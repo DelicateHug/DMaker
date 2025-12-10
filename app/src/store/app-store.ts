@@ -168,6 +168,7 @@ export interface AppActions {
   reorderProjects: (oldIndex: number, newIndex: number) => void;
   cyclePrevProject: () => void; // Cycle back through project history (Q)
   cycleNextProject: () => void; // Cycle forward through project history (E)
+  clearProjectHistory: () => void; // Clear history, keeping only current project
 
   // View actions
   setCurrentView: (view: ViewMode) => void;
@@ -420,6 +421,23 @@ export const useAppStore = create<AppState & AppActions>()(
             currentProject: targetProject,
             projectHistoryIndex: newIndex,
             currentView: "board"
+          });
+        }
+      },
+
+      clearProjectHistory: () => {
+        const currentProject = get().currentProject;
+        if (currentProject) {
+          // Keep only the current project in history
+          set({
+            projectHistory: [currentProject.id],
+            projectHistoryIndex: 0,
+          });
+        } else {
+          // No current project, clear everything
+          set({
+            projectHistory: [],
+            projectHistoryIndex: -1,
           });
         }
       },
