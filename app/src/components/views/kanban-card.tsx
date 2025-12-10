@@ -246,7 +246,13 @@ export function KanbanCard({
           <span>Errored</span>
         </div>
       )}
-      <CardHeader className="p-3 pb-2">
+      <CardHeader
+        className={cn(
+          "p-3 pb-2 block", // Reset grid layout to block for custom kanban card layout
+          // Add extra top padding when badges are present to prevent text overlap
+          (feature.skipTests || feature.error || shortcutKey) && "pt-10"
+        )}
+      >
         {isCurrentAutoTask && (
           <div className="absolute top-2 right-2 flex items-center justify-center gap-2 bg-running-indicator/20 border border-running-indicator rounded px-2 py-0.5">
             <Loader2 className="w-4 h-4 text-running-indicator animate-spin" />
@@ -320,8 +326,8 @@ export function KanbanCard({
               <GripVertical className="w-4 h-4 text-muted-foreground" />
             </div>
           )}
-          <div className="flex-1 min-w-0">
-            <CardTitle className="text-sm leading-tight break-words hyphens-auto line-clamp-3">
+          <div className="flex-1 min-w-0 overflow-hidden">
+            <CardTitle className="text-sm leading-tight break-words hyphens-auto line-clamp-3 overflow-hidden">
               {feature.description}
             </CardTitle>
             <CardDescription className="text-xs mt-1 truncate">
@@ -358,9 +364,9 @@ export function KanbanCard({
         {/* Agent Info Panel - shows for in_progress, waiting_approval, verified */}
         {/* Detailed mode: Show all agent info */}
         {showAgentInfo && feature.status !== "backlog" && agentInfo && (
-          <div className="mb-3 space-y-2">
+          <div className="mb-3 space-y-2 overflow-hidden">
             {/* Model & Phase */}
-            <div className="flex items-center gap-2 text-xs">
+            <div className="flex items-center gap-2 text-xs flex-wrap">
               <div className="flex items-center gap-1 text-cyan-400">
                 <Cpu className="w-3 h-3" />
                 <span className="font-medium">
@@ -437,25 +443,25 @@ export function KanbanCard({
               feature.status === "verified") && (
               <>
                 {(feature.summary || summary || agentInfo.summary) && (
-                  <div className="space-y-1 pt-1 border-t border-border-glass">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-1 text-[10px] text-green-400">
-                        <Sparkles className="w-3 h-3" />
-                        <span>Summary</span>
+                  <div className="space-y-1 pt-1 border-t border-border-glass overflow-hidden">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1 text-[10px] text-green-400 min-w-0">
+                        <Sparkles className="w-3 h-3 shrink-0" />
+                        <span className="truncate">Summary</span>
                       </div>
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
                           setIsSummaryDialogOpen(true);
                         }}
-                        className="p-0.5 rounded hover:bg-accent transition-colors text-muted-foreground hover:text-foreground"
+                        className="p-0.5 rounded hover:bg-accent transition-colors text-muted-foreground hover:text-foreground shrink-0"
                         title="View full summary"
                         data-testid={`expand-summary-${feature.id}`}
                       >
                         <Expand className="w-3 h-3" />
                       </button>
                     </div>
-                    <p className="text-[10px] text-foreground-secondary line-clamp-3 break-words hyphens-auto leading-relaxed">
+                    <p className="text-[10px] text-foreground-secondary line-clamp-3 break-words hyphens-auto leading-relaxed overflow-hidden">
                       {feature.summary || summary || agentInfo.summary}
                     </p>
                   </div>
