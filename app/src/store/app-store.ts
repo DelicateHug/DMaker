@@ -10,7 +10,8 @@ export type ViewMode =
   | "settings"
   | "tools"
   | "interview"
-  | "context";
+  | "context"
+  | "profiles";
 
 export type ThemeMode =
   | "light"
@@ -32,6 +33,7 @@ export type KanbanCardDetailLevel = "minimal" | "standard" | "detailed";
 export interface ApiKeys {
   anthropic: string;
   google: string;
+  openai: string;
 }
 
 export interface ImageAttachment {
@@ -75,6 +77,36 @@ export interface FeatureImagePath {
   mimeType: string;
 }
 
+// Available models for feature execution
+// Claude models
+export type ClaudeModel = "opus" | "sonnet" | "haiku";
+// OpenAI/Codex models
+export type OpenAIModel =
+  | "gpt-5.1-codex-max"
+  | "gpt-5.1-codex"
+  | "gpt-5.1-codex-mini"
+  | "gpt-5.1";
+// Combined model type
+export type AgentModel = ClaudeModel | OpenAIModel;
+
+// Model provider type
+export type ModelProvider = "claude" | "codex";
+
+// Thinking level (budget_tokens) options
+export type ThinkingLevel = "none" | "low" | "medium" | "high" | "ultrathink";
+
+// AI Provider Profile - user-defined presets for model configurations
+export interface AIProfile {
+  id: string;
+  name: string;
+  description: string;
+  model: AgentModel;
+  thinkingLevel: ThinkingLevel;
+  provider: ModelProvider;
+  isBuiltIn: boolean; // Built-in profiles cannot be deleted
+  icon?: string; // Optional icon name from lucide
+}
+
 export interface Feature {
   id: string;
   category: string;
@@ -86,7 +118,30 @@ export interface Feature {
   startedAt?: string; // ISO timestamp for when the card moved to in_progress
   skipTests?: boolean; // When true, skip TDD approach and require manual verification
   summary?: string; // Summary of what was done/modified by the agent
+  model?: AgentModel; // Model to use for this feature (defaults to opus)
+  thinkingLevel?: ThinkingLevel; // Thinking level for extended thinking (defaults to none)
   error?: string; // Error message if the agent errored during processing
+  // Worktree info - set when a feature is being worked on in an isolated git worktree
+  worktreePath?: string; // Path to the worktree directory
+  branchName?: string; // Name of the feature branch
+}
+
+// File tree node for project analysis
+export interface FileTreeNode {
+  name: string;
+  path: string;
+  isDirectory: boolean;
+  extension?: string;
+  children?: FileTreeNode[];
+}
+
+// Project analysis result
+export interface ProjectAnalysis {
+  fileTree: FileTreeNode[];
+  totalFiles: number;
+  totalDirectories: number;
+  filesByExtension: Record<string, number>;
+  analyzedAt: string;
 }
 
 export interface AppState {
@@ -137,6 +192,19 @@ export interface AppState {
 
   // Feature Default Settings
   defaultSkipTests: boolean; // Default value for skip tests when creating new features
+
+  // Worktree Settings
+  useWorktrees: boolean; // Whether to use git worktree isolation for features (default: false)
+
+  // AI Profiles
+  aiProfiles: AIProfile[];
+
+  // Profile Display Settings
+  showProfilesOnly: boolean; // When true, hide model tweaking options and show only profile selection
+
+  // Project Analysis
+  projectAnalysis: ProjectAnalysis | null;
+  isAnalyzing: boolean;
 }
 
 export interface AutoModeActivity {
@@ -226,6 +294,23 @@ export interface AppActions {
   // Feature Default Settings actions
   setDefaultSkipTests: (skip: boolean) => void;
 
+  // Worktree Settings actions
+  setUseWorktrees: (enabled: boolean) => void;
+
+  // Profile Display Settings actions
+  setShowProfilesOnly: (enabled: boolean) => void;
+
+  // AI Profile actions
+  addAIProfile: (profile: Omit<AIProfile, "id">) => void;
+  updateAIProfile: (id: string, updates: Partial<AIProfile>) => void;
+  removeAIProfile: (id: string) => void;
+  reorderAIProfiles: (oldIndex: number, newIndex: number) => void;
+
+  // Project Analysis actions
+  setProjectAnalysis: (analysis: ProjectAnalysis | null) => void;
+  setIsAnalyzing: (analyzing: boolean) => void;
+  clearAnalysis: () => void;
+
   // Agent Session actions
   setLastSelectedSession: (projectPath: string, sessionId: string | null) => void;
   getLastSelectedSession: (projectPath: string) => string | null;
@@ -233,6 +318,60 @@ export interface AppActions {
   // Reset
   reset: () => void;
 }
+
+// Default built-in AI profiles
+const DEFAULT_AI_PROFILES: AIProfile[] = [
+  {
+    id: "profile-heavy-task",
+    name: "Heavy Task",
+    description: "Claude Opus with Ultrathink for complex architecture, migrations, or deep debugging.",
+    model: "opus",
+    thinkingLevel: "ultrathink",
+    provider: "claude",
+    isBuiltIn: true,
+    icon: "Brain",
+  },
+  {
+    id: "profile-balanced",
+    name: "Balanced",
+    description: "Claude Sonnet with medium thinking for typical development tasks.",
+    model: "sonnet",
+    thinkingLevel: "medium",
+    provider: "claude",
+    isBuiltIn: true,
+    icon: "Scale",
+  },
+  {
+    id: "profile-quick-edit",
+    name: "Quick Edit",
+    description: "Claude Haiku for fast, simple edits and minor fixes.",
+    model: "haiku",
+    thinkingLevel: "none",
+    provider: "claude",
+    isBuiltIn: true,
+    icon: "Zap",
+  },
+  {
+    id: "profile-codex-power",
+    name: "Codex Power",
+    description: "GPT-5.1 Codex Max for deep coding tasks via OpenAI CLI.",
+    model: "gpt-5.1-codex-max",
+    thinkingLevel: "none",
+    provider: "codex",
+    isBuiltIn: true,
+    icon: "Cpu",
+  },
+  {
+    id: "profile-codex-fast",
+    name: "Codex Fast",
+    description: "GPT-5.1 Codex Mini for lightweight and quick edits.",
+    model: "gpt-5.1-codex-mini",
+    thinkingLevel: "none",
+    provider: "codex",
+    isBuiltIn: true,
+    icon: "Rocket",
+  },
+];
 
 const initialState: AppState = {
   projects: [],
@@ -250,6 +389,7 @@ const initialState: AppState = {
   apiKeys: {
     anthropic: "",
     google: "",
+    openai: "",
   },
   chatSessions: [],
   currentChatSession: null,
@@ -259,6 +399,11 @@ const initialState: AppState = {
   maxConcurrency: 3, // Default to 3 concurrent agents
   kanbanCardDetailLevel: "standard", // Default to standard detail level
   defaultSkipTests: false, // Default to TDD mode (tests enabled)
+  useWorktrees: false, // Default to disabled (worktree feature is experimental)
+  showProfilesOnly: false, // Default to showing all options (not profiles only)
+  aiProfiles: DEFAULT_AI_PROFILES,
+  projectAnalysis: null,
+  isAnalyzing: false,
 };
 
 export const useAppStore = create<AppState & AppActions>()(
@@ -722,6 +867,48 @@ export const useAppStore = create<AppState & AppActions>()(
       // Feature Default Settings actions
       setDefaultSkipTests: (skip) => set({ defaultSkipTests: skip }),
 
+      // Worktree Settings actions
+      setUseWorktrees: (enabled) => set({ useWorktrees: enabled }),
+
+      // Profile Display Settings actions
+      setShowProfilesOnly: (enabled) => set({ showProfilesOnly: enabled }),
+
+      // AI Profile actions
+      addAIProfile: (profile) => {
+        const id = `profile-${Date.now()}-${Math.random()
+          .toString(36)
+          .substr(2, 9)}`;
+        set({ aiProfiles: [...get().aiProfiles, { ...profile, id }] });
+      },
+
+      updateAIProfile: (id, updates) => {
+        set({
+          aiProfiles: get().aiProfiles.map((p) =>
+            p.id === id ? { ...p, ...updates } : p
+          ),
+        });
+      },
+
+      removeAIProfile: (id) => {
+        // Only allow removing non-built-in profiles
+        const profile = get().aiProfiles.find((p) => p.id === id);
+        if (profile && !profile.isBuiltIn) {
+          set({ aiProfiles: get().aiProfiles.filter((p) => p.id !== id) });
+        }
+      },
+
+      reorderAIProfiles: (oldIndex, newIndex) => {
+        const profiles = [...get().aiProfiles];
+        const [movedProfile] = profiles.splice(oldIndex, 1);
+        profiles.splice(newIndex, 0, movedProfile);
+        set({ aiProfiles: profiles });
+      },
+
+      // Project Analysis actions
+      setProjectAnalysis: (analysis) => set({ projectAnalysis: analysis }),
+      setIsAnalyzing: (analyzing) => set({ isAnalyzing: analyzing }),
+      clearAnalysis: () => set({ projectAnalysis: null }),
+
       // Agent Session actions
       setLastSelectedSession: (projectPath, sessionId) => {
         const current = get().lastSelectedSessionByProject;
@@ -742,7 +929,6 @@ export const useAppStore = create<AppState & AppActions>()(
       getLastSelectedSession: (projectPath) => {
         return get().lastSelectedSessionByProject[projectPath] || null;
       },
-
       // Reset
       reset: () => set(initialState),
     }),
@@ -763,6 +949,9 @@ export const useAppStore = create<AppState & AppActions>()(
         maxConcurrency: state.maxConcurrency,
         kanbanCardDetailLevel: state.kanbanCardDetailLevel,
         defaultSkipTests: state.defaultSkipTests,
+        useWorktrees: state.useWorktrees,
+        showProfilesOnly: state.showProfilesOnly,
+        aiProfiles: state.aiProfiles,
         lastSelectedSessionByProject: state.lastSelectedSessionByProject,
       }),
     }

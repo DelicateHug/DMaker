@@ -12,7 +12,8 @@ export type LogEntryType =
   | "success"
   | "info"
   | "debug"
-  | "warning";
+  | "warning"
+  | "thinking";
 
 export interface LogEntry {
   id: string;
@@ -28,7 +29,27 @@ export interface LogEntry {
   };
 }
 
-const generateId = () => Math.random().toString(36).substring(2, 9);
+/**
+ * Generates a deterministic ID based on content and position
+ * This ensures the same log entry always gets the same ID,
+ * preserving expanded/collapsed state when new logs stream in
+ *
+ * Uses only the first 200 characters of content to ensure stability
+ * even when entries are merged (which appends content at the end)
+ */
+const generateDeterministicId = (content: string, lineIndex: number): string => {
+  // Use first 200 chars to ensure stability when entries are merged
+  const stableContent = content.slice(0, 200);
+  // Simple hash function for the content
+  let hash = 0;
+  const str = stableContent + '|' + lineIndex.toString();
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32bit integer
+  }
+  return 'log_' + Math.abs(hash).toString(36);
+};
 
 /**
  * Detects the type of log entry based on content patterns
@@ -73,6 +94,18 @@ function detectEntryType(content: string): LogEntryType {
   // Warnings
   if (trimmed.startsWith("⚠️") || trimmed.toLowerCase().includes("warning:")) {
     return "warning";
+  }
+
+  // Thinking/Preparation info
+  if (
+    trimmed.toLowerCase().includes("ultrathink") ||
+    trimmed.toLowerCase().includes("thinking level") ||
+    trimmed.toLowerCase().includes("estimated cost") ||
+    trimmed.toLowerCase().includes("estimated time") ||
+    trimmed.toLowerCase().includes("budget tokens") ||
+    trimmed.match(/thinking.*preparation/i)
+  ) {
+    return "thinking";
   }
 
   // Debug info (JSON, stack traces, etc.)
@@ -130,6 +163,8 @@ function generateTitle(type: LogEntryType, content: string): string {
       return "Success";
     case "warning":
       return "Warning";
+    case "thinking":
+      return "Thinking Level";
     case "debug":
       return "Debug Info";
     case "prompt":
@@ -150,24 +185,32 @@ export function parseLogOutput(rawOutput: string): LogEntry[] {
   const entries: LogEntry[] = [];
   const lines = rawOutput.split("\n");
 
-  let currentEntry: LogEntry | null = null;
+  let currentEntry: Omit<LogEntry, 'id'> & { id?: string } | null = null;
   let currentContent: string[] = [];
+  let entryStartLine = 0; // Track the starting line for deterministic ID generation
 
   const finalizeEntry = () => {
     if (currentEntry && currentContent.length > 0) {
       currentEntry.content = currentContent.join("\n").trim();
       if (currentEntry.content) {
-        entries.push(currentEntry);
+        // Generate deterministic ID based on content and position
+        const entryWithId: LogEntry = {
+          ...currentEntry as Omit<LogEntry, 'id'>,
+          id: generateDeterministicId(currentEntry.content, entryStartLine),
+        };
+        entries.push(entryWithId);
       }
     }
     currentContent = [];
   };
 
+  let lineIndex = 0;
   for (const line of lines) {
     const trimmedLine = line.trim();
 
     // Skip empty lines at the beginning
     if (!trimmedLine && !currentEntry) {
+      lineIndex++;
       continue;
     }
 
@@ -180,15 +223,20 @@ export function parseLogOutput(rawOutput: string): LogEntry[] {
       trimmedLine.startsWith("✅") ||
       trimmedLine.startsWith("❌") ||
       trimmedLine.startsWith("⚠️") ||
+      trimmedLine.startsWith("🧠") ||
+      trimmedLine.toLowerCase().includes("ultrathink preparation") ||
+      trimmedLine.toLowerCase().includes("thinking level") ||
       (trimmedLine.startsWith("Input:") && currentEntry?.type === "tool_call");
 
     if (isNewEntry) {
       // Finalize previous entry
       finalizeEntry();
 
-      // Start new entry
+      // Track starting line for deterministic ID
+      entryStartLine = lineIndex;
+
+      // Start new entry (ID will be generated when finalizing)
       currentEntry = {
-        id: generateId(),
         type: lineType,
         title: generateTitle(lineType, trimmedLine),
         content: "",
@@ -202,15 +250,18 @@ export function parseLogOutput(rawOutput: string): LogEntry[] {
       // Continue current entry
       currentContent.push(line);
     } else {
+      // Track starting line for deterministic ID
+      entryStartLine = lineIndex;
+
       // No current entry, create a default info entry
       currentEntry = {
-        id: generateId(),
         type: "info",
         title: "Info",
         content: "",
       };
       currentContent.push(line);
     }
+    lineIndex++;
   }
 
   // Finalize last entry
@@ -230,6 +281,7 @@ function mergeConsecutiveEntries(entries: LogEntry[]): LogEntry[] {
 
   const merged: LogEntry[] = [];
   let current: LogEntry | null = null;
+  let mergeIndex = 0;
 
   for (const entry of entries) {
     if (
@@ -237,13 +289,15 @@ function mergeConsecutiveEntries(entries: LogEntry[]): LogEntry[] {
       (current.type === "debug" || current.type === "info") &&
       current.type === entry.type
     ) {
-      // Merge into current
+      // Merge into current - regenerate ID based on merged content
       current.content += "\n\n" + entry.content;
+      current.id = generateDeterministicId(current.content, mergeIndex);
     } else {
       if (current) {
         merged.push(current);
       }
       current = { ...entry };
+      mergeIndex = merged.length;
     }
   }
 
@@ -320,6 +374,14 @@ export function getLogTypeColors(type: LogEntryType): {
         text: "text-orange-300",
         icon: "text-orange-400",
         badge: "bg-orange-500/20 text-orange-300",
+      };
+    case "thinking":
+      return {
+        bg: "bg-indigo-500/10",
+        border: "border-l-indigo-500",
+        text: "text-indigo-300",
+        icon: "text-indigo-400",
+        badge: "bg-indigo-500/20 text-indigo-300",
       };
     case "debug":
       return {

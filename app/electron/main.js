@@ -7,6 +7,7 @@ const { app, BrowserWindow, ipcMain, dialog, shell } = require("electron");
 const fs = require("fs/promises");
 const agentService = require("./agent-service");
 const autoModeService = require("./auto-mode-service");
+const worktreeManager = require("./services/worktree-manager");
 const featureSuggestionsService = require("./services/feature-suggestions-service");
 const specRegenerationService = require("./services/spec-regeneration-service");
 
@@ -470,7 +471,7 @@ ipcMain.handle("auto-mode:status", () => {
  */
 ipcMain.handle(
   "auto-mode:run-feature",
-  async (_, { projectPath, featureId }) => {
+  async (_, { projectPath, featureId, useWorktrees = false }) => {
     try {
       const sendToRenderer = (data) => {
         if (mainWindow && !mainWindow.isDestroyed()) {
@@ -482,6 +483,7 @@ ipcMain.handle(
         projectPath,
         featureId,
         sendToRenderer,
+        useWorktrees,
       });
     } catch (error) {
       console.error("[IPC] auto-mode:run-feature error:", error);
@@ -673,6 +675,103 @@ ipcMain.handle(
 );
 
 // ============================================================================
+// Claude CLI Detection IPC Handlers
+// ============================================================================
+
+/**
+ * Check Claude Code CLI installation status
+ */
+ipcMain.handle("claude:check-cli", async () => {
+  try {
+    const claudeCliDetector = require("./services/claude-cli-detector");
+    const info = claudeCliDetector.getInstallationInfo();
+    return { success: true, ...info };
+  } catch (error) {
+    console.error("[IPC] claude:check-cli error:", error);
+    return { success: false, error: error.message };
+  }
+});
+
+// ============================================================================
+// Codex CLI Detection IPC Handlers
+// ============================================================================
+
+/**
+ * Check Codex CLI installation status
+ */
+ipcMain.handle("codex:check-cli", async () => {
+  try {
+    const codexCliDetector = require("./services/codex-cli-detector");
+    const info = codexCliDetector.getInstallationInfo();
+    return { success: true, ...info };
+  } catch (error) {
+    console.error("[IPC] codex:check-cli error:", error);
+    return { success: false, error: error.message };
+  }
+});
+
+/**
+ * Get all available models from all providers
+ */
+ipcMain.handle("model:get-available", async () => {
+  try {
+    const { ModelProviderFactory } = require("./services/model-provider");
+    const models = ModelProviderFactory.getAllModels();
+    return { success: true, models };
+  } catch (error) {
+    console.error("[IPC] model:get-available error:", error);
+    return { success: false, error: error.message };
+  }
+});
+
+/**
+ * Check all provider installation status
+ */
+ipcMain.handle("model:check-providers", async () => {
+  try {
+    const { ModelProviderFactory } = require("./services/model-provider");
+    const status = await ModelProviderFactory.checkAllProviders();
+    return { success: true, providers: status };
+  } catch (error) {
+    console.error("[IPC] model:check-providers error:", error);
+    return { success: false, error: error.message };
+  }
+});
+
+// ============================================================================
+// MCP Server IPC Handlers
+// ============================================================================
+
+/**
+ * Handle MCP server callback for updating feature status
+ * This can be called by the MCP server script via HTTP or other communication mechanism
+ * Note: The MCP server script runs as a separate process, so it can't directly use Electron IPC.
+ * For now, the MCP server calls featureLoader.updateFeatureStatus directly.
+ * This handler is here for future extensibility (e.g., HTTP endpoint bridge).
+ */
+ipcMain.handle("mcp:update-feature-status", async (_, { featureId, status, projectPath, summary }) => {
+  try {
+    const featureLoader = require("./services/feature-loader");
+    await featureLoader.updateFeatureStatus(featureId, status, projectPath, summary);
+    
+    // Notify renderer if window is available
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("mcp:feature-status-updated", {
+        featureId,
+        status,
+        projectPath,
+        summary
+      });
+    }
+    
+    return { success: true };
+  } catch (error) {
+    console.error("[IPC] mcp:update-feature-status error:", error);
+    return { success: false, error: error.message };
+  }
+});
+
+// ============================================================================
 // Feature Suggestions IPC Handlers
 // ============================================================================
 
@@ -756,6 +855,77 @@ ipcMain.handle("suggestions:status", () => {
     isRunning: suggestionsExecution !== null && suggestionsExecution.isActive(),
   };
 });
+
+// ============================================================================
+// OpenAI API Handlers
+// ============================================================================
+
+/**
+ * Test OpenAI API connection
+ */
+ipcMain.handle("openai:test-connection", async (_, { apiKey }) => {
+  try {
+    // Simple test using fetch to OpenAI API
+    const response = await fetch("https://api.openai.com/v1/models", {
+      method: "GET",
+      headers: {
+        "Authorization": `Bearer ${apiKey || process.env.OPENAI_API_KEY}`,
+        "Content-Type": "application/json"
+      }
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      return {
+        success: true,
+        message: `Connected successfully. Found ${data.data?.length || 0} models.`
+      };
+    } else {
+      const error = await response.json();
+      return {
+        success: false,
+        error: error.error?.message || "Failed to connect to OpenAI API"
+      };
+    }
+  } catch (error) {
+    console.error("[IPC] openai:test-connection error:", error);
+    return { success: false, error: error.message };
+  }
+});
+
+// ============================================================================
+// Worktree Management IPC Handlers
+// ============================================================================
+
+/**
+ * Revert feature changes by removing the worktree
+ * This effectively discards all changes made by the agent
+ */
+ipcMain.handle(
+  "worktree:revert-feature",
+  async (_, { projectPath, featureId }) => {
+    console.log("[IPC] worktree:revert-feature called with:", {
+      projectPath,
+      featureId,
+    });
+    try {
+      const sendToRenderer = (data) => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send("auto-mode:event", data);
+        }
+      };
+
+      return await autoModeService.revertFeature({
+        projectPath,
+        featureId,
+        sendToRenderer,
+      });
+    } catch (error) {
+      console.error("[IPC] worktree:revert-feature error:", error);
+      return { success: false, error: error.message };
+    }
+  }
+);
 
 // ============================================================================
 // Spec Regeneration IPC Handlers
@@ -892,3 +1062,123 @@ ipcMain.handle(
     }
   }
 );
+
+/**
+ * Merge feature worktree changes back to main branch
+ */
+ipcMain.handle(
+  "worktree:merge-feature",
+  async (_, { projectPath, featureId, options }) => {
+    console.log("[IPC] worktree:merge-feature called with:", {
+      projectPath,
+      featureId,
+      options,
+    });
+    try {
+      const sendToRenderer = (data) => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send("auto-mode:event", data);
+        }
+      };
+
+      return await autoModeService.mergeFeature({
+        projectPath,
+        featureId,
+        options,
+        sendToRenderer,
+      });
+    } catch (error) {
+      console.error("[IPC] worktree:merge-feature error:", error);
+      return { success: false, error: error.message };
+    }
+  }
+);
+/**
+ * Get worktree info for a feature
+ */
+ipcMain.handle(
+  "worktree:get-info",
+  async (_, { projectPath, featureId }) => {
+    try {
+      return await autoModeService.getWorktreeInfo({ projectPath, featureId });
+    } catch (error) {
+      console.error("[IPC] worktree:get-info error:", error);
+      return { success: false, error: error.message };
+    }
+  }
+);
+
+/**
+ * Get worktree status (changed files, commits)
+ */
+ipcMain.handle(
+  "worktree:get-status",
+  async (_, { projectPath, featureId }) => {
+    try {
+      return await autoModeService.getWorktreeStatus({ projectPath, featureId });
+    } catch (error) {
+      console.error("[IPC] worktree:get-status error:", error);
+      return { success: false, error: error.message };
+    }
+  }
+);
+
+/**
+ * List all feature worktrees
+ */
+ipcMain.handle("worktree:list", async (_, { projectPath }) => {
+  try {
+    return await autoModeService.listWorktrees({ projectPath });
+  } catch (error) {
+    console.error("[IPC] worktree:list error:", error);
+    return { success: false, error: error.message };
+  }
+});
+
+/**
+ * Get file diffs for a worktree
+ */
+ipcMain.handle("worktree:get-diffs", async (_, { projectPath, featureId }) => {
+  try {
+    return await autoModeService.getFileDiffs({ projectPath, featureId });
+  } catch (error) {
+    console.error("[IPC] worktree:get-diffs error:", error);
+    return { success: false, error: error.message };
+  }
+});
+
+/**
+ * Get diff for a specific file in a worktree
+ */
+ipcMain.handle("worktree:get-file-diff", async (_, { projectPath, featureId, filePath }) => {
+  try {
+    return await autoModeService.getFileDiff({ projectPath, featureId, filePath });
+  } catch (error) {
+    console.error("[IPC] worktree:get-file-diff error:", error);
+    return { success: false, error: error.message };
+  }
+});
+
+/**
+ * Get file diffs for the main project (non-worktree)
+ */
+ipcMain.handle("git:get-diffs", async (_, { projectPath }) => {
+  try {
+    return await worktreeManager.getFileDiffs(projectPath);
+  } catch (error) {
+    console.error("[IPC] git:get-diffs error:", error);
+    return { success: false, error: error.message };
+  }
+});
+
+/**
+ * Get diff for a specific file in the main project (non-worktree)
+ */
+ipcMain.handle("git:get-file-diff", async (_, { projectPath, filePath }) => {
+  try {
+    return await worktreeManager.getFileDiff(projectPath, filePath);
+  } catch (error) {
+    console.error("[IPC] git:get-file-diff error:", error);
+    return { success: false, error: error.message };
+  }
+});

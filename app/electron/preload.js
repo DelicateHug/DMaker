@@ -97,8 +97,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     status: () => ipcRenderer.invoke("auto-mode:status"),
 
     // Run a specific feature
-    runFeature: (projectPath, featureId) =>
-      ipcRenderer.invoke("auto-mode:run-feature", { projectPath, featureId }),
+    runFeature: (projectPath, featureId, useWorktrees) =>
+      ipcRenderer.invoke("auto-mode:run-feature", { projectPath, featureId, useWorktrees }),
 
     // Verify a specific feature by running its tests
     verifyFeature: (projectPath, featureId) =>
@@ -138,6 +138,67 @@ contextBridge.exposeInMainWorld("electronAPI", {
         ipcRenderer.removeListener("auto-mode:event", subscription);
       };
     },
+  },
+
+  // Claude CLI Detection API
+  checkClaudeCli: () => ipcRenderer.invoke("claude:check-cli"),
+
+  // Codex CLI Detection API
+  checkCodexCli: () => ipcRenderer.invoke("codex:check-cli"),
+
+  // Model Management APIs
+  model: {
+    // Get all available models from all providers
+    getAvailable: () => ipcRenderer.invoke("model:get-available"),
+
+    // Check all provider installation status
+    checkProviders: () => ipcRenderer.invoke("model:check-providers"),
+  },
+
+  // OpenAI API
+  testOpenAIConnection: (apiKey) =>
+    ipcRenderer.invoke("openai:test-connection", { apiKey }),
+
+  // Worktree Management APIs
+  worktree: {
+    // Revert feature changes by removing the worktree
+    revertFeature: (projectPath, featureId) =>
+      ipcRenderer.invoke("worktree:revert-feature", { projectPath, featureId }),
+
+    // Merge feature worktree changes back to main branch
+    mergeFeature: (projectPath, featureId, options) =>
+      ipcRenderer.invoke("worktree:merge-feature", { projectPath, featureId, options }),
+
+    // Get worktree info for a feature
+    getInfo: (projectPath, featureId) =>
+      ipcRenderer.invoke("worktree:get-info", { projectPath, featureId }),
+
+    // Get worktree status (changed files, commits)
+    getStatus: (projectPath, featureId) =>
+      ipcRenderer.invoke("worktree:get-status", { projectPath, featureId }),
+
+    // List all feature worktrees
+    list: (projectPath) =>
+      ipcRenderer.invoke("worktree:list", { projectPath }),
+
+    // Get file diffs for a feature worktree
+    getDiffs: (projectPath, featureId) =>
+      ipcRenderer.invoke("worktree:get-diffs", { projectPath, featureId }),
+
+    // Get diff for a specific file in a worktree
+    getFileDiff: (projectPath, featureId, filePath) =>
+      ipcRenderer.invoke("worktree:get-file-diff", { projectPath, featureId, filePath }),
+  },
+
+  // Git Operations APIs (for non-worktree operations)
+  git: {
+    // Get file diffs for the main project
+    getDiffs: (projectPath) =>
+      ipcRenderer.invoke("git:get-diffs", { projectPath }),
+
+    // Get diff for a specific file in the main project
+    getFileDiff: (projectPath, filePath) =>
+      ipcRenderer.invoke("git:get-file-diff", { projectPath, filePath }),
   },
 
   // Feature Suggestions API

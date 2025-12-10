@@ -23,6 +23,7 @@ import {
   RotateCcw,
   Trash2,
   Undo2,
+  UserCircle,
   MoreVertical,
 } from "lucide-react";
 import {
@@ -486,6 +487,12 @@ export function Sidebar() {
           label: "Agent Tools",
           icon: Wrench,
           shortcut: NAV_SHORTCUTS.tools,
+        },
+        {
+          id: "profiles",
+          label: "AI Profiles",
+          icon: UserCircle,
+          shortcut: NAV_SHORTCUTS.profiles,
         },
       ],
     },

@@ -202,6 +202,14 @@ export type AutoModeEvent =
       projectId?: string;
       phase: "planning" | "action" | "verification";
       message: string;
+    }
+  | {
+      type: "auto_mode_ultrathink_preparation";
+      featureId: string;
+      warnings: string[];
+      recommendations: string[];
+      estimatedCost?: number;
+      estimatedTime?: string;
     };
 
 export type SpecRegenerationEvent =
@@ -279,7 +287,7 @@ export interface AutoModeAPI {
     error?: string;
   }>;
 
-  runFeature: (projectPath: string, featureId: string) => Promise<{
+  runFeature: (projectPath: string, featureId: string, useWorktrees?: boolean) => Promise<{
     success: boolean;
     passes?: boolean;
     error?: string;
@@ -370,6 +378,10 @@ export interface ElectronAPI {
     };
     error?: string;
   }>;
+  deleteFile: (filePath: string) => Promise<{
+    success: boolean;
+    error?: string;
+  }>;
 
   // App APIs
   getPath: (name: string) => Promise<string>;
@@ -393,8 +405,189 @@ export interface ElectronAPI {
   // Auto Mode APIs
   autoMode: AutoModeAPI;
 
+  // Claude CLI Detection API
+  checkClaudeCli: () => Promise<{
+    success: boolean;
+    status?: string;
+    method?: string;
+    version?: string;
+    path?: string;
+    recommendation?: string;
+    installCommands?: {
+      macos?: string;
+      windows?: string;
+      linux?: string;
+      npm?: string;
+    };
+    error?: string;
+  }>;
+
+  // Codex CLI Detection API
+  checkCodexCli: () => Promise<{
+    success: boolean;
+    status?: string;
+    method?: string;
+    version?: string;
+    path?: string;
+    hasApiKey?: boolean;
+    recommendation?: string;
+    installCommands?: {
+      macos?: string;
+      windows?: string;
+      linux?: string;
+      npm?: string;
+    };
+    error?: string;
+  }>;
+
+  // Model Management APIs
+  model: {
+    // Get all available models from all providers
+    getAvailable: () => Promise<{
+      success: boolean;
+      models?: ModelDefinition[];
+      error?: string;
+    }>;
+
+    // Check all provider installation status
+    checkProviders: () => Promise<{
+      success: boolean;
+      providers?: Record<string, ProviderStatus>;
+      error?: string;
+    }>;
+  };
+
+  // OpenAI API
+  testOpenAIConnection: (apiKey?: string) => Promise<{
+    success: boolean;
+    message?: string;
+    error?: string;
+  }>;
+
+  // Worktree Management APIs
+  worktree: WorktreeAPI;
+
+  // Git Operations APIs (for non-worktree operations)
+  git: GitAPI;
+
   // Spec Regeneration APIs
   specRegeneration: SpecRegenerationAPI;
+}
+
+export interface WorktreeInfo {
+  worktreePath: string;
+  branchName: string;
+  head?: string;
+  baseBranch?: string;
+}
+
+export interface WorktreeStatus {
+  success: boolean;
+  modifiedFiles?: number;
+  files?: string[];
+  diffStat?: string;
+  recentCommits?: string[];
+  error?: string;
+}
+
+export interface FileStatus {
+  status: string;
+  path: string;
+  statusText: string;
+}
+
+export interface FileDiffsResult {
+  success: boolean;
+  diff?: string;
+  files?: FileStatus[];
+  hasChanges?: boolean;
+  error?: string;
+}
+
+export interface FileDiffResult {
+  success: boolean;
+  diff?: string;
+  filePath?: string;
+  error?: string;
+}
+
+export interface WorktreeAPI {
+  // Revert feature changes by removing the worktree
+  revertFeature: (projectPath: string, featureId: string) => Promise<{
+    success: boolean;
+    removedPath?: string;
+    error?: string;
+  }>;
+
+  // Merge feature worktree changes back to main branch
+  mergeFeature: (projectPath: string, featureId: string, options?: {
+    squash?: boolean;
+    commitMessage?: string;
+    squashMessage?: string;
+  }) => Promise<{
+    success: boolean;
+    mergedBranch?: string;
+    error?: string;
+  }>;
+
+  // Get worktree info for a feature
+  getInfo: (projectPath: string, featureId: string) => Promise<{
+    success: boolean;
+    worktreePath?: string;
+    branchName?: string;
+    head?: string;
+    error?: string;
+  }>;
+
+  // Get worktree status (changed files, commits)
+  getStatus: (projectPath: string, featureId: string) => Promise<WorktreeStatus>;
+
+  // List all feature worktrees
+  list: (projectPath: string) => Promise<{
+    success: boolean;
+    worktrees?: WorktreeInfo[];
+    error?: string;
+  }>;
+
+  // Get file diffs for a feature worktree
+  getDiffs: (projectPath: string, featureId: string) => Promise<FileDiffsResult>;
+
+  // Get diff for a specific file in a worktree
+  getFileDiff: (projectPath: string, featureId: string, filePath: string) => Promise<FileDiffResult>;
+}
+
+export interface GitAPI {
+  // Get diffs for the main project (not a worktree)
+  getDiffs: (projectPath: string) => Promise<FileDiffsResult>;
+
+  // Get diff for a specific file in the main project
+  getFileDiff: (projectPath: string, filePath: string) => Promise<FileDiffResult>;
+}
+
+// Model definition type
+export interface ModelDefinition {
+  id: string;
+  name: string;
+  modelString: string;
+  provider: "claude" | "codex";
+  description?: string;
+  tier?: "basic" | "standard" | "premium";
+  default?: boolean;
+}
+
+// Provider status type
+export interface ProviderStatus {
+  status: "installed" | "not_installed" | "api_key_only";
+  method?: string;
+  version?: string;
+  path?: string;
+  recommendation?: string;
+  installCommands?: {
+    macos?: string;
+    windows?: string;
+    linux?: string;
+    npm?: string;
+  };
 }
 
 declare global {
