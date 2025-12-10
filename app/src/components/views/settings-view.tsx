@@ -30,10 +30,8 @@ import {
 import { KeyboardMap, ShortcutReferencePanel } from "@/components/ui/keyboard-map";
 // Import extracted sections
 import { ApiKeysSection } from "./settings-view/api-keys/api-keys-section";
-import {
-  ClaudeCliStatus,
-  CodexCliStatus,
-} from "./settings-view/cli-status-section";
+import { ClaudeCliStatus } from "./settings-view/cli-status/claude-cli-status";
+import { CodexCliStatus } from "./settings-view/cli-status/codex-cli-status";
 import { AppearanceSection } from "./settings-view/appearance/appearance-section";
 import { KanbanDisplaySection } from "./settings-view/kanban-display-section";
 import { KeyboardShortcutsSection } from "./settings-view/keyboard-shortcuts-section";
