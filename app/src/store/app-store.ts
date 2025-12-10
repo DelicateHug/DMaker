@@ -156,6 +156,9 @@ export interface AppState {
   currentView: ViewMode;
   sidebarOpen: boolean;
 
+  // Agent Session state (per-project, keyed by project path)
+  lastSelectedSessionByProject: Record<string, string>; // projectPath -> sessionId
+
   // Theme
   theme: ThemeMode;
 
@@ -308,6 +311,10 @@ export interface AppActions {
   setIsAnalyzing: (analyzing: boolean) => void;
   clearAnalysis: () => void;
 
+  // Agent Session actions
+  setLastSelectedSession: (projectPath: string, sessionId: string | null) => void;
+  getLastSelectedSession: (projectPath: string) => string | null;
+
   // Reset
   reset: () => void;
 }
@@ -374,6 +381,7 @@ const initialState: AppState = {
   projectHistoryIndex: -1,
   currentView: "welcome",
   sidebarOpen: true,
+  lastSelectedSessionByProject: {},
   theme: "dark",
   features: [],
   appSpec: "",
@@ -532,17 +540,33 @@ export const useAppStore = create<AppState & AppActions>()(
 
       cyclePrevProject: () => {
         const { projectHistory, projectHistoryIndex, projects } = get();
-        if (projectHistory.length <= 1) return; // Need at least 2 projects to cycle
 
-        // Move to the next index (going back in history = higher index)
-        const newIndex = (projectHistoryIndex + 1) % projectHistory.length;
-        const targetProjectId = projectHistory[newIndex];
+        // Filter history to only include valid projects
+        const validHistory = projectHistory.filter((id) =>
+          projects.some((p) => p.id === id)
+        );
+
+        if (validHistory.length <= 1) return; // Need at least 2 valid projects to cycle
+
+        // Find current position in valid history
+        const currentProjectId = get().currentProject?.id;
+        let currentIndex = currentProjectId
+          ? validHistory.indexOf(currentProjectId)
+          : projectHistoryIndex;
+
+        // If current project not found in valid history, start from 0
+        if (currentIndex === -1) currentIndex = 0;
+
+        // Move to the next index (going back in history = higher index), wrapping around
+        const newIndex = (currentIndex + 1) % validHistory.length;
+        const targetProjectId = validHistory[newIndex];
         const targetProject = projects.find((p) => p.id === targetProjectId);
 
         if (targetProject) {
-          // Update the index but don't modify history order when cycling
+          // Update history to only include valid projects and set new index
           set({
             currentProject: targetProject,
+            projectHistory: validHistory,
             projectHistoryIndex: newIndex,
             currentView: "board"
           });
@@ -551,19 +575,35 @@ export const useAppStore = create<AppState & AppActions>()(
 
       cycleNextProject: () => {
         const { projectHistory, projectHistoryIndex, projects } = get();
-        if (projectHistory.length <= 1) return; // Need at least 2 projects to cycle
 
-        // Move to the previous index (going forward = lower index, wrapping around)
-        const newIndex = projectHistoryIndex <= 0
-          ? projectHistory.length - 1
-          : projectHistoryIndex - 1;
-        const targetProjectId = projectHistory[newIndex];
+        // Filter history to only include valid projects
+        const validHistory = projectHistory.filter((id) =>
+          projects.some((p) => p.id === id)
+        );
+
+        if (validHistory.length <= 1) return; // Need at least 2 valid projects to cycle
+
+        // Find current position in valid history
+        const currentProjectId = get().currentProject?.id;
+        let currentIndex = currentProjectId
+          ? validHistory.indexOf(currentProjectId)
+          : projectHistoryIndex;
+
+        // If current project not found in valid history, start from 0
+        if (currentIndex === -1) currentIndex = 0;
+
+        // Move to the previous index (going forward = lower index), wrapping around
+        const newIndex = currentIndex <= 0
+          ? validHistory.length - 1
+          : currentIndex - 1;
+        const targetProjectId = validHistory[newIndex];
         const targetProject = projects.find((p) => p.id === targetProjectId);
 
         if (targetProject) {
-          // Update the index but don't modify history order when cycling
+          // Update history to only include valid projects and set new index
           set({
             currentProject: targetProject,
+            projectHistory: validHistory,
             projectHistoryIndex: newIndex,
             currentView: "board"
           });
@@ -869,6 +909,26 @@ export const useAppStore = create<AppState & AppActions>()(
       setIsAnalyzing: (analyzing) => set({ isAnalyzing: analyzing }),
       clearAnalysis: () => set({ projectAnalysis: null }),
 
+      // Agent Session actions
+      setLastSelectedSession: (projectPath, sessionId) => {
+        const current = get().lastSelectedSessionByProject;
+        if (sessionId === null) {
+          // Remove the entry for this project
+          const { [projectPath]: _, ...rest } = current;
+          set({ lastSelectedSessionByProject: rest });
+        } else {
+          set({
+            lastSelectedSessionByProject: {
+              ...current,
+              [projectPath]: sessionId,
+            },
+          });
+        }
+      },
+
+      getLastSelectedSession: (projectPath) => {
+        return get().lastSelectedSessionByProject[projectPath] || null;
+      },
       // Reset
       reset: () => set(initialState),
     }),
@@ -892,6 +952,7 @@ export const useAppStore = create<AppState & AppActions>()(
         useWorktrees: state.useWorktrees,
         showProfilesOnly: state.showProfilesOnly,
         aiProfiles: state.aiProfiles,
+        lastSelectedSessionByProject: state.lastSelectedSessionByProject,
       }),
     }
   )
