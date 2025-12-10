@@ -8,9 +8,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Loader2, List, FileText } from "lucide-react";
+import { Loader2, List, FileText, GitBranch } from "lucide-react";
 import { getElectronAPI } from "@/lib/electron";
 import { LogViewer } from "@/components/ui/log-viewer";
+import { GitDiffPanel } from "@/components/ui/git-diff-panel";
+import { useAppStore } from "@/store/app-store";
+import type { AutoModeEvent } from "@/types/electron";
 
 interface AgentOutputModalProps {
   open: boolean;
@@ -21,7 +24,7 @@ interface AgentOutputModalProps {
   onNumberKeyPress?: (key: string) => void;
 }
 
-type ViewMode = "parsed" | "raw";
+type ViewMode = "parsed" | "raw" | "changes";
 
 export function AgentOutputModal({
   open,
@@ -33,9 +36,11 @@ export function AgentOutputModal({
   const [output, setOutput] = useState<string>("");
   const [isLoading, setIsLoading] = useState(true);
   const [viewMode, setViewMode] = useState<ViewMode>("parsed");
+  const [projectPath, setProjectPath] = useState<string>("");
   const scrollRef = useRef<HTMLDivElement>(null);
   const autoScrollRef = useRef(true);
   const projectPathRef = useRef<string>("");
+  const useWorktrees = useAppStore((state) => state.useWorktrees);
 
   // Auto-scroll to bottom when output changes
   useEffect(() => {
@@ -63,6 +68,7 @@ export function AgentOutputModal({
         }
 
         projectPathRef.current = currentProject.path;
+        setProjectPath(currentProject.path);
 
         // Ensure context directory exists
         const contextDir = `${currentProject.path}/.automaker/agents-context`;
@@ -113,44 +119,78 @@ export function AgentOutputModal({
     if (!api?.autoMode) return;
 
     const unsubscribe = api.autoMode.onEvent((event) => {
-      // Filter events for this specific feature only
-      if (event.featureId !== featureId) {
+      // Filter events for this specific feature only (skip events without featureId)
+      if ("featureId" in event && event.featureId !== featureId) {
         return;
       }
 
       let newContent = "";
 
-      if (event.type === "auto_mode_progress") {
-        newContent = event.content || "";
-      } else if (event.type === "auto_mode_tool") {
-        const toolName = event.tool || "Unknown Tool";
-        const toolInput = event.input
-          ? JSON.stringify(event.input, null, 2)
-          : "";
-        newContent = `\n🔧 Tool: ${toolName}\n${
-          toolInput ? `Input: ${toolInput}` : ""
-        }`;
-      } else if (event.type === "auto_mode_phase") {
-        const phaseEmoji =
-          event.phase === "planning"
-            ? "📋"
-            : event.phase === "action"
-            ? "⚡"
-            : "✅";
-        newContent = `\n${phaseEmoji} ${event.message}\n`;
-      } else if (event.type === "auto_mode_error") {
-        newContent = `\n❌ Error: ${event.error}\n`;
-      } else if (event.type === "auto_mode_feature_complete") {
-        const emoji = event.passes ? "✅" : "⚠️";
-        newContent = `\n${emoji} Task completed: ${event.message}\n`;
+      switch (event.type) {
+        case "auto_mode_progress":
+          newContent = event.content || "";
+          break;
+        case "auto_mode_tool":
+          const toolName = event.tool || "Unknown Tool";
+          const toolInput = event.input
+            ? JSON.stringify(event.input, null, 2)
+            : "";
+          newContent = `\n🔧 Tool: ${toolName}\n${
+            toolInput ? `Input: ${toolInput}` : ""
+          }`;
+          break;
+        case "auto_mode_phase":
+          const phaseEmoji =
+            event.phase === "planning"
+              ? "📋"
+              : event.phase === "action"
+              ? "⚡"
+              : "✅";
+          newContent = `\n${phaseEmoji} ${event.message}\n`;
+          break;
+        case "auto_mode_error":
+          newContent = `\n❌ Error: ${event.error}\n`;
+          break;
+        case "auto_mode_ultrathink_preparation":
+          // Format thinking level preparation information
+          let prepContent = `\n🧠 Ultrathink Preparation\n`;
+          
+          if (event.warnings && event.warnings.length > 0) {
+            prepContent += `\n⚠️ Warnings:\n`;
+            event.warnings.forEach((warning: string) => {
+              prepContent += `  • ${warning}\n`;
+            });
+          }
+          
+          if (event.recommendations && event.recommendations.length > 0) {
+            prepContent += `\n💡 Recommendations:\n`;
+            event.recommendations.forEach((rec: string) => {
+              prepContent += `  • ${rec}\n`;
+            });
+          }
+          
+          if (event.estimatedCost !== undefined) {
+            prepContent += `\n💰 Estimated Cost: ~$${event.estimatedCost.toFixed(2)} per execution\n`;
+          }
+          
+          if (event.estimatedTime) {
+            prepContent += `\n⏱️ Estimated Time: ${event.estimatedTime}\n`;
+          }
+          
+          newContent = prepContent;
+          break;
+        case "auto_mode_feature_complete":
+          const emoji = event.passes ? "✅" : "⚠️";
+          newContent = `\n${emoji} Task completed: ${event.message}\n`;
 
-        // Close the modal when the feature is verified (passes = true)
-        if (event.passes) {
-          // Small delay to show the completion message before closing
-          setTimeout(() => {
-            onClose();
-          }, 1500);
-        }
+          // Close the modal when the feature is verified (passes = true)
+          if (event.passes) {
+            // Small delay to show the completion message before closing
+            setTimeout(() => {
+              onClose();
+            }, 1500);
+          }
+          break;
       }
 
       if (newContent) {
@@ -211,25 +251,37 @@ export function AgentOutputModal({
               <Loader2 className="w-5 h-5 text-primary animate-spin" />
               Agent Output
             </DialogTitle>
-            <div className="flex items-center gap-1 bg-zinc-900/50 rounded-lg p-1">
+            <div className="flex items-center gap-1 bg-muted rounded-lg p-1">
               <button
                 onClick={() => setViewMode("parsed")}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
                   viewMode === "parsed"
                     ? "bg-primary/20 text-primary shadow-sm"
-                    : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50"
+                    : "text-muted-foreground hover:text-foreground hover:bg-accent"
                 }`}
                 data-testid="view-mode-parsed"
               >
                 <List className="w-3.5 h-3.5" />
-                Parsed
+                Logs
+              </button>
+              <button
+                onClick={() => setViewMode("changes")}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                  viewMode === "changes"
+                    ? "bg-primary/20 text-primary shadow-sm"
+                    : "text-muted-foreground hover:text-foreground hover:bg-accent"
+                }`}
+                data-testid="view-mode-changes"
+              >
+                <GitBranch className="w-3.5 h-3.5" />
+                Changes
               </button>
               <button
                 onClick={() => setViewMode("raw")}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
                   viewMode === "raw"
                     ? "bg-primary/20 text-primary shadow-sm"
-                    : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50"
+                    : "text-muted-foreground hover:text-foreground hover:bg-accent"
                 }`}
                 data-testid="view-mode-raw"
               >
@@ -246,34 +298,55 @@ export function AgentOutputModal({
           </DialogDescription>
         </DialogHeader>
 
-        <div
-          ref={scrollRef}
-          onScroll={handleScroll}
-          className="flex-1 overflow-y-auto bg-zinc-950 rounded-lg p-4 font-mono text-xs min-h-[400px] max-h-[60vh]"
-        >
-          {isLoading && !output ? (
-            <div className="flex items-center justify-center h-full text-muted-foreground">
-              <Loader2 className="w-6 h-6 animate-spin mr-2" />
-              Loading output...
+        {viewMode === "changes" ? (
+          <div className="flex-1 overflow-y-auto min-h-[400px] max-h-[60vh]">
+            {projectPath ? (
+              <GitDiffPanel
+                projectPath={projectPath}
+                featureId={featureId}
+                compact={false}
+                useWorktrees={useWorktrees}
+                className="border-0 rounded-lg"
+              />
+            ) : (
+              <div className="flex items-center justify-center h-full text-muted-foreground">
+                <Loader2 className="w-6 h-6 animate-spin mr-2" />
+                Loading...
+              </div>
+            )}
+          </div>
+        ) : (
+          <>
+            <div
+              ref={scrollRef}
+              onScroll={handleScroll}
+              className="flex-1 overflow-y-auto bg-zinc-950 rounded-lg p-4 font-mono text-xs min-h-[400px] max-h-[60vh]"
+            >
+              {isLoading && !output ? (
+                <div className="flex items-center justify-center h-full text-muted-foreground">
+                  <Loader2 className="w-6 h-6 animate-spin mr-2" />
+                  Loading output...
+                </div>
+              ) : !output ? (
+                <div className="flex items-center justify-center h-full text-muted-foreground">
+                  No output yet. The agent will stream output here as it works.
+                </div>
+              ) : viewMode === "parsed" ? (
+                <LogViewer output={output} />
+              ) : (
+                <div className="whitespace-pre-wrap break-words text-zinc-300">
+                  {output}
+                </div>
+              )}
             </div>
-          ) : !output ? (
-            <div className="flex items-center justify-center h-full text-muted-foreground">
-              No output yet. The agent will stream output here as it works.
-            </div>
-          ) : viewMode === "parsed" ? (
-            <LogViewer output={output} />
-          ) : (
-            <div className="whitespace-pre-wrap break-words text-zinc-300">
-              {output}
-            </div>
-          )}
-        </div>
 
-        <div className="text-xs text-muted-foreground text-center flex-shrink-0">
-          {autoScrollRef.current
-            ? "Auto-scrolling enabled"
-            : "Scroll to bottom to enable auto-scroll"}
-        </div>
+            <div className="text-xs text-muted-foreground text-center flex-shrink-0">
+              {autoScrollRef.current
+                ? "Auto-scrolling enabled"
+                : "Scroll to bottom to enable auto-scroll"}
+            </div>
+          </>
+        )}
       </DialogContent>
     </Dialog>
   );

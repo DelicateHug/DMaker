@@ -41,22 +41,8 @@ export interface StatResult {
   error?: string;
 }
 
-// Auto Mode types
-export type AutoModePhase = "planning" | "action" | "verification";
-
-export interface AutoModeEvent {
-  type: "auto_mode_feature_start" | "auto_mode_progress" | "auto_mode_tool" | "auto_mode_feature_complete" | "auto_mode_error" | "auto_mode_complete" | "auto_mode_phase";
-  featureId?: string;
-  projectId?: string;
-  feature?: object;
-  content?: string;
-  tool?: string;
-  input?: unknown;
-  passes?: boolean;
-  message?: string;
-  error?: string;
-  phase?: AutoModePhase;
-}
+// Auto Mode types - Import from electron.d.ts to avoid duplication
+import type { AutoModeEvent, ModelDefinition, ProviderStatus, WorktreeAPI, GitAPI, WorktreeInfo, WorktreeStatus, FileDiffsResult, FileDiffResult, FileStatus } from "@/types/electron";
 
 // Feature Suggestions types
 export interface FeatureSuggestion {
@@ -104,7 +90,7 @@ export interface AutoModeAPI {
   stop: () => Promise<{ success: boolean; error?: string }>;
   stopFeature: (featureId: string) => Promise<{ success: boolean; error?: string }>;
   status: () => Promise<{ success: boolean; isRunning?: boolean; currentFeatureId?: string | null; runningFeatures?: string[]; error?: string }>;
-  runFeature: (projectPath: string, featureId: string) => Promise<{ success: boolean; passes?: boolean; error?: string }>;
+  runFeature: (projectPath: string, featureId: string, useWorktrees?: boolean) => Promise<{ success: boolean; passes?: boolean; error?: string }>;
   verifyFeature: (projectPath: string, featureId: string) => Promise<{ success: boolean; passes?: boolean; error?: string }>;
   resumeFeature: (projectPath: string, featureId: string) => Promise<{ success: boolean; passes?: boolean; error?: string }>;
   contextExists: (projectPath: string, featureId: string) => Promise<{ success: boolean; exists?: boolean; error?: string }>;
@@ -133,19 +119,63 @@ export interface ElectronAPI {
   deleteFile: (filePath: string) => Promise<WriteResult>;
   trashItem?: (filePath: string) => Promise<WriteResult>;
   getPath: (name: string) => Promise<string>;
-  saveImageToTemp?: (data: string, filename: string, mimeType: string) => Promise<SaveImageResult>;
-  autoMode?: AutoModeAPI;
+  saveImageToTemp?: (data: string, filename: string, mimeType: string, projectPath?: string) => Promise<SaveImageResult>;
+  checkClaudeCli?: () => Promise<{
+    success: boolean;
+    status?: string;
+    method?: string;
+    version?: string;
+    path?: string;
+    recommendation?: string;
+    installCommands?: {
+      macos?: string;
+      windows?: string;
+      linux?: string;
+      npm?: string;
+    };
+    error?: string;
+  }>;
+  checkCodexCli?: () => Promise<{
+    success: boolean;
+    status?: string;
+    method?: string;
+    version?: string;
+    path?: string;
+    hasApiKey?: boolean;
+    recommendation?: string;
+    installCommands?: {
+      macos?: string;
+      windows?: string;
+      linux?: string;
+      npm?: string;
+    };
+    error?: string;
+  }>;
+  model?: {
+    getAvailable: () => Promise<{
+      success: boolean;
+      models?: ModelDefinition[];
+      error?: string;
+    }>;
+    checkProviders: () => Promise<{
+      success: boolean;
+      providers?: Record<string, ProviderStatus>;
+      error?: string;
+    }>;
+  };
+  testOpenAIConnection?: (apiKey?: string) => Promise<{
+    success: boolean;
+    message?: string;
+    error?: string;
+  }>;
+  worktree?: WorktreeAPI;
+  git?: GitAPI;
   suggestions?: SuggestionsAPI;
   specRegeneration?: SpecRegenerationAPI;
 }
 
-// Augment global Window interface
-declare global {
-  interface Window {
-    electronAPI: ElectronAPI | undefined;
-    isElectron: boolean | undefined;
-  }
-}
+// Note: Window interface is declared in @/types/electron.d.ts
+// Do not redeclare here to avoid type conflicts
 
 // Mock data for web development
 const mockFeatures = [
@@ -394,12 +424,13 @@ export const getElectronAPI = (): ElectronAPI => {
     },
 
     // Save image to temp directory
-    saveImageToTemp: async (data: string, filename: string, mimeType: string) => {
-      // Generate a mock temp file path
+    saveImageToTemp: async (data: string, filename: string, mimeType: string, projectPath?: string) => {
+      // Generate a mock temp file path - use projectPath if provided
       const timestamp = Date.now();
-      const ext = mimeType.split("/")[1] || "png";
       const safeName = filename.replace(/[^a-zA-Z0-9.-]/g, "_");
-      const tempFilePath = `/tmp/automaker-images/${timestamp}_${safeName}`;
+      const tempFilePath = projectPath
+        ? `${projectPath}/.automaker/images/${timestamp}_${safeName}`
+        : `/tmp/automaker-images/${timestamp}_${safeName}`;
 
       // Store the image data in mock file system for testing
       mockFileSystem[tempFilePath] = data;
@@ -408,8 +439,36 @@ export const getElectronAPI = (): ElectronAPI => {
       return { success: true, path: tempFilePath };
     },
 
+    checkClaudeCli: async () => ({
+      success: false,
+      status: "not_installed",
+      recommendation: "Claude CLI checks are unavailable in the web preview.",
+    }),
+
+    checkCodexCli: async () => ({
+      success: false,
+      status: "not_installed",
+      recommendation: "Codex CLI checks are unavailable in the web preview.",
+    }),
+
+    model: {
+      getAvailable: async () => ({ success: true, models: [] }),
+      checkProviders: async () => ({ success: true, providers: {} }),
+    },
+
+    testOpenAIConnection: async () => ({
+      success: false,
+      error: "OpenAI connection test is only available in the Electron app.",
+    }),
+
     // Mock Auto Mode API
     autoMode: createMockAutoModeAPI(),
+
+    // Mock Worktree API
+    worktree: createMockWorktreeAPI(),
+
+    // Mock Git API (for non-worktree operations)
+    git: createMockGitAPI(),
 
     // Mock Suggestions API
     suggestions: createMockSuggestionsAPI(),
@@ -418,6 +477,99 @@ export const getElectronAPI = (): ElectronAPI => {
     specRegeneration: createMockSpecRegenerationAPI(),
   };
 };
+
+// Mock Worktree API implementation
+function createMockWorktreeAPI(): WorktreeAPI {
+  return {
+    revertFeature: async (projectPath: string, featureId: string) => {
+      console.log("[Mock] Reverting feature:", { projectPath, featureId });
+      return { success: true, removedPath: `/mock/worktree/${featureId}` };
+    },
+
+    mergeFeature: async (projectPath: string, featureId: string, options?: object) => {
+      console.log("[Mock] Merging feature:", { projectPath, featureId, options });
+      return { success: true, mergedBranch: `feature/${featureId}` };
+    },
+
+    getInfo: async (projectPath: string, featureId: string) => {
+      console.log("[Mock] Getting worktree info:", { projectPath, featureId });
+      return {
+        success: true,
+        worktreePath: `/mock/worktrees/${featureId}`,
+        branchName: `feature/${featureId}`,
+        head: "abc1234",
+      };
+    },
+
+    getStatus: async (projectPath: string, featureId: string) => {
+      console.log("[Mock] Getting worktree status:", { projectPath, featureId });
+      return {
+        success: true,
+        modifiedFiles: 3,
+        files: ["src/feature.ts", "tests/feature.spec.ts", "README.md"],
+        diffStat: " 3 files changed, 50 insertions(+), 10 deletions(-)",
+        recentCommits: [
+          "abc1234 feat: implement feature",
+          "def5678 test: add tests for feature",
+        ],
+      };
+    },
+
+    list: async (projectPath: string) => {
+      console.log("[Mock] Listing worktrees:", { projectPath });
+      return { success: true, worktrees: [] };
+    },
+
+    getDiffs: async (projectPath: string, featureId: string) => {
+      console.log("[Mock] Getting file diffs:", { projectPath, featureId });
+      return {
+        success: true,
+        diff: "diff --git a/src/feature.ts b/src/feature.ts\n+++ new file\n@@ -0,0 +1,10 @@\n+export function feature() {\n+  return 'hello';\n+}",
+        files: [
+          { status: "A", path: "src/feature.ts", statusText: "Added" },
+          { status: "M", path: "README.md", statusText: "Modified" },
+        ],
+        hasChanges: true,
+      };
+    },
+
+    getFileDiff: async (projectPath: string, featureId: string, filePath: string) => {
+      console.log("[Mock] Getting file diff:", { projectPath, featureId, filePath });
+      return {
+        success: true,
+        diff: `diff --git a/${filePath} b/${filePath}\n+++ new file\n@@ -0,0 +1,5 @@\n+// New content`,
+        filePath,
+      };
+    },
+  };
+}
+
+// Mock Git API implementation (for non-worktree operations)
+function createMockGitAPI(): GitAPI {
+  return {
+    getDiffs: async (projectPath: string) => {
+      console.log("[Mock] Getting git diffs for project:", { projectPath });
+      return {
+        success: true,
+        diff: "diff --git a/src/feature.ts b/src/feature.ts\n+++ new file\n@@ -0,0 +1,10 @@\n+export function feature() {\n+  return 'hello';\n+}",
+        files: [
+          { status: "A", path: "src/feature.ts", statusText: "Added" },
+          { status: "M", path: "README.md", statusText: "Modified" },
+        ],
+        hasChanges: true,
+      };
+    },
+
+    getFileDiff: async (projectPath: string, filePath: string) => {
+      console.log("[Mock] Getting git file diff:", { projectPath, filePath });
+      return {
+        success: true,
+        diff: `diff --git a/${filePath} b/${filePath}\n+++ new file\n@@ -0,0 +1,5 @@\n+// New content`,
+        filePath,
+      };
+    },
+  };
+}
 
 // Mock Auto Mode state and implementation
 let mockAutoModeRunning = false;
@@ -487,11 +639,12 @@ function createMockAutoModeAPI(): AutoModeAPI {
       };
     },
 
-    runFeature: async (projectPath: string, featureId: string) => {
+    runFeature: async (projectPath: string, featureId: string, useWorktrees?: boolean) => {
       if (mockRunningFeatures.has(featureId)) {
         return { success: false, error: `Feature ${featureId} is already running` };
       }
 
+      console.log(`[Mock] Running feature ${featureId} with useWorktrees: ${useWorktrees}`);
       mockRunningFeatures.add(featureId);
       simulateAutoModeLoop(projectPath, featureId);
 
