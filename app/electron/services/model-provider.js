@@ -129,7 +129,19 @@ class ClaudeProvider extends ModelProvider {
       console.log('[ClaudeProvider] Loaded CLAUDE_CODE_OAUTH_TOKEN from ~/.claude/config.json');
       return true;
     }
-    console.error('[ClaudeProvider] No Anthropic auth found (env empty, ~/.claude/config.json missing token)');
+    
+    // Check if CLI is installed but not logged in
+    try {
+      const claudeCliDetector = require('./claude-cli-detector');
+      const detection = claudeCliDetector.detectClaudeInstallation();
+      if (detection.installed && detection.method === 'cli') {
+        console.error('[ClaudeProvider] Claude CLI is installed but not logged in. Run `claude login` to authenticate.');
+      } else {
+        console.error('[ClaudeProvider] No Anthropic auth found (env empty, ~/.claude/config.json missing token)');
+      }
+    } catch (err) {
+      console.error('[ClaudeProvider] No Anthropic auth found (env empty, ~/.claude/config.json missing token)');
+    }
     return false;
   }
 
@@ -146,7 +158,19 @@ class ClaudeProvider extends ModelProvider {
   async *executeQuery(options) {
     // Ensure we have auth; fall back to CLI login token if available.
     if (!this.ensureAuthEnv()) {
-      const msg = 'Missing Anthropic auth. Set ANTHROPIC_API_KEY or run `claude login` (CLI) so ~/.claude/config.json contains oauth_token.';
+      // Check if CLI is installed to provide better error message
+      let msg = 'Missing Anthropic auth. Set ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN environment variable.';
+      try {
+        const claudeCliDetector = require('./claude-cli-detector');
+        const detection = claudeCliDetector.detectClaudeInstallation();
+        if (detection.installed && detection.method === 'cli') {
+          msg = 'Claude CLI is installed but not authenticated. Run `claude login` to authenticate, or set ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN environment variable.';
+        } else {
+          msg = 'Missing Anthropic auth. Set ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN, or install Claude CLI and run `claude login`.';
+        }
+      } catch (err) {
+        // Fallback to default message
+      }
       console.error(`[ClaudeProvider] ${msg}`);
       yield { type: 'error', error: msg };
       return;

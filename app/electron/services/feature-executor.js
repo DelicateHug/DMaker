@@ -369,8 +369,19 @@ class FeatureExecutor {
       // Ensure provider auth is available (especially for Claude SDK)
       const provider = this.getProvider(feature);
       if (provider?.ensureAuthEnv && !provider.ensureAuthEnv()) {
-        const authMsg =
-          "Missing Anthropic auth. Set ANTHROPIC_API_KEY or run `claude login` so ~/.claude/config.json contains oauth_token.";
+        // Check if CLI is installed to provide better error message
+        let authMsg = "Missing Anthropic auth. Set ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN environment variable.";
+        try {
+          const claudeCliDetector = require('./claude-cli-detector');
+          const detection = claudeCliDetector.detectClaudeInstallation();
+          if (detection.installed && detection.method === 'cli') {
+            authMsg = "Claude CLI is installed but not authenticated. Run `claude login` to authenticate, or set ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN environment variable.";
+          } else {
+            authMsg = "Missing Anthropic auth. Set ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN, or install Claude CLI and run `claude login`.";
+          }
+        } catch (err) {
+          // Fallback to default message
+        }
         console.error(`[FeatureExecutor] ${authMsg}`);
         throw new Error(authMsg);
       }
