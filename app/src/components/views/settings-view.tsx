@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState } from "react";
 import { useAppStore } from "@/store/app-store";
 import { useSetupStore } from "@/store/setup-store";
 import { Button } from "@/components/ui/button";
@@ -30,6 +30,7 @@ import {
 import { KeyboardMap, ShortcutReferencePanel } from "@/components/ui/keyboard-map";
 // Import custom hooks
 import { useCliStatus } from "./settings-view/hooks/use-cli-status";
+import { useScrollTracking } from "./settings-view/hooks/use-scroll-tracking";
 // Import extracted sections
 import { ApiKeysSection } from "./settings-view/api-keys/api-keys-section";
 import { ClaudeCliStatus } from "./settings-view/cli-status/claude-cli-status";
@@ -95,72 +96,12 @@ export function SettingsView() {
     handleRefreshCodexCli,
   } = useCliStatus();
 
-  const [activeSection, setActiveSection] = useState("api-keys");
+  // Use scroll tracking hook
+  const { activeSection, scrollToSection, scrollContainerRef } =
+    useScrollTracking(NAV_ITEMS, currentProject);
+
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showKeyboardMapDialog, setShowKeyboardMapDialog] = useState(false);
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
-
-  // Track scroll position to highlight active nav item
-  useEffect(() => {
-    const container = scrollContainerRef.current;
-    if (!container) return;
-
-    const handleScroll = () => {
-      const sections = NAV_ITEMS.filter(
-        (item) => item.id !== "danger" || currentProject
-      )
-        .map((item) => ({
-          id: item.id,
-          element: document.getElementById(item.id),
-        }))
-        .filter((s) => s.element);
-
-      const containerRect = container.getBoundingClientRect();
-      const scrollTop = container.scrollTop;
-      const scrollHeight = container.scrollHeight;
-      const clientHeight = container.clientHeight;
-
-      // Check if scrolled to bottom (within a small threshold)
-      const isAtBottom = scrollTop + clientHeight >= scrollHeight - 50;
-
-      if (isAtBottom && sections.length > 0) {
-        // If at bottom, highlight the last visible section
-        setActiveSection(sections[sections.length - 1].id);
-        return;
-      }
-
-      for (let i = sections.length - 1; i >= 0; i--) {
-        const section = sections[i];
-        if (section.element) {
-          const rect = section.element.getBoundingClientRect();
-          const relativeTop = rect.top - containerRect.top + scrollTop;
-          if (scrollTop >= relativeTop - 100) {
-            setActiveSection(section.id);
-            break;
-          }
-        }
-      }
-    };
-
-    container.addEventListener("scroll", handleScroll);
-    return () => container.removeEventListener("scroll", handleScroll);
-  }, [currentProject]);
-
-  const scrollToSection = useCallback((sectionId: string) => {
-    const element = document.getElementById(sectionId);
-    if (element && scrollContainerRef.current) {
-      const container = scrollContainerRef.current;
-      const containerRect = container.getBoundingClientRect();
-      const elementRect = element.getBoundingClientRect();
-      const relativeTop =
-        elementRect.top - containerRect.top + container.scrollTop;
-
-      container.scrollTo({
-        top: relativeTop - 24,
-        behavior: "smooth",
-      });
-    }
-  }, []);
 
   return (
     <div
