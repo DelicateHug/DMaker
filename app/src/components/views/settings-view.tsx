@@ -40,6 +40,7 @@ import {
   TestTube,
   Settings2,
   RefreshCw,
+  RotateCcw,
 } from "lucide-react";
 import { getElectronAPI } from "@/lib/electron";
 import { Checkbox } from "@/components/ui/checkbox";
