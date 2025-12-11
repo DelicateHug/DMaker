@@ -117,11 +117,10 @@ class SpecRegenerationService {
       console.log(`[SpecRegeneration] Phase: ${currentPhase}`);
 
       // Create custom MCP server with UpdateFeatureStatus tool if generating features
-      let featureToolsServer = null;
       if (generateFeatures) {
         console.log("[SpecRegeneration] Setting up feature generation tools...");
         try {
-          featureToolsServer = mcpServerFactory.createFeatureToolsServer(
+          mcpServerFactory.createFeatureToolsServer(
             featureLoader.updateFeatureStatus.bind(featureLoader),
             projectPath
           );
