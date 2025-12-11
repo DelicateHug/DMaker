@@ -611,7 +611,39 @@ class ClaudeCliDetector {
     }
     send("Opening system terminal for authentication...\n");
 
-    return await new Promise((resolve, reject) => {
+    // Helper function to check if a command exists asynchronously
+    const commandExists = (cmd) => {
+      return new Promise((resolve) => {
+        require("child_process").exec(
+          `which ${cmd}`,
+          { timeout: 1000 },
+          (error) => {
+            resolve(!error);
+          }
+        );
+      });
+    };
+
+    // For Linux, find available terminal first (async)
+    let linuxTerminal = null;
+    if (platform !== "win32" && platform !== "darwin") {
+      const terminals = [
+        ["gnome-terminal", ["--", claudePath, "setup-token"]],
+        ["konsole", ["-e", claudePath, "setup-token"]],
+        ["xterm", ["-e", claudePath, "setup-token"]],
+        ["x-terminal-emulator", ["-e", `${claudePath} setup-token`]],
+      ];
+
+      for (const [term, termArgs] of terminals) {
+        const exists = await commandExists(term);
+        if (exists) {
+          linuxTerminal = { command: term, args: termArgs };
+          break;
+        }
+      }
+    }
+
+    return new Promise((resolve, reject) => {
       // Open command in external terminal since Claude CLI requires TTY
       let command, args;
 
@@ -629,27 +661,8 @@ class ClaudeCliDetector {
           'tell application "Terminal" to activate',
         ];
       } else {
-        // Linux: Try common terminal emulators
-        const terminals = [
-          ["gnome-terminal", ["--", claudePath, "setup-token"]],
-          ["konsole", ["-e", claudePath, "setup-token"]],
-          ["xterm", ["-e", claudePath, "setup-token"]],
-          ["x-terminal-emulator", ["-e", `${claudePath} setup-token`]],
-        ];
-
-        // Try to find an available terminal
-        for (const [term, termArgs] of terminals) {
-          try {
-            execSync(`which ${term}`, { stdio: "ignore" });
-            command = term;
-            args = termArgs;
-            break;
-          } catch {
-            // Terminal not found, try next
-          }
-        }
-
-        if (!command) {
+        // Linux: Use the terminal we found earlier
+        if (!linuxTerminal) {
           reject({
             success: false,
             error:
@@ -658,6 +671,8 @@ class ClaudeCliDetector {
           });
           return;
         }
+        command = linuxTerminal.command;
+        args = linuxTerminal.args;
       }
 
       console.log(
