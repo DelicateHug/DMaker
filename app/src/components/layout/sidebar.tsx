@@ -40,6 +40,8 @@ import {
   Radio,
   Monitor,
   Search,
+  Bug,
+  Activity,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -394,7 +396,8 @@ export function Sidebar() {
     if (!result.canceled && result.filePaths[0]) {
       const path = result.filePaths[0];
       // Extract folder name from path (works on both Windows and Mac/Linux)
-      const name = path.split(/[/\\]/).filter(Boolean).pop() || "Untitled Project";
+      const name =
+        path.split(/[/\\]/).filter(Boolean).pop() || "Untitled Project";
 
       try {
         // Check if this is a brand new project (no .automaker directory)
@@ -572,7 +575,10 @@ export function Sidebar() {
 
   // Handle selecting the currently highlighted project
   const selectHighlightedProject = useCallback(() => {
-    if (filteredProjects.length > 0 && selectedProjectIndex < filteredProjects.length) {
+    if (
+      filteredProjects.length > 0 &&
+      selectedProjectIndex < filteredProjects.length
+    ) {
       setCurrentProject(filteredProjects[selectedProjectIndex]);
       setIsProjectPickerOpen(false);
     }
@@ -596,7 +602,11 @@ export function Sidebar() {
       } else if (event.key === "ArrowUp") {
         event.preventDefault();
         setSelectedProjectIndex((prev) => (prev > 0 ? prev - 1 : prev));
-      } else if (event.key.toLowerCase() === "p" && !event.metaKey && !event.ctrlKey) {
+      } else if (
+        event.key.toLowerCase() === "p" &&
+        !event.metaKey &&
+        !event.ctrlKey
+      ) {
         // Toggle off when P is pressed (not with modifiers) while dropdown is open
         // Only if not typing in the search input
         if (document.activeElement !== projectSearchInputRef.current) {
@@ -913,7 +923,10 @@ export function Sidebar() {
                         </span>
                       )}
                     </DropdownMenuSubTrigger>
-                    <DropdownMenuSubContent className="w-48" data-testid="project-theme-menu">
+                    <DropdownMenuSubContent
+                      className="w-48"
+                      data-testid="project-theme-menu"
+                    >
                       <DropdownMenuLabel className="text-xs text-muted-foreground">
                         Select theme for this project
                       </DropdownMenuLabel>
@@ -922,7 +935,10 @@ export function Sidebar() {
                         value={currentProject.theme || ""}
                         onValueChange={(value) => {
                           if (currentProject) {
-                            setProjectTheme(currentProject.id, value === "" ? null : value as any);
+                            setProjectTheme(
+                              currentProject.id,
+                              value === "" ? null : (value as any)
+                            );
                           }
                         }}
                       >
@@ -932,7 +948,9 @@ export function Sidebar() {
                             <DropdownMenuRadioItem
                               key={option.value}
                               value={option.value}
-                              data-testid={`project-theme-${option.value || 'global'}`}
+                              data-testid={`project-theme-${
+                                option.value || "global"
+                              }`}
                             >
                               <Icon className="w-4 h-4 mr-2" />
                               <span>{option.label}</span>
@@ -955,21 +973,30 @@ export function Sidebar() {
                       <DropdownMenuLabel className="text-xs text-muted-foreground">
                         Project History
                       </DropdownMenuLabel>
-                      <DropdownMenuItem onClick={cyclePrevProject} data-testid="cycle-prev-project">
+                      <DropdownMenuItem
+                        onClick={cyclePrevProject}
+                        data-testid="cycle-prev-project"
+                      >
                         <Undo2 className="w-4 h-4 mr-2" />
                         <span className="flex-1">Previous</span>
                         <span className="text-[10px] font-mono text-muted-foreground ml-2">
                           {formatShortcut(shortcuts.cyclePrevProject, true)}
                         </span>
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={cycleNextProject} data-testid="cycle-next-project">
+                      <DropdownMenuItem
+                        onClick={cycleNextProject}
+                        data-testid="cycle-next-project"
+                      >
                         <Redo2 className="w-4 h-4 mr-2" />
                         <span className="flex-1">Next</span>
                         <span className="text-[10px] font-mono text-muted-foreground ml-2">
                           {formatShortcut(shortcuts.cycleNextProject, true)}
                         </span>
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={clearProjectHistory} data-testid="clear-project-history">
+                      <DropdownMenuItem
+                        onClick={clearProjectHistory}
+                        data-testid="clear-project-history"
+                      >
                         <RotateCcw className="w-4 h-4 mr-2" />
                         <span>Clear history</span>
                       </DropdownMenuItem>
@@ -1078,8 +1105,79 @@ export function Sidebar() {
         </nav>
       </div>
 
-      {/* Bottom Section - User / Settings */}
+      {/* Bottom Section - Running Agents / Bug Report / Settings */}
       <div className="border-t border-sidebar-border bg-sidebar-accent/10 shrink-0">
+        {/* Running Agents Link */}
+        <div className="p-2 pb-0">
+          <button
+            onClick={() => setCurrentView("running-agents")}
+            className={cn(
+              "group flex items-center w-full px-2 lg:px-3 py-2.5 rounded-lg relative overflow-hidden transition-all titlebar-no-drag",
+              isActiveRoute("running-agents")
+                ? "bg-sidebar-accent/50 text-foreground border border-sidebar-border"
+                : "text-muted-foreground hover:text-foreground hover:bg-sidebar-accent/50",
+              sidebarOpen ? "justify-start" : "justify-center"
+            )}
+            title={!sidebarOpen ? "Running Agents" : undefined}
+            data-testid="running-agents-link"
+          >
+            {isActiveRoute("running-agents") && (
+              <div className="absolute inset-y-0 left-0 w-0.5 bg-brand-500 rounded-l-md"></div>
+            )}
+            <Activity
+              className={cn(
+                "w-4 h-4 shrink-0 transition-colors",
+                isActiveRoute("running-agents")
+                  ? "text-brand-500"
+                  : "group-hover:text-brand-400"
+              )}
+            />
+            <span
+              className={cn(
+                "ml-2.5 font-medium text-sm flex-1 text-left",
+                sidebarOpen ? "hidden lg:block" : "hidden"
+              )}
+            >
+              Running Agents
+            </span>
+            {!sidebarOpen && (
+              <span className="absolute left-full ml-2 px-2 py-1 bg-popover text-popover-foreground text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 border border-border">
+                Running Agents
+              </span>
+            )}
+          </button>
+        </div>
+        {/* Bug Report Link */}
+        <div className="p-2 pb-0 pt-0">
+          <button
+            onClick={() => {
+              const api = getElectronAPI();
+              api.openExternalLink("https://github.com/AutoMaker-Org/automaker/issues");
+            }}
+            className={cn(
+              "group flex items-center w-full px-2 lg:px-3 py-2.5 rounded-lg relative overflow-hidden transition-all titlebar-no-drag",
+              "text-muted-foreground hover:text-foreground hover:bg-sidebar-accent/50",
+              sidebarOpen ? "justify-start" : "justify-center"
+            )}
+            title={!sidebarOpen ? "Report Bug / Feature Request" : undefined}
+            data-testid="bug-report-link"
+          >
+            <Bug className="w-4 h-4 shrink-0 transition-colors group-hover:text-brand-400" />
+            <span
+              className={cn(
+                "ml-2.5 font-medium text-sm flex-1 text-left",
+                sidebarOpen ? "hidden lg:block" : "hidden"
+              )}
+            >
+              Report Bug / Feature Request
+            </span>
+            {!sidebarOpen && (
+              <span className="absolute left-full ml-2 px-2 py-1 bg-popover text-popover-foreground text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 border border-border">
+                Report Bug / Feature Request
+              </span>
+            )}
+          </button>
+        </div>
         {/* Settings Link */}
         <div className="p-2">
           <button
@@ -1272,8 +1370,8 @@ export function Sidebar() {
                   Generate feature list
                 </label>
                 <p className="text-xs text-muted-foreground">
-                  Automatically create features in the features folder
-                  from the implementation roadmap after the spec is generated.
+                  Automatically create features in the features folder from the
+                  implementation roadmap after the spec is generated.
                 </p>
               </div>
             </div>

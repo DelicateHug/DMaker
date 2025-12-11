@@ -529,16 +529,22 @@ export function BoardView() {
     const projectId = currentProject.id;
 
     const unsubscribe = api.autoMode.onEvent((event) => {
-      // Use event's projectId if available, otherwise use current project
-      const eventProjectId = event.projectId || projectId;
+      // Use event's projectPath or projectId if available, otherwise use current project
+      // Board view only reacts to events for the currently selected project
+      const eventProjectId = ('projectId' in event && event.projectId) || projectId;
 
       if (event.type === "auto_mode_feature_complete") {
         // Reload features when a feature is completed
         console.log("[Board] Feature completed, reloading features...");
         loadFeatures();
-        // Play ding sound when feature is done
-        const audio = new Audio("/sounds/ding.mp3");
-        audio.play().catch((err) => console.warn("Could not play ding sound:", err));
+        // Play ding sound when feature is done (unless muted)
+        const { muteDoneSound } = useAppStore.getState();
+        if (!muteDoneSound) {
+          const audio = new Audio("/sounds/ding.mp3");
+          audio
+            .play()
+            .catch((err) => console.warn("Could not play ding sound:", err));
+        }
       } else if (event.type === "auto_mode_error") {
         // Reload features when an error occurs (feature moved to waiting_approval)
         console.log(
@@ -580,22 +586,36 @@ export function BoardView() {
         const api = getElectronAPI();
         if (!api?.autoMode?.status) return;
 
-        const status = await api.autoMode.status();
-        if (status.success && status.runningFeatures) {
-          console.log(
-            "[Board] Syncing running tasks from backend:",
-            status.runningFeatures
-          );
-
-          // Clear existing running tasks for this project and add the actual running ones
-          const { clearRunningTasks, addRunningTask } = useAppStore.getState();
+        const status = await api.autoMode.status(currentProject.path);
+        if (status.success) {
           const projectId = currentProject.id;
-          clearRunningTasks(projectId);
+          const { clearRunningTasks, addRunningTask, setAutoModeRunning } =
+            useAppStore.getState();
 
-          // Add each running feature to the store
-          status.runningFeatures.forEach((featureId: string) => {
-            addRunningTask(projectId, featureId);
-          });
+          // Sync running features if available
+          if (status.runningFeatures) {
+            console.log(
+              "[Board] Syncing running tasks from backend:",
+              status.runningFeatures
+            );
+
+            // Clear existing running tasks for this project and add the actual running ones
+            clearRunningTasks(projectId);
+
+            // Add each running feature to the store
+            status.runningFeatures.forEach((featureId: string) => {
+              addRunningTask(projectId, featureId);
+            });
+          }
+
+          // Sync auto mode running state (backend returns autoLoopRunning, mock returns isRunning)
+          const isAutoModeRunning =
+            status.autoLoopRunning ?? status.isRunning ?? false;
+          console.log(
+            "[Board] Syncing auto mode running state:",
+            isAutoModeRunning
+          );
+          setAutoModeRunning(projectId, isAutoModeRunning);
         }
       } catch (error) {
         console.error("[Board] Failed to sync running tasks:", error);
@@ -1899,7 +1919,7 @@ export function BoardView() {
                               data-testid="start-next-button"
                             >
                               <FastForward className="w-3 h-3 mr-1" />
-                              Start Next
+                              Pull Top
                             </HotkeyButton>
                           )}
                         </div>

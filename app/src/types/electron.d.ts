@@ -163,18 +163,21 @@ export type AutoModeEvent =
       type: "auto_mode_feature_start";
       featureId: string;
       projectId?: string;
+      projectPath?: string;
       feature: unknown;
     }
   | {
       type: "auto_mode_progress";
       featureId: string;
       projectId?: string;
+      projectPath?: string;
       content: string;
     }
   | {
       type: "auto_mode_tool";
       featureId: string;
       projectId?: string;
+      projectPath?: string;
       tool: string;
       input: unknown;
     }
@@ -182,6 +185,7 @@ export type AutoModeEvent =
       type: "auto_mode_feature_complete";
       featureId: string;
       projectId?: string;
+      projectPath?: string;
       passes: boolean;
       message: string;
     }
@@ -190,22 +194,26 @@ export type AutoModeEvent =
       error: string;
       featureId?: string;
       projectId?: string;
+      projectPath?: string;
     }
   | {
       type: "auto_mode_complete";
       message: string;
       projectId?: string;
+      projectPath?: string;
     }
   | {
       type: "auto_mode_phase";
       featureId: string;
       projectId?: string;
+      projectPath?: string;
       phase: "planning" | "action" | "verification";
       message: string;
     }
   | {
       type: "auto_mode_ultrathink_preparation";
       featureId: string;
+      projectPath?: string;
       warnings: string[];
       recommendations: string[];
       estimatedCost?: number;
@@ -264,14 +272,15 @@ export interface SpecRegenerationAPI {
 }
 
 export interface AutoModeAPI {
-  start: (projectPath: string) => Promise<{
+  start: (projectPath: string, maxConcurrency?: number) => Promise<{
     success: boolean;
     error?: string;
   }>;
 
-  stop: () => Promise<{
+  stop: (projectPath: string) => Promise<{
     success: boolean;
     error?: string;
+    runningFeatures?: number;
   }>;
 
   stopFeature: (featureId: string) => Promise<{
@@ -279,11 +288,14 @@ export interface AutoModeAPI {
     error?: string;
   }>;
 
-  status: () => Promise<{
+  status: (projectPath?: string) => Promise<{
     success: boolean;
+    autoLoopRunning?: boolean;
     isRunning?: boolean;
     currentFeatureId?: string | null;
     runningFeatures?: string[];
+    runningProjects?: string[];
+    runningCount?: number;
     error?: string;
   }>;
 

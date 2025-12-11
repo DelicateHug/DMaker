@@ -56,7 +56,10 @@ function parseHotkeyConfig(hotkey: string | HotkeyConfig): HotkeyConfig {
 /**
  * Generate the display label for the hotkey
  */
-function getHotkeyDisplayLabel(config: HotkeyConfig, isMac: boolean): React.ReactNode {
+function getHotkeyDisplayLabel(
+  config: HotkeyConfig,
+  isMac: boolean
+): React.ReactNode {
   if (config.label) {
     return config.label;
   }
@@ -73,7 +76,10 @@ function getHotkeyDisplayLabel(config: HotkeyConfig, isMac: boolean): React.Reac
 
   if (config.shift) {
     parts.push(
-      <span key="shift" className="leading-none flex items-center justify-center">
+      <span
+        key="shift"
+        className="leading-none flex items-center justify-center"
+      >
         ⇧
       </span>
     );
@@ -134,11 +140,7 @@ function getHotkeyDisplayLabel(config: HotkeyConfig, isMac: boolean): React.Reac
     </span>
   );
 
-  return (
-    <span className="inline-flex items-center gap-1.5">
-      {parts}
-    </span>
-  );
+  return <span className="inline-flex items-center gap-1.5">{parts}</span>;
 }
 
 /**
@@ -205,7 +207,11 @@ export function HotkeyButton({
 
       // Don't trigger when typing in inputs (unless explicitly scoped or using cmdCtrl modifier)
       // cmdCtrl shortcuts like Cmd+Enter should work even in inputs as they're intentional submit actions
-      if (!scopeRef && !config.cmdCtrl && isInputElement(document.activeElement)) {
+      if (
+        !scopeRef &&
+        !config.cmdCtrl &&
+        isInputElement(document.activeElement)
+      ) {
         return;
       }
 
@@ -228,7 +234,8 @@ export function HotkeyButton({
       // If scoped, check that the scope element is visible
       if (scopeRef && scopeRef.current) {
         const scopeEl = scopeRef.current;
-        const isVisible = scopeEl.offsetParent !== null ||
+        const isVisible =
+          scopeEl.offsetParent !== null ||
           getComputedStyle(scopeEl).display !== "none";
         if (!isVisible) return;
       }
@@ -259,14 +266,15 @@ export function HotkeyButton({
   }, [config, hotkeyActive, handleKeyDown]);
 
   // Render the hotkey indicator
-  const hotkeyIndicator = config && showHotkeyIndicator ? (
-    <span
-      className="ml-3 px-2 py-0.5 text-[10px] font-mono rounded bg-primary-foreground/10 border border-primary-foreground/20 inline-flex items-center gap-1.5"
-      data-testid="hotkey-indicator"
-    >
-      {getHotkeyDisplayLabel(config, isMac)}
-    </span>
-  ) : null;
+  const hotkeyIndicator =
+    config && showHotkeyIndicator ? (
+      <span
+        className="px-2 py-0.5 text-[10px] font-mono rounded bg-primary-foreground/10 border border-primary-foreground/20 inline-flex items-center gap-1.5"
+        data-testid="hotkey-indicator"
+      >
+        {getHotkeyDisplayLabel(config, isMac)}
+      </span>
+    ) : null;
 
   return (
     <Button

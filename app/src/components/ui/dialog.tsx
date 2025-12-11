@@ -82,7 +82,7 @@ function DialogContent({
             data-slot="dialog-close"
             className={cn(
               "ring-offset-background focus:ring-ring data-[state=open]:bg-accent data-[state=open]:text-muted-foreground absolute rounded-xs opacity-70 transition-opacity cursor-pointer hover:opacity-100 focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none disabled:cursor-not-allowed [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
-              compact ? "top-2 right-2" : "top-4 right-4"
+              compact ? "top-2 right-3" : "top-3 right-5"
             )}
           >
             <XIcon />

@@ -248,21 +248,12 @@ export const KanbanCard = memo(function KanbanCard({
       {...attributes}
       {...(isDraggable ? listeners : {})}
     >
-      {/* Shortcut key badge for in-progress cards */}
-      {shortcutKey && (
-        <div
-          className="absolute top-2 left-2 px-1.5 py-0.5 text-[10px] font-mono rounded bg-brand-500/10 border border-brand-500/30 text-brand-400/70 z-10"
-          data-testid={`shortcut-key-${feature.id}`}
-        >
-          {shortcutKey}
-        </div>
-      )}
       {/* Skip Tests indicator badge */}
       {feature.skipTests && !feature.error && (
         <div
           className={cn(
             "absolute px-1.5 py-0.5 text-[10px] font-medium rounded flex items-center gap-1 z-10",
-            shortcutKey ? "top-2 left-10" : "top-2 left-2",
+            "top-2 left-2",
             "bg-orange-500/20 border border-orange-500/50 text-orange-400"
           )}
           data-testid={`skip-tests-badge-${feature.id}`}
@@ -277,7 +268,7 @@ export const KanbanCard = memo(function KanbanCard({
         <div
           className={cn(
             "absolute px-1.5 py-0.5 text-[10px] font-medium rounded flex items-center gap-1 z-10",
-            shortcutKey ? "top-2 left-10" : "top-2 left-2",
+            "top-2 left-2",
             "bg-red-500/20 border border-red-500/50 text-red-400"
           )}
           data-testid={`error-badge-${feature.id}`}
@@ -299,9 +290,7 @@ export const KanbanCard = memo(function KanbanCard({
                   // Position below error badge if present, otherwise use normal position
                   feature.error || feature.skipTests
                     ? "top-8 left-2"
-                    : shortcutKey
-                      ? "top-2 left-10"
-                      : "top-2 left-2"
+                    : "top-2 left-2"
                 )}
                 data-testid={`branch-badge-${feature.id}`}
               >
@@ -319,7 +308,7 @@ export const KanbanCard = memo(function KanbanCard({
         className={cn(
           "p-3 pb-2 block", // Reset grid layout to block for custom kanban card layout
           // Add extra top padding when badges are present to prevent text overlap
-          (feature.skipTests || feature.error || shortcutKey) && "pt-10",
+          (feature.skipTests || feature.error) && "pt-10",
           // Add even more top padding when both badges and branch are shown
           hasWorktree && (feature.skipTests || feature.error) && "pt-14"
         )}
@@ -613,6 +602,14 @@ export const KanbanCard = memo(function KanbanCard({
                 >
                   <FileText className="w-3 h-3 mr-1" />
                   Logs
+                  {shortcutKey && (
+                    <span
+                      className="ml-2 px-1.5 py-0.5 text-[10px] font-mono rounded bg-primary-foreground/10 border border-primary-foreground/20"
+                      data-testid={`shortcut-key-${feature.id}`}
+                    >
+                      {shortcutKey}
+                    </span>
+                  )}
                 </Button>
               )}
               {onForceStop && (

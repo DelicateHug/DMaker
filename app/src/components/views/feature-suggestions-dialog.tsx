@@ -20,8 +20,11 @@ import {
   StopCircle,
   ChevronDown,
   ChevronRight,
+  RefreshCw,
+  Shield,
+  Zap,
 } from "lucide-react";
-import { getElectronAPI, FeatureSuggestion, SuggestionsEvent } from "@/lib/electron";
+import { getElectronAPI, FeatureSuggestion, SuggestionsEvent, SuggestionType } from "@/lib/electron";
 import { useAppStore, Feature } from "@/store/app-store";
 import { toast } from "sonner";
 
@@ -36,6 +39,39 @@ interface FeatureSuggestionsDialogProps {
   setIsGenerating: (generating: boolean) => void;
 }
 
+// Configuration for each suggestion type
+const suggestionTypeConfig: Record<SuggestionType, {
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  description: string;
+  color: string;
+}> = {
+  features: {
+    label: "Feature Suggestions",
+    icon: Lightbulb,
+    description: "Discover missing features and improvements",
+    color: "text-yellow-500",
+  },
+  refactoring: {
+    label: "Refactoring Suggestions",
+    icon: RefreshCw,
+    description: "Find code smells and refactoring opportunities",
+    color: "text-blue-500",
+  },
+  security: {
+    label: "Security Suggestions",
+    icon: Shield,
+    description: "Identify security vulnerabilities and issues",
+    color: "text-red-500",
+  },
+  performance: {
+    label: "Performance Suggestions",
+    icon: Zap,
+    description: "Discover performance bottlenecks and optimizations",
+    color: "text-green-500",
+  },
+};
+
 export function FeatureSuggestionsDialog({
   open,
   onClose,
@@ -49,6 +85,7 @@ export function FeatureSuggestionsDialog({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [isImporting, setIsImporting] = useState(false);
+  const [currentSuggestionType, setCurrentSuggestionType] = useState<SuggestionType | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const autoScrollRef = useRef(true);
 
@@ -87,7 +124,8 @@ export function FeatureSuggestionsDialog({
           setSuggestions(event.suggestions);
           // Select all by default
           setSelectedIds(new Set(event.suggestions.map((s) => s.id)));
-          toast.success(`Generated ${event.suggestions.length} feature suggestions!`);
+          const typeLabel = currentSuggestionType ? suggestionTypeConfig[currentSuggestionType].label.toLowerCase() : "suggestions";
+          toast.success(`Generated ${event.suggestions.length} ${typeLabel}!`);
         } else {
           toast.info("No suggestions generated. Try again.");
         }
@@ -100,10 +138,10 @@ export function FeatureSuggestionsDialog({
     return () => {
       unsubscribe();
     };
-  }, [open, setSuggestions, setIsGenerating]);
+  }, [open, setSuggestions, setIsGenerating, currentSuggestionType]);
 
-  // Start generating suggestions
-  const handleGenerate = useCallback(async () => {
+  // Start generating suggestions for a specific type
+  const handleGenerate = useCallback(async (suggestionType: SuggestionType) => {
     const api = getElectronAPI();
     if (!api?.suggestions) {
       toast.error("Suggestions API not available");
@@ -114,9 +152,10 @@ export function FeatureSuggestionsDialog({
     setProgress([]);
     setSuggestions([]);
     setSelectedIds(new Set());
+    setCurrentSuggestionType(suggestionType);
 
     try {
-      const result = await api.suggestions.generate(projectPath);
+      const result = await api.suggestions.generate(projectPath, suggestionType);
       if (!result.success) {
         toast.error(result.error || "Failed to start generation");
         setIsGenerating(false);
@@ -203,8 +242,10 @@ export function FeatureSuggestionsDialog({
       }));
 
       // Create each new feature using the features API
-      for (const feature of newFeatures) {
-        await api.features.create(projectPath, feature);
+      if (api.features) {
+        for (const feature of newFeatures) {
+          await api.features.create(projectPath, feature);
+        }
       }
 
       // Merge with existing features for store update
@@ -219,6 +260,7 @@ export function FeatureSuggestionsDialog({
       setSuggestions([]);
       setSelectedIds(new Set());
       setProgress([]);
+      setCurrentSuggestionType(null);
 
       onClose();
     } catch (error) {
@@ -238,16 +280,17 @@ export function FeatureSuggestionsDialog({
     autoScrollRef.current = isAtBottom;
   };
 
-  // Reset state when dialog closes
-  useEffect(() => {
-    if (!open) {
-      // Don't reset immediately - allow re-open to see results
-      // Only reset if explicitly closed without importing
-    }
-  }, [open]);
+  // Go back to type selection
+  const handleBackToSelection = useCallback(() => {
+    setSuggestions([]);
+    setSelectedIds(new Set());
+    setProgress([]);
+    setCurrentSuggestionType(null);
+  }, [setSuggestions]);
 
   const hasStarted = progress.length > 0 || suggestions.length > 0;
   const hasSuggestions = suggestions.length > 0;
+  const currentConfig = currentSuggestionType ? suggestionTypeConfig[currentSuggestionType] : null;
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -257,31 +300,56 @@ export function FeatureSuggestionsDialog({
       >
         <DialogHeader className="flex-shrink-0">
           <DialogTitle className="flex items-center gap-2">
-            <Lightbulb className="w-5 h-5 text-yellow-500" />
-            Feature Suggestions
+            {currentConfig ? (
+              <>
+                <currentConfig.icon className={`w-5 h-5 ${currentConfig.color}`} />
+                {currentConfig.label}
+              </>
+            ) : (
+              <>
+                <Lightbulb className="w-5 h-5 text-yellow-500" />
+                AI Suggestions
+              </>
+            )}
           </DialogTitle>
           <DialogDescription>
-            Analyze your project to discover missing features and improvements.
-            The AI will scan your codebase and suggest features ordered by priority.
+            {currentConfig
+              ? currentConfig.description
+              : "Analyze your project to discover improvements. Choose a suggestion type below."}
           </DialogDescription>
         </DialogHeader>
 
         {!hasStarted ? (
-          // Initial state - show explanation and generate button
-          <div className="flex-1 flex flex-col items-center justify-center py-8 text-center">
-            <Lightbulb className="w-16 h-16 text-yellow-500/50 mb-4" />
-            <h3 className="text-lg font-semibold mb-2">
-              Discover Missing Features
-            </h3>
-            <p className="text-muted-foreground max-w-md mb-6">
-              Our AI will analyze your project structure, code patterns, and
-              existing features to generate a prioritized list of suggestions
-              for new features you could add.
+          // Initial state - show suggestion type buttons
+          <div className="flex-1 flex flex-col items-center justify-center py-8">
+            <p className="text-muted-foreground text-center max-w-lg mb-8">
+              Our AI will analyze your project and generate actionable suggestions.
+              Choose what type of analysis you want to perform:
             </p>
-            <Button onClick={handleGenerate} size="lg">
-              <Lightbulb className="w-4 h-4 mr-2" />
-              Generate Suggestions
-            </Button>
+            <div className="grid grid-cols-2 gap-4 w-full max-w-2xl">
+              {(Object.entries(suggestionTypeConfig) as [SuggestionType, typeof suggestionTypeConfig[SuggestionType]][]).map(
+                ([type, config]) => {
+                  const Icon = config.icon;
+                  return (
+                    <Button
+                      key={type}
+                      variant="outline"
+                      className="h-auto py-6 px-6 flex flex-col items-center gap-3 hover:border-primary/50 transition-colors"
+                      onClick={() => handleGenerate(type)}
+                      data-testid={`generate-${type}-btn`}
+                    >
+                      <Icon className={`w-8 h-8 ${config.color}`} />
+                      <div className="text-center">
+                        <div className="font-semibold">{config.label.replace(" Suggestions", "")}</div>
+                        <div className="text-xs text-muted-foreground mt-1">
+                          {config.description}
+                        </div>
+                      </div>
+                    </Button>
+                  );
+                }
+              )}
+            </div>
           </div>
         ) : isGenerating ? (
           // Generating state - show progress
@@ -410,20 +478,34 @@ export function FeatureSuggestionsDialog({
             <p className="text-muted-foreground mb-4">
               No suggestions were generated. Try running the analysis again.
             </p>
-            <Button onClick={handleGenerate}>
-              <Lightbulb className="w-4 h-4 mr-2" />
-              Try Again
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={handleBackToSelection}>
+                Back to Selection
+              </Button>
+              {currentSuggestionType && (
+                <Button onClick={() => handleGenerate(currentSuggestionType)}>
+                  <Lightbulb className="w-4 h-4 mr-2" />
+                  Try Again
+                </Button>
+              )}
+            </div>
           </div>
         )}
 
         <DialogFooter className="flex-shrink-0">
           {hasSuggestions && (
             <div className="flex gap-2 w-full justify-between">
-              <Button variant="outline" onClick={handleGenerate}>
-                <Lightbulb className="w-4 h-4 mr-2" />
-                Regenerate
-              </Button>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={handleBackToSelection}>
+                  Back
+                </Button>
+                {currentSuggestionType && (
+                  <Button variant="outline" onClick={() => handleGenerate(currentSuggestionType)}>
+                    {currentConfig && <currentConfig.icon className="w-4 h-4 mr-2" />}
+                    Regenerate
+                  </Button>
+                )}
+              </div>
               <div className="flex gap-2">
                 <Button variant="ghost" onClick={onClose}>
                   Cancel

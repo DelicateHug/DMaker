@@ -6,6 +6,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // IPC test
   ping: () => ipcRenderer.invoke("ping"),
 
+  // Shell APIs
+  openExternalLink: (url) => ipcRenderer.invoke("shell:openExternal", url),
+
   // Dialog APIs
   openDirectory: () => ipcRenderer.invoke("dialog:openDirectory"),
   openFile: (options) => ipcRenderer.invoke("dialog:openFile", options),
@@ -97,15 +100,15 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // Auto Mode API
   autoMode: {
-    // Start auto mode
+    // Start auto mode for a specific project
     start: (projectPath, maxConcurrency) =>
       ipcRenderer.invoke("auto-mode:start", { projectPath, maxConcurrency }),
 
-    // Stop auto mode
-    stop: () => ipcRenderer.invoke("auto-mode:stop"),
+    // Stop auto mode for a specific project
+    stop: (projectPath) => ipcRenderer.invoke("auto-mode:stop", { projectPath }),
 
-    // Get auto mode status
-    status: () => ipcRenderer.invoke("auto-mode:status"),
+    // Get auto mode status (optionally for a specific project)
+    status: (projectPath) => ipcRenderer.invoke("auto-mode:status", { projectPath }),
 
     // Run a specific feature
     runFeature: (projectPath, featureId, useWorktrees) =>
@@ -243,8 +246,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // Feature Suggestions API
   suggestions: {
     // Generate feature suggestions
-    generate: (projectPath) =>
-      ipcRenderer.invoke("suggestions:generate", { projectPath }),
+    // suggestionType can be: "features", "refactoring", "security", "performance"
+    generate: (projectPath, suggestionType = "features") =>
+      ipcRenderer.invoke("suggestions:generate", { projectPath, suggestionType }),
 
     // Stop generating suggestions
     stop: () => ipcRenderer.invoke("suggestions:stop"),
@@ -381,6 +385,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
     // Get agent output for a feature
     getAgentOutput: (projectPath, featureId) =>
       ipcRenderer.invoke("features:getAgentOutput", { projectPath, featureId }),
+  },
+
+  // Running Agents API
+  runningAgents: {
+    // Get all running agents across all projects
+    getAll: () => ipcRenderer.invoke("running-agents:getAll"),
   },
 });
 

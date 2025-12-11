@@ -355,6 +355,17 @@ ipcMain.handle("ping", () => {
   return "pong";
 });
 
+// Open external link in default browser
+ipcMain.handle("shell:openExternal", async (_, url) => {
+  try {
+    await shell.openExternal(url);
+    return { success: true };
+  } catch (error) {
+    console.error("[IPC] shell:openExternal error:", error);
+    return { success: false, error: error.message };
+  }
+});
+
 // ============================================================================
 // Agent IPC Handlers
 // ============================================================================
@@ -574,11 +585,11 @@ ipcMain.handle(
 );
 
 /**
- * Stop auto mode
+ * Stop auto mode for a specific project
  */
-ipcMain.handle("auto-mode:stop", async () => {
+ipcMain.handle("auto-mode:stop", async (_, { projectPath }) => {
   try {
-    return await autoModeService.stop();
+    return await autoModeService.stop({ projectPath });
   } catch (error) {
     console.error("[IPC] auto-mode:stop error:", error);
     return { success: false, error: error.message };
@@ -586,11 +597,11 @@ ipcMain.handle("auto-mode:stop", async () => {
 });
 
 /**
- * Get auto mode status
+ * Get auto mode status (optionally for a specific project)
  */
-ipcMain.handle("auto-mode:status", () => {
+ipcMain.handle("auto-mode:status", (_, { projectPath } = {}) => {
   try {
-    return { success: true, ...autoModeService.getStatus() };
+    return { success: true, ...autoModeService.getStatus({ projectPath }) };
   } catch (error) {
     console.error("[IPC] auto-mode:status error:", error);
     return { success: false, error: error.message };
@@ -942,9 +953,11 @@ let suggestionsExecution = null;
 
 /**
  * Generate feature suggestions by analyzing the project
+ * @param {string} projectPath - The path to the project
+ * @param {string} suggestionType - Type of suggestions: "features", "refactoring", "security", "performance"
  */
-ipcMain.handle("suggestions:generate", async (_, { projectPath }) => {
-  console.log("[IPC] suggestions:generate called with:", { projectPath });
+ipcMain.handle("suggestions:generate", async (_, { projectPath, suggestionType = "features" }) => {
+  console.log("[IPC] suggestions:generate called with:", { projectPath, suggestionType });
 
   try {
     // Check if already running
@@ -970,7 +983,7 @@ ipcMain.handle("suggestions:generate", async (_, { projectPath }) => {
 
     // Start generating suggestions (runs in background)
     featureSuggestionsService
-      .generateSuggestions(projectPath, sendToRenderer, suggestionsExecution)
+      .generateSuggestions(projectPath, sendToRenderer, suggestionsExecution, suggestionType)
       .catch((error) => {
         console.error("[IPC] suggestions:generate background error:", error);
         sendToRenderer({
@@ -1776,3 +1789,41 @@ ipcMain.handle(
     }
   }
 );
+
+// ============================================================================
+// Running Agents IPC Handlers
+// ============================================================================
+
+/**
+ * Get all currently running agents across all projects
+ */
+ipcMain.handle("running-agents:getAll", () => {
+  try {
+    const status = autoModeService.getStatus();
+    const allStatuses = autoModeService.getAllProjectStatuses();
+
+    // Build a list of running agents with their details
+    const runningAgents = [];
+
+    for (const [projectPath, projectStatus] of Object.entries(allStatuses)) {
+      for (const featureId of projectStatus.runningFeatures) {
+        runningAgents.push({
+          featureId,
+          projectPath,
+          projectName: projectPath.split(/[/\\]/).pop() || projectPath,
+          isAutoMode: projectStatus.isRunning,
+        });
+      }
+    }
+
+    return {
+      success: true,
+      runningAgents,
+      totalCount: status.runningCount,
+      autoLoopRunning: status.autoLoopRunning,
+    };
+  } catch (error) {
+    console.error("[IPC] running-agents:getAll error:", error);
+    return { success: false, error: error.message };
+  }
+});

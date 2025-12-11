@@ -58,6 +58,26 @@ import type {
 // Feature type - Import from app-store
 import type { Feature } from "@/store/app-store";
 
+// Running Agent type
+export interface RunningAgent {
+  featureId: string;
+  projectPath: string;
+  projectName: string;
+  isAutoMode: boolean;
+}
+
+export interface RunningAgentsResult {
+  success: boolean;
+  runningAgents?: RunningAgent[];
+  totalCount?: number;
+  autoLoopRunning?: boolean;
+  error?: string;
+}
+
+export interface RunningAgentsAPI {
+  getAll: () => Promise<RunningAgentsResult>;
+}
+
 // Feature Suggestions types
 export interface FeatureSuggestion {
   id: string;
@@ -81,9 +101,12 @@ export interface SuggestionsEvent {
   error?: string;
 }
 
+export type SuggestionType = "features" | "refactoring" | "security" | "performance";
+
 export interface SuggestionsAPI {
   generate: (
-    projectPath: string
+    projectPath: string,
+    suggestionType?: SuggestionType
   ) => Promise<{ success: boolean; error?: string }>;
   stop: () => Promise<{ success: boolean; error?: string }>;
   status: () => Promise<{
@@ -153,15 +176,18 @@ export interface AutoModeAPI {
     projectPath: string,
     maxConcurrency?: number
   ) => Promise<{ success: boolean; error?: string }>;
-  stop: () => Promise<{ success: boolean; error?: string }>;
+  stop: (projectPath: string) => Promise<{ success: boolean; error?: string; runningFeatures?: number }>;
   stopFeature: (
     featureId: string
   ) => Promise<{ success: boolean; error?: string }>;
-  status: () => Promise<{
+  status: (projectPath?: string) => Promise<{
     success: boolean;
     isRunning?: boolean;
+    autoLoopRunning?: boolean; // Backend uses this name instead of isRunning
     currentFeatureId?: string | null;
     runningFeatures?: string[];
+    runningProjects?: string[];
+    runningCount?: number;
     error?: string;
   }>;
   runFeature: (
@@ -205,6 +231,7 @@ export interface SaveImageResult {
 
 export interface ElectronAPI {
   ping: () => Promise<string>;
+  openExternalLink: (url: string) => Promise<{ success: boolean; error?: string }>;
   openDirectory: () => Promise<DialogResult>;
   openFile: (options?: object) => Promise<DialogResult>;
   readFile: (filePath: string) => Promise<FileResult>;
@@ -276,6 +303,7 @@ export interface ElectronAPI {
   specRegeneration?: SpecRegenerationAPI;
   autoMode?: AutoModeAPI;
   features?: FeaturesAPI;
+  runningAgents?: RunningAgentsAPI;
   setup?: {
     getClaudeStatus: () => Promise<{
       success: boolean;
@@ -396,6 +424,12 @@ export const getElectronAPI = (): ElectronAPI => {
   // Return mock API for web development
   return {
     ping: async () => "pong (mock)",
+
+    openExternalLink: async (url: string) => {
+      // In web mode, open in a new tab
+      window.open(url, "_blank", "noopener,noreferrer");
+      return { success: true };
+    },
 
     openDirectory: async () => {
       // In web mode, we'll use a prompt to simulate directory selection
@@ -675,6 +709,9 @@ export const getElectronAPI = (): ElectronAPI => {
 
     // Mock Features API
     features: createMockFeaturesAPI(),
+
+    // Mock Running Agents API
+    runningAgents: createMockRunningAgentsAPI(),
   };
 };
 
@@ -1020,13 +1057,14 @@ function createMockAutoModeAPI(): AutoModeAPI {
       return { success: true };
     },
 
-    stop: async () => {
+    stop: async (_projectPath: string) => {
       mockAutoModeRunning = false;
+      const runningCount = mockRunningFeatures.size;
       mockRunningFeatures.clear();
       // Clear all timeouts
       mockAutoModeTimeouts.forEach((timeout) => clearTimeout(timeout));
       mockAutoModeTimeouts.clear();
-      return { success: true };
+      return { success: true, runningFeatures: runningCount };
     },
 
     stopFeature: async (featureId: string) => {
@@ -1055,12 +1093,14 @@ function createMockAutoModeAPI(): AutoModeAPI {
       return { success: true };
     },
 
-    status: async () => {
+    status: async (_projectPath?: string) => {
       return {
         success: true,
         isRunning: mockAutoModeRunning,
+        autoLoopRunning: mockAutoModeRunning,
         currentFeatureId: mockAutoModeRunning ? "feature-0" : null,
         runningFeatures: Array.from(mockRunningFeatures),
+        runningCount: mockRunningFeatures.size,
       };
     },
 
@@ -1441,7 +1481,7 @@ let mockSuggestionsTimeout: NodeJS.Timeout | null = null;
 
 function createMockSuggestionsAPI(): SuggestionsAPI {
   return {
-    generate: async (projectPath: string) => {
+    generate: async (projectPath: string, suggestionType: SuggestionType = "features") => {
       if (mockSuggestionsRunning) {
         return {
           success: false,
@@ -1450,10 +1490,10 @@ function createMockSuggestionsAPI(): SuggestionsAPI {
       }
 
       mockSuggestionsRunning = true;
-      console.log(`[Mock] Generating suggestions for: ${projectPath}`);
+      console.log(`[Mock] Generating ${suggestionType} suggestions for: ${projectPath}`);
 
       // Simulate async suggestion generation
-      simulateSuggestionsGeneration();
+      simulateSuggestionsGeneration(suggestionType);
 
       return { success: true };
     },
@@ -1489,11 +1529,18 @@ function emitSuggestionsEvent(event: SuggestionsEvent) {
   mockSuggestionsCallbacks.forEach((cb) => cb(event));
 }
 
-async function simulateSuggestionsGeneration() {
+async function simulateSuggestionsGeneration(suggestionType: SuggestionType = "features") {
+  const typeLabels: Record<SuggestionType, string> = {
+    features: "feature suggestions",
+    refactoring: "refactoring opportunities",
+    security: "security vulnerabilities",
+    performance: "performance issues",
+  };
+
   // Emit progress events
   emitSuggestionsEvent({
     type: "suggestions_progress",
-    content: "Starting project analysis...\n",
+    content: `Starting project analysis for ${typeLabels[suggestionType]}...\n`,
   });
 
   await new Promise((resolve) => {
@@ -1524,7 +1571,7 @@ async function simulateSuggestionsGeneration() {
 
   emitSuggestionsEvent({
     type: "suggestions_progress",
-    content: "Identifying missing features...\n",
+    content: `Identifying ${typeLabels[suggestionType]}...\n`,
   });
 
   await new Promise((resolve) => {
@@ -1532,75 +1579,184 @@ async function simulateSuggestionsGeneration() {
   });
   if (!mockSuggestionsRunning) return;
 
-  // Generate mock suggestions
-  const mockSuggestions: FeatureSuggestion[] = [
-    {
-      id: `suggestion-${Date.now()}-0`,
-      category: "User Experience",
-      description: "Add dark mode toggle with system preference detection",
-      steps: [
-        "Create a ThemeProvider context to manage theme state",
-        "Add a toggle component in the settings or header",
-        "Implement CSS variables for theme colors",
-        "Add localStorage persistence for user preference",
-      ],
-      priority: 1,
-      reasoning:
-        "Dark mode is a standard feature that improves accessibility and user comfort",
-    },
-    {
-      id: `suggestion-${Date.now()}-1`,
-      category: "Performance",
-      description: "Implement lazy loading for heavy components",
-      steps: [
-        "Identify components that are heavy or rarely used",
-        "Use React.lazy() and Suspense for code splitting",
-        "Add loading states for lazy-loaded components",
-      ],
-      priority: 2,
-      reasoning: "Improves initial load time and reduces bundle size",
-    },
-    {
-      id: `suggestion-${Date.now()}-2`,
-      category: "Accessibility",
-      description: "Add keyboard navigation support throughout the app",
-      steps: [
-        "Implement focus management for modals and dialogs",
-        "Add keyboard shortcuts for common actions",
-        "Ensure all interactive elements are focusable",
-        "Add ARIA labels and roles where needed",
-      ],
-      priority: 3,
-      reasoning:
-        "Improves accessibility for users who rely on keyboard navigation",
-    },
-    {
-      id: `suggestion-${Date.now()}-3`,
-      category: "Testing",
-      description: "Add comprehensive unit test coverage",
-      steps: [
-        "Set up Jest and React Testing Library",
-        "Create tests for all utility functions",
-        "Add component tests for critical UI elements",
-        "Set up CI pipeline for automated testing",
-      ],
-      priority: 4,
-      reasoning: "Ensures code quality and prevents regressions",
-    },
-    {
-      id: `suggestion-${Date.now()}-4`,
-      category: "Developer Experience",
-      description: "Add Storybook for component documentation",
-      steps: [
-        "Install and configure Storybook",
-        "Create stories for all UI components",
-        "Add interaction tests using play functions",
-        "Set up Chromatic for visual regression testing",
-      ],
-      priority: 5,
-      reasoning: "Improves component development workflow and documentation",
-    },
-  ];
+  // Generate mock suggestions based on type
+  let mockSuggestions: FeatureSuggestion[];
+
+  switch (suggestionType) {
+    case "refactoring":
+      mockSuggestions = [
+        {
+          id: `suggestion-${Date.now()}-0`,
+          category: "Code Smell",
+          description: "Extract duplicate validation logic into reusable utility",
+          steps: [
+            "Identify all files with similar validation patterns",
+            "Create a validation utilities module",
+            "Replace duplicate code with utility calls",
+            "Add unit tests for the new utilities",
+          ],
+          priority: 1,
+          reasoning: "Reduces code duplication and improves maintainability",
+        },
+        {
+          id: `suggestion-${Date.now()}-1`,
+          category: "Complexity",
+          description: "Break down large handleSubmit function into smaller functions",
+          steps: [
+            "Identify the handleSubmit function in form components",
+            "Extract validation logic into separate function",
+            "Extract API call logic into separate function",
+            "Extract success/error handling into separate functions",
+          ],
+          priority: 2,
+          reasoning: "Function is too long and handles multiple responsibilities",
+        },
+        {
+          id: `suggestion-${Date.now()}-2`,
+          category: "Architecture",
+          description: "Move business logic out of React components into hooks",
+          steps: [
+            "Identify business logic in component files",
+            "Create custom hooks for reusable logic",
+            "Update components to use the new hooks",
+            "Add tests for the extracted hooks",
+          ],
+          priority: 3,
+          reasoning: "Improves separation of concerns and testability",
+        },
+      ];
+      break;
+
+    case "security":
+      mockSuggestions = [
+        {
+          id: `suggestion-${Date.now()}-0`,
+          category: "High",
+          description: "Sanitize user input before rendering to prevent XSS",
+          steps: [
+            "Audit all places where user input is rendered",
+            "Implement input sanitization using DOMPurify",
+            "Add Content-Security-Policy headers",
+            "Test with common XSS payloads",
+          ],
+          priority: 1,
+          reasoning: "User input is rendered without proper sanitization",
+        },
+        {
+          id: `suggestion-${Date.now()}-1`,
+          category: "Medium",
+          description: "Add rate limiting to authentication endpoints",
+          steps: [
+            "Implement rate limiting middleware",
+            "Configure limits for login attempts",
+            "Add account lockout after failed attempts",
+            "Log suspicious activity",
+          ],
+          priority: 2,
+          reasoning: "Prevents brute force attacks on authentication",
+        },
+        {
+          id: `suggestion-${Date.now()}-2`,
+          category: "Low",
+          description: "Remove sensitive information from error messages",
+          steps: [
+            "Audit error handling in API routes",
+            "Create generic error messages for production",
+            "Log detailed errors server-side only",
+            "Implement proper error boundaries",
+          ],
+          priority: 3,
+          reasoning: "Error messages may leak implementation details",
+        },
+      ];
+      break;
+
+    case "performance":
+      mockSuggestions = [
+        {
+          id: `suggestion-${Date.now()}-0`,
+          category: "Rendering",
+          description: "Add React.memo to prevent unnecessary re-renders",
+          steps: [
+            "Profile component renders with React DevTools",
+            "Identify components that re-render unnecessarily",
+            "Wrap pure components with React.memo",
+            "Use useCallback for event handlers passed as props",
+          ],
+          priority: 1,
+          reasoning: "Components re-render even when props haven't changed",
+        },
+        {
+          id: `suggestion-${Date.now()}-1`,
+          category: "Bundle Size",
+          description: "Implement code splitting for route components",
+          steps: [
+            "Use React.lazy for route components",
+            "Add Suspense boundaries with loading states",
+            "Analyze bundle with webpack-bundle-analyzer",
+            "Consider dynamic imports for heavy libraries",
+          ],
+          priority: 2,
+          reasoning: "Initial bundle is larger than necessary",
+        },
+        {
+          id: `suggestion-${Date.now()}-2`,
+          category: "Caching",
+          description: "Add memoization for expensive computations",
+          steps: [
+            "Identify expensive calculations in render",
+            "Use useMemo for derived data",
+            "Consider using react-query for server state",
+            "Add caching headers for static assets",
+          ],
+          priority: 3,
+          reasoning: "Expensive computations run on every render",
+        },
+      ];
+      break;
+
+    default: // "features"
+      mockSuggestions = [
+        {
+          id: `suggestion-${Date.now()}-0`,
+          category: "User Experience",
+          description: "Add dark mode toggle with system preference detection",
+          steps: [
+            "Create a ThemeProvider context to manage theme state",
+            "Add a toggle component in the settings or header",
+            "Implement CSS variables for theme colors",
+            "Add localStorage persistence for user preference",
+          ],
+          priority: 1,
+          reasoning: "Dark mode is a standard feature that improves accessibility and user comfort",
+        },
+        {
+          id: `suggestion-${Date.now()}-1`,
+          category: "Performance",
+          description: "Implement lazy loading for heavy components",
+          steps: [
+            "Identify components that are heavy or rarely used",
+            "Use React.lazy() and Suspense for code splitting",
+            "Add loading states for lazy-loaded components",
+          ],
+          priority: 2,
+          reasoning: "Improves initial load time and reduces bundle size",
+        },
+        {
+          id: `suggestion-${Date.now()}-2`,
+          category: "Accessibility",
+          description: "Add keyboard navigation support throughout the app",
+          steps: [
+            "Implement focus management for modals and dialogs",
+            "Add keyboard shortcuts for common actions",
+            "Ensure all interactive elements are focusable",
+            "Add ARIA labels and roles where needed",
+          ],
+          priority: 3,
+          reasoning: "Improves accessibility for users who rely on keyboard navigation",
+        },
+      ];
+  }
 
   emitSuggestionsEvent({
     type: "suggestions_complete",
@@ -1917,6 +2073,30 @@ function createMockFeaturesAPI(): FeaturesAPI {
       const agentOutputPath = `${projectPath}/.automaker/features/${featureId}/agent-output.md`;
       const content = mockFileSystem[agentOutputPath];
       return { success: true, content: content || null };
+    },
+  };
+}
+
+// Mock Running Agents API implementation
+function createMockRunningAgentsAPI(): RunningAgentsAPI {
+  return {
+    getAll: async () => {
+      console.log("[Mock] Getting all running agents");
+      // Return running agents from mock auto mode state
+      const runningAgents: RunningAgent[] = Array.from(mockRunningFeatures).map(
+        (featureId) => ({
+          featureId,
+          projectPath: "/mock/project",
+          projectName: "Mock Project",
+          isAutoMode: mockAutoModeRunning,
+        })
+      );
+      return {
+        success: true,
+        runningAgents,
+        totalCount: runningAgents.length,
+        autoLoopRunning: mockAutoModeRunning,
+      };
     },
   };
 }

@@ -372,6 +372,30 @@ class ClaudeCliDetector {
   }
 
   /**
+   * Get installation info and recommendations
+   * @returns {Object} Installation status and recommendations
+   */
+  static getInstallationInfo() {
+    const detection = this.detectClaudeInstallation();
+
+    if (detection.installed) {
+      return {
+        status: 'installed',
+        method: detection.method,
+        version: detection.version,
+        path: detection.path,
+        recommendation: 'Claude Code CLI is ready for ultrathink'
+      };
+    }
+
+    return {
+      status: 'not_installed',
+      recommendation: 'Install Claude Code CLI for optimal ultrathink performance',
+      installCommands: this.getInstallCommands()
+    };
+  }
+
+  /**
    * Get installation commands for different platforms
    * @returns {Object} Installation commands
    */
