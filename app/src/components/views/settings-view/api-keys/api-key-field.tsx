@@ -2,7 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AlertCircle, CheckCircle2, Eye, EyeOff, Loader2, Zap } from "lucide-react";
-import type { ProviderConfig } from "./shared/api-provider-config";
+import type { ProviderConfig } from "@/config/api-providers";
 
 interface ApiKeyFieldProps {
   config: ProviderConfig;

@@ -13,7 +13,7 @@ import {
   Terminal,
   Trees,
 } from "lucide-react";
-import { Theme } from "../../shared/types";
+import { Theme } from "@/components/views/settings-view/shared/types";
 
 export interface ThemeOption {
   value: Theme;

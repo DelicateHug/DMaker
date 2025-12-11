@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useAppStore } from "@/store/app-store";
 import { Button } from "@/components/ui/button";
 import { useCliStatus } from "./settings-view/hooks/use-cli-status";
-import { useScrollTracking } from "./settings-view/hooks/use-scroll-tracking";
+import { useScrollTracking } from "@/hooks/use-scroll-tracking";
 import { NAV_ITEMS } from "./settings-view/config/navigation";
 import { SettingsHeader } from "./settings-view/components/settings-header";
 import { KeyboardMapDialog } from "./settings-view/components/keyboard-map-dialog";
@@ -76,7 +76,11 @@ export function SettingsView() {
 
   // Use scroll tracking hook
   const { activeSection, scrollToSection, scrollContainerRef } =
-    useScrollTracking(NAV_ITEMS, currentProject);
+    useScrollTracking({
+      items: NAV_ITEMS,
+      filterFn: (item) => item.id !== "danger" || !!currentProject,
+      initialSection: "api-keys",
+    });
 
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showKeyboardMapDialog, setShowKeyboardMapDialog] = useState(false);

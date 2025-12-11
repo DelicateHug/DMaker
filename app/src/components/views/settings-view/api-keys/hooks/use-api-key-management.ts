@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useAppStore } from "@/store/app-store";
 import { getElectronAPI } from "@/lib/electron";
-import type { ProviderConfigParams } from "../config/api-provider-config";
+import type { ProviderConfigParams } from "@/config/api-providers";
 
 interface TestResult {
   success: boolean;

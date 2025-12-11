@@ -3,7 +3,7 @@ import { useSetupStore } from "@/store/setup-store";
 import { Button } from "@/components/ui/button";
 import { Key, CheckCircle2 } from "lucide-react";
 import { ApiKeyField } from "./api-key-field";
-import { buildProviderConfigs } from "./shared/api-provider-config";
+import { buildProviderConfigs } from "@/config/api-providers";
 import { AuthenticationStatusDisplay } from "./authentication-status-display";
 import { SecurityNotice } from "./security-notice";
 import { useApiKeyManagement } from "./hooks/use-api-key-management";
