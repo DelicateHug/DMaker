@@ -147,10 +147,15 @@ export interface SpecRegenerationAPI {
     projectPath: string,
     projectDefinition: string
   ) => Promise<{ success: boolean; error?: string }>;
+  generateFeatures: (projectPath: string) => Promise<{
+    success: boolean;
+    error?: string;
+  }>;
   stop: () => Promise<{ success: boolean; error?: string }>;
   status: () => Promise<{
     success: boolean;
     isRunning?: boolean;
+    currentPhase?: string;
     error?: string;
   }>;
   onEvent: (callback: (event: SpecRegenerationEvent) => void) => () => void;
