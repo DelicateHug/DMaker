@@ -251,7 +251,7 @@ class ClaudeProvider extends ModelProvider {
 
   async detectInstallation() {
     const claudeCliDetector = require('./claude-cli-detector');
-    return claudeCliDetector.getInstallationInfo();
+    return claudeCliDetector.getFullStatus();
   }
 
   getAvailableModels() {

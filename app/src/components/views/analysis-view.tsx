@@ -357,7 +357,10 @@ ${Object.entries(projectAnalysis.filesByExtension)
   )
   .sort((a: [string, number], b: [string, number]) => b[1] - a[1])
   .slice(0, 5)
-  .map(([ext, count]: [string, number]) => `      <language ext=".${ext}" count="${count}" />`)
+  .map(
+    ([ext, count]: [string, number]) =>
+      `      <language ext=".${ext}" count="${count}" />`
+  )
   .join("\n")}
     </languages>
     <frameworks>
@@ -756,6 +759,10 @@ ${Object.entries(projectAnalysis.filesByExtension)
       }
 
       // Create each feature using the features API
+      if (!api.features) {
+        throw new Error("Features API not available");
+      }
+
       for (const feature of detectedFeatures) {
         await api.features.create(currentProject.path, feature);
       }
@@ -829,7 +836,9 @@ ${Object.entries(projectAnalysis.filesByExtension)
         </div>
         {node.isDirectory && isExpanded && node.children && (
           <div>
-            {node.children.map((child: FileTreeNode) => renderNode(child, depth + 1))}
+            {node.children.map((child: FileTreeNode) =>
+              renderNode(child, depth + 1)
+            )}
           </div>
         )}
       </div>
@@ -953,7 +962,10 @@ ${Object.entries(projectAnalysis.filesByExtension)
                 <CardContent>
                   <div className="space-y-2">
                     {Object.entries(projectAnalysis.filesByExtension)
-                      .sort((a: [string, number], b: [string, number]) => b[1] - a[1])
+                      .sort(
+                        (a: [string, number], b: [string, number]) =>
+                          b[1] - a[1]
+                      )
                       .slice(0, 15)
                       .map(([ext, count]: [string, number]) => (
                         <div key={ext} className="flex justify-between text-sm">
@@ -1096,7 +1108,9 @@ ${Object.entries(projectAnalysis.filesByExtension)
                 data-testid="analysis-file-tree"
               >
                 <div className="p-2">
-                  {projectAnalysis.fileTree.map((node: FileTreeNode) => renderNode(node))}
+                  {projectAnalysis.fileTree.map((node: FileTreeNode) =>
+                    renderNode(node)
+                  )}
                 </div>
               </CardContent>
             </Card>

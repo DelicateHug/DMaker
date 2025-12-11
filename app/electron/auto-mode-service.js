@@ -20,11 +20,64 @@ class AutoModeService {
   constructor() {
     // Track multiple concurrent feature executions
     this.runningFeatures = new Map(); // featureId -> { abortController, query, projectPath, sendToRenderer }
-    this.autoLoopRunning = false; // Separate flag for the auto loop
-    this.autoLoopAbortController = null;
-    this.autoLoopInterval = null; // Timer for periodic checking
+
+    // Per-project auto loop state (keyed by projectPath)
+    this.projectLoops = new Map(); // projectPath -> { isRunning, interval, abortController, sendToRenderer, maxConcurrency }
+
     this.checkIntervalMs = 5000; // Check every 5 seconds
-    this.maxConcurrency = 3; // Default max concurrency
+    this.maxConcurrency = 3; // Default max concurrency (global default)
+  }
+
+  /**
+   * Get or create project loop state
+   */
+  getProjectLoopState(projectPath) {
+    if (!this.projectLoops.has(projectPath)) {
+      this.projectLoops.set(projectPath, {
+        isRunning: false,
+        interval: null,
+        abortController: null,
+        sendToRenderer: null,
+        maxConcurrency: this.maxConcurrency,
+      });
+    }
+    return this.projectLoops.get(projectPath);
+  }
+
+  /**
+   * Check if any project has auto mode running
+   */
+  hasAnyAutoLoopRunning() {
+    for (const [, state] of this.projectLoops) {
+      if (state.isRunning) return true;
+    }
+    return false;
+  }
+
+  /**
+   * Get running features for a specific project
+   */
+  getRunningFeaturesForProject(projectPath) {
+    const features = [];
+    for (const [featureId, execution] of this.runningFeatures) {
+      if (execution.projectPath === projectPath) {
+        features.push(featureId);
+      }
+    }
+    return features;
+  }
+
+  /**
+   * Count running features for a specific project
+   */
+  getRunningCountForProject(projectPath) {
+    let count = 0;
+    for (const [, execution] of this.runningFeatures) {
+      if (execution.projectPath === projectPath) {
+        count++;
+      }
+    }
+    return count;
   }
 
   /**
@@ -41,6 +94,18 @@ class AutoModeService {
       isActive: () => this.runningFeatures.has(featureId),
     };
     return context;
+  }
+
+  /**
+   * Helper to emit event with projectPath included
+   */
+  emitEvent(projectPath, sendToRenderer, event) {
+    if (sendToRenderer) {
+      sendToRenderer({
+        ...event,
+        projectPath,
+      });
+    }
   }
 
   /**
@@ -65,7 +130,7 @@ class AutoModeService {
       return { useWorktree: false, workPath: projectPath };
     }
 
-    sendToRenderer({
+    this.emitEvent(projectPath, sendToRenderer, {
       type: "auto_mode_progress",
       featureId: feature.id,
       content: "Creating isolated worktree for feature...\n",
@@ -75,7 +140,7 @@ class AutoModeService {
 
     if (!result.success) {
       console.warn(`[AutoMode] Failed to create worktree: ${result.error}. Falling back to main project.`);
-      sendToRenderer({
+      this.emitEvent(projectPath, sendToRenderer, {
         type: "auto_mode_progress",
         featureId: feature.id,
         content: `Warning: Could not create worktree (${result.error}). Working directly on main project.\n`,
@@ -84,7 +149,7 @@ class AutoModeService {
     }
 
     console.log(`[AutoMode] Created worktree at: ${result.worktreePath}, branch: ${result.branchName}`);
-    sendToRenderer({
+    this.emitEvent(projectPath, sendToRenderer, {
       type: "auto_mode_progress",
       featureId: feature.id,
       content: `Working in isolated branch: ${result.branchName}\n`,
@@ -107,46 +172,56 @@ class AutoModeService {
   }
 
   /**
-   * Start auto mode - continuously implement features
+   * Start auto mode for a specific project - continuously implement features
+   * Each project can have its own independent auto mode loop
    */
   async start({ projectPath, sendToRenderer, maxConcurrency }) {
-    if (this.autoLoopRunning) {
-      throw new Error("Auto mode loop is already running");
+    const projectState = this.getProjectLoopState(projectPath);
+
+    if (projectState.isRunning) {
+      throw new Error(`Auto mode loop is already running for project: ${projectPath}`);
     }
 
-    this.autoLoopRunning = true;
-    this.maxConcurrency = maxConcurrency || 3;
+    projectState.isRunning = true;
+    projectState.maxConcurrency = maxConcurrency || 3;
+    projectState.sendToRenderer = sendToRenderer;
 
     console.log(
-      `[AutoMode] Starting auto mode for project: ${projectPath} with max concurrency: ${this.maxConcurrency}`
+      `[AutoMode] Starting auto mode for project: ${projectPath} with max concurrency: ${projectState.maxConcurrency}`
     );
 
-    // Start the periodic checking loop
-    this.runPeriodicLoop(projectPath, sendToRenderer);
+    // Start the periodic checking loop for this project
+    this.runPeriodicLoopForProject(projectPath);
 
     return { success: true };
   }
 
   /**
-   * Stop auto mode - stops the auto loop but lets running features complete
+   * Stop auto mode for a specific project - stops the auto loop but lets running features complete
    * This only turns off the auto toggle to prevent picking up new features.
    * Running tasks will continue until they complete naturally.
    */
-  async stop() {
-    console.log("[AutoMode] Stopping auto mode (letting running features complete)");
+  async stop({ projectPath }) {
+    console.log(`[AutoMode] Stopping auto mode for project: ${projectPath} (letting running features complete)`);
 
-    this.autoLoopRunning = false;
+    const projectState = this.projectLoops.get(projectPath);
+    if (!projectState) {
+      console.log(`[AutoMode] No auto mode state found for project: ${projectPath}`);
+      return { success: true, runningFeatures: 0 };
+    }
 
-    // Clear the interval timer
-    if (this.autoLoopInterval) {
-      clearInterval(this.autoLoopInterval);
-      this.autoLoopInterval = null;
+    projectState.isRunning = false;
+
+    // Clear the interval timer for this project
+    if (projectState.interval) {
+      clearInterval(projectState.interval);
+      projectState.interval = null;
     }
 
     // Abort auto loop if running
-    if (this.autoLoopAbortController) {
-      this.autoLoopAbortController.abort();
-      this.autoLoopAbortController = null;
+    if (projectState.abortController) {
+      projectState.abortController.abort();
+      projectState.abortController = null;
     }
 
     // NOTE: We intentionally do NOT abort running features here.
@@ -154,21 +229,56 @@ class AutoModeService {
     // from being picked up. Running features will complete naturally.
     // Use stopFeature() to cancel a specific running feature if needed.
 
-    const runningCount = this.runningFeatures.size;
-    console.log(`[AutoMode] Auto loop stopped. ${runningCount} feature(s) still running and will complete.`);
+    const runningCount = this.getRunningCountForProject(projectPath);
+    console.log(`[AutoMode] Auto loop stopped for ${projectPath}. ${runningCount} feature(s) still running and will complete.`);
 
     return { success: true, runningFeatures: runningCount };
   }
 
   /**
-   * Get status of auto mode
+   * Get status of auto mode (global and per-project)
    */
-  getStatus() {
+  getStatus({ projectPath } = {}) {
+    // If projectPath is specified, return status for that project
+    if (projectPath) {
+      const projectState = this.projectLoops.get(projectPath);
+      return {
+        autoLoopRunning: projectState?.isRunning || false,
+        runningFeatures: this.getRunningFeaturesForProject(projectPath),
+        runningCount: this.getRunningCountForProject(projectPath),
+      };
+    }
+
+    // Otherwise return global status
+    const allRunningProjects = [];
+    for (const [path, state] of this.projectLoops) {
+      if (state.isRunning) {
+        allRunningProjects.push(path);
+      }
+    }
+
     return {
-      autoLoopRunning: this.autoLoopRunning,
+      autoLoopRunning: this.hasAnyAutoLoopRunning(),
+      runningProjects: allRunningProjects,
       runningFeatures: Array.from(this.runningFeatures.keys()),
       runningCount: this.runningFeatures.size,
     };
+  }
+
+  /**
+   * Get status for all projects with auto mode
+   */
+  getAllProjectStatuses() {
+    const statuses = {};
+    for (const [projectPath, state] of this.projectLoops) {
+      statuses[projectPath] = {
+        isRunning: state.isRunning,
+        runningFeatures: this.getRunningFeaturesForProject(projectPath),
+        runningCount: this.getRunningCountForProject(projectPath),
+        maxConcurrency: state.maxConcurrency,
+      };
+    }
+    return statuses;
   }
 
   /**
@@ -218,7 +328,7 @@ class AutoModeService {
         projectPath
       );
 
-      sendToRenderer({
+      this.emitEvent(projectPath, sendToRenderer, {
         type: "auto_mode_feature_start",
         featureId: feature.id,
         feature: { ...feature, worktreePath: worktreeSetup.workPath, branchName: worktreeSetup.branchName },
@@ -253,7 +363,7 @@ class AutoModeService {
 
       // Keep context file for viewing output later (deleted only when card is removed)
 
-      sendToRenderer({
+      this.emitEvent(projectPath, sendToRenderer, {
         type: "auto_mode_feature_complete",
         featureId: feature.id,
         passes: result.passes,
@@ -288,7 +398,7 @@ class AutoModeService {
         console.error("[AutoMode] Failed to update feature status after error:", statusError);
       }
 
-      sendToRenderer({
+      this.emitEvent(projectPath, sendToRenderer, {
         type: "auto_mode_error",
         error: error.message,
         featureId: featureId,
@@ -333,7 +443,7 @@ class AutoModeService {
 
       console.log(`[AutoMode] Verifying feature: ${feature.description}`);
 
-      sendToRenderer({
+      this.emitEvent(projectPath, sendToRenderer, {
         type: "auto_mode_feature_start",
         featureId: feature.id,
         feature: feature,
@@ -357,7 +467,7 @@ class AutoModeService {
 
       // Keep context file for viewing output later (deleted only when card is removed)
 
-      sendToRenderer({
+      this.emitEvent(projectPath, sendToRenderer, {
         type: "auto_mode_feature_complete",
         featureId: feature.id,
         passes: result.passes,
@@ -392,7 +502,7 @@ class AutoModeService {
         console.error("[AutoMode] Failed to update feature status after error:", statusError);
       }
 
-      sendToRenderer({
+      this.emitEvent(projectPath, sendToRenderer, {
         type: "auto_mode_error",
         error: error.message,
         featureId: featureId,
@@ -437,7 +547,7 @@ class AutoModeService {
 
       console.log(`[AutoMode] Resuming feature: ${feature.description}`);
 
-      sendToRenderer({
+      this.emitEvent(projectPath, sendToRenderer, {
         type: "auto_mode_feature_start",
         featureId: feature.id,
         feature: feature,
@@ -481,7 +591,7 @@ class AutoModeService {
             `\n\n🔄 Auto-retry #${attempts} - Continuing implementation...\n\n`
           );
 
-          sendToRenderer({
+          this.emitEvent(projectPath, sendToRenderer, {
             type: "auto_mode_progress",
             featureId: feature.id,
             content: `\n🔄 Auto-retry #${attempts} - Agent ended early, continuing...\n`,
@@ -524,7 +634,7 @@ class AutoModeService {
 
       // Keep context file for viewing output later (deleted only when card is removed)
 
-      sendToRenderer({
+      this.emitEvent(projectPath, sendToRenderer, {
         type: "auto_mode_feature_complete",
         featureId: feature.id,
         passes: finalResult.passes,
@@ -559,7 +669,7 @@ class AutoModeService {
         console.error("[AutoMode] Failed to update feature status after error:", statusError);
       }
 
-      sendToRenderer({
+      this.emitEvent(projectPath, sendToRenderer, {
         type: "auto_mode_error",
         error: error.message,
         featureId: featureId,
@@ -572,42 +682,52 @@ class AutoModeService {
   }
 
   /**
-   * New periodic loop - checks available slots and starts features up to max concurrency
+   * New periodic loop for a specific project - checks available slots and starts features up to max concurrency
    * This loop continues running even if there are no backlog items
    */
-  runPeriodicLoop(projectPath, sendToRenderer) {
+  runPeriodicLoopForProject(projectPath) {
+    const projectState = this.getProjectLoopState(projectPath);
+
     console.log(
-      `[AutoMode] Starting periodic loop with interval: ${this.checkIntervalMs}ms`
+      `[AutoMode] Starting periodic loop for ${projectPath} with interval: ${this.checkIntervalMs}ms`
     );
 
     // Initial check immediately
-    this.checkAndStartFeatures(projectPath, sendToRenderer);
+    this.checkAndStartFeaturesForProject(projectPath);
 
     // Then check periodically
-    this.autoLoopInterval = setInterval(() => {
-      if (this.autoLoopRunning) {
-        this.checkAndStartFeatures(projectPath, sendToRenderer);
+    projectState.interval = setInterval(() => {
+      if (projectState.isRunning) {
+        this.checkAndStartFeaturesForProject(projectPath);
       }
     }, this.checkIntervalMs);
   }
 
   /**
-   * Check how many features are running and start new ones if under max concurrency
+   * Check how many features are running for a specific project and start new ones if under max concurrency
    */
-  async checkAndStartFeatures(projectPath, sendToRenderer) {
+  async checkAndStartFeaturesForProject(projectPath) {
+    const projectState = this.projectLoops.get(projectPath);
+    if (!projectState || !projectState.isRunning) {
+      return;
+    }
+
+    const sendToRenderer = projectState.sendToRenderer;
+    const maxConcurrency = projectState.maxConcurrency;
+
     try {
-      // Check how many are currently running
-      const currentRunningCount = this.runningFeatures.size;
+      // Check how many are currently running FOR THIS PROJECT
+      const currentRunningCount = this.getRunningCountForProject(projectPath);
 
       console.log(
-        `[AutoMode] Checking features - Running: ${currentRunningCount}/${this.maxConcurrency}`
+        `[AutoMode] [${projectPath}] Checking features - Running: ${currentRunningCount}/${maxConcurrency}`
       );
 
-      // Calculate available slots
-      const availableSlots = this.maxConcurrency - currentRunningCount;
+      // Calculate available slots for this project
+      const availableSlots = maxConcurrency - currentRunningCount;
 
       if (availableSlots <= 0) {
-        console.log("[AutoMode] At max concurrency, waiting...");
+        console.log(`[AutoMode] [${projectPath}] At max concurrency, waiting...`);
         return;
       }
 
@@ -616,7 +736,7 @@ class AutoModeService {
       const backlogFeatures = features.filter((f) => f.status === "backlog");
 
       if (backlogFeatures.length === 0) {
-        console.log("[AutoMode] No backlog features available, waiting...");
+        console.log(`[AutoMode] [${projectPath}] No backlog features available, waiting...`);
         return;
       }
 
@@ -624,7 +744,7 @@ class AutoModeService {
       const featuresToStart = backlogFeatures.slice(0, availableSlots);
 
       console.log(
-        `[AutoMode] Starting ${featuresToStart.length} feature(s) from backlog`
+        `[AutoMode] [${projectPath}] Starting ${featuresToStart.length} feature(s) from backlog`
       );
 
       // Start each feature (don't await - run in parallel like drag operations)
@@ -632,7 +752,7 @@ class AutoModeService {
         this.startFeatureAsync(feature, projectPath, sendToRenderer);
       }
     } catch (error) {
-      console.error("[AutoMode] Error checking/starting features:", error);
+      console.error(`[AutoMode] [${projectPath}] Error checking/starting features:`, error);
     }
   }
 
@@ -678,7 +798,7 @@ class AutoModeService {
         projectPath
       );
 
-      sendToRenderer({
+      this.emitEvent(projectPath, sendToRenderer, {
         type: "auto_mode_feature_start",
         featureId: feature.id,
         feature: { ...feature, worktreePath: worktreeSetup.workPath, branchName: worktreeSetup.branchName },
@@ -713,7 +833,7 @@ class AutoModeService {
 
       // Keep context file for viewing output later (deleted only when card is removed)
 
-      sendToRenderer({
+      this.emitEvent(projectPath, sendToRenderer, {
         type: "auto_mode_feature_complete",
         featureId: feature.id,
         passes: result.passes,
@@ -746,7 +866,7 @@ class AutoModeService {
         console.error("[AutoMode] Failed to update feature status after error:", statusError);
       }
 
-      sendToRenderer({
+      this.emitEvent(projectPath, sendToRenderer, {
         type: "auto_mode_error",
         error: error.message,
         featureId: featureId,
@@ -778,7 +898,7 @@ class AutoModeService {
     this.runningFeatures.set(analysisId, execution);
 
     try {
-      sendToRenderer({
+      this.emitEvent(projectPath, sendToRenderer, {
         type: "auto_mode_feature_start",
         featureId: analysisId,
         feature: {
@@ -796,7 +916,7 @@ class AutoModeService {
         execution
       );
 
-      sendToRenderer({
+      this.emitEvent(projectPath, sendToRenderer, {
         type: "auto_mode_feature_complete",
         featureId: analysisId,
         passes: result.success,
@@ -806,7 +926,7 @@ class AutoModeService {
       return { success: true, message: result.message };
     } catch (error) {
       console.error("[AutoMode] Error analyzing project:", error);
-      sendToRenderer({
+      this.emitEvent(projectPath, sendToRenderer, {
         type: "auto_mode_error",
         error: error.message,
         featureId: analysisId,
@@ -911,7 +1031,7 @@ class AutoModeService {
         projectPath
       );
 
-      sendToRenderer({
+      this.emitEvent(projectPath, sendToRenderer, {
         type: "auto_mode_feature_start",
         featureId: feature.id,
         feature: feature,
@@ -956,7 +1076,7 @@ class AutoModeService {
 
       // Keep context file for viewing output later (deleted only when card is removed)
 
-      sendToRenderer({
+      this.emitEvent(projectPath, sendToRenderer, {
         type: "auto_mode_feature_complete",
         featureId: feature.id,
         passes: result.passes,
@@ -989,7 +1109,7 @@ class AutoModeService {
         console.error("[AutoMode] Failed to update feature status after error:", statusError);
       }
 
-      sendToRenderer({
+      this.emitEvent(projectPath, sendToRenderer, {
         type: "auto_mode_error",
         error: error.message,
         featureId: featureId,
@@ -1021,13 +1141,13 @@ class AutoModeService {
         throw new Error(`Feature ${featureId} not found`);
       }
 
-      sendToRenderer({
+      this.emitEvent(projectPath, sendToRenderer, {
         type: "auto_mode_feature_start",
         featureId: feature.id,
         feature: { ...feature, description: "Committing changes..." },
       });
 
-      sendToRenderer({
+      this.emitEvent(projectPath, sendToRenderer, {
         type: "auto_mode_phase",
         featureId,
         phase: "action",
@@ -1051,7 +1171,7 @@ class AutoModeService {
 
       // Keep context file for viewing output later (deleted only when card is removed)
 
-      sendToRenderer({
+      this.emitEvent(projectPath, sendToRenderer, {
         type: "auto_mode_feature_complete",
         featureId: feature.id,
         passes: true,
@@ -1061,7 +1181,7 @@ class AutoModeService {
       return { success: true };
     } catch (error) {
       console.error("[AutoMode] Error committing feature:", error);
-      sendToRenderer({
+      this.emitEvent(projectPath, sendToRenderer, {
         type: "auto_mode_error",
         error: error.message,
         featureId: featureId,
@@ -1108,26 +1228,22 @@ class AutoModeService {
       // Delete context file
       await contextManager.deleteContextFile(projectPath, featureId);
 
-      if (sendToRenderer) {
-        sendToRenderer({
-          type: "auto_mode_feature_complete",
-          featureId: featureId,
-          passes: false,
-          message: "Feature reverted - all changes discarded",
-        });
-      }
+      this.emitEvent(projectPath, sendToRenderer, {
+        type: "auto_mode_feature_complete",
+        featureId: featureId,
+        passes: false,
+        message: "Feature reverted - all changes discarded",
+      });
 
       console.log(`[AutoMode] Feature ${featureId} reverted successfully`);
       return { success: true, removedPath: result.removedPath };
     } catch (error) {
       console.error("[AutoMode] Error reverting feature:", error);
-      if (sendToRenderer) {
-        sendToRenderer({
-          type: "auto_mode_error",
-          error: error.message,
-          featureId: featureId,
-        });
-      }
+      this.emitEvent(projectPath, sendToRenderer, {
+        type: "auto_mode_error",
+        error: error.message,
+        featureId: featureId,
+      });
       return { success: false, error: error.message };
     }
   }
@@ -1147,13 +1263,11 @@ class AutoModeService {
         throw new Error(`Feature ${featureId} not found`);
       }
 
-      if (sendToRenderer) {
-        sendToRenderer({
-          type: "auto_mode_progress",
-          featureId: featureId,
-          content: "Merging feature branch into main...\n",
-        });
-      }
+      this.emitEvent(projectPath, sendToRenderer, {
+        type: "auto_mode_progress",
+        featureId: featureId,
+        content: "Merging feature branch into main...\n",
+      });
 
       // Merge the worktree
       const result = await worktreeManager.mergeWorktree(projectPath, featureId, {
@@ -1171,26 +1285,22 @@ class AutoModeService {
       // Update feature status to verified
       await featureLoader.updateFeatureStatus(featureId, "verified", projectPath);
 
-      if (sendToRenderer) {
-        sendToRenderer({
-          type: "auto_mode_feature_complete",
-          featureId: featureId,
-          passes: true,
-          message: `Feature merged into ${result.intoBranch}`,
-        });
-      }
+      this.emitEvent(projectPath, sendToRenderer, {
+        type: "auto_mode_feature_complete",
+        featureId: featureId,
+        passes: true,
+        message: `Feature merged into ${result.intoBranch}`,
+      });
 
       console.log(`[AutoMode] Feature ${featureId} merged successfully`);
       return { success: true, mergedBranch: result.mergedBranch };
     } catch (error) {
       console.error("[AutoMode] Error merging feature:", error);
-      if (sendToRenderer) {
-        sendToRenderer({
-          type: "auto_mode_error",
-          error: error.message,
-          featureId: featureId,
-        });
-      }
+      this.emitEvent(projectPath, sendToRenderer, {
+        type: "auto_mode_error",
+        error: error.message,
+        featureId: featureId,
+      });
       return { success: false, error: error.message };
     }
   }

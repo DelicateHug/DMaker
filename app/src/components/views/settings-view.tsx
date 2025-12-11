@@ -42,6 +42,8 @@ import {
   RefreshCw,
   Info,
   RotateCcw,
+  Volume2,
+  VolumeX,
 } from "lucide-react";
 import { getElectronAPI } from "@/lib/electron";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -62,6 +64,7 @@ const NAV_ITEMS = [
   { id: "codex", label: "Codex", icon: Atom },
   { id: "appearance", label: "Appearance", icon: Palette },
   { id: "kanban", label: "Kanban Display", icon: LayoutGrid },
+  { id: "audio", label: "Audio", icon: Volume2 },
   { id: "keyboard", label: "Keyboard Shortcuts", icon: Settings2 },
   { id: "defaults", label: "Feature Defaults", icon: FlaskConical },
   { id: "danger", label: "Danger Zone", icon: Trash2 },
@@ -83,6 +86,8 @@ export function SettingsView() {
     setUseWorktrees,
     showProfilesOnly,
     setShowProfilesOnly,
+    muteDoneSound,
+    setMuteDoneSound,
     currentProject,
     moveProjectToTrash,
     keyboardShortcuts,
@@ -2127,6 +2132,55 @@ export function SettingsView() {
                       Use single keys (A-Z, 0-9) or special keys like `
                       (backtick). Changes take effect immediately.
                     </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Audio Section */}
+            <div
+              id="audio"
+              className="rounded-xl border border-border bg-card backdrop-blur-md overflow-hidden scroll-mt-6"
+            >
+              <div className="p-6 border-b border-border">
+                <div className="flex items-center gap-2 mb-2">
+                  <Volume2 className="w-5 h-5 text-brand-500" />
+                  <h2 className="text-lg font-semibold text-foreground">
+                    Audio
+                  </h2>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Configure audio and notification settings.
+                </p>
+              </div>
+              <div className="p-6 space-y-4">
+                {/* Mute Done Sound Setting */}
+                <div className="space-y-3">
+                  <div className="flex items-start space-x-3">
+                    <Checkbox
+                      id="mute-done-sound"
+                      checked={muteDoneSound}
+                      onCheckedChange={(checked) =>
+                        setMuteDoneSound(checked === true)
+                      }
+                      className="mt-0.5"
+                      data-testid="mute-done-sound-checkbox"
+                    />
+                    <div className="space-y-1">
+                      <Label
+                        htmlFor="mute-done-sound"
+                        className="text-foreground cursor-pointer font-medium flex items-center gap-2"
+                      >
+                        <VolumeX className="w-4 h-4 text-brand-500" />
+                        Mute notification sound when agents complete
+                      </Label>
+                      <p className="text-xs text-muted-foreground">
+                        When enabled, disables the &quot;ding&quot; sound that
+                        plays when an agent completes a feature. The feature
+                        will still move to the completed column, but without
+                        audio notification.
+                      </p>
+                    </div>
                   </div>
                 </div>
               </div>

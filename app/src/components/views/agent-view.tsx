@@ -592,7 +592,7 @@ export function AgentView() {
                 </div>
                 <Card
                   className={cn(
-                    "max-w-[80%]",
+                    "max-w-[80%] py-0",
                     message.role === "user"
                       ? "bg-transparent border border-primary text-foreground"
                       : "border-l-4 border-primary bg-card"
@@ -628,7 +628,7 @@ export function AgentView() {
                 <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
                   <Bot className="w-4 h-4 text-primary" />
                 </div>
-                <Card className="border-l-4 border-primary bg-card">
+                <Card className="border-l-4 border-primary bg-card py-0">
                   <CardContent className="p-3">
                     <div className="flex items-center gap-2">
                       <Loader2 className="w-4 h-4 animate-spin text-primary" />

@@ -12,7 +12,8 @@ export type ViewMode =
   | "tools"
   | "interview"
   | "context"
-  | "profiles";
+  | "profiles"
+  | "running-agents";
 
 export type ThemeMode =
   | "light"
@@ -260,6 +261,9 @@ export interface AppState {
   // Keyboard Shortcuts
   keyboardShortcuts: KeyboardShortcuts; // User-defined keyboard shortcuts
 
+  // Audio Settings
+  muteDoneSound: boolean; // When true, mute the notification sound when agents complete (default: false)
+
   // Project Analysis
   projectAnalysis: ProjectAnalysis | null;
   isAnalyzing: boolean;
@@ -367,6 +371,9 @@ export interface AppActions {
   setKeyboardShortcuts: (shortcuts: Partial<KeyboardShortcuts>) => void;
   resetKeyboardShortcuts: () => void;
 
+  // Audio Settings actions
+  setMuteDoneSound: (muted: boolean) => void;
+
   // AI Profile actions
   addAIProfile: (profile: Omit<AIProfile, "id">) => void;
   updateAIProfile: (id: string, updates: Partial<AIProfile>) => void;
@@ -469,6 +476,7 @@ const initialState: AppState = {
   useWorktrees: false, // Default to disabled (worktree feature is experimental)
   showProfilesOnly: false, // Default to showing all options (not profiles only)
   keyboardShortcuts: DEFAULT_KEYBOARD_SHORTCUTS, // Default keyboard shortcuts
+  muteDoneSound: false, // Default to sound enabled (not muted)
   aiProfiles: DEFAULT_AI_PROFILES,
   projectAnalysis: null,
   isAnalyzing: false,
@@ -997,6 +1005,9 @@ export const useAppStore = create<AppState & AppActions>()(
         set({ keyboardShortcuts: DEFAULT_KEYBOARD_SHORTCUTS });
       },
 
+      // Audio Settings actions
+      setMuteDoneSound: (muted) => set({ muteDoneSound: muted }),
+
       // AI Profile actions
       addAIProfile: (profile) => {
         const id = `profile-${Date.now()}-${Math.random()
@@ -1071,11 +1082,13 @@ export const useAppStore = create<AppState & AppActions>()(
         chatSessions: state.chatSessions,
         chatHistoryOpen: state.chatHistoryOpen,
         maxConcurrency: state.maxConcurrency,
+        autoModeByProject: state.autoModeByProject,
         kanbanCardDetailLevel: state.kanbanCardDetailLevel,
         defaultSkipTests: state.defaultSkipTests,
         useWorktrees: state.useWorktrees,
         showProfilesOnly: state.showProfilesOnly,
         keyboardShortcuts: state.keyboardShortcuts,
+        muteDoneSound: state.muteDoneSound,
         aiProfiles: state.aiProfiles,
         lastSelectedSessionByProject: state.lastSelectedSessionByProject,
       }),
