@@ -18,6 +18,8 @@ import { KanbanDisplaySection } from "./settings-view/kanban-display/kanban-disp
 import { KeyboardShortcutsSection } from "./settings-view/keyboard-shortcuts/keyboard-shortcuts-section";
 import { FeatureDefaultsSection } from "./settings-view/feature-defaults/feature-defaults-section";
 import { DangerZoneSection } from "./settings-view/danger-zone/danger-zone-section";
+import type { Project as SettingsProject, Theme } from "./settings-view/shared/types";
+import type { Project as ElectronProject } from "@/lib/electron";
 
 export function SettingsView() {
   const {
@@ -37,8 +39,21 @@ export function SettingsView() {
     moveProjectToTrash,
   } = useAppStore();
 
+  // Convert electron Project to settings-view Project type
+  const convertProject = (project: ElectronProject | null): SettingsProject | null => {
+    if (!project) return null;
+    return {
+      id: project.id,
+      name: project.name,
+      path: project.path,
+      theme: project.theme as Theme | undefined,
+    };
+  };
+
+  const settingsProject = convertProject(currentProject);
+
   // Compute the effective theme for the current project
-  const effectiveTheme = currentProject?.theme || theme;
+  const effectiveTheme = (settingsProject?.theme || theme) as Theme;
 
   // Handler to set theme - saves to project if one is selected, otherwise to global
   const handleSetTheme = (newTheme: typeof theme) => {
@@ -111,7 +126,7 @@ export function SettingsView() {
             {/* Appearance Section */}
             <AppearanceSection
               effectiveTheme={effectiveTheme}
-              currentProject={currentProject}
+              currentProject={settingsProject}
               onThemeChange={handleSetTheme}
             />
 
@@ -138,7 +153,7 @@ export function SettingsView() {
 
             {/* Danger Zone Section - Only show when a project is selected */}
             <DangerZoneSection
-              project={currentProject}
+              project={settingsProject}
               onDeleteClick={() => setShowDeleteDialog(true)}
             />
 
