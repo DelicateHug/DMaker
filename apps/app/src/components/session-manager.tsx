@@ -245,26 +245,44 @@ export function SessionManager({
   // Archive session
   const handleArchiveSession = async (sessionId: string) => {
     const api = getElectronAPI();
-    if (!api?.sessions) return;
+    if (!api?.sessions) {
+      console.error("[SessionManager] Sessions API not available");
+      return;
+    }
 
-    const result = await api.sessions.archive(sessionId);
-    if (result.success) {
-      // If the archived session was currently selected, deselect it
-      if (currentSessionId === sessionId) {
-        onSelectSession(null);
+    try {
+      const result = await api.sessions.archive(sessionId);
+      if (result.success) {
+        // If the archived session was currently selected, deselect it
+        if (currentSessionId === sessionId) {
+          onSelectSession(null);
+        }
+        await loadSessions();
+      } else {
+        console.error("[SessionManager] Archive failed:", result.error);
       }
-      await loadSessions();
+    } catch (error) {
+      console.error("[SessionManager] Archive error:", error);
     }
   };
 
   // Unarchive session
   const handleUnarchiveSession = async (sessionId: string) => {
     const api = getElectronAPI();
-    if (!api?.sessions) return;
+    if (!api?.sessions) {
+      console.error("[SessionManager] Sessions API not available");
+      return;
+    }
 
-    const result = await api.sessions.unarchive(sessionId);
-    if (result.success) {
-      await loadSessions();
+    try {
+      const result = await api.sessions.unarchive(sessionId);
+      if (result.success) {
+        await loadSessions();
+      } else {
+        console.error("[SessionManager] Unarchive failed:", result.error);
+      }
+    } catch (error) {
+      console.error("[SessionManager] Unarchive error:", error);
     }
   };
 
