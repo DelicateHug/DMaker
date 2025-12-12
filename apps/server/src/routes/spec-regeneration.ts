@@ -255,7 +255,7 @@ Format your response as markdown. Be specific and actionable.`;
 
   // Save spec
   const specDir = path.join(projectPath, ".automaker");
-  const specPath = path.join(specDir, "project-spec.md");
+  const specPath = path.join(specDir, "app_spec.txt");
 
   await fs.mkdir(specDir, { recursive: true });
   await fs.writeFile(specPath, responseText);
@@ -278,7 +278,7 @@ async function generateFeaturesFromSpec(
   abortController: AbortController
 ) {
   // Read existing spec
-  const specPath = path.join(projectPath, ".automaker", "project-spec.md");
+  const specPath = path.join(projectPath, ".automaker", "app_spec.txt");
   let spec: string;
 
   try {
@@ -382,7 +382,7 @@ async function parseAndCreateFeatures(
         id: feature.id,
         title: feature.title,
         description: feature.description,
-        status: "pending",
+        status: "backlog",  // Features go to backlog - user must manually start them
         priority: feature.priority || 2,
         complexity: feature.complexity || "moderate",
         dependencies: feature.dependencies || [],

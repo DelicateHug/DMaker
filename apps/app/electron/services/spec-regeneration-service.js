@@ -390,15 +390,13 @@ class SpecRegenerationService {
 3. For EACH feature in the implementation_roadmap:
    - Determine if it's ALREADY IMPLEMENTED (fully or partially)
    - If fully implemented: Create with status "verified" and note what's done
-   - If partially implemented: Create with status "in_progress" and note remaining work
-   - If not started: Create with status "backlog"
+   - If partially implemented OR not started: Create with status "backlog" and note what still needs to be done
 
 **IMPORTANT - For each feature you MUST provide:**
 - **featureId**: A descriptive ID (lowercase, hyphens for spaces). Example: "user-authentication", "budget-tracking"
-- **status**: 
-  - "verified" if feature is fully implemented in the codebase
-  - "in_progress" if partially implemented
-  - "backlog" if not yet started
+- **status**:
+  - "verified" ONLY if feature is 100% fully implemented in the codebase
+  - "backlog" for ALL features that need ANY work (partial or not started) - the user will manually start these
 - **description**: A DETAILED description (2-4 sentences) explaining what the feature does, its purpose, and key functionality
 - **category**: The phase from the roadmap (e.g., "Phase 1: Foundation", "Phase 2: Core Logic", "Phase 3: Polish")
 - **steps**: An array of 4-8 clear, actionable implementation steps. For verified features, these are what WAS done. For backlog, these are what NEEDS to be done.
@@ -407,10 +405,12 @@ class SpecRegenerationService {
 **Example of analyzing existing code:**
 If you find NextAuth.js configured in the codebase with working login pages, the user-authentication feature should be "verified" not "backlog".
 
-**Example of a well-defined feature:**
+**IMPORTANT: NEVER use "in_progress" status when creating features. Only use "verified" or "backlog".**
+
+**Example of a well-defined feature (verified - fully complete):**
 {
   "featureId": "user-authentication",
-  "status": "verified",  // Because we found it's already implemented
+  "status": "verified",  // Because we found it's 100% already implemented
   "description": "Secure user authentication system with email/password login and session management. Already implemented using NextAuth.js with email provider.",
   "category": "Phase 1: Foundation",
   "steps": [
@@ -420,6 +420,21 @@ If you find NextAuth.js configured in the codebase with working login pages, the
     "Implement session management - DONE"
   ],
   "summary": "Authentication implemented with NextAuth.js email provider"
+}
+
+**Example of a feature that needs work (backlog):**
+{
+  "featureId": "user-profile",
+  "status": "backlog",  // Needs work - user will manually start this
+  "description": "User profile page where users can view and edit their account settings, change password, and manage preferences.",
+  "category": "Phase 2: Core Features",
+  "steps": [
+    "Create profile page component",
+    "Add form for editing user details",
+    "Implement password change functionality",
+    "Add avatar upload feature"
+  ],
+  "summary": "User profile management - needs implementation"
 }
 
 **Feature Storage:**
@@ -453,13 +468,15 @@ Use the UpdateFeatureStatus tool to create features with ALL the fields above.`,
 2. **Then, read .automaker/app_spec.txt** to see the implementation roadmap
 
 3. **For EACH feature in the roadmap, determine its status:**
-   - Is it ALREADY IMPLEMENTED in the codebase? → status: "verified"
-   - Is it PARTIALLY IMPLEMENTED? → status: "in_progress"  
-   - Is it NOT STARTED? → status: "backlog"
+   - Is it 100% FULLY IMPLEMENTED in the codebase? → status: "verified"
+   - Is it PARTIALLY IMPLEMENTED or NOT STARTED? → status: "backlog"
+
+   **CRITICAL: NEVER use "in_progress" status. Only use "verified" or "backlog".**
+   The user will manually move features from backlog to in_progress when they want to start working on them.
 
 4. **Create each feature with UpdateFeatureStatus including ALL fields:**
    - featureId: Descriptive ID (lowercase, hyphens)
-   - status: "verified", "in_progress", or "backlog" based on your analysis
+   - status: "verified" or "backlog" ONLY (never in_progress)
    - description: 2-4 sentences explaining the feature
    - category: The phase name from the roadmap
    - steps: Array of 4-8 implementation steps
