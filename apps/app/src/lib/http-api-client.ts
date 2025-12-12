@@ -31,6 +31,7 @@ import type {
   ModelDefinition,
   ProviderStatus,
 } from "@/types/electron";
+import { getGlobalFileBrowser } from "@/contexts/file-browser-context";
 
 
 // Server URL - configurable via environment variable
@@ -201,9 +202,17 @@ export class HttpApiClient implements ElectronAPI {
     return { success: true };
   }
 
-  // File picker - uses prompt for path input
+  // File picker - uses server-side file browser dialog
   async openDirectory(): Promise<DialogResult> {
-    const path = prompt("Enter project directory path:");
+    const fileBrowser = getGlobalFileBrowser();
+
+    if (!fileBrowser) {
+      console.error("File browser not initialized");
+      return { canceled: true, filePaths: [] };
+    }
+
+    const path = await fileBrowser();
+
     if (!path) {
       return { canceled: true, filePaths: [] };
     }
@@ -219,13 +228,21 @@ export class HttpApiClient implements ElectronAPI {
       return { canceled: false, filePaths: [result.path] };
     }
 
-    alert(result.error || "Invalid path");
+    console.error("Invalid directory:", result.error);
     return { canceled: true, filePaths: [] };
   }
 
   async openFile(options?: object): Promise<DialogResult> {
-    // Prompt for file path
-    const path = prompt("Enter file path:");
+    const fileBrowser = getGlobalFileBrowser();
+
+    if (!fileBrowser) {
+      console.error("File browser not initialized");
+      return { canceled: true, filePaths: [] };
+    }
+
+    // For now, use the same directory browser (could be enhanced for file selection)
+    const path = await fileBrowser();
+
     if (!path) {
       return { canceled: true, filePaths: [] };
     }
@@ -239,7 +256,7 @@ export class HttpApiClient implements ElectronAPI {
       return { canceled: false, filePaths: [path] };
     }
 
-    alert("File does not exist");
+    console.error("File not found");
     return { canceled: true, filePaths: [] };
   }
 
