@@ -24,7 +24,7 @@ export abstract class BaseProvider {
   }
 
   /**
-   * Get the provider name (e.g., "claude", "codex", "cursor")
+   * Get the provider name (e.g., "claude", "cursor")
    */
   abstract getName(): string;
 

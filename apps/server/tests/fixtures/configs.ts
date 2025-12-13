@@ -1,5 +1,5 @@
 /**
- * Configuration fixtures for testing Codex config manager
+ * Configuration fixtures for testing
  */
 
 export const tomlConfigFixture = `
@@ -15,11 +15,3 @@ enabled_tools = ["UpdateFeatureStatus"]
 [mcp_servers.automaker-tools.env]
 AUTOMAKER_PROJECT_PATH = "/path/to/project"
 `;
-
-export const codexAuthJsonFixture = {
-  token: {
-    access_token: "test-access-token",
-    refresh_token: "test-refresh-token",
-    id_token: "test-id-token",
-  },
-};

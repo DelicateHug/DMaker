@@ -40,19 +40,6 @@ export function WelcomeStep({ onNext }: WelcomeStepProps) {
           </CardContent>
         </Card>
 
-        <Card className="bg-card/50 border-border hover:border-brand-500/50 transition-colors">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Terminal className="w-5 h-5 text-green-500" />
-              Codex CLI
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground">
-              OpenAI&apos;s GPT-5.1 Codex for advanced code generation tasks
-            </p>
-          </CardContent>
-        </Card>
       </div>
 
       <Button

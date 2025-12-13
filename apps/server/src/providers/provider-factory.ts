@@ -76,7 +76,7 @@ export class ProviderFactory {
   /**
    * Get provider by name (for direct access if needed)
    *
-   * @param name Provider name (e.g., "claude", "codex", "cursor")
+   * @param name Provider name (e.g., "claude", "cursor")
    * @returns Provider instance or null if not found
    */
   static getProviderByName(name: string): BaseProvider | null {

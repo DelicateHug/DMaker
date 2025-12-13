@@ -37,26 +37,3 @@ export const claudeProviderMessageFixture: ProviderMessage = {
   },
 };
 
-export const codexThinkingMessageFixture = {
-  type: "item.completed",
-  item: {
-    type: "reasoning",
-    text: "I need to analyze the problem first...",
-  },
-};
-
-export const codexCommandExecutionFixture = {
-  type: "item.completed",
-  item: {
-    type: "command_execution",
-    command: "ls -la",
-    aggregated_output: "total 12\ndrwxr-xr-x 3 user user 4096 Dec 13",
-  },
-};
-
-export const codexErrorFixture = {
-  type: "error",
-  data: {
-    message: "Authentication failed",
-  },
-};

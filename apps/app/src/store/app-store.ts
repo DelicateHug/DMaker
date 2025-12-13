@@ -246,20 +246,11 @@ export interface FeatureImagePath {
 }
 
 // Available models for feature execution
-// Claude models
 export type ClaudeModel = "opus" | "sonnet" | "haiku";
-// OpenAI/Codex models
-export type OpenAIModel =
-  | "gpt-5.2"
-  | "gpt-5.1-codex-max"
-  | "gpt-5.1-codex"
-  | "gpt-5.1-codex-mini"
-  | "gpt-5.1";
-// Combined model type
-export type AgentModel = ClaudeModel | OpenAIModel;
+export type AgentModel = ClaudeModel;
 
 // Model provider type
-export type ModelProvider = "claude" | "codex";
+export type ModelProvider = "claude";
 
 // Thinking level (budget_tokens) options
 export type ThinkingLevel = "none" | "low" | "medium" | "high" | "ultrathink";
@@ -658,36 +649,6 @@ const DEFAULT_AI_PROFILES: AIProfile[] = [
     provider: "claude",
     isBuiltIn: true,
     icon: "Zap",
-  },
-  {
-    id: "profile-gpt52",
-    name: "GPT-5.2",
-    description: "GPT-5.2 - Latest OpenAI model for advanced coding tasks.",
-    model: "gpt-5.2",
-    thinkingLevel: "none",
-    provider: "codex",
-    isBuiltIn: true,
-    icon: "Sparkles",
-  },
-  {
-    id: "profile-codex-power",
-    name: "Codex Power",
-    description: "GPT-5.1 Codex Max for deep coding tasks via OpenAI CLI.",
-    model: "gpt-5.1-codex-max",
-    thinkingLevel: "none",
-    provider: "codex",
-    isBuiltIn: true,
-    icon: "Cpu",
-  },
-  {
-    id: "profile-codex-fast",
-    name: "Codex Fast",
-    description: "GPT-5.1 Codex Mini for lightweight and quick edits.",
-    model: "gpt-5.1-codex-mini",
-    thinkingLevel: "none",
-    provider: "codex",
-    isBuiltIn: true,
-    icon: "Rocket",
   },
 ];
 
