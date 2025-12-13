@@ -170,4 +170,11 @@ To learn more about Next.js, take a look at the following resources:
 
 ## License
 
-See [LICENSE](../LICENSE) for details.
+This project is dual-licensed under:
+
+- **GNU Affero General Public License v3.0 (AGPL-3.0)** - See [LICENSE-AGPL-3.0](../LICENSE-AGPL-3.0) for details
+- **Commercial License** - See [LICENSE-COMMERCIAL](../LICENSE-COMMERCIAL) for details
+
+See [LICENSE](../LICENSE) for information on choosing a license.
+
+**Important:** You can freely use Automaker to build or maintain software services without needing a Business License. A Business License is only required if you want to resell or redistribute Automaker itself, host it as a service for others, or include it in products you distribute. The core contributors (Shirone, SuperComboGamer, Ben, and Web Dev Cody) are granted perpetual, royalty-free licenses for any use.
