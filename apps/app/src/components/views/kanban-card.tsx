@@ -27,7 +27,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Feature, useAppStore } from "@/store/app-store";
+import { Feature, useAppStore, ThinkingLevel } from "@/store/app-store";
 import {
   GripVertical,
   Edit,
@@ -55,6 +55,7 @@ import {
   GitMerge,
   ChevronDown,
   ChevronUp,
+  Brain,
 } from "lucide-react";
 import { CountUpTimer } from "@/components/ui/count-up-timer";
 import { getElectronAPI } from "@/lib/electron";
@@ -71,6 +72,21 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+
+/**
+ * Formats thinking level for compact display
+ */
+function formatThinkingLevel(level: ThinkingLevel | undefined): string {
+  if (!level || level === "none") return "";
+  const labels: Record<ThinkingLevel, string> = {
+    none: "",
+    low: "Low",
+    medium: "Med",
+    high: "High",
+    ultrathink: "Ultra",
+  };
+  return labels[level];
+}
 
 interface KanbanCardProps {
   feature: Feature;
@@ -280,6 +296,21 @@ export const KanbanCard = memo(function KanbanCard({
           <span>Errored</span>
         </div>
       )}
+      {/* Just Finished indicator badge - shows when agent just completed work */}
+      {feature.justFinished && feature.status === "waiting_approval" && !feature.error && (
+        <div
+          className={cn(
+            "absolute px-1.5 py-0.5 text-[10px] font-medium rounded flex items-center gap-1 z-10",
+            feature.skipTests ? "top-8 left-2" : "top-2 left-2",
+            "bg-green-500/20 border border-green-500/50 text-green-400 animate-pulse"
+          )}
+          data-testid={`just-finished-badge-${feature.id}`}
+          title="Agent just finished working on this feature"
+        >
+          <Sparkles className="w-3 h-3" />
+          <span>Done</span>
+        </div>
+      )}
       {/* Branch badge - show when feature has a worktree */}
       {hasWorktree && !isCurrentAutoTask && (
         <TooltipProvider delayDuration={300}>
@@ -289,8 +320,8 @@ export const KanbanCard = memo(function KanbanCard({
                 className={cn(
                   "absolute px-1.5 py-0.5 text-[10px] font-medium rounded flex items-center gap-1 z-10 cursor-default",
                   "bg-purple-500/20 border border-purple-500/50 text-purple-400",
-                  // Position below error badge if present, otherwise use normal position
-                  feature.error || feature.skipTests
+                  // Position below other badges if present, otherwise use normal position
+                  feature.error || feature.skipTests || (feature.justFinished && feature.status === "waiting_approval")
                     ? "top-8 left-2"
                     : "top-2 left-2"
                 )}
@@ -310,14 +341,17 @@ export const KanbanCard = memo(function KanbanCard({
         className={cn(
           "p-3 pb-2 block", // Reset grid layout to block for custom kanban card layout
           // Add extra top padding when badges are present to prevent text overlap
-          (feature.skipTests || feature.error) && "pt-10",
+          (feature.skipTests || feature.error || (feature.justFinished && feature.status === "waiting_approval")) && "pt-10",
           // Add even more top padding when both badges and branch are shown
-          hasWorktree && (feature.skipTests || feature.error) && "pt-14"
+          hasWorktree && (feature.skipTests || feature.error || (feature.justFinished && feature.status === "waiting_approval")) && "pt-14"
         )}
       >
         {isCurrentAutoTask && (
           <div className="absolute top-2 right-2 flex items-center justify-center gap-2 bg-running-indicator/20 border border-running-indicator rounded px-2 py-0.5">
             <Loader2 className="w-4 h-4 text-running-indicator animate-spin" />
+            <span className="text-xs text-running-indicator font-medium">
+              {formatModelName(feature.model ?? DEFAULT_MODEL)}
+            </span>
             {feature.startedAt && (
               <CountUpTimer
                 startedAt={feature.startedAt}
@@ -449,6 +483,28 @@ export const KanbanCard = memo(function KanbanCard({
                 +{feature.steps.length - 3} more steps
               </p>
             )}
+          </div>
+        )}
+
+        {/* Model/Preset Info for Backlog Cards - Show in Detailed mode */}
+        {showAgentInfo && feature.status === "backlog" && (
+          <div className="mb-3 space-y-2 overflow-hidden">
+            <div className="flex items-center gap-2 text-xs flex-wrap">
+              <div className="flex items-center gap-1 text-cyan-400">
+                <Cpu className="w-3 h-3" />
+                <span className="font-medium">
+                  {formatModelName(feature.model ?? DEFAULT_MODEL)}
+                </span>
+              </div>
+              {feature.thinkingLevel && feature.thinkingLevel !== "none" && (
+                <div className="flex items-center gap-1 text-purple-400">
+                  <Brain className="w-3 h-3" />
+                  <span className="font-medium">
+                    {formatThinkingLevel(feature.thinkingLevel)}
+                  </span>
+                </div>
+              )}
+            </div>
           </div>
         )}
 

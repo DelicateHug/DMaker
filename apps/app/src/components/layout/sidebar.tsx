@@ -42,6 +42,7 @@ import {
   Search,
   Bug,
   Activity,
+  Recycle,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -70,7 +71,7 @@ import {
   useKeyboardShortcutsConfig,
   KeyboardShortcut,
 } from "@/hooks/use-keyboard-shortcuts";
-import { getElectronAPI, Project, TrashedProject } from "@/lib/electron";
+import { getElectronAPI, Project, TrashedProject, RunningAgent } from "@/lib/electron";
 import {
   initializeProject,
   hasAppSpec,
@@ -80,6 +81,7 @@ import { toast } from "sonner";
 import { Sparkles, Loader2 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { SpecRegenerationEvent } from "@/types/electron";
+import { DeleteProjectDialog } from "@/components/views/settings-view/components/delete-project-dialog";
 import {
   DndContext,
   DragEndEvent,
@@ -212,6 +214,7 @@ export function Sidebar() {
     setProjectTheme,
     setTheme,
     theme: globalTheme,
+    moveProjectToTrash,
   } = useAppStore();
 
   // Get customizable keyboard shortcuts
@@ -224,6 +227,12 @@ export function Sidebar() {
   const [showTrashDialog, setShowTrashDialog] = useState(false);
   const [activeTrashId, setActiveTrashId] = useState<string | null>(null);
   const [isEmptyingTrash, setIsEmptyingTrash] = useState(false);
+
+  // State for delete project confirmation dialog
+  const [showDeleteProjectDialog, setShowDeleteProjectDialog] = useState(false);
+
+  // State for running agents count
+  const [runningAgentsCount, setRunningAgentsCount] = useState(0);
 
   // State for new project setup dialog
   const [showSetupDialog, setShowSetupDialog] = useState(false);
@@ -333,6 +342,64 @@ export function Sidebar() {
       unsubscribe();
     };
   }, [setCurrentView]);
+
+  // Fetch running agents count and update every 2 seconds
+  useEffect(() => {
+    const fetchRunningAgentsCount = async () => {
+      try {
+        const api = getElectronAPI();
+        if (api.runningAgents) {
+          const result = await api.runningAgents.getAll();
+          if (result.success && result.runningAgents) {
+            setRunningAgentsCount(result.runningAgents.length);
+          }
+        }
+      } catch (error) {
+        console.error("[Sidebar] Error fetching running agents count:", error);
+      }
+    };
+
+    // Initial fetch
+    fetchRunningAgentsCount();
+
+    // Set up interval to refresh every 2 seconds
+    const interval = setInterval(fetchRunningAgentsCount, 2000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  // Subscribe to auto-mode events to update running agents count in real-time
+  useEffect(() => {
+    const api = getElectronAPI();
+    if (!api.autoMode) return;
+
+    const unsubscribe = api.autoMode.onEvent((event) => {
+      // When a feature starts, completes, or errors, refresh the count
+      if (
+        event.type === "auto_mode_feature_complete" ||
+        event.type === "auto_mode_error" ||
+        event.type === "auto_mode_feature_started"
+      ) {
+        const fetchRunningAgentsCount = async () => {
+          try {
+            if (api.runningAgents) {
+              const result = await api.runningAgents.getAll();
+              if (result.success && result.runningAgents) {
+                setRunningAgentsCount(result.runningAgents.length);
+              }
+            }
+          } catch (error) {
+            console.error("[Sidebar] Error fetching running agents count:", error);
+          }
+        };
+        fetchRunningAgentsCount();
+      }
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, []);
 
   // Handle creating initial spec for new project
   const handleCreateInitialSpec = useCallback(async () => {
@@ -534,14 +601,14 @@ export function Sidebar() {
     }
 
     const confirmed = window.confirm(
-      "Clear all trashed projects from Automaker? This does not delete folders from disk."
+      "Clear all projects from recycle bin? This does not delete folders from disk."
     );
     if (!confirmed) return;
 
     setIsEmptyingTrash(true);
     try {
       emptyTrash();
-      toast.success("Trash cleared");
+      toast.success("Recycle bin cleared");
       setShowTrashDialog(false);
     } finally {
       setIsEmptyingTrash(false);
@@ -830,10 +897,10 @@ export function Sidebar() {
             <button
               onClick={() => setShowTrashDialog(true)}
               className="group flex items-center justify-center px-3 h-[42px] rounded-lg relative overflow-hidden transition-all text-muted-foreground hover:text-primary hover:bg-destructive/10 border border-sidebar-border"
-              title="Trash"
+              title="Recycle Bin"
               data-testid="trash-button"
             >
-              <Trash2 className="size-4 shrink-0" />
+              <Recycle className="size-4 shrink-0" />
               {trashedProjects.length > 0 && (
                 <span className="absolute -top-[2px] -right-[2px] flex items-center justify-center w-5 h-5 text-[10px] font-medium rounded-full text-brand-500">
                   {trashedProjects.length > 9 ? "9+" : trashedProjects.length}
@@ -1039,6 +1106,17 @@ export function Sidebar() {
                       </DropdownMenuItem>
                     </>
                   )}
+
+                  {/* Move to Trash Section */}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={() => setShowDeleteProjectDialog(true)}
+                    className="text-destructive focus:text-destructive focus:bg-destructive/10"
+                    data-testid="move-project-to-trash"
+                  >
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    <span>Move to Trash</span>
+                  </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
@@ -1242,7 +1320,7 @@ export function Sidebar() {
       <Dialog open={showTrashDialog} onOpenChange={setShowTrashDialog}>
         <DialogContent className="bg-popover border-border max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Trash</DialogTitle>
+            <DialogTitle>Recycle Bin</DialogTitle>
             <DialogDescription className="text-muted-foreground">
               Restore projects to the sidebar or delete their folders using your
               system Trash.
@@ -1250,7 +1328,7 @@ export function Sidebar() {
           </DialogHeader>
 
           {trashedProjects.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Trash is empty.</p>
+            <p className="text-sm text-muted-foreground">Recycle bin is empty.</p>
           ) : (
             <div className="space-y-3 max-h-[360px] overflow-y-auto pr-1">
               {trashedProjects.map((project) => (
@@ -1318,7 +1396,7 @@ export function Sidebar() {
                 disabled={isEmptyingTrash}
                 data-testid="empty-trash"
               >
-                {isEmptyingTrash ? "Clearing..." : "Empty Trash"}
+                {isEmptyingTrash ? "Clearing..." : "Empty Recycle Bin"}
               </Button>
             )}
           </DialogFooter>
@@ -1421,6 +1499,14 @@ export function Sidebar() {
             </button>
           </div>
         )}
+
+      {/* Delete Project Confirmation Dialog */}
+      <DeleteProjectDialog
+        open={showDeleteProjectDialog}
+        onOpenChange={setShowDeleteProjectDialog}
+        project={currentProject}
+        onConfirm={moveProjectToTrash}
+      />
     </aside>
   );
 }

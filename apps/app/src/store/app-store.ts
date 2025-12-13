@@ -245,6 +245,7 @@ export interface Feature {
   // Worktree info - set when a feature is being worked on in an isolated git worktree
   worktreePath?: string; // Path to the worktree directory
   branchName?: string; // Name of the feature branch
+  justFinished?: boolean; // Set to true when agent just finished and moved to waiting_approval
 }
 
 // File tree node for project analysis
@@ -332,6 +333,13 @@ export interface AppState {
   // Project Analysis
   projectAnalysis: ProjectAnalysis | null;
   isAnalyzing: boolean;
+
+  // Board Background Settings (per-project, keyed by project path)
+  boardBackgroundByProject: Record<string, {
+    imagePath: string | null; // Path to background image in .automaker directory
+    cardOpacity: number; // Opacity of cards (0-100)
+    columnOpacity: number; // Opacity of columns (0-100)
+  }>;
 }
 
 export interface AutoModeActivity {
@@ -455,6 +463,13 @@ export interface AppActions {
   setLastSelectedSession: (projectPath: string, sessionId: string | null) => void;
   getLastSelectedSession: (projectPath: string) => string | null;
 
+  // Board Background actions
+  setBoardBackground: (projectPath: string, imagePath: string | null) => void;
+  setCardOpacity: (projectPath: string, opacity: number) => void;
+  setColumnOpacity: (projectPath: string, opacity: number) => void;
+  getBoardBackground: (projectPath: string) => { imagePath: string | null; cardOpacity: number; columnOpacity: number };
+  clearBoardBackground: (projectPath: string) => void;
+
   // Reset
   reset: () => void;
 }
@@ -546,6 +561,7 @@ const initialState: AppState = {
   aiProfiles: DEFAULT_AI_PROFILES,
   projectAnalysis: null,
   isAnalyzing: false,
+  boardBackgroundByProject: {},
 };
 
 export const useAppStore = create<AppState & AppActions>()(
@@ -1131,6 +1147,69 @@ export const useAppStore = create<AppState & AppActions>()(
       getLastSelectedSession: (projectPath) => {
         return get().lastSelectedSessionByProject[projectPath] || null;
       },
+
+      // Board Background actions
+      setBoardBackground: (projectPath, imagePath) => {
+        const current = get().boardBackgroundByProject;
+        const existing = current[projectPath] || { imagePath: null, cardOpacity: 100, columnOpacity: 100 };
+        set({
+          boardBackgroundByProject: {
+            ...current,
+            [projectPath]: {
+              ...existing,
+              imagePath,
+            },
+          },
+        });
+      },
+
+      setCardOpacity: (projectPath, opacity) => {
+        const current = get().boardBackgroundByProject;
+        const existing = current[projectPath] || { imagePath: null, cardOpacity: 100, columnOpacity: 100 };
+        set({
+          boardBackgroundByProject: {
+            ...current,
+            [projectPath]: {
+              ...existing,
+              cardOpacity: opacity,
+            },
+          },
+        });
+      },
+
+      setColumnOpacity: (projectPath, opacity) => {
+        const current = get().boardBackgroundByProject;
+        const existing = current[projectPath] || { imagePath: null, cardOpacity: 100, columnOpacity: 100 };
+        set({
+          boardBackgroundByProject: {
+            ...current,
+            [projectPath]: {
+              ...existing,
+              columnOpacity: opacity,
+            },
+          },
+        });
+      },
+
+      getBoardBackground: (projectPath) => {
+        const settings = get().boardBackgroundByProject[projectPath];
+        return settings || { imagePath: null, cardOpacity: 100, columnOpacity: 100 };
+      },
+
+      clearBoardBackground: (projectPath) => {
+        const current = get().boardBackgroundByProject;
+        set({
+          boardBackgroundByProject: {
+            ...current,
+            [projectPath]: {
+              imagePath: null,
+              cardOpacity: 100,
+              columnOpacity: 100,
+            },
+          },
+        });
+      },
+
       // Reset
       reset: () => set(initialState),
     }),
@@ -1164,6 +1243,8 @@ export const useAppStore = create<AppState & AppActions>()(
         aiProfiles: state.aiProfiles,
         chatSessions: state.chatSessions,
         lastSelectedSessionByProject: state.lastSelectedSessionByProject,
+        // Board background settings
+        boardBackgroundByProject: state.boardBackgroundByProject,
       }),
     }
   )

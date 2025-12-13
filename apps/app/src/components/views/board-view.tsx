@@ -867,7 +867,8 @@ export function BoardView() {
       // features often have skipTests=true, and we want status-based handling first
       if (targetStatus === "verified") {
         moveFeature(featureId, "verified");
-        persistFeatureUpdate(featureId, { status: "verified" });
+        // Clear justFinished flag when manually verifying via drag
+        persistFeatureUpdate(featureId, { status: "verified", justFinished: false });
         toast.success("Feature verified", {
           description: `Manually verified: ${draggedFeature.description.slice(
             0,
@@ -877,7 +878,8 @@ export function BoardView() {
       } else if (targetStatus === "backlog") {
         // Allow moving waiting_approval cards back to backlog
         moveFeature(featureId, "backlog");
-        persistFeatureUpdate(featureId, { status: "backlog" });
+        // Clear justFinished flag when moving back to backlog
+        persistFeatureUpdate(featureId, { status: "backlog", justFinished: false });
         toast.info("Feature moved to backlog", {
           description: `Moved to Backlog: ${draggedFeature.description.slice(
             0,
@@ -1198,7 +1200,8 @@ export function BoardView() {
       description: feature.description,
     });
     moveFeature(feature.id, "verified");
-    persistFeatureUpdate(feature.id, { status: "verified" });
+    // Clear justFinished flag when manually verifying
+    persistFeatureUpdate(feature.id, { status: "verified", justFinished: false });
     toast.success("Feature verified", {
       description: `Marked as verified: ${feature.description.slice(0, 50)}${
         feature.description.length > 50 ? "..." : ""
@@ -1264,9 +1267,11 @@ export function BoardView() {
     }
 
     // Move feature back to in_progress before sending follow-up
+    // Clear justFinished flag since user is now interacting with it
     const updates = {
       status: "in_progress" as const,
       startedAt: new Date().toISOString(),
+      justFinished: false,
     };
     updateFeature(featureId, updates);
     persistFeatureUpdate(featureId, updates);
@@ -1523,6 +1528,14 @@ export function BoardView() {
           map.backlog.push(f);
         }
       }
+    });
+
+    // Sort waiting_approval column: justFinished features go to the top
+    map.waiting_approval.sort((a, b) => {
+      // Features with justFinished=true should appear first
+      if (a.justFinished && !b.justFinished) return -1;
+      if (!a.justFinished && b.justFinished) return 1;
+      return 0; // Keep original order for features with same justFinished status
     });
 
     return map;
