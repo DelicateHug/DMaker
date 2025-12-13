@@ -709,6 +709,23 @@ Format your response as a structured markdown document.`;
     };
   }
 
+  /**
+   * Get detailed info about all running agents
+   */
+  getRunningAgents(): Array<{
+    featureId: string;
+    projectPath: string;
+    projectName: string;
+    isAutoMode: boolean;
+  }> {
+    return Array.from(this.runningFeatures.values()).map((rf) => ({
+      featureId: rf.featureId,
+      projectPath: rf.projectPath,
+      projectName: path.basename(rf.projectPath),
+      isAutoMode: rf.isAutoMode,
+    }));
+  }
+
   // Private helpers
 
   private async setupWorktree(
@@ -785,6 +802,13 @@ Format your response as a structured markdown document.`;
       const feature = JSON.parse(data);
       feature.status = status;
       feature.updatedAt = new Date().toISOString();
+      // Set justFinished flag when moving to waiting_approval (agent just completed)
+      if (status === "waiting_approval") {
+        feature.justFinished = true;
+      } else {
+        // Clear the flag when moving to other statuses
+        feature.justFinished = false;
+      }
       await fs.writeFile(featurePath, JSON.stringify(feature, null, 2));
     } catch {
       // Feature file may not exist

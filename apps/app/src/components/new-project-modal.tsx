@@ -17,6 +17,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import {
   FolderPlus,
+  FolderOpen,
   Rocket,
   ExternalLink,
   Check,
@@ -28,6 +29,7 @@ import { starterTemplates, type StarterTemplate } from "@/lib/templates";
 import { getElectronAPI } from "@/lib/electron";
 import { getHttpApiClient } from "@/lib/http-api-client";
 import { cn } from "@/lib/utils";
+import { useFileBrowser } from "@/contexts/file-browser-context";
 
 interface ValidationErrors {
   projectName?: boolean;
@@ -69,6 +71,7 @@ export function NewProjectModal({
   const [useCustomUrl, setUseCustomUrl] = useState(false);
   const [customUrl, setCustomUrl] = useState("");
   const [errors, setErrors] = useState<ValidationErrors>({});
+  const { openFileBrowser } = useFileBrowser();
 
   // Fetch workspace directory when modal opens
   useEffect(() => {
@@ -181,6 +184,20 @@ export function NewProjectModal({
     }
   };
 
+  const handleBrowseDirectory = async () => {
+    const selectedPath = await openFileBrowser({
+      title: "Select Base Project Directory",
+      description: "Choose the parent directory where your project will be created",
+    });
+    if (selectedPath) {
+      setWorkspaceDir(selectedPath);
+      // Clear any workspace error when a valid directory is selected
+      if (errors.workspaceDir) {
+        setErrors((prev) => ({ ...prev, workspaceDir: false }));
+      }
+    }
+  };
+
   const projectPath = workspaceDir && projectName ? `${workspaceDir}/${projectName}` : "";
 
   return (
@@ -226,16 +243,28 @@ export function NewProjectModal({
             "flex items-center gap-2 text-sm",
             errors.workspaceDir ? "text-red-500" : "text-muted-foreground"
           )}>
-            <Folder className="w-4 h-4" />
-            <span>
+            <Folder className="w-4 h-4 shrink-0" />
+            <span className="flex-1 min-w-0">
               {isLoadingWorkspace ? (
                 "Loading workspace..."
               ) : workspaceDir ? (
-                <>Will be created at: <code className="text-xs bg-muted px-1.5 py-0.5 rounded">{projectPath || "..."}</code></>
+                <>Will be created at: <code className="text-xs bg-muted px-1.5 py-0.5 rounded truncate">{projectPath || "..."}</code></>
               ) : (
-                <span className="text-red-500">No workspace configured - please configure WORKSPACE_DIR</span>
+                <span className="text-red-500">No workspace configured</span>
               )}
             </span>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleBrowseDirectory}
+              disabled={isLoadingWorkspace}
+              className="shrink-0 h-7 px-2 text-xs"
+              data-testid="browse-directory-button"
+            >
+              <FolderOpen className="w-3.5 h-3.5 mr-1" />
+              Browse
+            </Button>
           </div>
         </div>
 

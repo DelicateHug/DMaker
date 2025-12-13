@@ -181,7 +181,8 @@ export function WelcomeView() {
         if (!result.canceled && result.filePaths[0]) {
           const path = result.filePaths[0];
           // Extract folder name from path (works on both Windows and Mac/Linux)
-          const name = path.split(/[/\\]/).filter(Boolean).pop() || "Untitled Project";
+          const name =
+            path.split(/[/\\]/).filter(Boolean).pop() || "Untitled Project";
           await initializeAndOpenProject(path, name);
         }
       }
@@ -193,7 +194,8 @@ export function WelcomeView() {
 
       if (!result.canceled && result.filePaths[0]) {
         const path = result.filePaths[0];
-        const name = path.split(/[/\\]/).filter(Boolean).pop() || "Untitled Project";
+        const name =
+          path.split(/[/\\]/).filter(Boolean).pop() || "Untitled Project";
         await initializeAndOpenProject(path, name);
       }
     }
@@ -231,7 +233,10 @@ export function WelcomeView() {
   /**
    * Create a blank project with just .automaker directory structure
    */
-  const handleCreateBlankProject = async (projectName: string, parentDir: string) => {
+  const handleCreateBlankProject = async (
+    projectName: string,
+    parentDir: string
+  ) => {
     setIsCreating(true);
     try {
       const api = getElectronAPI();
@@ -359,11 +364,15 @@ export function WelcomeView() {
   </overview>
 
   <technology_stack>
-    ${template.techStack.map((tech) => `<technology>${tech}</technology>`).join("\n    ")}
+    ${template.techStack
+      .map((tech) => `<technology>${tech}</technology>`)
+      .join("\n    ")}
   </technology_stack>
 
   <core_capabilities>
-    ${template.features.map((feature) => `<capability>${feature}</capability>`).join("\n    ")}
+    ${template.features
+      .map((feature) => `<capability>${feature}</capability>`)
+      .join("\n    ")}
   </core_capabilities>
 
   <implemented_features>
