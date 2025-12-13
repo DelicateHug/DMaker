@@ -1094,7 +1094,7 @@ When done, summarize what you implemented and any notes for the developer.`;
                 block.text.includes("Fix external API key"))) {
               throw new Error(
                 "Authentication failed: Invalid or expired API key. " +
-                "Please check your ANTHROPIC_API_KEY or run 'claude login' to re-authenticate."
+                "Please check your ANTHROPIC_API_KEY or GOOGLE_API_KEY, or run 'claude login' to re-authenticate."
               );
             }
 
