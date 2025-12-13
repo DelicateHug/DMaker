@@ -639,11 +639,13 @@ Address the follow-up instructions above. Review the previous work and make the 
 Format your response as a structured markdown document.`;
 
     try {
-      const provider = ProviderFactory.getProviderForModel("claude-sonnet-4-20250514");
+      // Use default Claude model for analysis (can be overridden in the future)
+      const analysisModel = resolveModelString(undefined, DEFAULT_MODELS.claude);
+      const provider = ProviderFactory.getProviderForModel(analysisModel);
 
       const options: ExecuteOptions = {
         prompt,
-        model: "claude-sonnet-4-20250514",
+        model: analysisModel,
         maxTurns: 5,
         cwd: projectPath,
         allowedTools: ["Read", "Glob", "Grep"],
@@ -926,10 +928,13 @@ When done, summarize what you implemented and any notes for the developer.`;
             if (block.text && (block.text.includes("Invalid API key") ||
                 block.text.includes("authentication_failed") ||
                 block.text.includes("Fix external API key"))) {
-              throw new Error(
-                "Authentication failed: Invalid or expired API key. " +
-                "Please check your ANTHROPIC_API_KEY or run 'claude login' to re-authenticate."
-              );
+              const isCodex = finalModel.startsWith("gpt-") || finalModel.startsWith("o");
+              const errorMsg = isCodex
+                ? "Authentication failed: Invalid or expired API key. " +
+                  "Please check your OPENAI_API_KEY or run 'codex login' to re-authenticate."
+                : "Authentication failed: Invalid or expired API key. " +
+                  "Please check your ANTHROPIC_API_KEY or run 'claude login' to re-authenticate.";
+              throw new Error(errorMsg);
             }
 
             this.emitAutoModeEvent("auto_mode_progress", {
