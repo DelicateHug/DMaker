@@ -177,8 +177,8 @@ This project is licensed under the **Automaker License Agreement**. See [LICENSE
 - **Allowed:**
 
   - **Build Anything:** You can clone and use Automaker locally or in your organization to build ANY product (commercial or free).
-  - **Internal Use:** You can use it internally within your company without restriction.
-  - **Modify:** You can modify the code for your own internal use.
+  - **Internal Use:** You can use it internally within your company (commercial or non-profit) without restriction.
+  - **Modify:** You can modify the code for internal use within your organization (commercial or non-profit).
 
 - **Restricted (The "No Monetization of the Tool" Rule):**
 
