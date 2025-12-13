@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { ProviderFactory } from "@/providers/provider-factory.js";
 import { ClaudeProvider } from "@/providers/claude-provider.js";
-import { CodexProvider } from "@/providers/codex-provider.js";
 
 describe("provider-factory.ts", () => {
   let consoleSpy: any;
@@ -17,48 +16,6 @@ describe("provider-factory.ts", () => {
   });
 
   describe("getProviderForModel", () => {
-    describe("OpenAI/Codex models (gpt-*)", () => {
-      it("should return CodexProvider for gpt-5.2", () => {
-        const provider = ProviderFactory.getProviderForModel("gpt-5.2");
-        expect(provider).toBeInstanceOf(CodexProvider);
-      });
-
-      it("should return CodexProvider for gpt-5.1-codex", () => {
-        const provider = ProviderFactory.getProviderForModel("gpt-5.1-codex");
-        expect(provider).toBeInstanceOf(CodexProvider);
-      });
-
-      it("should return CodexProvider for gpt-4", () => {
-        const provider = ProviderFactory.getProviderForModel("gpt-4");
-        expect(provider).toBeInstanceOf(CodexProvider);
-      });
-
-      it("should be case-insensitive for gpt models", () => {
-        const provider1 = ProviderFactory.getProviderForModel("GPT-5.2");
-        const provider2 = ProviderFactory.getProviderForModel("Gpt-5.1");
-        expect(provider1).toBeInstanceOf(CodexProvider);
-        expect(provider2).toBeInstanceOf(CodexProvider);
-      });
-    });
-
-    describe("Unsupported o-series models", () => {
-      it("should default to ClaudeProvider for o1 (not supported by Codex CLI)", () => {
-        const provider = ProviderFactory.getProviderForModel("o1");
-        expect(provider).toBeInstanceOf(ClaudeProvider);
-        expect(consoleSpy.warn).toHaveBeenCalled();
-      });
-
-      it("should default to ClaudeProvider for o3", () => {
-        const provider = ProviderFactory.getProviderForModel("o3");
-        expect(provider).toBeInstanceOf(ClaudeProvider);
-      });
-
-      it("should default to ClaudeProvider for o1-mini", () => {
-        const provider = ProviderFactory.getProviderForModel("o1-mini");
-        expect(provider).toBeInstanceOf(ClaudeProvider);
-      });
-    });
-
     describe("Claude models (claude-* prefix)", () => {
       it("should return ClaudeProvider for claude-opus-4-5-20251101", () => {
         const provider = ProviderFactory.getProviderForModel(
@@ -138,6 +95,18 @@ describe("provider-factory.ts", () => {
         expect(provider).toBeInstanceOf(ClaudeProvider);
         expect(consoleSpy.warn).toHaveBeenCalled();
       });
+
+      it("should default to ClaudeProvider for gpt models (not supported)", () => {
+        const provider = ProviderFactory.getProviderForModel("gpt-5.2");
+        expect(provider).toBeInstanceOf(ClaudeProvider);
+        expect(consoleSpy.warn).toHaveBeenCalled();
+      });
+
+      it("should default to ClaudeProvider for o-series models (not supported)", () => {
+        const provider = ProviderFactory.getProviderForModel("o1");
+        expect(provider).toBeInstanceOf(ClaudeProvider);
+        expect(consoleSpy.warn).toHaveBeenCalled();
+      });
     });
   });
 
@@ -155,15 +124,9 @@ describe("provider-factory.ts", () => {
       expect(hasClaudeProvider).toBe(true);
     });
 
-    it("should include CodexProvider", () => {
+    it("should return exactly 1 provider", () => {
       const providers = ProviderFactory.getAllProviders();
-      const hasCodexProvider = providers.some((p) => p instanceof CodexProvider);
-      expect(hasCodexProvider).toBe(true);
-    });
-
-    it("should return exactly 2 providers", () => {
-      const providers = ProviderFactory.getAllProviders();
-      expect(providers).toHaveLength(2);
+      expect(providers).toHaveLength(1);
     });
 
     it("should create new instances each time", () => {
@@ -171,7 +134,6 @@ describe("provider-factory.ts", () => {
       const providers2 = ProviderFactory.getAllProviders();
 
       expect(providers1[0]).not.toBe(providers2[0]);
-      expect(providers1[1]).not.toBe(providers2[1]);
     });
   });
 
@@ -180,14 +142,12 @@ describe("provider-factory.ts", () => {
       const statuses = await ProviderFactory.checkAllProviders();
 
       expect(statuses).toHaveProperty("claude");
-      expect(statuses).toHaveProperty("codex");
     });
 
     it("should call detectInstallation on each provider", async () => {
       const statuses = await ProviderFactory.checkAllProviders();
 
       expect(statuses.claude).toHaveProperty("installed");
-      expect(statuses.codex).toHaveProperty("installed");
     });
 
     it("should return correct provider names as keys", async () => {
@@ -195,8 +155,7 @@ describe("provider-factory.ts", () => {
       const keys = Object.keys(statuses);
 
       expect(keys).toContain("claude");
-      expect(keys).toContain("codex");
-      expect(keys).toHaveLength(2);
+      expect(keys).toHaveLength(1);
     });
   });
 
@@ -211,24 +170,12 @@ describe("provider-factory.ts", () => {
       expect(provider).toBeInstanceOf(ClaudeProvider);
     });
 
-    it("should return CodexProvider for 'codex'", () => {
-      const provider = ProviderFactory.getProviderByName("codex");
-      expect(provider).toBeInstanceOf(CodexProvider);
-    });
-
-    it("should return CodexProvider for 'openai'", () => {
-      const provider = ProviderFactory.getProviderByName("openai");
-      expect(provider).toBeInstanceOf(CodexProvider);
-    });
-
     it("should be case-insensitive", () => {
       const provider1 = ProviderFactory.getProviderByName("CLAUDE");
-      const provider2 = ProviderFactory.getProviderByName("Codex");
-      const provider3 = ProviderFactory.getProviderByName("ANTHROPIC");
+      const provider2 = ProviderFactory.getProviderByName("ANTHROPIC");
 
       expect(provider1).toBeInstanceOf(ClaudeProvider);
-      expect(provider2).toBeInstanceOf(CodexProvider);
-      expect(provider3).toBeInstanceOf(ClaudeProvider);
+      expect(provider2).toBeInstanceOf(ClaudeProvider);
     });
 
     it("should return null for unknown provider", () => {
@@ -273,7 +220,7 @@ describe("provider-factory.ts", () => {
       });
     });
 
-    it("should aggregate models from both Claude and Codex", () => {
+    it("should include Claude models", () => {
       const models = ProviderFactory.getAllAvailableModels();
 
       // Claude models should include claude-* in their IDs
@@ -281,13 +228,7 @@ describe("provider-factory.ts", () => {
         m.id.toLowerCase().includes("claude")
       );
 
-      // Codex models should include gpt-* in their IDs
-      const hasCodexModels = models.some((m) =>
-        m.id.toLowerCase().includes("gpt")
-      );
-
       expect(hasClaudeModels).toBe(true);
-      expect(hasCodexModels).toBe(true);
     });
   });
 });

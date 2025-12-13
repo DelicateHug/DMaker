@@ -245,7 +245,7 @@ describe("agent-service.ts", () => {
 
     it("should use custom model if provided", async () => {
       const mockProvider = {
-        getName: () => "codex",
+        getName: () => "claude",
         executeQuery: async function* () {
           yield {
             type: "result",
@@ -266,10 +266,10 @@ describe("agent-service.ts", () => {
       await service.sendMessage({
         sessionId: "session-1",
         message: "Hello",
-        model: "gpt-5.2",
+        model: "claude-sonnet-4-20250514",
       });
 
-      expect(ProviderFactory.getProviderForModel).toHaveBeenCalledWith("gpt-5.2");
+      expect(ProviderFactory.getProviderForModel).toHaveBeenCalledWith("claude-sonnet-4-20250514");
     });
 
     it("should save session messages", async () => {

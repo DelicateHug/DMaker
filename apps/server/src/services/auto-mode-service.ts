@@ -1092,13 +1092,10 @@ When done, summarize what you implemented and any notes for the developer.`;
             if (block.text && (block.text.includes("Invalid API key") ||
                 block.text.includes("authentication_failed") ||
                 block.text.includes("Fix external API key"))) {
-              const isCodex = finalModel.startsWith("gpt-")
-              const errorMsg = isCodex
-                ? "Authentication failed: Invalid or expired API key. " +
-                  "Please check your OPENAI_API_KEY or run 'codex login' to re-authenticate."
-                : "Authentication failed: Invalid or expired API key. " +
-                  "Please check your ANTHROPIC_API_KEY or run 'claude login' to re-authenticate.";
-              throw new Error(errorMsg);
+              throw new Error(
+                "Authentication failed: Invalid or expired API key. " +
+                "Please check your ANTHROPIC_API_KEY or run 'claude login' to re-authenticate."
+              );
             }
 
             this.emitAutoModeEvent("auto_mode_progress", {

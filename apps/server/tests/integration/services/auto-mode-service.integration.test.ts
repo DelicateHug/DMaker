@@ -288,11 +288,11 @@ describe("auto-mode-service.ts (integration)", () => {
         category: "test",
         description: "Model test",
         status: "pending",
-        model: "gpt-5.2",
+        model: "claude-sonnet-4-20250514",
       });
 
       const mockProvider = {
-        getName: () => "codex",
+        getName: () => "claude",
         executeQuery: async function* () {
           yield {
             type: "result",
@@ -312,8 +312,8 @@ describe("auto-mode-service.ts (integration)", () => {
         false
       );
 
-      // Should have used gpt-5.2
-      expect(ProviderFactory.getProviderForModel).toHaveBeenCalledWith("gpt-5.2");
+      // Should have used claude-sonnet-4-20250514
+      expect(ProviderFactory.getProviderForModel).toHaveBeenCalledWith("claude-sonnet-4-20250514");
     }, 30000);
   });
 

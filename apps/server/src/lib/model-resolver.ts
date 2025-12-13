@@ -3,7 +3,6 @@
  *
  * Provides centralized model resolution logic:
  * - Maps Claude model aliases to full model strings
- * - Detects and passes through OpenAI/Codex models
  * - Provides default models per provider
  * - Handles multiple model sources with priority
  */
@@ -22,7 +21,6 @@ export const CLAUDE_MODEL_MAP: Record<string, string> = {
  */
 export const DEFAULT_MODELS = {
   claude: "claude-opus-4-5-20251101",
-  openai: "gpt-5.2",
 } as const;
 
 /**
@@ -39,13 +37,6 @@ export function resolveModelString(
   // No model specified - use default
   if (!modelKey) {
     return defaultModel;
-  }
-
-  // OpenAI/Codex models - pass through unchanged
-  // Only check for gpt-* models (Codex CLI doesn't support o1/o3)
-  if (modelKey.startsWith("gpt-")) {
-    console.log(`[ModelResolver] Using OpenAI/Codex model: ${modelKey}`);
-    return modelKey;
   }
 
   // Full Claude model string - pass through unchanged

@@ -8,7 +8,6 @@
 
 import { BaseProvider } from "./base-provider.js";
 import { ClaudeProvider } from "./claude-provider.js";
-import { CodexProvider } from "./codex-provider.js";
 import type { InstallationStatus } from "./types.js";
 
 export class ProviderFactory {
@@ -20,12 +19,6 @@ export class ProviderFactory {
    */
   static getProviderForModel(modelId: string): BaseProvider {
     const lowerModel = modelId.toLowerCase();
-
-    // OpenAI/Codex models (gpt-*)
-    // Note: o1/o3 models are not supported by Codex CLI
-    if (lowerModel.startsWith("gpt-")) {
-      return new CodexProvider();
-    }
 
     // Claude models (claude-*, opus, sonnet, haiku)
     if (
@@ -56,7 +49,6 @@ export class ProviderFactory {
   static getAllProviders(): BaseProvider[] {
     return [
       new ClaudeProvider(),
-      new CodexProvider(),
       // Future providers...
     ];
   }
@@ -94,10 +86,6 @@ export class ProviderFactory {
       case "claude":
       case "anthropic":
         return new ClaudeProvider();
-
-      case "codex":
-      case "openai":
-        return new CodexProvider();
 
       // Future providers:
       // case "cursor":

@@ -230,84 +230,6 @@ export function createSetupRoutes(): Router {
     }
   });
 
-  // Get Codex CLI status
-  router.get("/codex-status", async (_req: Request, res: Response) => {
-    try {
-      let installed = false;
-      let version = "";
-      let cliPath = "";
-      let method = "none";
-
-      // Try to find Codex CLI
-      try {
-        const { stdout } = await execAsync("which codex || where codex 2>/dev/null");
-        cliPath = stdout.trim();
-        installed = true;
-        method = "path";
-
-        try {
-          const { stdout: versionOut } = await execAsync("codex --version");
-          version = versionOut.trim();
-        } catch {
-          version = "unknown";
-        }
-      } catch {
-        // Not found
-      }
-
-      // Check for OpenAI/Codex authentication
-      // Simplified: only check via CLI command, no file parsing
-      let auth = {
-        authenticated: false,
-        method: "none" as string,
-        hasEnvKey: !!process.env.OPENAI_API_KEY,
-        hasStoredApiKey: !!apiKeys.openai,
-      };
-
-      // Try to verify authentication using codex CLI command if CLI is installed
-      if (installed && cliPath) {
-        try {
-          const { stdout: statusOutput } = await execAsync(`"${cliPath}" login status 2>&1`, {
-            timeout: 5000,
-          });
-
-          // Check if the output indicates logged in status
-          if (statusOutput && (statusOutput.includes('Logged in') || statusOutput.includes('Authenticated'))) {
-            auth.authenticated = true;
-            auth.method = "cli_verified"; // CLI verified via login status command
-          }
-        } catch (error) {
-          // CLI check failed - user needs to login manually
-          console.log("[Setup] Codex login status check failed:", error);
-        }
-      }
-
-      // Environment variable override
-      if (process.env.OPENAI_API_KEY) {
-        auth.authenticated = true;
-        auth.method = "env"; // OPENAI_API_KEY environment variable
-      }
-
-      // In-memory stored API key (from settings UI)
-      if (!auth.authenticated && apiKeys.openai) {
-        auth.authenticated = true;
-        auth.method = "api_key"; // Manually stored API key
-      }
-
-      res.json({
-        success: true,
-        status: installed ? "installed" : "not_installed",
-        method,
-        version,
-        path: cliPath,
-        auth,
-      });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Unknown error";
-      res.status(500).json({ success: false, error: message });
-    }
-  });
-
   // Install Claude CLI
   router.post("/install-claude", async (_req: Request, res: Response) => {
     try {
@@ -324,20 +246,6 @@ export function createSetupRoutes(): Router {
     }
   });
 
-  // Install Codex CLI
-  router.post("/install-codex", async (_req: Request, res: Response) => {
-    try {
-      res.json({
-        success: false,
-        error:
-          "CLI installation requires terminal access. Please install manually using: npm install -g @openai/codex",
-      });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Unknown error";
-      res.status(500).json({ success: false, error: message });
-    }
-  });
-
   // Auth Claude
   router.post("/auth-claude", async (_req: Request, res: Response) => {
     try {
@@ -347,28 +255,6 @@ export function createSetupRoutes(): Router {
         command: "claude login",
         message: "Please run 'claude login' in your terminal to authenticate",
       });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Unknown error";
-      res.status(500).json({ success: false, error: message });
-    }
-  });
-
-  // Auth Codex
-  router.post("/auth-codex", async (req: Request, res: Response) => {
-    try {
-      const { apiKey } = req.body as { apiKey?: string };
-
-      if (apiKey) {
-        apiKeys.openai = apiKey;
-        process.env.OPENAI_API_KEY = apiKey;
-        res.json({ success: true });
-      } else {
-        res.json({
-          success: true,
-          requiresManualAuth: true,
-          command: "codex auth login",
-        });
-      }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
       res.status(500).json({ success: false, error: message });
@@ -401,9 +287,6 @@ export function createSetupRoutes(): Router {
         process.env.ANTHROPIC_API_KEY = apiKey;
         await persistApiKeyToEnv("ANTHROPIC_API_KEY", apiKey);
         console.log("[Setup] Stored API key as ANTHROPIC_API_KEY");
-      } else if (provider === "openai") {
-        process.env.OPENAI_API_KEY = apiKey;
-        await persistApiKeyToEnv("OPENAI_API_KEY", apiKey);
       } else if (provider === "google") {
         process.env.GOOGLE_API_KEY = apiKey;
         await persistApiKeyToEnv("GOOGLE_API_KEY", apiKey);
@@ -422,37 +305,8 @@ export function createSetupRoutes(): Router {
       res.json({
         success: true,
         hasAnthropicKey: !!apiKeys.anthropic || !!process.env.ANTHROPIC_API_KEY,
-        hasOpenAIKey: !!apiKeys.openai || !!process.env.OPENAI_API_KEY,
         hasGoogleKey: !!apiKeys.google || !!process.env.GOOGLE_API_KEY,
       });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Unknown error";
-      res.status(500).json({ success: false, error: message });
-    }
-  });
-
-  // Configure Codex MCP
-  router.post("/configure-codex-mcp", async (req: Request, res: Response) => {
-    try {
-      const { projectPath } = req.body as { projectPath: string };
-
-      if (!projectPath) {
-        res.status(400).json({ success: false, error: "projectPath required" });
-        return;
-      }
-
-      // Create .codex directory and config
-      const codexDir = path.join(projectPath, ".codex");
-      await fs.mkdir(codexDir, { recursive: true });
-
-      const configPath = path.join(codexDir, "config.toml");
-      const config = `# Codex configuration
-[mcp]
-enabled = true
-`;
-      await fs.writeFile(configPath, config);
-
-      res.json({ success: true, configPath });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
       res.status(500).json({ success: false, error: message });
@@ -472,30 +326,6 @@ enabled = true
         isMac: platform === "darwin",
         isLinux: platform === "linux",
       });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Unknown error";
-      res.status(500).json({ success: false, error: message });
-    }
-  });
-
-  // Test OpenAI connection
-  router.post("/test-openai", async (req: Request, res: Response) => {
-    try {
-      const { apiKey } = req.body as { apiKey?: string };
-      const key = apiKey || apiKeys.openai || process.env.OPENAI_API_KEY;
-
-      if (!key) {
-        res.json({ success: false, error: "No OpenAI API key provided" });
-        return;
-      }
-
-      // Simple test - just verify the key format
-      if (!key.startsWith("sk-")) {
-        res.json({ success: false, error: "Invalid OpenAI API key format" });
-        return;
-      }
-
-      res.json({ success: true, message: "API key format is valid" });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
       res.status(500).json({ success: false, error: message });

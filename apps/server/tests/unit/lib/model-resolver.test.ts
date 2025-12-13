@@ -40,19 +40,8 @@ describe("model-resolver.ts", () => {
       );
     });
 
-    it("should pass through OpenAI gpt-* models", () => {
-      const models = ["gpt-5.2", "gpt-5.1-codex", "gpt-4"];
-      models.forEach((model) => {
-        const result = resolveModelString(model);
-        expect(result).toBe(model);
-      });
-      expect(consoleSpy.log).toHaveBeenCalledWith(
-        expect.stringContaining("Using OpenAI/Codex model")
-      );
-    });
-
-    it("should treat o-series models as unknown (Codex CLI doesn't support them)", () => {
-      const models = ["o1", "o1-mini", "o3"];
+    it("should treat unknown models as falling back to default", () => {
+      const models = ["o1", "o1-mini", "o3", "gpt-5.2", "unknown-model"];
       models.forEach((model) => {
         const result = resolveModelString(model);
         // Should fall back to default since these aren't supported
@@ -143,14 +132,12 @@ describe("model-resolver.ts", () => {
   });
 
   describe("DEFAULT_MODELS", () => {
-    it("should have claude and openai defaults", () => {
+    it("should have claude default", () => {
       expect(DEFAULT_MODELS).toHaveProperty("claude");
-      expect(DEFAULT_MODELS).toHaveProperty("openai");
     });
 
-    it("should have valid default models", () => {
+    it("should have valid default model", () => {
       expect(DEFAULT_MODELS.claude).toContain("claude");
-      expect(DEFAULT_MODELS.openai).toContain("gpt");
     });
   });
 });

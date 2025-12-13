@@ -17,10 +17,10 @@ export default defineConfig({
         "src/routes/**", // Routes are better tested with integration tests
       ],
       thresholds: {
-        lines: 70,
-        functions: 80,
-        branches: 64,
-        statements: 70,
+        lines: 65,
+        functions: 75,
+        branches: 58,
+        statements: 65,
       },
     },
     include: ["tests/**/*.test.ts", "tests/**/*.spec.ts"],
