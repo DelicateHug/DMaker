@@ -231,7 +231,7 @@ export function KeyboardMap({ onKeySelect, selectedKey, className }: KeyboardMap
         >
           {isBound && shortcuts.length > 0
             ? (shortcuts.length === 1
-                ? SHORTCUT_LABELS[shortcuts[0]].split(" ")[0]
+                ? (SHORTCUT_LABELS[shortcuts[0]]?.split(" ")[0] ?? shortcuts[0])
                 : `${shortcuts.length}x`)
             : "\u00A0" // Non-breaking space to maintain height
           }
@@ -257,10 +257,12 @@ export function KeyboardMap({ onKeySelect, selectedKey, className }: KeyboardMap
                     <span
                       className={cn(
                         "w-2 h-2 rounded-full",
-                        CATEGORY_COLORS[SHORTCUT_CATEGORIES[shortcut]].bg.replace("/20", "")
+                        SHORTCUT_CATEGORIES[shortcut] && CATEGORY_COLORS[SHORTCUT_CATEGORIES[shortcut]]
+                          ? CATEGORY_COLORS[SHORTCUT_CATEGORIES[shortcut]].bg.replace("/20", "")
+                          : "bg-muted-foreground"
                       )}
                     />
-                    <span className="text-sm">{SHORTCUT_LABELS[shortcut]}</span>
+                    <span className="text-sm">{SHORTCUT_LABELS[shortcut] ?? shortcut}</span>
                     <kbd className="text-xs font-mono bg-sidebar-accent/30 px-1 rounded">
                       {displayShortcut}
                     </kbd>
@@ -362,7 +364,7 @@ export function ShortcutReferencePanel({ editable = false }: ShortcutReferencePa
       ([shortcut, category]) => {
         groups[category].push({
           key: shortcut,
-          label: SHORTCUT_LABELS[shortcut],
+          label: SHORTCUT_LABELS[shortcut] ?? shortcut,
           value: keyboardShortcuts[shortcut],
         });
       }
@@ -386,7 +388,7 @@ export function ShortcutReferencePanel({ editable = false }: ShortcutReferencePa
     const conflict = Object.entries(keyboardShortcuts).find(
       ([k, v]) => k !== currentKey && v.toUpperCase() === shortcutStr.toUpperCase()
     );
-    return conflict ? SHORTCUT_LABELS[conflict[0] as keyof KeyboardShortcuts] : null;
+    return conflict ? (SHORTCUT_LABELS[conflict[0] as keyof KeyboardShortcuts] ?? conflict[0]) : null;
   }, [keyboardShortcuts]);
 
   const handleStartEdit = (key: keyof KeyboardShortcuts) => {
