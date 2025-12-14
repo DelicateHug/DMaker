@@ -3,12 +3,13 @@
  */
 
 import { createLogger } from "../../lib/logger.js";
+import {
+  getErrorMessage as getErrorMessageShared,
+  createLogError,
+} from "../common.js";
 
 const logger = createLogger("Health");
 
-/**
- * Get error message from error object
- */
-export function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "Unknown error";
-}
+// Re-export shared utilities
+export { getErrorMessageShared as getErrorMessage };
+export const logError = createLogError(logger);

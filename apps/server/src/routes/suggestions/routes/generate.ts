@@ -43,7 +43,7 @@ export function createGenerateHandler(events: EventEmitter) {
       // Start generation in background
       generateSuggestions(projectPath, suggestionType, events, abortController)
         .catch((error) => {
-          logger.error("[Suggestions] Error:", error);
+          logError(error, "Generate suggestions failed (background)");
           events.emit("suggestions:event", {
             type: "suggestions_error",
             error: getErrorMessage(error),

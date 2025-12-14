@@ -31,10 +31,11 @@ export function createResolveDirectoryHandler() {
           const stats = await fs.stat(resolvedPath);
           if (stats.isDirectory()) {
             addAllowedPath(resolvedPath);
-            return res.json({
+            res.json({
               success: true,
               path: resolvedPath,
             });
+            return;
           }
         } catch {
           // Not a valid absolute path, continue to search
@@ -102,10 +103,11 @@ export function createResolveDirectoryHandler() {
 
             // Found matching directory
             addAllowedPath(candidatePath);
-            return res.json({
+            res.json({
               success: true,
               path: candidatePath,
             });
+            return;
           }
         } catch {
           // Directory doesn't exist at this location, continue searching

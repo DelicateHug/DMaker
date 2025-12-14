@@ -62,8 +62,7 @@ export function createGenerateFeaturesHandler(events: EventEmitter) {
       );
       res.json({ success: true });
     } catch (error) {
-      logger.error("❌ Route handler exception:");
-      logger.error("Error:", error);
+      logError(error, "Generate features route handler failed");
       res.status(500).json({ success: false, error: getErrorMessage(error) });
     }
   };

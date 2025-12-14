@@ -22,12 +22,10 @@ export function createSendHandler(agentService: AgentService) {
         };
 
       if (!sessionId || !message) {
-        res
-          .status(400)
-          .json({
-            success: false,
-            error: "sessionId and message are required",
-          });
+        res.status(400).json({
+          success: false,
+          error: "sessionId and message are required",
+        });
         return;
       }
 
@@ -41,7 +39,7 @@ export function createSendHandler(agentService: AgentService) {
           model,
         })
         .catch((error) => {
-          logger.error("[Agent Route] Error sending message:", error);
+          logError(error, "Send message failed (background)");
         });
 
       // Return immediately - responses come via WebSocket

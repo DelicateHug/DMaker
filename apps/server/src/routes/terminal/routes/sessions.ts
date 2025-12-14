@@ -5,7 +5,7 @@
 
 import type { Request, Response } from "express";
 import { getTerminalService } from "../../../services/terminal-service.js";
-import { getErrorMessage } from "../common.js";
+import { getErrorMessage, logError } from "../common.js";
 import { createLogger } from "../../../lib/logger.js";
 
 const logger = createLogger("Terminal");
@@ -44,7 +44,7 @@ export function createSessionsCreateHandler() {
         },
       });
     } catch (error) {
-      logger.error("[Terminal] Error creating session:", error);
+      logError(error, "Create terminal session failed");
       res.status(500).json({
         success: false,
         error: "Failed to create terminal session",

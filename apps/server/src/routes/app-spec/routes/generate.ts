@@ -90,8 +90,7 @@ export function createGenerateHandler(events: EventEmitter) {
       );
       res.json({ success: true });
     } catch (error) {
-      logger.error("❌ Route handler exception:");
-      logger.error("Error:", error);
+      logError(error, "Generate spec route handler failed");
       res.status(500).json({ success: false, error: getErrorMessage(error) });
     }
   };

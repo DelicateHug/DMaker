@@ -7,10 +7,7 @@ import { spawn } from "child_process";
 import path from "path";
 import fs from "fs/promises";
 import { addAllowedPath } from "../../../lib/security.js";
-import { createLogger } from "../../../lib/logger.js";
-import { getErrorMessage, logError } from "../common.js";
-
-const logger = createLogger("Templates");
+import { logger, getErrorMessage, logError } from "../common.js";
 
 export function createCloneHandler() {
   return async (req: Request, res: Response): Promise<void> => {
@@ -59,10 +56,11 @@ export function createCloneHandler() {
       const resolvedProject = path.resolve(projectPath);
       const relativePath = path.relative(resolvedParent, resolvedProject);
       if (relativePath.startsWith("..") || path.isAbsolute(relativePath)) {
-        return res.status(400).json({
+        res.status(400).json({
           success: false,
           error: "Invalid project name; potential path traversal attempt.",
         });
+        return;
       }
 
       // Check if directory already exists
@@ -199,7 +197,6 @@ export function createCloneHandler() {
         projectName: sanitizedName,
       });
     } catch (error) {
-      logger.error("[Templates] Clone error:", error);
       logError(error, "Clone template failed");
       res.status(500).json({ success: false, error: getErrorMessage(error) });
     }

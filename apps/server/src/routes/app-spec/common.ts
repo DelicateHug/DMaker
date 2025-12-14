@@ -3,6 +3,7 @@
  */
 
 import { createLogger } from "../../lib/logger.js";
+import { getErrorMessage as getErrorMessageShared } from "../common.js";
 
 const logger = createLogger("SpecRegeneration");
 
@@ -65,9 +66,7 @@ export function logError(error: unknown, context: string): void {
   );
 }
 
-/**
- * Get error message from error object
- */
-export function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "Unknown error";
-}
+import { getErrorMessage as getErrorMessageShared } from "../common.js";
+
+// Re-export shared utility
+export { getErrorMessageShared as getErrorMessage };

@@ -129,9 +129,11 @@ export function getTokenExpiryMs(): number {
   return TOKEN_EXPIRY_MS;
 }
 
-/**
- * Get error message from error object
- */
-export function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "Unknown error";
-}
+import {
+  getErrorMessage as getErrorMessageShared,
+  createLogError,
+} from "../common.js";
+
+// Re-export shared utilities
+export { getErrorMessageShared as getErrorMessage };
+export const logError = createLogError(logger);
