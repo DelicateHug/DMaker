@@ -6,9 +6,19 @@ import { createLogger } from "../../lib/logger.js";
 
 const logger = createLogger("SpecRegeneration");
 
-// Shared state for tracking generation status
-export let isRunning = false;
-export let currentAbortController: AbortController | null = null;
+// Shared state for tracking generation status - private
+let isRunning = false;
+let currentAbortController: AbortController | null = null;
+
+/**
+ * Get the current running state
+ */
+export function getSpecRegenerationStatus(): {
+  isRunning: boolean;
+  currentAbortController: AbortController | null;
+} {
+  return { isRunning, currentAbortController };
+}
 
 /**
  * Set the running state and abort controller
@@ -65,9 +75,7 @@ export function logError(error: unknown, context: string): void {
   );
 }
 
-/**
- * Get error message from error object
- */
-export function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "Unknown error";
-}
+import { getErrorMessage as getErrorMessageShared } from "../common.js";
+
+// Re-export shared utility
+export { getErrorMessageShared as getErrorMessage };

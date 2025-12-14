@@ -6,7 +6,7 @@ import type { Request, Response } from "express";
 import type { EventEmitter } from "../../../lib/events.js";
 import { createLogger } from "../../../lib/logger.js";
 import {
-  isRunning,
+  getSpecRegenerationStatus,
   setRunningState,
   logAuthStatus,
   logError,
@@ -32,6 +32,7 @@ export function createGenerateFeaturesHandler(events: EventEmitter) {
         return;
       }
 
+      const { isRunning } = getSpecRegenerationStatus();
       if (isRunning) {
         logger.warn("Generation already running, rejecting request");
         res.json({ success: false, error: "Generation already running" });
@@ -62,8 +63,7 @@ export function createGenerateFeaturesHandler(events: EventEmitter) {
       );
       res.json({ success: true });
     } catch (error) {
-      logger.error("❌ Route handler exception:");
-      logger.error("Error:", error);
+      logError(error, "Generate features route handler failed");
       res.status(500).json({ success: false, error: getErrorMessage(error) });
     }
   };
