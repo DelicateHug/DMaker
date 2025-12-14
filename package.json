@@ -22,7 +22,6 @@
     "start:server": "npm run start --workspace=apps/server",
     "lint": "npm run lint --workspace=apps/app",
     "test": "npm run test --workspace=apps/app",
-    "test:headed": "npm run test:headed --workspace=apps/app",
-    "dev:marketing": "npm run dev --workspace=apps/marketing"
+    "test:headed": "npm run test:headed --workspace=apps/app"
   }
 }
