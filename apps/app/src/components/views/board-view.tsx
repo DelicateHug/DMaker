@@ -1496,7 +1496,7 @@ export function BoardView() {
       ? features.filter(
           (f) =>
             f.description.toLowerCase().includes(normalizedQuery) ||
-            f.category.toLowerCase().includes(normalizedQuery)
+            f.category?.toLowerCase().includes(normalizedQuery)
         )
       : features;
 
