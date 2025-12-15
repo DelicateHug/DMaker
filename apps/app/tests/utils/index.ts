@@ -19,6 +19,7 @@ export * from "./views/spec-editor";
 export * from "./views/agent";
 export * from "./views/settings";
 export * from "./views/setup";
+export * from "./views/profiles";
 
 // Component utilities
 export * from "./components/dialogs";
