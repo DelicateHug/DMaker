@@ -1,11 +1,6 @@
-<div align="center">
-  <div style="display: inline-flex; align-items: center;">
-    <img src="apps/app/public/automaker.svg" alt="Automaker Logo" height="80">
-    <span style="margin-left: 12px; font-size: 2.2rem; font-weight: 700; color: #ffffff;">automaker.</span>
-  </div>
-</div>
-
-<br />
+<p align="center">
+  <img src="apps/app/public/readme_logo.png" alt="Automaker Logo" height="80" />
+</p>
 
 > **[!TIP]**
 >
