@@ -20,7 +20,8 @@ export async function generateSpec(
   events: EventEmitter,
   abortController: AbortController,
   generateFeatures?: boolean,
-  analyzeProject?: boolean
+  analyzeProject?: boolean,
+  maxFeatures?: number
 ): Promise<void> {
   logger.info("========== generateSpec() started ==========");
   logger.info("projectPath:", projectPath);
@@ -28,6 +29,7 @@ export async function generateSpec(
   logger.info("projectOverview preview:", projectOverview.substring(0, 300));
   logger.info("generateFeatures:", generateFeatures);
   logger.info("analyzeProject:", analyzeProject);
+  logger.info("maxFeatures:", maxFeatures);
 
   // Build the prompt based on whether we should analyze the project
   let analysisInstructions = "";
@@ -252,7 +254,8 @@ ${getAppSpecFormatInstruction()}`;
       await generateFeaturesFromSpec(
         projectPath,
         events,
-        featureAbortController
+        featureAbortController,
+        maxFeatures
       );
       // Final completion will be emitted by generateFeaturesFromSpec -> parseAndCreateFeatures
     } catch (featureError) {

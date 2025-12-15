@@ -27,11 +27,13 @@ export function createGenerateHandler(events: EventEmitter) {
         projectDefinition,
         generateFeatures,
         analyzeProject,
+        maxFeatures,
       } = req.body as {
         projectPath: string;
         projectDefinition: string;
         generateFeatures?: boolean;
         analyzeProject?: boolean;
+        maxFeatures?: number;
       };
 
       logger.debug("Parsed params:");
@@ -42,6 +44,7 @@ export function createGenerateHandler(events: EventEmitter) {
       );
       logger.debug("  generateFeatures:", generateFeatures);
       logger.debug("  analyzeProject:", analyzeProject);
+      logger.debug("  maxFeatures:", maxFeatures);
 
       if (!projectPath || !projectDefinition) {
         logger.error("Missing required parameters");
@@ -71,7 +74,8 @@ export function createGenerateHandler(events: EventEmitter) {
         events,
         abortController,
         generateFeatures,
-        analyzeProject
+        analyzeProject,
+        maxFeatures
       )
         .catch((error) => {
           logError(error, "Generation failed with error");

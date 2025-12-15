@@ -2180,7 +2180,7 @@ export function BoardView() {
                                   data-testid="start-next-button"
                                 >
                                   <FastForward className="w-3 h-3 mr-1" />
-                                  Pull Top
+                                  Make
                                 </HotkeyButton>
                               )}
                             </div>

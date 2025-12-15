@@ -13,15 +13,18 @@ import { parseAndCreateFeatures } from "./parse-and-create-features.js";
 
 const logger = createLogger("SpecRegeneration");
 
-const MAX_FEATURES = 100;
+const DEFAULT_MAX_FEATURES = 50;
 
 export async function generateFeaturesFromSpec(
   projectPath: string,
   events: EventEmitter,
-  abortController: AbortController
+  abortController: AbortController,
+  maxFeatures?: number
 ): Promise<void> {
+  const featureCount = maxFeatures ?? DEFAULT_MAX_FEATURES;
   logger.debug("========== generateFeaturesFromSpec() started ==========");
   logger.debug("projectPath:", projectPath);
+  logger.debug("maxFeatures:", featureCount);
 
   // Read existing spec
   const specPath = path.join(projectPath, ".automaker", "app_spec.txt");
@@ -73,7 +76,7 @@ Format as JSON:
   ]
 }
 
-Generate ${MAX_FEATURES} features that build on each other logically.
+Generate ${featureCount} features that build on each other logically.
 
 IMPORTANT: Do not ask for clarification. The specification is provided above. Generate the JSON immediately.`;
 

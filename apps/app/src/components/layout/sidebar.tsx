@@ -82,7 +82,10 @@ import { themeOptions } from "@/config/theme-options";
 import type { SpecRegenerationEvent } from "@/types/electron";
 import { DeleteProjectDialog } from "@/components/views/settings-view/components/delete-project-dialog";
 import { NewProjectModal } from "@/components/new-project-modal";
-import { ProjectSetupDialog } from "@/components/layout/project-setup-dialog";
+import {
+  ProjectSetupDialog,
+  type FeatureCount,
+} from "@/components/layout/project-setup-dialog";
 import {
   DndContext,
   DragEndEvent,
@@ -261,6 +264,7 @@ export function Sidebar() {
   const [setupProjectPath, setSetupProjectPath] = useState("");
   const [projectOverview, setProjectOverview] = useState("");
   const [generateFeatures, setGenerateFeatures] = useState(true);
+  const [featureCount, setFeatureCount] = useState<FeatureCount>(50);
   const [showSpecIndicator, setShowSpecIndicator] = useState(true);
 
   // Derive isCreatingSpec from store state
@@ -466,7 +470,9 @@ export function Sidebar() {
       const result = await api.specRegeneration.create(
         setupProjectPath,
         projectOverview.trim(),
-        generateFeatures
+        generateFeatures,
+        undefined, // analyzeProject - use default
+        generateFeatures ? featureCount : undefined // only pass maxFeatures if generating features
       );
 
       if (!result.success) {
@@ -490,7 +496,13 @@ export function Sidebar() {
         description: error instanceof Error ? error.message : "Unknown error",
       });
     }
-  }, [setupProjectPath, projectOverview, setSpecCreatingForProject]);
+  }, [
+    setupProjectPath,
+    projectOverview,
+    generateFeatures,
+    featureCount,
+    setSpecCreatingForProject,
+  ]);
 
   // Handle skipping setup
   const handleSkipSetup = useCallback(() => {
@@ -1453,7 +1465,7 @@ export function Sidebar() {
               onClick={() => setShowTrashDialog(true)}
               className={cn(
                 "group flex items-center justify-center px-3 h-[42px] rounded-xl",
-                "relative overflow-hidden",
+                "relative",
                 "text-muted-foreground hover:text-destructive",
                 // Subtle background that turns red on hover
                 "bg-accent/20 hover:bg-destructive/15",
@@ -1467,7 +1479,7 @@ export function Sidebar() {
             >
               <Recycle className="size-4 shrink-0 transition-transform duration-200 group-hover:rotate-12" />
               {trashedProjects.length > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 flex items-center justify-center min-w-4 h-4 px-1 text-[9px] font-bold rounded-full bg-destructive text-destructive-foreground shadow-sm">
+                <span className="absolute -top-1.5 -right-1.5 z-10 flex items-center justify-center min-w-4 h-4 px-1 text-[9px] font-bold rounded-full bg-red-500 text-white shadow-md ring-1 ring-red-600/50">
                   {trashedProjects.length > 9 ? "9+" : trashedProjects.length}
                 </span>
               )}
@@ -2248,6 +2260,8 @@ export function Sidebar() {
         onProjectOverviewChange={setProjectOverview}
         generateFeatures={generateFeatures}
         onGenerateFeaturesChange={setGenerateFeatures}
+        featureCount={featureCount}
+        onFeatureCountChange={setFeatureCount}
         onCreateSpec={handleCreateInitialSpec}
         onSkip={handleSkipSetup}
         isCreatingSpec={isCreatingSpec}

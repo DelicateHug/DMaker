@@ -1,6 +1,6 @@
 "use client";
 
-import { Sparkles } from "lucide-react";
+import { Sparkles, Clock } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -11,6 +11,19 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { cn } from "@/lib/utils";
+
+// Feature count options
+export type FeatureCount = 20 | 50 | 100;
+const FEATURE_COUNT_OPTIONS: {
+  value: FeatureCount;
+  label: string;
+  warning?: string;
+}[] = [
+  { value: 20, label: "20" },
+  { value: 50, label: "50", warning: "May take up to 5 minutes" },
+  { value: 100, label: "100", warning: "May take up to 5 minutes" },
+];
 
 interface ProjectSetupDialogProps {
   open: boolean;
@@ -19,6 +32,8 @@ interface ProjectSetupDialogProps {
   onProjectOverviewChange: (value: string) => void;
   generateFeatures: boolean;
   onGenerateFeaturesChange: (value: boolean) => void;
+  featureCount: FeatureCount;
+  onFeatureCountChange: (value: FeatureCount) => void;
   onCreateSpec: () => void;
   onSkip: () => void;
   isCreatingSpec: boolean;
@@ -31,6 +46,8 @@ export function ProjectSetupDialog({
   onProjectOverviewChange,
   generateFeatures,
   onGenerateFeaturesChange,
+  featureCount,
+  onFeatureCountChange,
   onCreateSpec,
   onSkip,
   isCreatingSpec,
@@ -94,16 +111,52 @@ export function ProjectSetupDialog({
               </p>
             </div>
           </div>
+
+          {/* Feature Count Selection - only shown when generateFeatures is enabled */}
+          {generateFeatures && (
+            <div className="space-y-2 pt-2 pl-7">
+              <label className="text-sm font-medium">Number of Features</label>
+              <div className="flex gap-2">
+                {FEATURE_COUNT_OPTIONS.map((option) => (
+                  <Button
+                    key={option.value}
+                    type="button"
+                    variant={
+                      featureCount === option.value ? "default" : "outline"
+                    }
+                    size="sm"
+                    onClick={() => onFeatureCountChange(option.value)}
+                    className={cn(
+                      "flex-1 transition-all",
+                      featureCount === option.value
+                        ? "bg-primary hover:bg-primary/90 text-primary-foreground"
+                        : "bg-muted/30 hover:bg-muted/50 border-border"
+                    )}
+                    data-testid={`feature-count-${option.value}`}
+                  >
+                    {option.label}
+                  </Button>
+                ))}
+              </div>
+              {FEATURE_COUNT_OPTIONS.find((o) => o.value === featureCount)
+                ?.warning && (
+                <p className="text-xs text-amber-500 flex items-center gap-1">
+                  <Clock className="w-3 h-3" />
+                  {
+                    FEATURE_COUNT_OPTIONS.find((o) => o.value === featureCount)
+                      ?.warning
+                  }
+                </p>
+              )}
+            </div>
+          )}
         </div>
 
         <DialogFooter>
           <Button variant="ghost" onClick={onSkip}>
             Skip for now
           </Button>
-          <Button
-            onClick={onCreateSpec}
-            disabled={!projectOverview.trim()}
-          >
+          <Button onClick={onCreateSpec} disabled={!projectOverview.trim()}>
             <Sparkles className="w-4 h-4 mr-2" />
             Generate Spec
           </Button>
@@ -112,4 +165,3 @@ export function ProjectSetupDialog({
     </Dialog>
   );
 }
-
