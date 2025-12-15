@@ -90,6 +90,8 @@ import {
   Maximize2,
   Shuffle,
   ImageIcon,
+  Archive,
+  ArchiveRestore,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Slider } from "@/components/ui/slider";
@@ -112,9 +114,21 @@ type ColumnId = Feature["status"];
 
 const COLUMNS: { id: ColumnId; title: string; colorClass: string }[] = [
   { id: "backlog", title: "Backlog", colorClass: "bg-[var(--status-backlog)]" },
-  { id: "in_progress", title: "In Progress", colorClass: "bg-[var(--status-in-progress)]" },
-  { id: "waiting_approval", title: "Waiting Approval", colorClass: "bg-[var(--status-waiting)]" },
-  { id: "verified", title: "Verified", colorClass: "bg-[var(--status-success)]" },
+  {
+    id: "in_progress",
+    title: "In Progress",
+    colorClass: "bg-[var(--status-in-progress)]",
+  },
+  {
+    id: "waiting_approval",
+    title: "Waiting Approval",
+    colorClass: "bg-[var(--status-waiting)]",
+  },
+  {
+    id: "verified",
+    title: "Verified",
+    colorClass: "bg-[var(--status-success)]",
+  },
 ];
 
 type ModelOption = {
@@ -208,6 +222,9 @@ export function BoardView() {
     useState(false);
   const [showBoardBackgroundModal, setShowBoardBackgroundModal] =
     useState(false);
+  const [showCompletedModal, setShowCompletedModal] = useState(false);
+  const [deleteCompletedFeature, setDeleteCompletedFeature] =
+    useState<Feature | null>(null);
   const [persistedCategories, setPersistedCategories] = useState<string[]>([]);
   const [showFollowUpDialog, setShowFollowUpDialog] = useState(false);
   const [followUpFeature, setFollowUpFeature] = useState<Feature | null>(null);
@@ -270,7 +287,7 @@ export function BoardView() {
     };
   }, []);
 
-  // Subscribe to spec regeneration events to clear state on completion
+  // Subscribe to spec regeneration events to clear creating state on completion
   useEffect(() => {
     const api = getElectronAPI();
     if (!api.specRegeneration) return;
@@ -489,6 +506,30 @@ export function BoardView() {
       isSwitchingProjectRef.current = false;
     }
   }, [currentProject, setFeatures]);
+
+  // Subscribe to spec regeneration complete events to refresh kanban board
+  useEffect(() => {
+    const api = getElectronAPI();
+    if (!api.specRegeneration) return;
+
+    const unsubscribe = api.specRegeneration.onEvent((event) => {
+      // Refresh the kanban board when spec regeneration completes for the current project
+      if (
+        event.type === "spec_regeneration_complete" &&
+        currentProject &&
+        event.projectPath === currentProject.path
+      ) {
+        console.log(
+          "[BoardView] Spec regeneration complete, refreshing features"
+        );
+        loadFeatures();
+      }
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [currentProject, loadFeatures]);
 
   // Load persisted categories from file
   const loadCategories = useCallback(async () => {
@@ -844,34 +885,12 @@ export function BoardView() {
     // Same column, nothing to do
     if (targetStatus === draggedFeature.status) return;
 
-    // Check concurrency limit before moving to in_progress (only for backlog -> in_progress and if running agent)
-    if (
-      targetStatus === "in_progress" &&
-      draggedFeature.status === "backlog" &&
-      !autoMode.canStartNewTask
-    ) {
-      console.log("[Board] Cannot start new task - at max concurrency limit");
-      toast.error("Concurrency limit reached", {
-        description: `You can only have ${autoMode.maxConcurrency} task${
-          autoMode.maxConcurrency > 1 ? "s" : ""
-        } running at a time. Wait for a task to complete or increase the limit.`,
-      });
-      return;
-    }
-
     // Handle different drag scenarios
     if (draggedFeature.status === "backlog") {
       // From backlog
       if (targetStatus === "in_progress") {
-        // Update with startedAt timestamp
-        const updates = {
-          status: targetStatus,
-          startedAt: new Date().toISOString(),
-        };
-        updateFeature(featureId, updates);
-        persistFeatureUpdate(featureId, updates);
-        console.log("[Board] Feature moved to in_progress, starting agent...");
-        await handleRunFeature(draggedFeature);
+        // Use helper function to handle concurrency check and start implementation
+        await handleStartImplementation(draggedFeature);
       } else {
         moveFeature(featureId, targetStatus);
         persistFeatureUpdate(featureId, { status: targetStatus });
@@ -1142,6 +1161,28 @@ export function BoardView() {
       // Reload to revert the UI status change
       await loadFeatures();
     }
+  };
+
+  // Helper function to start implementing a feature (from backlog to in_progress)
+  const handleStartImplementation = async (feature: Feature) => {
+    if (!autoMode.canStartNewTask) {
+      toast.error("Concurrency limit reached", {
+        description: `You can only have ${autoMode.maxConcurrency} task${
+          autoMode.maxConcurrency > 1 ? "s" : ""
+        } running at a time. Wait for a task to complete or increase the limit.`,
+      });
+      return false;
+    }
+
+    const updates = {
+      status: "in_progress" as const,
+      startedAt: new Date().toISOString(),
+    };
+    updateFeature(feature.id, updates);
+    persistFeatureUpdate(feature.id, updates);
+    console.log("[Board] Feature moved to in_progress, starting agent...");
+    await handleRunFeature(feature);
+    return true;
   };
 
   const handleVerifyFeature = async (feature: Feature) => {
@@ -1497,6 +1538,47 @@ export function BoardView() {
     }
   };
 
+  // Complete a verified feature (move to completed/archived)
+  const handleCompleteFeature = (feature: Feature) => {
+    console.log("[Board] Completing feature:", {
+      id: feature.id,
+      description: feature.description,
+    });
+
+    const updates = {
+      status: "completed" as const,
+    };
+    updateFeature(feature.id, updates);
+    persistFeatureUpdate(feature.id, updates);
+
+    toast.success("Feature completed", {
+      description: `Archived: ${feature.description.slice(0, 50)}${
+        feature.description.length > 50 ? "..." : ""
+      }`,
+    });
+  };
+
+  // Unarchive a completed feature (move back to verified)
+  const handleUnarchiveFeature = (feature: Feature) => {
+    console.log("[Board] Unarchiving feature:", {
+      id: feature.id,
+      description: feature.description,
+    });
+
+    const updates = {
+      status: "verified" as const,
+    };
+    updateFeature(feature.id, updates);
+    persistFeatureUpdate(feature.id, updates);
+
+    toast.success("Feature restored", {
+      description: `Moved back to verified: ${feature.description.slice(
+        0,
+        50
+      )}${feature.description.length > 50 ? "..." : ""}`,
+    });
+  };
+
   const checkContextExists = async (featureId: string): Promise<boolean> => {
     if (!currentProject) return false;
 
@@ -1518,6 +1600,11 @@ export function BoardView() {
     }
   };
 
+  // Memoize completed features for the archive modal
+  const completedFeatures = useMemo(() => {
+    return features.filter((f) => f.status === "completed");
+  }, [features]);
+
   // Memoize column features to prevent unnecessary re-renders
   const columnFeaturesMap = useMemo(() => {
     const map: Record<ColumnId, Feature[]> = {
@@ -1525,6 +1612,7 @@ export function BoardView() {
       in_progress: [],
       waiting_approval: [],
       verified: [],
+      completed: [], // Completed features are shown in the archive modal, not as a column
     };
 
     // Filter features by search query (case-insensitive)
@@ -1903,6 +1991,31 @@ export function BoardView() {
                   </TooltipContent>
                 </Tooltip>
 
+                {/* Completed/Archived Features Button */}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowCompletedModal(true)}
+                      className="h-8 px-2 relative"
+                      data-testid="completed-features-button"
+                    >
+                      <Archive className="w-4 h-4" />
+                      {completedFeatures.length > 0 && (
+                        <span className="absolute -top-1 -right-1 bg-brand-500 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
+                          {completedFeatures.length > 99
+                            ? "99+"
+                            : completedFeatures.length}
+                        </span>
+                      )}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Completed Features ({completedFeatures.length})</p>
+                  </TooltipContent>
+                </Tooltip>
+
                 {/* Kanban Card Detail Level Toggle */}
                 <div
                   className="flex items-center rounded-lg bg-secondary border border-border"
@@ -2067,7 +2180,7 @@ export function BoardView() {
                                   data-testid="start-next-button"
                                 >
                                   <FastForward className="w-3 h-3 mr-1" />
-                                  Pull Top
+                                  Make
                                 </HotkeyButton>
                               )}
                             </div>
@@ -2107,6 +2220,12 @@ export function BoardView() {
                                 onCommit={() => handleCommitFeature(feature)}
                                 onRevert={() => handleRevertFeature(feature)}
                                 onMerge={() => handleMergeFeature(feature)}
+                                onComplete={() =>
+                                  handleCompleteFeature(feature)
+                                }
+                                onImplement={() =>
+                                  handleStartImplementation(feature)
+                                }
                                 hasContext={featuresWithContext.has(feature.id)}
                                 isCurrentAutoTask={runningAutoTasks.includes(
                                   feature.id
@@ -2131,10 +2250,12 @@ export function BoardView() {
                   })}
                 </div>
 
-                <DragOverlay dropAnimation={{
-                  duration: 200,
-                  easing: 'cubic-bezier(0.18, 0.67, 0.6, 1.22)',
-                }}>
+                <DragOverlay
+                  dropAnimation={{
+                    duration: 200,
+                    easing: "cubic-bezier(0.18, 0.67, 0.6, 1.22)",
+                  }}
+                >
                   {activeFeature && (
                     <Card className="w-72 rotate-2 shadow-2xl shadow-black/25 border-primary/50 bg-card/95 backdrop-blur-sm transition-transform">
                       <CardHeader className="p-3">
@@ -2159,6 +2280,136 @@ export function BoardView() {
         open={showBoardBackgroundModal}
         onOpenChange={setShowBoardBackgroundModal}
       />
+
+      {/* Completed Features Modal */}
+      <Dialog open={showCompletedModal} onOpenChange={setShowCompletedModal}>
+        <DialogContent className="max-w-5xl max-h-[80vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Archive className="w-5 h-5 text-brand-500" />
+              Completed Features
+            </DialogTitle>
+            <DialogDescription>
+              {completedFeatures.length === 0
+                ? "No completed features yet. Features you complete will appear here."
+                : `${completedFeatures.length} completed feature${
+                    completedFeatures.length === 1 ? "" : "s"
+                  }`}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 overflow-y-auto py-4">
+            {completedFeatures.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+                <Archive className="w-12 h-12 mb-4 opacity-50" />
+                <p className="text-lg font-medium">No completed features</p>
+                <p className="text-sm">
+                  Complete features from the Verified column to archive them
+                  here.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {completedFeatures.map((feature) => (
+                  <Card
+                    key={feature.id}
+                    className="flex flex-col"
+                    data-testid={`completed-card-${feature.id}`}
+                  >
+                    <CardHeader className="p-3 pb-2 flex-1">
+                      <CardTitle className="text-sm leading-tight line-clamp-3">
+                        {feature.description || feature.summary || feature.id}
+                      </CardTitle>
+                      <CardDescription className="text-xs mt-1 truncate">
+                        {feature.category || "Uncategorized"}
+                      </CardDescription>
+                    </CardHeader>
+                    <div className="p-3 pt-0 flex gap-2">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        className="flex-1 h-7 text-xs"
+                        onClick={() => handleUnarchiveFeature(feature)}
+                        data-testid={`unarchive-${feature.id}`}
+                      >
+                        <ArchiveRestore className="w-3 h-3 mr-1" />
+                        Restore
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
+                        onClick={() => setDeleteCompletedFeature(feature)}
+                        data-testid={`delete-completed-${feature.id}`}
+                        title="Delete"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="ghost"
+              onClick={() => setShowCompletedModal(false)}
+            >
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Completed Feature Confirmation Dialog */}
+      <Dialog
+        open={!!deleteCompletedFeature}
+        onOpenChange={(open) => !open && setDeleteCompletedFeature(null)}
+      >
+        <DialogContent data-testid="delete-completed-confirmation-dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <Trash2 className="w-5 h-5" />
+              Delete Feature
+            </DialogTitle>
+            <DialogDescription>
+              Are you sure you want to permanently delete this feature?
+              <span className="block mt-2 font-medium text-foreground">
+                &quot;{deleteCompletedFeature?.description?.slice(0, 100)}
+                {(deleteCompletedFeature?.description?.length ?? 0) > 100
+                  ? "..."
+                  : ""}
+                &quot;
+              </span>
+              <span className="block mt-2 text-destructive font-medium">
+                This action cannot be undone.
+              </span>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="ghost"
+              onClick={() => setDeleteCompletedFeature(null)}
+              data-testid="cancel-delete-completed-button"
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={async () => {
+                if (deleteCompletedFeature) {
+                  await handleDeleteFeature(deleteCompletedFeature.id);
+                  setDeleteCompletedFeature(null);
+                }
+              }}
+              data-testid="confirm-delete-completed-button"
+            >
+              <Trash2 className="w-4 h-4 mr-2" />
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Add Feature Dialog */}
       <Dialog

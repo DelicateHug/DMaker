@@ -22,12 +22,13 @@ export function createCreateHandler(events: EventEmitter) {
     logger.debug("Request body:", JSON.stringify(req.body, null, 2));
 
     try {
-      const { projectPath, projectOverview, generateFeatures, analyzeProject } =
+      const { projectPath, projectOverview, generateFeatures, analyzeProject, maxFeatures } =
         req.body as {
           projectPath: string;
           projectOverview: string;
           generateFeatures?: boolean;
           analyzeProject?: boolean;
+          maxFeatures?: number;
         };
 
       logger.debug("Parsed params:");
@@ -38,6 +39,7 @@ export function createCreateHandler(events: EventEmitter) {
       );
       logger.debug("  generateFeatures:", generateFeatures);
       logger.debug("  analyzeProject:", analyzeProject);
+      logger.debug("  maxFeatures:", maxFeatures);
 
       if (!projectPath || !projectOverview) {
         logger.error("Missing required parameters");
@@ -68,7 +70,8 @@ export function createCreateHandler(events: EventEmitter) {
         events,
         abortController,
         generateFeatures,
-        analyzeProject
+        analyzeProject,
+        maxFeatures
       )
         .catch((error) => {
           logError(error, "Generation failed with error");

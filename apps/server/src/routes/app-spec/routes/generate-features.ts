@@ -22,9 +22,13 @@ export function createGenerateFeaturesHandler(events: EventEmitter) {
     logger.debug("Request body:", JSON.stringify(req.body, null, 2));
 
     try {
-      const { projectPath } = req.body as { projectPath: string };
+      const { projectPath, maxFeatures } = req.body as {
+        projectPath: string;
+        maxFeatures?: number;
+      };
 
       logger.debug("projectPath:", projectPath);
+      logger.debug("maxFeatures:", maxFeatures);
 
       if (!projectPath) {
         logger.error("Missing projectPath parameter");
@@ -45,7 +49,12 @@ export function createGenerateFeaturesHandler(events: EventEmitter) {
       setRunningState(true, abortController);
       logger.info("Starting background feature generation task...");
 
-      generateFeaturesFromSpec(projectPath, events, abortController)
+      generateFeaturesFromSpec(
+        projectPath,
+        events,
+        abortController,
+        maxFeatures
+      )
         .catch((error) => {
           logError(error, "Feature generation failed with error");
           events.emit("spec-regeneration:event", {

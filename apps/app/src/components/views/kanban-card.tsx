@@ -57,6 +57,8 @@ import {
   ChevronDown,
   ChevronUp,
   Brain,
+  Wand2,
+  Archive,
 } from "lucide-react";
 import { CountUpTimer } from "@/components/ui/count-up-timer";
 import { getElectronAPI } from "@/lib/electron";
@@ -103,6 +105,8 @@ interface KanbanCardProps {
   onCommit?: () => void;
   onRevert?: () => void;
   onMerge?: () => void;
+  onImplement?: () => void;
+  onComplete?: () => void;
   hasContext?: boolean;
   isCurrentAutoTask?: boolean;
   shortcutKey?: string;
@@ -128,6 +132,8 @@ export const KanbanCard = memo(function KanbanCard({
   onCommit,
   onRevert,
   onMerge,
+  onImplement,
+  onComplete,
   hasContext,
   isCurrentAutoTask,
   shortcutKey,
@@ -436,7 +442,82 @@ export const KanbanCard = memo(function KanbanCard({
             )}
           </div>
         )}
-        {!isCurrentAutoTask && (
+        {!isCurrentAutoTask && feature.status === "backlog" && (
+          <div className="absolute top-2 right-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 w-6 p-0 hover:bg-white/10 text-muted-foreground hover:text-destructive"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleDeleteClick(e);
+              }}
+              onPointerDown={(e) => e.stopPropagation()}
+              data-testid={`delete-backlog-${feature.id}`}
+            >
+              <Trash2 className="w-4 h-4" />
+            </Button>
+          </div>
+        )}
+        {!isCurrentAutoTask &&
+          (feature.status === "waiting_approval" ||
+            feature.status === "verified") && (
+            <div className="absolute top-2 right-2 flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 w-6 p-0 hover:bg-white/10 text-muted-foreground hover:text-foreground"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onEdit();
+                }}
+                onPointerDown={(e) => e.stopPropagation()}
+                data-testid={`edit-${
+                  feature.status === "waiting_approval" ? "waiting" : "verified"
+                }-${feature.id}`}
+                title="Edit"
+              >
+                <Edit className="w-4 h-4" />
+              </Button>
+              {onViewOutput && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 w-6 p-0 hover:bg-white/10 text-muted-foreground hover:text-foreground"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onViewOutput();
+                  }}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  data-testid={`logs-${
+                    feature.status === "waiting_approval"
+                      ? "waiting"
+                      : "verified"
+                  }-${feature.id}`}
+                  title="Logs"
+                >
+                  <FileText className="w-4 h-4" />
+                </Button>
+              )}
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 w-6 p-0 hover:bg-white/10 text-muted-foreground hover:text-destructive"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleDeleteClick(e);
+                }}
+                onPointerDown={(e) => e.stopPropagation()}
+                data-testid={`delete-${
+                  feature.status === "waiting_approval" ? "waiting" : "verified"
+                }-${feature.id}`}
+                title="Delete"
+              >
+                <Trash2 className="w-4 h-4" />
+              </Button>
+            </div>
+          )}
+        {!isCurrentAutoTask && feature.status === "in_progress" && (
           <div className="absolute top-2 right-2">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -463,7 +544,7 @@ export const KanbanCard = memo(function KanbanCard({
                   <Edit className="w-3 h-3 mr-2" />
                   Edit
                 </DropdownMenuItem>
-                {onViewOutput && feature.status !== "backlog" && (
+                {onViewOutput && (
                   <DropdownMenuItem
                     onClick={(e) => {
                       e.stopPropagation();
@@ -647,7 +728,8 @@ export const KanbanCard = memo(function KanbanCard({
                           "break-words hyphens-auto line-clamp-2 leading-relaxed",
                           todo.status === "completed" &&
                             "text-muted-foreground/60 line-through",
-                          todo.status === "in_progress" && "text-[var(--status-warning)]",
+                          todo.status === "in_progress" &&
+                            "text-[var(--status-warning)]",
                           todo.status === "pending" &&
                             "text-muted-foreground/80"
                         )}
@@ -833,11 +915,12 @@ export const KanbanCard = memo(function KanbanCard({
           )}
           {!isCurrentAutoTask && feature.status === "verified" && (
             <>
-              {hasContext && onViewOutput && (
+              {/* Logs button - styled like Refine */}
+              {onViewOutput && (
                 <Button
-                  variant="ghost"
+                  variant="secondary"
                   size="sm"
-                  className="h-7 text-[11px] px-2"
+                  className="flex-1 h-7 text-xs min-w-0"
                   onClick={(e) => {
                     e.stopPropagation();
                     onViewOutput();
@@ -845,7 +928,25 @@ export const KanbanCard = memo(function KanbanCard({
                   onPointerDown={(e) => e.stopPropagation()}
                   data-testid={`view-output-verified-${feature.id}`}
                 >
-                  <FileText className="w-3 h-3" />
+                  <FileText className="w-3 h-3 mr-1 shrink-0" />
+                  <span className="truncate">Logs</span>
+                </Button>
+              )}
+              {/* Complete button */}
+              {onComplete && (
+                <Button
+                  variant="default"
+                  size="sm"
+                  className="flex-1 h-7 text-xs min-w-0 bg-brand-500 hover:bg-brand-600"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onComplete();
+                  }}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  data-testid={`complete-${feature.id}`}
+                >
+                  <Archive className="w-3 h-3 mr-1 shrink-0" />
+                  <span className="truncate">Complete</span>
                 </Button>
               )}
             </>
@@ -876,6 +977,7 @@ export const KanbanCard = memo(function KanbanCard({
                   </Tooltip>
                 </TooltipProvider>
               )}
+              {/* Refine prompt button */}
               {onFollowUp && (
                 <Button
                   variant="secondary"
@@ -888,8 +990,8 @@ export const KanbanCard = memo(function KanbanCard({
                   onPointerDown={(e) => e.stopPropagation()}
                   data-testid={`follow-up-${feature.id}`}
                 >
-                  <MessageSquare className="w-3 h-3 mr-1 shrink-0" />
-                  <span className="truncate">Follow-up</span>
+                  <Wand2 className="w-3 h-3 mr-1 shrink-0" />
+                  <span className="truncate">Refine</span>
                 </Button>
               )}
               {hasWorktree && onMerge && (
@@ -923,6 +1025,40 @@ export const KanbanCard = memo(function KanbanCard({
                 >
                   <GitCommit className="w-3 h-3 mr-1" />
                   Commit
+                </Button>
+              )}
+            </>
+          )}
+          {!isCurrentAutoTask && feature.status === "backlog" && (
+            <>
+              <Button
+                variant="secondary"
+                size="sm"
+                className="flex-1 h-7 text-xs"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onEdit();
+                }}
+                onPointerDown={(e) => e.stopPropagation()}
+                data-testid={`edit-backlog-${feature.id}`}
+              >
+                <Edit className="w-3 h-3 mr-1" />
+                Edit
+              </Button>
+              {onImplement && (
+                <Button
+                  variant="default"
+                  size="sm"
+                  className="flex-1 h-7 text-xs"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onImplement();
+                  }}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  data-testid={`make-${feature.id}`}
+                >
+                  <PlayCircle className="w-3 h-3 mr-1" />
+                  Make
                 </Button>
               )}
             </>

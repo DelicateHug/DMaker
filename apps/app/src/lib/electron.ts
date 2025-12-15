@@ -148,15 +148,17 @@ export interface SpecRegenerationAPI {
     projectPath: string,
     projectOverview: string,
     generateFeatures?: boolean,
-    analyzeProject?: boolean
+    analyzeProject?: boolean,
+    maxFeatures?: number
   ) => Promise<{ success: boolean; error?: string }>;
   generate: (
     projectPath: string,
     projectDefinition: string,
     generateFeatures?: boolean,
-    analyzeProject?: boolean
+    analyzeProject?: boolean,
+    maxFeatures?: number
   ) => Promise<{ success: boolean; error?: string }>;
-  generateFeatures: (projectPath: string) => Promise<{
+  generateFeatures: (projectPath: string, maxFeatures?: number) => Promise<{
     success: boolean;
     error?: string;
   }>;
@@ -1836,7 +1838,9 @@ function createMockSpecRegenerationAPI(): SpecRegenerationAPI {
     create: async (
       projectPath: string,
       projectOverview: string,
-      generateFeatures = true
+      generateFeatures = true,
+      _analyzeProject?: boolean,
+      maxFeatures?: number
     ) => {
       if (mockSpecRegenerationRunning) {
         return { success: false, error: "Spec creation is already running" };
@@ -1844,7 +1848,7 @@ function createMockSpecRegenerationAPI(): SpecRegenerationAPI {
 
       mockSpecRegenerationRunning = true;
       console.log(
-        `[Mock] Creating initial spec for: ${projectPath}, generateFeatures: ${generateFeatures}`
+        `[Mock] Creating initial spec for: ${projectPath}, generateFeatures: ${generateFeatures}, maxFeatures: ${maxFeatures}`
       );
 
       // Simulate async spec creation
@@ -1856,7 +1860,9 @@ function createMockSpecRegenerationAPI(): SpecRegenerationAPI {
     generate: async (
       projectPath: string,
       projectDefinition: string,
-      generateFeatures = false
+      generateFeatures = false,
+      _analyzeProject?: boolean,
+      maxFeatures?: number
     ) => {
       if (mockSpecRegenerationRunning) {
         return {
@@ -1867,7 +1873,7 @@ function createMockSpecRegenerationAPI(): SpecRegenerationAPI {
 
       mockSpecRegenerationRunning = true;
       console.log(
-        `[Mock] Regenerating spec for: ${projectPath}, generateFeatures: ${generateFeatures}`
+        `[Mock] Regenerating spec for: ${projectPath}, generateFeatures: ${generateFeatures}, maxFeatures: ${maxFeatures}`
       );
 
       // Simulate async spec regeneration
@@ -1880,7 +1886,7 @@ function createMockSpecRegenerationAPI(): SpecRegenerationAPI {
       return { success: true };
     },
 
-    generateFeatures: async (projectPath: string) => {
+    generateFeatures: async (projectPath: string, maxFeatures?: number) => {
       if (mockSpecRegenerationRunning) {
         return {
           success: false,
@@ -1890,7 +1896,7 @@ function createMockSpecRegenerationAPI(): SpecRegenerationAPI {
 
       mockSpecRegenerationRunning = true;
       console.log(
-        `[Mock] Generating features from existing spec for: ${projectPath}`
+        `[Mock] Generating features from existing spec for: ${projectPath}, maxFeatures: ${maxFeatures}`
       );
 
       // Simulate async feature generation

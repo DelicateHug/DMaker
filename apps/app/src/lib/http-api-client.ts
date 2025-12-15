@@ -582,28 +582,32 @@ export class HttpApiClient implements ElectronAPI {
       projectPath: string,
       projectOverview: string,
       generateFeatures?: boolean,
-      analyzeProject?: boolean
+      analyzeProject?: boolean,
+      maxFeatures?: number
     ) =>
       this.post("/api/spec-regeneration/create", {
         projectPath,
         projectOverview,
         generateFeatures,
         analyzeProject,
+        maxFeatures,
       }),
     generate: (
       projectPath: string,
       projectDefinition: string,
       generateFeatures?: boolean,
-      analyzeProject?: boolean
+      analyzeProject?: boolean,
+      maxFeatures?: number
     ) =>
       this.post("/api/spec-regeneration/generate", {
         projectPath,
         projectDefinition,
         generateFeatures,
         analyzeProject,
+        maxFeatures,
       }),
-    generateFeatures: (projectPath: string) =>
-      this.post("/api/spec-regeneration/generate-features", { projectPath }),
+    generateFeatures: (projectPath: string, maxFeatures?: number) =>
+      this.post("/api/spec-regeneration/generate-features", { projectPath, maxFeatures }),
     stop: () => this.post("/api/spec-regeneration/stop"),
     status: () => this.get("/api/spec-regeneration/status"),
     onEvent: (callback: (event: SpecRegenerationEvent) => void) => {

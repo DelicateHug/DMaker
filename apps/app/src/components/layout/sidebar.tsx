@@ -79,10 +79,13 @@ import {
 } from "@/lib/project-init";
 import { toast } from "sonner";
 import { themeOptions } from "@/config/theme-options";
-import { Checkbox } from "@/components/ui/checkbox";
 import type { SpecRegenerationEvent } from "@/types/electron";
 import { DeleteProjectDialog } from "@/components/views/settings-view/components/delete-project-dialog";
 import { NewProjectModal } from "@/components/new-project-modal";
+import {
+  ProjectSetupDialog,
+  type FeatureCount,
+} from "@/components/layout/project-setup-dialog";
 import {
   DndContext,
   DragEndEvent,
@@ -149,7 +152,8 @@ function SortableProjectItem({
         "flex items-center gap-2 px-2.5 py-2 rounded-lg cursor-pointer transition-all duration-200",
         "text-muted-foreground hover:text-foreground hover:bg-accent/80",
         isDragging && "bg-accent shadow-lg scale-[1.02]",
-        isHighlighted && "bg-brand-500/10 text-foreground ring-1 ring-brand-500/20"
+        isHighlighted &&
+          "bg-brand-500/10 text-foreground ring-1 ring-brand-500/20"
       )}
       data-testid={`project-option-${project.id}`}
     >
@@ -170,7 +174,9 @@ function SortableProjectItem({
         onClick={() => onSelect(project)}
       >
         <Folder className="h-4 w-4 shrink-0 text-muted-foreground" />
-        <span className="flex-1 truncate text-sm font-medium">{project.name}</span>
+        <span className="flex-1 truncate text-sm font-medium">
+          {project.name}
+        </span>
         {currentProjectId === project.id && (
           <Check className="h-4 w-4 text-brand-500 shrink-0" />
         )}
@@ -258,6 +264,7 @@ export function Sidebar() {
   const [setupProjectPath, setSetupProjectPath] = useState("");
   const [projectOverview, setProjectOverview] = useState("");
   const [generateFeatures, setGenerateFeatures] = useState(true);
+  const [featureCount, setFeatureCount] = useState<FeatureCount>(50);
   const [showSpecIndicator, setShowSpecIndicator] = useState(true);
 
   // Derive isCreatingSpec from store state
@@ -463,7 +470,9 @@ export function Sidebar() {
       const result = await api.specRegeneration.create(
         setupProjectPath,
         projectOverview.trim(),
-        generateFeatures
+        generateFeatures,
+        undefined, // analyzeProject - use default
+        generateFeatures ? featureCount : undefined // only pass maxFeatures if generating features
       );
 
       if (!result.success) {
@@ -471,6 +480,12 @@ export function Sidebar() {
         setSpecCreatingForProject(null);
         toast.error("Failed to create specification", {
           description: result.error,
+        });
+      } else {
+        // Show processing toast to inform user
+        toast.info("Generating app specification...", {
+          description:
+            "This may take a minute. You'll be notified when complete.",
         });
       }
       // If successful, we'll wait for the events to update the state
@@ -481,7 +496,13 @@ export function Sidebar() {
         description: error instanceof Error ? error.message : "Unknown error",
       });
     }
-  }, [setupProjectPath, projectOverview, setSpecCreatingForProject]);
+  }, [
+    setupProjectPath,
+    projectOverview,
+    generateFeatures,
+    featureCount,
+    setSpecCreatingForProject,
+  ]);
 
   // Handle skipping setup
   const handleSkipSetup = useCallback(() => {
@@ -1248,16 +1269,55 @@ export function Sidebar() {
                   className="size-8 group-hover:rotate-12 transition-transform duration-300 ease-out"
                 >
                   <defs>
-                    <linearGradient id="bg-collapsed" x1="0" y1="0" x2="256" y2="256" gradientUnits="userSpaceOnUse">
-                      <stop offset="0%" style={{ stopColor: 'var(--brand-400)' }} />
-                      <stop offset="100%" style={{ stopColor: 'var(--brand-600)' }} />
+                    <linearGradient
+                      id="bg-collapsed"
+                      x1="0"
+                      y1="0"
+                      x2="256"
+                      y2="256"
+                      gradientUnits="userSpaceOnUse"
+                    >
+                      <stop
+                        offset="0%"
+                        style={{ stopColor: "var(--brand-400)" }}
+                      />
+                      <stop
+                        offset="100%"
+                        style={{ stopColor: "var(--brand-600)" }}
+                      />
                     </linearGradient>
-                    <filter id="iconShadow-collapsed" x="-20%" y="-20%" width="140%" height="140%">
-                      <feDropShadow dx="0" dy="4" stdDeviation="4" floodColor="#000000" floodOpacity="0.25" />
+                    <filter
+                      id="iconShadow-collapsed"
+                      x="-20%"
+                      y="-20%"
+                      width="140%"
+                      height="140%"
+                    >
+                      <feDropShadow
+                        dx="0"
+                        dy="4"
+                        stdDeviation="4"
+                        floodColor="#000000"
+                        floodOpacity="0.25"
+                      />
                     </filter>
                   </defs>
-                  <rect x="16" y="16" width="224" height="224" rx="56" fill="url(#bg-collapsed)" />
-                  <g fill="none" stroke="#FFFFFF" strokeWidth="20" strokeLinecap="round" strokeLinejoin="round" filter="url(#iconShadow-collapsed)">
+                  <rect
+                    x="16"
+                    y="16"
+                    width="224"
+                    height="224"
+                    rx="56"
+                    fill="url(#bg-collapsed)"
+                  />
+                  <g
+                    fill="none"
+                    stroke="#FFFFFF"
+                    strokeWidth="20"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    filter="url(#iconShadow-collapsed)"
+                  >
                     <path d="M92 92 L52 128 L92 164" />
                     <path d="M144 72 L116 184" />
                     <path d="M164 92 L204 128 L164 164" />
@@ -1265,12 +1325,7 @@ export function Sidebar() {
                 </svg>
               </div>
             ) : (
-              <div
-                className={cn(
-                  "flex items-center gap-1",
-                  "hidden lg:flex"
-                )}
-              >
+              <div className={cn("flex items-center gap-1", "hidden lg:flex")}>
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
                   viewBox="0 0 256 256"
@@ -1279,16 +1334,55 @@ export function Sidebar() {
                   className="h-[36.8px] w-[36.8px] group-hover:rotate-12 transition-transform duration-300 ease-out"
                 >
                   <defs>
-                    <linearGradient id="bg-expanded" x1="0" y1="0" x2="256" y2="256" gradientUnits="userSpaceOnUse">
-                      <stop offset="0%" style={{ stopColor: 'var(--brand-400)' }} />
-                      <stop offset="100%" style={{ stopColor: 'var(--brand-600)' }} />
+                    <linearGradient
+                      id="bg-expanded"
+                      x1="0"
+                      y1="0"
+                      x2="256"
+                      y2="256"
+                      gradientUnits="userSpaceOnUse"
+                    >
+                      <stop
+                        offset="0%"
+                        style={{ stopColor: "var(--brand-400)" }}
+                      />
+                      <stop
+                        offset="100%"
+                        style={{ stopColor: "var(--brand-600)" }}
+                      />
                     </linearGradient>
-                    <filter id="iconShadow-expanded" x="-20%" y="-20%" width="140%" height="140%">
-                      <feDropShadow dx="0" dy="4" stdDeviation="4" floodColor="#000000" floodOpacity="0.25" />
+                    <filter
+                      id="iconShadow-expanded"
+                      x="-20%"
+                      y="-20%"
+                      width="140%"
+                      height="140%"
+                    >
+                      <feDropShadow
+                        dx="0"
+                        dy="4"
+                        stdDeviation="4"
+                        floodColor="#000000"
+                        floodOpacity="0.25"
+                      />
                     </filter>
                   </defs>
-                  <rect x="16" y="16" width="224" height="224" rx="56" fill="url(#bg-expanded)" />
-                  <g fill="none" stroke="#FFFFFF" strokeWidth="20" strokeLinecap="round" strokeLinejoin="round" filter="url(#iconShadow-expanded)">
+                  <rect
+                    x="16"
+                    y="16"
+                    width="224"
+                    height="224"
+                    rx="56"
+                    fill="url(#bg-expanded)"
+                  />
+                  <g
+                    fill="none"
+                    stroke="#FFFFFF"
+                    strokeWidth="20"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    filter="url(#iconShadow-expanded)"
+                  >
                     <path d="M92 92 L52 128 L92 164" />
                     <path d="M144 72 L116 184" />
                     <path d="M164 92 L204 128 L164 164" />
@@ -1371,7 +1465,7 @@ export function Sidebar() {
               onClick={() => setShowTrashDialog(true)}
               className={cn(
                 "group flex items-center justify-center px-3 h-[42px] rounded-xl",
-                "relative overflow-hidden",
+                "relative",
                 "text-muted-foreground hover:text-destructive",
                 // Subtle background that turns red on hover
                 "bg-accent/20 hover:bg-destructive/15",
@@ -1385,7 +1479,7 @@ export function Sidebar() {
             >
               <Recycle className="size-4 shrink-0 transition-transform duration-200 group-hover:rotate-12" />
               {trashedProjects.length > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 flex items-center justify-center min-w-4 h-4 px-1 text-[9px] font-bold rounded-full bg-destructive text-destructive-foreground shadow-sm">
+                <span className="absolute -top-1.5 -right-1.5 z-10 flex items-center justify-center min-w-4 h-4 px-1 text-[9px] font-bold rounded-full bg-red-500 text-white shadow-md ring-1 ring-red-600/50">
                   {trashedProjects.length > 9 ? "9+" : trashedProjects.length}
                 </span>
               )}
@@ -1413,7 +1507,8 @@ export function Sidebar() {
                     "text-foreground titlebar-no-drag min-w-0",
                     "transition-all duration-200 ease-out",
                     "hover:scale-[1.01] active:scale-[0.99]",
-                    isProjectPickerOpen && "from-brand-500/10 to-brand-600/5 border-brand-500/30 ring-2 ring-brand-500/20 shadow-lg shadow-brand-500/5"
+                    isProjectPickerOpen &&
+                      "from-brand-500/10 to-brand-600/5 border-brand-500/30 ring-2 ring-brand-500/20 shadow-lg shadow-brand-500/5"
                   )}
                   data-testid="project-selector"
                 >
@@ -1430,10 +1525,12 @@ export function Sidebar() {
                     >
                       {formatShortcut(shortcuts.projectPicker, true)}
                     </span>
-                    <ChevronDown className={cn(
-                      "h-4 w-4 text-muted-foreground shrink-0 transition-transform duration-200",
-                      isProjectPickerOpen && "rotate-180"
-                    )} />
+                    <ChevronDown
+                      className={cn(
+                        "h-4 w-4 text-muted-foreground shrink-0 transition-transform duration-200",
+                        isProjectPickerOpen && "rotate-180"
+                      )}
+                    />
                   </div>
                 </button>
               </DropdownMenuTrigger>
@@ -1499,7 +1596,11 @@ export function Sidebar() {
                 {/* Keyboard hint */}
                 <div className="px-2 pt-2 mt-1.5 border-t border-border/50">
                   <p className="text-[10px] text-muted-foreground text-center tracking-wide">
-                    <span className="text-foreground/60">arrow</span> navigate <span className="mx-1 text-foreground/30">|</span> <span className="text-foreground/60">enter</span> select <span className="mx-1 text-foreground/30">|</span> <span className="text-foreground/60">esc</span> close
+                    <span className="text-foreground/60">arrow</span> navigate{" "}
+                    <span className="mx-1 text-foreground/30">|</span>{" "}
+                    <span className="text-foreground/60">enter</span> select{" "}
+                    <span className="mx-1 text-foreground/30">|</span>{" "}
+                    <span className="text-foreground/60">esc</span> close
                   </p>
                 </div>
               </DropdownMenuContent>
@@ -1531,7 +1632,10 @@ export function Sidebar() {
                     <MoreVertical className="w-4 h-4" />
                   </button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56 bg-popover/95 backdrop-blur-xl">
+                <DropdownMenuContent
+                  align="end"
+                  className="w-56 bg-popover/95 backdrop-blur-xl"
+                >
                   {/* Project Theme Submenu */}
                   <DropdownMenuSub>
                     <DropdownMenuSubTrigger data-testid="project-theme-trigger">
@@ -1809,13 +1913,15 @@ export function Sidebar() {
       </div>
 
       {/* Bottom Section - Running Agents / Bug Report / Settings */}
-      <div className={cn(
-        "shrink-0",
-        // Top border with gradient fade
-        "border-t border-border/40",
-        // Elevated background for visual separation
-        "bg-gradient-to-t from-background/10 via-sidebar/50 to-transparent"
-      )}>
+      <div
+        className={cn(
+          "shrink-0",
+          // Top border with gradient fade
+          "border-t border-border/40",
+          // Elevated background for visual separation
+          "bg-gradient-to-t from-background/10 via-sidebar/50 to-transparent"
+        )}
+      >
         {/* Course Promo Badge */}
         <CoursePromoBadge sidebarOpen={sidebarOpen} />
         {/* Wiki Link */}
@@ -1865,14 +1971,16 @@ export function Sidebar() {
                 Wiki
               </span>
               {!sidebarOpen && (
-                <span className={cn(
-                  "absolute left-full ml-3 px-2.5 py-1.5 rounded-lg",
-                  "bg-popover text-popover-foreground text-xs font-medium",
-                  "border border-border shadow-lg",
-                  "opacity-0 group-hover:opacity-100",
-                  "transition-all duration-200 whitespace-nowrap z-50",
-                  "translate-x-1 group-hover:translate-x-0"
-                )}>
+                <span
+                  className={cn(
+                    "absolute left-full ml-3 px-2.5 py-1.5 rounded-lg",
+                    "bg-popover text-popover-foreground text-xs font-medium",
+                    "border border-border shadow-lg",
+                    "opacity-0 group-hover:opacity-100",
+                    "transition-all duration-200 whitespace-nowrap z-50",
+                    "translate-x-1 group-hover:translate-x-0"
+                  )}
+                >
                   Wiki
                 </span>
               )}
@@ -1957,14 +2065,16 @@ export function Sidebar() {
                 </span>
               )}
               {!sidebarOpen && (
-                <span className={cn(
-                  "absolute left-full ml-3 px-2.5 py-1.5 rounded-lg",
-                  "bg-popover text-popover-foreground text-xs font-medium",
-                  "border border-border shadow-lg",
-                  "opacity-0 group-hover:opacity-100",
-                  "transition-all duration-200 whitespace-nowrap z-50",
-                  "translate-x-1 group-hover:translate-x-0"
-                )}>
+                <span
+                  className={cn(
+                    "absolute left-full ml-3 px-2.5 py-1.5 rounded-lg",
+                    "bg-popover text-popover-foreground text-xs font-medium",
+                    "border border-border shadow-lg",
+                    "opacity-0 group-hover:opacity-100",
+                    "transition-all duration-200 whitespace-nowrap z-50",
+                    "translate-x-1 group-hover:translate-x-0"
+                  )}
+                >
                   Running Agents
                   {runningAgentsCount > 0 && (
                     <span className="ml-2 px-1.5 py-0.5 bg-brand-500 text-white rounded-full text-[10px] font-semibold">
@@ -2035,14 +2145,16 @@ export function Sidebar() {
               </span>
             )}
             {!sidebarOpen && (
-              <span className={cn(
-                "absolute left-full ml-3 px-2.5 py-1.5 rounded-lg",
-                "bg-popover text-popover-foreground text-xs font-medium",
-                "border border-border shadow-lg",
-                "opacity-0 group-hover:opacity-100",
-                "transition-all duration-200 whitespace-nowrap z-50",
-                "translate-x-1 group-hover:translate-x-0"
-              )}>
+              <span
+                className={cn(
+                  "absolute left-full ml-3 px-2.5 py-1.5 rounded-lg",
+                  "bg-popover text-popover-foreground text-xs font-medium",
+                  "border border-border shadow-lg",
+                  "opacity-0 group-hover:opacity-100",
+                  "transition-all duration-200 whitespace-nowrap z-50",
+                  "translate-x-1 group-hover:translate-x-0"
+                )}
+              >
                 Settings
                 <span className="ml-2 px-1.5 py-0.5 bg-muted rounded text-[10px] font-mono text-muted-foreground">
                   {formatShortcut(shortcuts.settings, true)}
@@ -2141,80 +2253,19 @@ export function Sidebar() {
       </Dialog>
 
       {/* New Project Setup Dialog */}
-      <Dialog
+      <ProjectSetupDialog
         open={showSetupDialog}
-        onOpenChange={(open) => {
-          if (!open && !isCreatingSpec) {
-            handleSkipSetup();
-          }
-        }}
-      >
-        <DialogContent className="max-w-2xl bg-popover/95 backdrop-blur-xl">
-          <DialogHeader>
-            <DialogTitle>Set Up Your Project</DialogTitle>
-            <DialogDescription className="text-muted-foreground">
-              We didn&apos;t find an app_spec.txt file. Let us help you generate
-              your app_spec.txt to help describe your project for our system.
-              We&apos;ll analyze your project&apos;s tech stack and create a
-              comprehensive specification.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Project Overview</label>
-              <p className="text-xs text-muted-foreground">
-                Describe what your project does and what features you want to
-                build. Be as detailed as you want - this will help us create a
-                better specification.
-              </p>
-              <textarea
-                className="w-full h-48 p-3 rounded-lg border border-border bg-background/50 font-mono text-sm resize-none focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500/50 transition-all"
-                value={projectOverview}
-                onChange={(e) => setProjectOverview(e.target.value)}
-                placeholder="e.g., A project management tool that allows teams to track tasks, manage sprints, and visualize progress through kanban boards. It should support user authentication, real-time updates, and file attachments..."
-                autoFocus
-              />
-            </div>
-
-            <div className="flex items-start space-x-3 pt-2">
-              <Checkbox
-                id="sidebar-generate-features"
-                checked={generateFeatures}
-                onCheckedChange={(checked) =>
-                  setGenerateFeatures(checked === true)
-                }
-              />
-              <div className="space-y-1">
-                <label
-                  htmlFor="sidebar-generate-features"
-                  className="text-sm font-medium cursor-pointer"
-                >
-                  Generate feature list
-                </label>
-                <p className="text-xs text-muted-foreground">
-                  Automatically create features in the features folder from the
-                  implementation roadmap after the spec is generated.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button variant="ghost" onClick={handleSkipSetup}>
-              Skip for now
-            </Button>
-            <Button
-              onClick={handleCreateInitialSpec}
-              disabled={!projectOverview.trim()}
-              className="bg-gradient-to-r from-brand-500 to-brand-600 hover:from-brand-600 hover:to-brand-600 text-white border-0"
-            >
-              <Sparkles className="w-4 h-4 mr-2" />
-              Generate Spec
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        onOpenChange={setShowSetupDialog}
+        projectOverview={projectOverview}
+        onProjectOverviewChange={setProjectOverview}
+        generateFeatures={generateFeatures}
+        onGenerateFeaturesChange={setGenerateFeatures}
+        featureCount={featureCount}
+        onFeatureCountChange={setFeatureCount}
+        onCreateSpec={handleCreateInitialSpec}
+        onSkip={handleSkipSetup}
+        isCreatingSpec={isCreatingSpec}
+      />
 
       {/* New Project Onboarding Dialog */}
       <Dialog
