@@ -1394,26 +1394,52 @@ export function Sidebar() {
               </div>
             )}
           </div>
-          {/* Bug Report Button */}
-          <button
-            onClick={() => {
-              const api = getElectronAPI();
-              api.openExternalLink(
-                "https://github.com/AutoMaker-Org/automaker/issues"
-              );
-            }}
-            className={cn(
-              "titlebar-no-drag p-1.5 rounded-lg absolute right-3",
-              "text-muted-foreground hover:text-foreground hover:bg-accent/80",
-              "transition-all duration-200 ease-out",
-              "hover:scale-105 active:scale-95"
-            )}
-            title="Report Bug / Feature Request"
-            data-testid="bug-report-link"
-          >
-            <Bug className="w-4 h-4" />
-          </button>
+          {/* Bug Report Button - Only visible in expanded sidebar */}
+          {sidebarOpen && (
+            <button
+              onClick={() => {
+                const api = getElectronAPI();
+                api.openExternalLink(
+                  "https://github.com/AutoMaker-Org/automaker/issues"
+                );
+              }}
+              className={cn(
+                "titlebar-no-drag p-1.5 rounded-lg absolute right-3",
+                "text-muted-foreground hover:text-foreground hover:bg-accent/80",
+                "transition-all duration-200 ease-out",
+                "hover:scale-105 active:scale-95"
+              )}
+              title="Report Bug / Feature Request"
+              data-testid="bug-report-link"
+            >
+              <Bug className="w-4 h-4" />
+            </button>
+          )}
         </div>
+
+        {/* Bug Report Button - Collapsed sidebar version */}
+        {!sidebarOpen && (
+          <div className="flex items-center justify-center px-3 py-2.5">
+            <button
+              onClick={() => {
+                const api = getElectronAPI();
+                api.openExternalLink(
+                  "https://github.com/AutoMaker-Org/automaker/issues"
+                );
+              }}
+              className={cn(
+                "titlebar-no-drag p-1.5 rounded-lg",
+                "text-muted-foreground hover:text-foreground hover:bg-accent/80",
+                "transition-all duration-200 ease-out",
+                "hover:scale-105 active:scale-95"
+              )}
+              title="Report Bug / Feature Request"
+              data-testid="bug-report-link-collapsed"
+            >
+              <Bug className="w-4 h-4" />
+            </button>
+          </div>
+        )}
 
         {/* Project Actions - Moved above project selector */}
         {sidebarOpen && (
