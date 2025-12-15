@@ -2,6 +2,22 @@ import { Page } from "@playwright/test";
 import { getByTestId, getButtonByText } from "./elements";
 
 /**
+ * Get the platform-specific modifier key (Meta for Mac, Control for Windows/Linux)
+ * This is used for keyboard shortcuts like Cmd+Enter or Ctrl+Enter
+ */
+export function getPlatformModifier(): "Meta" | "Control" {
+  return process.platform === "darwin" ? "Meta" : "Control";
+}
+
+/**
+ * Press the platform-specific modifier + a key (e.g., Cmd+Enter or Ctrl+Enter)
+ */
+export async function pressModifierEnter(page: Page): Promise<void> {
+  const modifier = getPlatformModifier();
+  await page.keyboard.press(`${modifier}+Enter`);
+}
+
+/**
  * Click an element by its data-testid attribute
  */
 export async function clickElement(page: Page, testId: string): Promise<void> {
@@ -56,8 +72,15 @@ export async function focusOnInput(page: Page, testId: string): Promise<void> {
 
 /**
  * Close any open dialog by pressing Escape
+ * Waits for dialog to be removed from DOM rather than using arbitrary timeout
  */
 export async function closeDialogWithEscape(page: Page): Promise<void> {
   await page.keyboard.press("Escape");
-  await page.waitForTimeout(100); // Give dialog time to close
+  // Wait for any dialog overlay to disappear
+  await page
+    .locator('[data-radix-dialog-overlay], [role="dialog"]')
+    .waitFor({ state: "hidden", timeout: 5000 })
+    .catch(() => {
+      // Dialog may have already closed or not exist
+    });
 }

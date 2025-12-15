@@ -633,3 +633,120 @@ export async function setupComplete(page: Page): Promise<void> {
     localStorage.setItem("automaker-setup", JSON.stringify(setupState));
   });
 }
+
+/**
+ * Set up a mock project with AI profiles for testing the profiles view
+ * Includes default built-in profiles and optionally custom profiles
+ */
+export async function setupMockProjectWithProfiles(
+  page: Page,
+  options?: {
+    customProfilesCount?: number;
+    includeBuiltIn?: boolean;
+  }
+): Promise<void> {
+  await page.addInitScript((opts: typeof options) => {
+    const mockProject = {
+      id: "test-project-1",
+      name: "Test Project",
+      path: "/mock/test-project",
+      lastOpened: new Date().toISOString(),
+    };
+
+    // Default built-in profiles (same as DEFAULT_AI_PROFILES from app-store.ts)
+    const builtInProfiles = [
+      {
+        id: "profile-heavy-task",
+        name: "Heavy Task",
+        description:
+          "Claude Opus with Ultrathink for complex architecture, migrations, or deep debugging.",
+        model: "opus" as const,
+        thinkingLevel: "ultrathink" as const,
+        provider: "claude" as const,
+        isBuiltIn: true,
+        icon: "Brain",
+      },
+      {
+        id: "profile-balanced",
+        name: "Balanced",
+        description:
+          "Claude Sonnet with medium thinking for typical development tasks.",
+        model: "sonnet" as const,
+        thinkingLevel: "medium" as const,
+        provider: "claude" as const,
+        isBuiltIn: true,
+        icon: "Scale",
+      },
+      {
+        id: "profile-quick-edit",
+        name: "Quick Edit",
+        description: "Claude Haiku for fast, simple edits and minor fixes.",
+        model: "haiku" as const,
+        thinkingLevel: "none" as const,
+        provider: "claude" as const,
+        isBuiltIn: true,
+        icon: "Zap",
+      },
+    ];
+
+    // Generate custom profiles if requested
+    const customProfiles = [];
+    const customCount = opts?.customProfilesCount ?? 0;
+    for (let i = 0; i < customCount; i++) {
+      customProfiles.push({
+        id: `custom-profile-${i + 1}`,
+        name: `Custom Profile ${i + 1}`,
+        description: `Test custom profile ${i + 1}`,
+        model: ["haiku", "sonnet", "opus"][i % 3] as
+          | "haiku"
+          | "sonnet"
+          | "opus",
+        thinkingLevel: ["none", "low", "medium", "high"][i % 4] as
+          | "none"
+          | "low"
+          | "medium"
+          | "high",
+        provider: "claude" as const,
+        isBuiltIn: false,
+        icon: ["Brain", "Zap", "Scale", "Cpu", "Rocket", "Sparkles"][i % 6],
+      });
+    }
+
+    // Combine profiles (built-in first, then custom)
+    const includeBuiltIn = opts?.includeBuiltIn !== false; // Default to true
+    const aiProfiles = includeBuiltIn
+      ? [...builtInProfiles, ...customProfiles]
+      : customProfiles;
+
+    const mockState = {
+      state: {
+        projects: [mockProject],
+        currentProject: mockProject,
+        theme: "dark",
+        sidebarOpen: true,
+        apiKeys: { anthropic: "", google: "", openai: "" },
+        chatSessions: [],
+        chatHistoryOpen: false,
+        maxConcurrency: 3,
+        aiProfiles: aiProfiles,
+        features: [],
+        currentView: "board", // Start at board, will navigate to profiles
+      },
+      version: 0,
+    };
+
+    localStorage.setItem("automaker-storage", JSON.stringify(mockState));
+
+    // Also mark setup as complete to skip the setup wizard
+    const setupState = {
+      state: {
+        isFirstRun: false,
+        setupComplete: true,
+        currentStep: "complete",
+        skipClaudeSetup: false,
+      },
+      version: 0,
+    };
+    localStorage.setItem("automaker-setup", JSON.stringify(setupState));
+  }, options);
+}
