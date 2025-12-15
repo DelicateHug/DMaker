@@ -11,6 +11,7 @@ import {
   clickElement,
   fillInput,
   waitForNetworkIdle,
+  waitForElement,
 } from "./utils";
 
 test.describe("Spec Editor Persistence", () => {
@@ -50,9 +51,7 @@ test.describe("Spec Editor Persistence", () => {
     await specEditor.waitFor({ state: "visible", timeout: 10000 });
 
     // Step 6: Wait for CodeMirror to initialize (it has a .cm-content element)
-    await page.waitForSelector('[data-testid="spec-editor"] .cm-content', {
-      timeout: 10000,
-    });
+    await specEditor.locator(".cm-content").waitFor({ state: "visible", timeout: 10000 });
 
     // Small delay to ensure editor is fully initialized
     await page.waitForTimeout(500);
@@ -69,15 +68,14 @@ test.describe("Spec Editor Persistence", () => {
 
     // Step 10: Navigate back to the spec editor
     // After reload, we need to wait for the app to initialize
-    await page.waitForSelector('[data-testid="sidebar"]', { timeout: 10000 });
+    await waitForElement(page, "sidebar", { timeout: 10000 });
 
     // Navigate to spec editor again
     await navigateToSpecEditor(page);
 
     // Wait for CodeMirror to be ready
-    await page.waitForSelector('[data-testid="spec-editor"] .cm-content', {
-      timeout: 10000,
-    });
+    const specEditorAfterReload = await getByTestId(page, "spec-editor");
+    await specEditorAfterReload.locator(".cm-content").waitFor({ state: "visible", timeout: 10000 });
 
     // Small delay to ensure editor content is loaded
     await page.waitForTimeout(500);
@@ -239,7 +237,7 @@ test.describe("Spec Editor - Full Open Project Flow", () => {
     await waitForNetworkIdle(page);
 
     // Wait for sidebar
-    await page.waitForSelector('[data-testid="sidebar"]', { timeout: 10000 });
+    await waitForElement(page, "sidebar", { timeout: 10000 });
 
     // Click the Open Project button
     const openProjectButton = await getByTestId(page, "open-project-button");
@@ -295,10 +293,9 @@ test.describe("Spec Editor - Full Open Project Flow", () => {
     await clickElement(page, "nav-spec");
 
     // Wait for spec view with the editor (not the empty state)
-    await page.waitForSelector('[data-testid="spec-view"]', { timeout: 10000 });
-    await page.waitForSelector('[data-testid="spec-editor"] .cm-content', {
-      timeout: 10000,
-    });
+    await waitForElement(page, "spec-view", { timeout: 10000 });
+    const specEditorForOpenFlow = await getByTestId(page, "spec-editor");
+    await specEditorForOpenFlow.locator(".cm-content").waitFor({ state: "visible", timeout: 10000 });
     await page.waitForTimeout(500);
 
     // Edit the content
@@ -315,9 +312,8 @@ test.describe("Spec Editor - Full Open Project Flow", () => {
     await specNav.waitFor({ state: "visible", timeout: 10000 });
     await clickElement(page, "nav-spec");
 
-    await page.waitForSelector('[data-testid="spec-editor"] .cm-content', {
-      timeout: 10000,
-    });
+    const specEditorAfterRefresh = await getByTestId(page, "spec-editor");
+    await specEditorAfterRefresh.locator(".cm-content").waitFor({ state: "visible", timeout: 10000 });
     await page.waitForTimeout(500);
 
     // Verify the content persisted
