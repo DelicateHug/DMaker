@@ -19,7 +19,9 @@ import {
   FeatureImagePath as DescriptionImagePath,
   ImagePreviewMap,
 } from "@/components/ui/description-image-dropzone";
-import { MessageSquare, Settings2, FlaskConical } from "lucide-react";
+import { MessageSquare, Settings2, FlaskConical, Sparkles, ChevronDown } from "lucide-react";
+import { toast } from "sonner";
+import { getElectronAPI } from "@/lib/electron";
 import { modelSupportsThinking } from "@/lib/utils";
 import {
   useAppStore,
@@ -34,6 +36,12 @@ import {
   ProfileQuickSelect,
   TestingTabContent,
 } from "../shared";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface AddFeatureDialogProps {
   open: boolean;
@@ -79,6 +87,11 @@ export function AddFeatureDialog({
     useState<ImagePreviewMap>(() => new Map());
   const [showAdvancedOptions, setShowAdvancedOptions] = useState(false);
   const [descriptionError, setDescriptionError] = useState(false);
+  const [isEnhancing, setIsEnhancing] = useState(false);
+  const [enhancementMode, setEnhancementMode] = useState<'improve' | 'technical' | 'simplify' | 'acceptance'>('improve');
+
+  // Get enhancement model from store
+  const { enhancementModel } = useAppStore();
 
   // Sync skipTests default when dialog opens
   useEffect(() => {
@@ -136,6 +149,32 @@ export function AddFeatureDialog({
       setNewFeaturePreviewMap(new Map());
       setShowAdvancedOptions(false);
       setDescriptionError(false);
+    }
+  };
+
+  const handleEnhanceDescription = async () => {
+    if (!newFeature.description.trim() || isEnhancing) return;
+
+    setIsEnhancing(true);
+    try {
+      const api = getElectronAPI();
+      const result = await api.enhancePrompt?.enhance(
+        newFeature.description,
+        enhancementMode,
+        enhancementModel
+      );
+
+      if (result?.success && result.enhancedText) {
+        setNewFeature(prev => ({ ...prev, description: result.enhancedText! }));
+        toast.success("Description enhanced!");
+      } else {
+        toast.error(result?.error || "Failed to enhance description");
+      }
+    } catch (error) {
+      console.error("Enhancement failed:", error);
+      toast.error("Failed to enhance description");
+    } finally {
+      setIsEnhancing(false);
     }
   };
 
@@ -224,6 +263,45 @@ export function AddFeatureDialog({
                 autoFocus
                 error={descriptionError}
               />
+              <div className="flex items-center gap-3 mt-2">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm" className="w-[180px] justify-between">
+                      {enhancementMode === 'improve' && 'Improve Clarity'}
+                      {enhancementMode === 'technical' && 'Add Technical Details'}
+                      {enhancementMode === 'simplify' && 'Simplify'}
+                      {enhancementMode === 'acceptance' && 'Add Acceptance Criteria'}
+                      <ChevronDown className="w-4 h-4 ml-2" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start">
+                    <DropdownMenuItem onClick={() => setEnhancementMode('improve')}>
+                      Improve Clarity
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setEnhancementMode('technical')}>
+                      Add Technical Details
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setEnhancementMode('simplify')}>
+                      Simplify
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setEnhancementMode('acceptance')}>
+                      Add Acceptance Criteria
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleEnhanceDescription}
+                  disabled={!newFeature.description.trim() || isEnhancing}
+                  loading={isEnhancing}
+                >
+                  <Sparkles className="w-4 h-4 mr-2" />
+                  Enhance with AI
+                </Button>
+              </div>
             </div>
             <div className="space-y-2">
               <Label htmlFor="category">Category (optional)</Label>
