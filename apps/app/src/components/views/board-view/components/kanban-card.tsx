@@ -898,7 +898,7 @@ export const KanbanCard = memo(function KanbanCard({
               ) : null}
               {onViewOutput && !feature.skipTests && (
                 <Button
-                  variant="ghost"
+                  variant="secondary"
                   size="sm"
                   className="h-7 text-[11px] px-2"
                   onClick={(e) => {
