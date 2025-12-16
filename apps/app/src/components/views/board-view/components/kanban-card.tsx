@@ -85,7 +85,7 @@ function formatThinkingLevel(level: ThinkingLevel | undefined): string {
     none: "",
     low: "Low",
     medium: "Med", //
-    high: "High",
+    high: "High", //
     ultrathink: "Ultra",
   };
   return labels[level];
