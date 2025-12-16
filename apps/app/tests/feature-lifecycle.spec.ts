@@ -250,8 +250,8 @@ test.describe("Feature Lifecycle Tests", () => {
     // Wait for the restore action to complete
     await page.waitForTimeout(1000);
 
-    // Close the modal
-    const closeButton = completedModal.locator('button:has-text("Close")');
+    // Close the modal - use first() to select the footer Close button, not the X button
+    const closeButton = completedModal.locator('button:has-text("Close")').first();
     await closeButton.click();
     await expect(completedModal).not.toBeVisible({ timeout: 5000 });
 

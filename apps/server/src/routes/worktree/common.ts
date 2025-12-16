@@ -34,6 +34,42 @@ export async function isGitRepo(repoPath: string): Promise<boolean> {
   }
 }
 
+/**
+ * Check if an error is ENOENT (file/path not found or spawn failed)
+ * These are expected in test environments with mock paths
+ */
+export function isENOENT(error: unknown): boolean {
+  return (
+    error !== null &&
+    typeof error === "object" &&
+    "code" in error &&
+    error.code === "ENOENT"
+  );
+}
+
+/**
+ * Check if a path is a mock/test path that doesn't exist
+ */
+export function isMockPath(worktreePath: string): boolean {
+  return worktreePath.startsWith("/mock/") || worktreePath.includes("/mock/");
+}
+
+/**
+ * Conditionally log worktree errors - suppress ENOENT for mock paths
+ * to reduce noise in test output
+ */
+export function logWorktreeError(
+  error: unknown,
+  message: string,
+  worktreePath?: string
+): void {
+  // Don't log ENOENT errors for mock paths (expected in tests)
+  if (isENOENT(error) && worktreePath && isMockPath(worktreePath)) {
+    return;
+  }
+  logError(error, message);
+}
+
 // Re-export shared utilities
 export { getErrorMessageShared as getErrorMessage };
 export const logError = createLogError(logger);

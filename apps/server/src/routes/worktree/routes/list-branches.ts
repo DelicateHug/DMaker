@@ -5,7 +5,7 @@
 import type { Request, Response } from "express";
 import { exec } from "child_process";
 import { promisify } from "util";
-import { getErrorMessage, logError } from "../common.js";
+import { getErrorMessage, logWorktreeError } from "../common.js";
 
 const execAsync = promisify(exec);
 
@@ -86,7 +86,8 @@ export function createListBranchesHandler() {
         },
       });
     } catch (error) {
-      logError(error, "List branches failed");
+      const worktreePath = req.body?.worktreePath;
+      logWorktreeError(error, "List branches failed", worktreePath);
       res.status(500).json({ success: false, error: getErrorMessage(error) });
     }
   };

@@ -96,6 +96,9 @@ export async function createTestGitRepo(tempDir: string): Promise<TestRepo> {
   const featuresDir = path.join(automakerDir, "features");
   fs.mkdirSync(featuresDir, { recursive: true });
 
+  // Create empty categories.json to avoid ENOENT errors in tests
+  fs.writeFileSync(path.join(automakerDir, "categories.json"), "[]");
+
   return {
     path: tmpDir,
     cleanup: async () => {
@@ -324,6 +327,11 @@ export async function setupProjectWithPath(page: Page, projectPath: string): Pro
         chatHistoryOpen: false,
         maxConcurrency: 3,
         aiProfiles: [],
+        useWorktrees: true, // Enable worktree feature for tests
+        currentWorktreeByProject: {
+          [pathArg]: { path: null, branch: "main" }, // Initialize to main branch
+        },
+        worktreesByProject: {},
       },
       version: 0,
     };
