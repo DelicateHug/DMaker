@@ -67,6 +67,8 @@ export function BoardView() {
     setSpecCreatingForProject,
     getCurrentWorktree,
     setCurrentWorktree,
+    getWorktrees,
+    setWorktrees,
   } = useAppStore();
   const shortcuts = useKeyboardShortcutsConfig();
   const {
@@ -215,7 +217,7 @@ export function BoardView() {
   // Branch suggestions for the branch autocomplete
   const [branchSuggestions, setBranchSuggestions] = useState<string[]>([]);
 
-  // Fetch branches when project changes
+  // Fetch branches when project changes or worktrees are created/modified
   useEffect(() => {
     const fetchBranches = async () => {
       if (!currentProject) {
@@ -244,7 +246,7 @@ export function BoardView() {
     };
 
     fetchBranches();
-  }, [currentProject]);
+  }, [currentProject, worktreeRefreshKey]);
 
   // Custom collision detection that prioritizes columns over cards
   const collisionDetectionStrategy = useCallback(
@@ -339,16 +341,21 @@ export function BoardView() {
   });
 
   // Use drag and drop hook
-  // Get current worktree path and branch for filtering features
-  const currentWorktreePath = currentProject ? getCurrentWorktree(currentProject.path) : null;
+  // Get current worktree info (path and branch) for filtering features
+  const currentWorktreeInfo = currentProject ? getCurrentWorktree(currentProject.path) : null;
+  const currentWorktreePath = currentWorktreeInfo?.path ?? null;
+  const currentWorktreeBranch = currentWorktreeInfo?.branch ?? null;
   const worktreesByProject = useAppStore((s) => s.worktreesByProject);
   const worktrees = useMemo(
     () => (currentProject ? (worktreesByProject[currentProject.path] ?? EMPTY_WORKTREES) : EMPTY_WORKTREES),
     [currentProject, worktreesByProject]
   );
-  const currentWorktreeBranch = currentWorktreePath
-    ? worktrees.find(w => w.path === currentWorktreePath)?.branch || null
-    : null;
+
+  // Get the branch for the currently selected worktree (for defaulting new features)
+  // Use the branch from currentWorktreeInfo, or fall back to main worktree's branch
+  const selectedWorktreeBranch = currentWorktreeBranch
+    || worktrees.find(w => w.isMain)?.branch
+    || "main";
 
   const { activeFeature, handleDragStart, handleDragEnd } = useBoardDragDrop({
     features: hookFeatures,
@@ -533,6 +540,7 @@ export function BoardView() {
         categorySuggestions={categorySuggestions}
         branchSuggestions={branchSuggestions}
         defaultSkipTests={defaultSkipTests}
+        defaultBranch={selectedWorktreeBranch}
         isMaximized={isMaximized}
         showProfilesOnly={showProfilesOnly}
         aiProfiles={aiProfiles}
@@ -603,10 +611,24 @@ export function BoardView() {
         open={showCreateWorktreeDialog}
         onOpenChange={setShowCreateWorktreeDialog}
         projectPath={currentProject.path}
-        onCreated={(worktreePath) => {
+        onCreated={(newWorktree) => {
+          // Add the new worktree to the store immediately to avoid race condition
+          // when deriving currentWorktreeBranch for filtering
+          const currentWorktrees = getWorktrees(currentProject.path);
+          const newWorktreeInfo = {
+            path: newWorktree.path,
+            branch: newWorktree.branch,
+            isMain: false,
+            isCurrent: false,
+            hasWorktree: true,
+          };
+          setWorktrees(currentProject.path, [...currentWorktrees, newWorktreeInfo]);
+
+          // Now set the current worktree with both path and branch
+          setCurrentWorktree(currentProject.path, newWorktree.path, newWorktree.branch);
+
+          // Trigger refresh to get full worktree details (hasChanges, etc.)
           setWorktreeRefreshKey((k) => k + 1);
-          // Auto-select the newly created worktree
-          setCurrentWorktree(currentProject.path, worktreePath);
         }}
       />
 

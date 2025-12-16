@@ -69,6 +69,7 @@ interface AddFeatureDialogProps {
   categorySuggestions: string[];
   branchSuggestions: string[];
   defaultSkipTests: boolean;
+  defaultBranch?: string;
   isMaximized: boolean;
   showProfilesOnly: boolean;
   aiProfiles: AIProfile[];
@@ -81,6 +82,7 @@ export function AddFeatureDialog({
   categorySuggestions,
   branchSuggestions,
   defaultSkipTests,
+  defaultBranch = "main",
   isMaximized,
   showProfilesOnly,
   aiProfiles,
@@ -109,15 +111,16 @@ export function AddFeatureDialog({
   // Get enhancement model from store
   const { enhancementModel } = useAppStore();
 
-  // Sync skipTests default when dialog opens
+  // Sync defaults when dialog opens
   useEffect(() => {
     if (open) {
       setNewFeature((prev) => ({
         ...prev,
         skipTests: defaultSkipTests,
+        branchName: defaultBranch,
       }));
     }
-  }, [open, defaultSkipTests]);
+  }, [open, defaultSkipTests, defaultBranch]);
 
   const handleAdd = () => {
     if (!newFeature.description.trim()) {
@@ -155,7 +158,7 @@ export function AddFeatureDialog({
       model: "opus",
       priority: 2,
       thinkingLevel: "none",
-      branchName: "main",
+      branchName: defaultBranch,
     });
     setNewFeaturePreviewMap(new Map());
     setShowAdvancedOptions(false);

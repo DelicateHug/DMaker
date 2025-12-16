@@ -198,13 +198,15 @@ export function WorktreeSelector({
   // Initialize selection to main if not set
   useEffect(() => {
     if (worktrees.length > 0 && currentWorktree === undefined) {
-      setCurrentWorktree(projectPath, null); // null = main worktree
+      const mainWorktree = worktrees.find(w => w.isMain);
+      const mainBranch = mainWorktree?.branch || "main";
+      setCurrentWorktree(projectPath, null, mainBranch); // null = main worktree
     }
   }, [worktrees, currentWorktree, projectPath, setCurrentWorktree]);
 
   const handleSelectWorktree = async (worktree: WorktreeInfo) => {
-    // Simply select the worktree in the UI
-    setCurrentWorktree(projectPath, worktree.isMain ? null : worktree.path);
+    // Simply select the worktree in the UI with both path and branch
+    setCurrentWorktree(projectPath, worktree.isMain ? null : worktree.path, worktree.branch);
   };
 
   const handleStartDevServer = async (worktree: WorktreeInfo) => {
@@ -454,19 +456,20 @@ export function WorktreeSelector({
   };
 
   // The "selected" worktree is based on UI state, not git's current branch
-  // currentWorktree is null for main, or the worktree path for others
-  const selectedWorktree = currentWorktree
-    ? worktrees.find((w) => w.path === currentWorktree)
+  // currentWorktree.path is null for main, or the worktree path for others
+  const currentWorktreePath = currentWorktree?.path ?? null;
+  const selectedWorktree = currentWorktreePath
+    ? worktrees.find((w) => w.path === currentWorktreePath)
     : worktrees.find((w) => w.isMain);
 
 
   // Render a worktree tab with branch selector (for main) and actions dropdown
   const renderWorktreeTab = (worktree: WorktreeInfo) => {
     // Selection is based on UI state, not git's current branch
-    // Default to main selected if currentWorktree is null or undefined
+    // Default to main selected if currentWorktree is null/undefined or path is null
     const isSelected = worktree.isMain
-      ? currentWorktree === null || currentWorktree === undefined
-      : worktree.path === currentWorktree;
+      ? currentWorktree === null || currentWorktree === undefined || currentWorktree.path === null
+      : worktree.path === currentWorktreePath;
 
     const isRunning = hasRunningFeatures(worktree);
 

@@ -16,11 +16,16 @@ import { GitBranch, Loader2 } from "lucide-react";
 import { getElectronAPI } from "@/lib/electron";
 import { toast } from "sonner";
 
+interface CreatedWorktreeInfo {
+  path: string;
+  branch: string;
+}
+
 interface CreateWorktreeDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   projectPath: string;
-  onCreated: (worktreePath: string) => void;
+  onCreated: (worktree: CreatedWorktreeInfo) => void;
 }
 
 export function CreateWorktreeDialog({
@@ -68,7 +73,7 @@ export function CreateWorktreeDialog({
               : "Using existing branch",
           }
         );
-        onCreated(result.worktree.path);
+        onCreated({ path: result.worktree.path, branch: result.worktree.branch });
         onOpenChange(false);
         setBranchName("");
       } else {

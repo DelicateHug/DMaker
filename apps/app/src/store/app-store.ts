@@ -399,7 +399,8 @@ export interface AppState {
   useWorktrees: boolean; // Whether to use git worktree isolation for features (default: false)
 
   // User-managed Worktrees (per-project)
-  currentWorktreeByProject: Record<string, string | null>; // projectPath -> worktreePath or null for main
+  // projectPath -> { path: worktreePath or null for main, branch: branch name }
+  currentWorktreeByProject: Record<string, { path: string | null; branch: string }>;
   worktreesByProject: Record<
     string,
     Array<{
@@ -582,7 +583,7 @@ export interface AppActions {
 
   // Worktree Settings actions
   setUseWorktrees: (enabled: boolean) => void;
-  setCurrentWorktree: (projectPath: string, worktreePath: string | null) => void;
+  setCurrentWorktree: (projectPath: string, worktreePath: string | null, branch: string) => void;
   setWorktrees: (
     projectPath: string,
     worktrees: Array<{
@@ -593,7 +594,7 @@ export interface AppActions {
       changedFilesCount?: number;
     }>
   ) => void;
-  getCurrentWorktree: (projectPath: string) => string | null;
+  getCurrentWorktree: (projectPath: string) => { path: string | null; branch: string } | null;
   getWorktrees: (projectPath: string) => Array<{
     path: string;
     branch: string;
@@ -1344,12 +1345,12 @@ export const useAppStore = create<AppState & AppActions>()(
       // Worktree Settings actions
       setUseWorktrees: (enabled) => set({ useWorktrees: enabled }),
 
-      setCurrentWorktree: (projectPath, worktreePath) => {
+      setCurrentWorktree: (projectPath, worktreePath, branch) => {
         const current = get().currentWorktreeByProject;
         set({
           currentWorktreeByProject: {
             ...current,
-            [projectPath]: worktreePath,
+            [projectPath]: { path: worktreePath, branch },
           },
         });
       },

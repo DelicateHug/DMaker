@@ -43,7 +43,12 @@ export function useBoardColumnFeatures({
     // Determine the effective worktree path and branch for filtering
     // If currentWorktreePath is null, we're on the main worktree
     const effectiveWorktreePath = currentWorktreePath || projectPath;
-    const effectiveBranch = currentWorktreeBranch || "main";
+    // Use the branch name from the selected worktree
+    // If we're selecting main (currentWorktreePath is null), currentWorktreeBranch
+    // should contain the main branch's actual name, defaulting to "main"
+    // If we're selecting a non-main worktree but can't find it, currentWorktreeBranch is null
+    // In that case, we can't do branch-based filtering, so we'll handle it specially below
+    const effectiveBranch = currentWorktreeBranch;
 
     filteredFeatures.forEach((f) => {
       // If feature has a running agent, always show it in "in_progress"
@@ -62,6 +67,11 @@ export function useBoardColumnFeatures({
       } else if (f.worktreePath) {
         // Has worktreePath - match by path
         matchesWorktree = f.worktreePath === effectiveWorktreePath;
+      } else if (effectiveBranch === null) {
+        // We're selecting a non-main worktree but can't determine its branch yet
+        // (worktrees haven't loaded). Don't show branch-only features until we know.
+        // This prevents showing wrong features during loading.
+        matchesWorktree = false;
       } else {
         // Has branchName but no worktreePath - match by branch name
         matchesWorktree = featureBranch === effectiveBranch;
@@ -76,10 +86,12 @@ export function useBoardColumnFeatures({
         // Otherwise, use the feature's status (fallback to backlog for unknown statuses)
         const status = f.status as ColumnId;
 
-        // Backlog items are always visible (they have no worktree assigned)
-        // For other statuses, filter by worktree
+        // Filter all items by worktree, including backlog
+        // This ensures backlog items with a branch assigned only show in that branch
         if (status === "backlog") {
-          map.backlog.push(f);
+          if (matchesWorktree) {
+            map.backlog.push(f);
+          }
         } else if (map[status]) {
           // Only show if matches current worktree or has no worktree assigned
           if (matchesWorktree) {
