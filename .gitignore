@@ -1,6 +1,9 @@
 #added by trueheads > will remove once supercombo adds multi-os support
 launch.sh
 
+# Claude Code settings
+.claude/settings.local.json
+
 # Dependencies
 node_modules/
 

@@ -47,6 +47,7 @@ interface AddFeatureDialogProps {
     skipTests: boolean;
     model: AgentModel;
     thinkingLevel: ThinkingLevel;
+    priority: number;
   }) => void;
   categorySuggestions: string[];
   defaultSkipTests: boolean;
@@ -74,6 +75,7 @@ export function AddFeatureDialog({
     skipTests: false,
     model: "opus" as AgentModel,
     thinkingLevel: "none" as ThinkingLevel,
+    priority: 2 as number, // Default to medium priority
   });
   const [newFeaturePreviewMap, setNewFeaturePreviewMap] =
     useState<ImagePreviewMap>(() => new Map());
@@ -111,6 +113,7 @@ export function AddFeatureDialog({
       skipTests: newFeature.skipTests,
       model: selectedModel,
       thinkingLevel: normalizedThinking,
+      priority: newFeature.priority,
     });
 
     // Reset form
@@ -122,6 +125,7 @@ export function AddFeatureDialog({
       imagePaths: [],
       skipTests: defaultSkipTests,
       model: "opus",
+      priority: 2,
       thinkingLevel: "none",
     });
     setNewFeaturePreviewMap(new Map());
@@ -236,6 +240,55 @@ export function AddFeatureDialog({
                 placeholder="e.g., Core, UI, API"
                 data-testid="feature-category-input"
               />
+            </div>
+
+            {/* Priority Selector */}
+            <div className="space-y-2">
+              <Label>Priority</Label>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setNewFeature({ ...newFeature, priority: 1 })
+                  }
+                  className={`flex-1 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                    newFeature.priority === 1
+                      ? "bg-red-500/20 text-red-500 border-2 border-red-500/50"
+                      : "bg-muted/50 text-muted-foreground border border-border hover:bg-muted"
+                  }`}
+                  data-testid="priority-high-button"
+                >
+                  High
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setNewFeature({ ...newFeature, priority: 2 })
+                  }
+                  className={`flex-1 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                    newFeature.priority === 2
+                      ? "bg-yellow-500/20 text-yellow-500 border-2 border-yellow-500/50"
+                      : "bg-muted/50 text-muted-foreground border border-border hover:bg-muted"
+                  }`}
+                  data-testid="priority-medium-button"
+                >
+                  Medium
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setNewFeature({ ...newFeature, priority: 3 })
+                  }
+                  className={`flex-1 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                    newFeature.priority === 3
+                      ? "bg-blue-500/20 text-blue-500 border-2 border-blue-500/50"
+                      : "bg-muted/50 text-muted-foreground border border-border hover:bg-muted"
+                  }`}
+                  data-testid="priority-low-button"
+                >
+                  Low
+                </button>
+              </div>
             </div>
           </TabsContent>
 

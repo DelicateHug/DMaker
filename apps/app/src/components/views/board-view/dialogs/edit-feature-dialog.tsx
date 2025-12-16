@@ -19,7 +19,7 @@ import {
   FeatureImagePath as DescriptionImagePath,
   ImagePreviewMap,
 } from "@/components/ui/description-image-dropzone";
-import { MessageSquare, Settings2, FlaskConical } from "lucide-react";
+import { MessageSquare, Settings2, FlaskConical, GitBranch } from "lucide-react";
 import { modelSupportsThinking } from "@/lib/utils";
 import {
   Feature,
@@ -33,6 +33,7 @@ import {
   ProfileQuickSelect,
   TestingTabContent,
 } from "../shared";
+import { DependencyTreeDialog } from "./dependency-tree-dialog";
 
 interface EditFeatureDialogProps {
   feature: Feature | null;
@@ -47,12 +48,14 @@ interface EditFeatureDialogProps {
       model: AgentModel;
       thinkingLevel: ThinkingLevel;
       imagePaths: DescriptionImagePath[];
+      priority: number;
     }
   ) => void;
   categorySuggestions: string[];
   isMaximized: boolean;
   showProfilesOnly: boolean;
   aiProfiles: AIProfile[];
+  allFeatures: Feature[];
 }
 
 export function EditFeatureDialog({
@@ -63,11 +66,13 @@ export function EditFeatureDialog({
   isMaximized,
   showProfilesOnly,
   aiProfiles,
+  allFeatures,
 }: EditFeatureDialogProps) {
   const [editingFeature, setEditingFeature] = useState<Feature | null>(feature);
   const [editFeaturePreviewMap, setEditFeaturePreviewMap] =
     useState<ImagePreviewMap>(() => new Map());
   const [showEditAdvancedOptions, setShowEditAdvancedOptions] = useState(false);
+  const [showDependencyTree, setShowDependencyTree] = useState(false);
 
   useEffect(() => {
     setEditingFeature(feature);
@@ -93,6 +98,7 @@ export function EditFeatureDialog({
       model: selectedModel,
       thinkingLevel: normalizedThinking,
       imagePaths: editingFeature.imagePaths ?? [],
+      priority: editingFeature.priority ?? 2,
     };
 
     onUpdate(editingFeature.id, updates);
@@ -214,6 +220,64 @@ export function EditFeatureDialog({
                 data-testid="edit-feature-category"
               />
             </div>
+
+            {/* Priority Selector */}
+            <div className="space-y-2">
+              <Label>Priority</Label>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setEditingFeature({
+                      ...editingFeature,
+                      priority: 1,
+                    })
+                  }
+                  className={`flex-1 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                    (editingFeature.priority ?? 2) === 1
+                      ? "bg-red-500/20 text-red-500 border-2 border-red-500/50"
+                      : "bg-muted/50 text-muted-foreground border border-border hover:bg-muted"
+                  }`}
+                  data-testid="edit-priority-high-button"
+                >
+                  High
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setEditingFeature({
+                      ...editingFeature,
+                      priority: 2,
+                    })
+                  }
+                  className={`flex-1 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                    (editingFeature.priority ?? 2) === 2
+                      ? "bg-yellow-500/20 text-yellow-500 border-2 border-yellow-500/50"
+                      : "bg-muted/50 text-muted-foreground border border-border hover:bg-muted"
+                  }`}
+                  data-testid="edit-priority-medium-button"
+                >
+                  Medium
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setEditingFeature({
+                      ...editingFeature,
+                      priority: 3,
+                    })
+                  }
+                  className={`flex-1 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                    (editingFeature.priority ?? 2) === 3
+                      ? "bg-blue-500/20 text-blue-500 border-2 border-blue-500/50"
+                      : "bg-muted/50 text-muted-foreground border border-border hover:bg-muted"
+                  }`}
+                  data-testid="edit-priority-low-button"
+                >
+                  Low
+                </button>
+              </div>
+            </div>
           </TabsContent>
 
           {/* Model Tab */}
@@ -297,20 +361,37 @@ export function EditFeatureDialog({
             />
           </TabsContent>
         </Tabs>
-        <DialogFooter>
-          <Button variant="ghost" onClick={onClose}>
-            Cancel
-          </Button>
-          <HotkeyButton
-            onClick={handleUpdate}
-            hotkey={{ key: "Enter", cmdCtrl: true }}
-            hotkeyActive={!!editingFeature}
-            data-testid="confirm-edit-feature"
+        <DialogFooter className="sm:!justify-between">
+          <Button
+            variant="outline"
+            onClick={() => setShowDependencyTree(true)}
+            className="gap-2 h-10"
           >
-            Save Changes
-          </HotkeyButton>
+            <GitBranch className="w-4 h-4" />
+            View Dependency Tree
+          </Button>
+          <div className="flex gap-2">
+            <Button variant="ghost" onClick={onClose}>
+              Cancel
+            </Button>
+            <HotkeyButton
+              onClick={handleUpdate}
+              hotkey={{ key: "Enter", cmdCtrl: true }}
+              hotkeyActive={!!editingFeature}
+              data-testid="confirm-edit-feature"
+            >
+              Save Changes
+            </HotkeyButton>
+          </div>
         </DialogFooter>
       </DialogContent>
+
+      <DependencyTreeDialog
+        open={showDependencyTree}
+        onClose={() => setShowDependencyTree(false)}
+        feature={editingFeature}
+        allFeatures={allFeatures}
+      />
     </Dialog>
   );
 }
