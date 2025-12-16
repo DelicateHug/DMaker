@@ -796,6 +796,17 @@ export interface WorktreeAPI {
     success: boolean;
     result?: {
       message: string;
+      editorName?: string;
+    };
+    error?: string;
+  }>;
+
+  // Get the default code editor name
+  getDefaultEditor: () => Promise<{
+    success: boolean;
+    result?: {
+      editorName: string;
+      editorCommand: string;
     };
     error?: string;
   }>;

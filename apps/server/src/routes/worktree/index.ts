@@ -19,7 +19,7 @@ import { createPullHandler } from "./routes/pull.js";
 import { createCheckoutBranchHandler } from "./routes/checkout-branch.js";
 import { createListBranchesHandler } from "./routes/list-branches.js";
 import { createSwitchBranchHandler } from "./routes/switch-branch.js";
-import { createOpenInEditorHandler } from "./routes/open-in-editor.js";
+import { createOpenInEditorHandler, createGetDefaultEditorHandler } from "./routes/open-in-editor.js";
 import { createInitGitHandler } from "./routes/init-git.js";
 import { createActivateHandler } from "./routes/activate.js";
 import { createMigrateHandler } from "./routes/migrate.js";
@@ -47,6 +47,7 @@ export function createWorktreeRoutes(): Router {
   router.post("/list-branches", createListBranchesHandler());
   router.post("/switch-branch", createSwitchBranchHandler());
   router.post("/open-in-editor", createOpenInEditorHandler());
+  router.get("/default-editor", createGetDefaultEditorHandler());
   router.post("/init-git", createInitGitHandler());
   router.post("/activate", createActivateHandler());
   router.post("/migrate", createMigrateHandler());

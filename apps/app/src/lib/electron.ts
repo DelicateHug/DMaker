@@ -1222,7 +1222,19 @@ function createMockWorktreeAPI(): WorktreeAPI {
       return {
         success: true,
         result: {
-          message: `Opened ${worktreePath} in editor`,
+          message: `Opened ${worktreePath} in VS Code`,
+          editorName: "VS Code",
+        },
+      };
+    },
+
+    getDefaultEditor: async () => {
+      console.log("[Mock] Getting default editor");
+      return {
+        success: true,
+        result: {
+          editorName: "VS Code",
+          editorCommand: "code",
         },
       };
     },

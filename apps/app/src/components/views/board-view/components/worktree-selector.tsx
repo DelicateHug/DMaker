@@ -101,6 +101,7 @@ export function WorktreeSelector({
   const [isLoadingBranches, setIsLoadingBranches] = useState(false);
   const [branchFilter, setBranchFilter] = useState("");
   const [runningDevServers, setRunningDevServers] = useState<Map<string, DevServerInfo>>(new Map());
+  const [defaultEditorName, setDefaultEditorName] = useState<string>("Editor");
   const currentWorktree = useAppStore((s) => s.getCurrentWorktree(projectPath));
   const setCurrentWorktree = useAppStore((s) => s.setCurrentWorktree);
   const setWorktreesInStore = useAppStore((s) => s.setWorktrees);
@@ -145,6 +146,21 @@ export function WorktreeSelector({
     }
   }, []);
 
+  const fetchDefaultEditor = useCallback(async () => {
+    try {
+      const api = getElectronAPI();
+      if (!api?.worktree?.getDefaultEditor) {
+        return;
+      }
+      const result = await api.worktree.getDefaultEditor();
+      if (result.success && result.result?.editorName) {
+        setDefaultEditorName(result.result.editorName);
+      }
+    } catch (error) {
+      console.error("Failed to fetch default editor:", error);
+    }
+  }, []);
+
   const fetchBranches = useCallback(async (worktreePath: string) => {
     setIsLoadingBranches(true);
     try {
@@ -169,7 +185,8 @@ export function WorktreeSelector({
   useEffect(() => {
     fetchWorktrees();
     fetchDevServers();
-  }, [fetchWorktrees, fetchDevServers]);
+    fetchDefaultEditor();
+  }, [fetchWorktrees, fetchDevServers, fetchDefaultEditor]);
 
   // Refresh when refreshTrigger changes (but skip the initial render)
   useEffect(() => {
@@ -442,10 +459,6 @@ export function WorktreeSelector({
     ? worktrees.find((w) => w.path === currentWorktree)
     : worktrees.find((w) => w.isMain);
 
-  if (worktrees.length === 0 && !isLoading) {
-    // No git repo or loading
-    return null;
-  }
 
   // Render a worktree tab with branch selector (for main) and actions dropdown
   const renderWorktreeTab = (worktree: WorktreeInfo) => {
@@ -707,7 +720,7 @@ export function WorktreeSelector({
               className="text-xs"
             >
               <ExternalLink className="w-3.5 h-3.5 mr-2" />
-              Open in Editor
+              Open in {defaultEditorName}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             {/* Commit changes */}
