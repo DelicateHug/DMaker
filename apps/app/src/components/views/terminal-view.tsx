@@ -147,6 +147,18 @@ export function TerminalView() {
   const serverUrl = process.env.NEXT_PUBLIC_SERVER_URL || "http://localhost:3008";
   const CREATE_COOLDOWN_MS = 500; // Prevent rapid terminal creation
 
+  // Helper to check if terminal creation should be debounced
+  const canCreateTerminal = (debounceMessage: string): boolean => {
+    const now = Date.now();
+    if (now - lastCreateTimeRef.current < CREATE_COOLDOWN_MS || isCreatingRef.current) {
+      console.log(debounceMessage);
+      return false;
+    }
+    lastCreateTimeRef.current = now;
+    isCreatingRef.current = true;
+    return true;
+  };
+
   // Get active tab
   const activeTab = terminalState.tabs.find(t => t.id === terminalState.activeTabId);
 
@@ -263,14 +275,9 @@ export function TerminalView() {
   // Create a new terminal session
   // targetSessionId: the terminal to split (if splitting an existing terminal)
   const createTerminal = async (direction?: "horizontal" | "vertical", targetSessionId?: string) => {
-    // Debounce: prevent rapid terminal creation
-    const now = Date.now();
-    if (now - lastCreateTimeRef.current < CREATE_COOLDOWN_MS || isCreatingRef.current) {
-      console.log("[Terminal] Debounced terminal creation");
+    if (!canCreateTerminal("[Terminal] Debounced terminal creation")) {
       return;
     }
-    lastCreateTimeRef.current = now;
-    isCreatingRef.current = true;
 
     try {
       const headers: Record<string, string> = {
@@ -305,6 +312,10 @@ export function TerminalView() {
 
   // Create terminal in new tab
   const createTerminalInNewTab = async () => {
+    if (!canCreateTerminal("[Terminal] Debounced terminal tab creation")) {
+      return;
+    }
+
     const tabId = addTerminalTab();
     try {
       const headers: Record<string, string> = {
@@ -332,6 +343,8 @@ export function TerminalView() {
       }
     } catch (err) {
       console.error("[Terminal] Create session error:", err);
+    } finally {
+      isCreatingRef.current = false;
     }
   };
 
@@ -413,12 +426,22 @@ export function TerminalView() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [terminalState.isUnlocked, terminalState.activeSessionId, shortcuts]);
 
-  // Get a stable key for a panel
+  // Collect all terminal IDs from a panel tree in order
+  const getTerminalIds = (panel: TerminalPanelContent): string[] => {
+    if (panel.type === "terminal") {
+      return [panel.sessionId];
+    }
+    return panel.panels.flatMap(getTerminalIds);
+  };
+
+  // Get a STABLE key for a panel - based only on terminal IDs, not tree structure
+  // This prevents unnecessary remounts when layout structure changes
   const getPanelKey = (panel: TerminalPanelContent): string => {
     if (panel.type === "terminal") {
       return panel.sessionId;
     }
-    return `split-${panel.direction}-${panel.panels.map(getPanelKey).join("-")}`;
+    // Use joined terminal IDs - stable regardless of nesting depth
+    return `group-${getTerminalIds(panel).join("-")}`;
   };
 
   // Render panel content recursively
@@ -454,10 +477,12 @@ export function TerminalView() {
             ? panel.size
             : defaultSizePerPanel;
 
+          const panelKey = getPanelKey(panel);
           return (
-            <React.Fragment key={getPanelKey(panel)}>
+            <React.Fragment key={panelKey}>
               {index > 0 && (
                 <PanelResizeHandle
+                  key={`handle-${panelKey}`}
                   className={
                     isHorizontal
                       ? "w-1 h-full bg-border hover:bg-brand-500 transition-colors data-[resize-handle-state=hover]:bg-brand-500 data-[resize-handle-state=drag]:bg-brand-500"
@@ -465,7 +490,7 @@ export function TerminalView() {
                   }
                 />
               )}
-              <Panel defaultSize={panelSize} minSize={15}>
+              <Panel id={panelKey} order={index} defaultSize={panelSize} minSize={30}>
                 {renderPanelContent(panel)}
               </Panel>
             </React.Fragment>
