@@ -1286,17 +1286,13 @@ This mock response was generated because AUTOMAKER_MOCK_AGENT=true was set.
     const outputPath = path.join(featureDirForOutput, "agent-output.md");
 
     // Incremental file writing state
-    let directoryCreated = false;
     let writeTimeout: ReturnType<typeof setTimeout> | null = null;
     const WRITE_DEBOUNCE_MS = 500; // Batch writes every 500ms
 
     // Helper to write current responseText to file
     const writeToFile = async (): Promise<void> => {
       try {
-        if (!directoryCreated) {
-          await fs.mkdir(path.dirname(outputPath), { recursive: true });
-          directoryCreated = true;
-        }
+        await fs.mkdir(path.dirname(outputPath), { recursive: true });
         await fs.writeFile(outputPath, responseText);
       } catch (error) {
         // Log but don't crash - file write errors shouldn't stop execution
@@ -1310,9 +1306,7 @@ This mock response was generated because AUTOMAKER_MOCK_AGENT=true was set.
         clearTimeout(writeTimeout);
       }
       writeTimeout = setTimeout(() => {
-        writeToFile().catch((err) => {
-          console.error(`[AutoMode] Debounced write error:`, err);
-        });
+        writeToFile();
       }, WRITE_DEBOUNCE_MS);
     };
 
