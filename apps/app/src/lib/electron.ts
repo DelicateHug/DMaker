@@ -158,7 +158,10 @@ export interface SpecRegenerationAPI {
     analyzeProject?: boolean,
     maxFeatures?: number
   ) => Promise<{ success: boolean; error?: string }>;
-  generateFeatures: (projectPath: string, maxFeatures?: number) => Promise<{
+  generateFeatures: (
+    projectPath: string,
+    maxFeatures?: number
+  ) => Promise<{
     success: boolean;
     error?: string;
   }>;
@@ -321,7 +324,11 @@ export interface ElectronAPI {
   features?: FeaturesAPI;
   runningAgents?: RunningAgentsAPI;
   enhancePrompt?: {
-    enhance: (originalText: string, enhancementMode: string, model?: string) => Promise<{
+    enhance: (
+      originalText: string,
+      enhancementMode: string,
+      model?: string
+    ) => Promise<{
       success: boolean;
       enhancedText?: string;
       error?: string;
@@ -1042,11 +1049,6 @@ function createMockSetupAPI(): SetupAPI {
 // Mock Worktree API implementation
 function createMockWorktreeAPI(): WorktreeAPI {
   return {
-    revertFeature: async (projectPath: string, featureId: string) => {
-      console.log("[Mock] Reverting feature:", { projectPath, featureId });
-      return { success: true, removedPath: `/mock/worktree/${featureId}` };
-    },
-
     mergeFeature: async (
       projectPath: string,
       featureId: string,
@@ -1093,17 +1095,36 @@ function createMockWorktreeAPI(): WorktreeAPI {
     },
 
     listAll: async (projectPath: string, includeDetails?: boolean) => {
-      console.log("[Mock] Listing all worktrees:", { projectPath, includeDetails });
+      console.log("[Mock] Listing all worktrees:", {
+        projectPath,
+        includeDetails,
+      });
       return {
         success: true,
         worktrees: [
-          { path: projectPath, branch: "main", isMain: true, isCurrent: true, hasWorktree: true, hasChanges: false, changedFilesCount: 0 },
+          {
+            path: projectPath,
+            branch: "main",
+            isMain: true,
+            isCurrent: true,
+            hasWorktree: true,
+            hasChanges: false,
+            changedFilesCount: 0,
+          },
         ],
       };
     },
 
-    create: async (projectPath: string, branchName: string, baseBranch?: string) => {
-      console.log("[Mock] Creating worktree:", { projectPath, branchName, baseBranch });
+    create: async (
+      projectPath: string,
+      branchName: string,
+      baseBranch?: string
+    ) => {
+      console.log("[Mock] Creating worktree:", {
+        projectPath,
+        branchName,
+        baseBranch,
+      });
       return {
         success: true,
         worktree: {
@@ -1114,8 +1135,16 @@ function createMockWorktreeAPI(): WorktreeAPI {
       };
     },
 
-    delete: async (projectPath: string, worktreePath: string, deleteBranch?: boolean) => {
-      console.log("[Mock] Deleting worktree:", { projectPath, worktreePath, deleteBranch });
+    delete: async (
+      projectPath: string,
+      worktreePath: string,
+      deleteBranch?: boolean
+    ) => {
+      console.log("[Mock] Deleting worktree:", {
+        projectPath,
+        worktreePath,
+        deleteBranch,
+      });
       return {
         success: true,
         deleted: {
@@ -1208,7 +1237,10 @@ function createMockWorktreeAPI(): WorktreeAPI {
     },
 
     checkoutBranch: async (worktreePath: string, branchName: string) => {
-      console.log("[Mock] Creating and checking out branch:", { worktreePath, branchName });
+      console.log("[Mock] Creating and checking out branch:", {
+        worktreePath,
+        branchName,
+      });
       return {
         success: true,
         result: {
@@ -1277,18 +1309,6 @@ function createMockWorktreeAPI(): WorktreeAPI {
         result: {
           initialized: true,
           message: `Initialized git repository in ${projectPath}`,
-        },
-      };
-    },
-
-    activate: async (projectPath: string, worktreePath: string | null) => {
-      console.log("[Mock] Activating worktree:", { projectPath, worktreePath });
-      return {
-        success: true,
-        result: {
-          previousBranch: "main",
-          currentBranch: worktreePath ? "feature-branch" : "main",
-          message: worktreePath ? "Switched to worktree branch" : "Switched to main",
         },
       };
     },
@@ -1465,7 +1485,11 @@ function createMockAutoModeAPI(): AutoModeAPI {
       return { success: true, passes: true };
     },
 
-    resumeFeature: async (projectPath: string, featureId: string, useWorktrees?: boolean) => {
+    resumeFeature: async (
+      projectPath: string,
+      featureId: string,
+      useWorktrees?: boolean
+    ) => {
       if (mockRunningFeatures.has(featureId)) {
         return {
           success: false,
@@ -1629,8 +1653,16 @@ function createMockAutoModeAPI(): AutoModeAPI {
       return { success: true };
     },
 
-    commitFeature: async (projectPath: string, featureId: string, worktreePath?: string) => {
-      console.log("[Mock] Committing feature:", { projectPath, featureId, worktreePath });
+    commitFeature: async (
+      projectPath: string,
+      featureId: string,
+      worktreePath?: string
+    ) => {
+      console.log("[Mock] Committing feature:", {
+        projectPath,
+        featureId,
+        worktreePath,
+      });
 
       // Simulate commit operation
       emitAutoModeEvent({

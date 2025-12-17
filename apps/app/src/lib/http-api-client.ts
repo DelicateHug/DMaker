@@ -468,7 +468,9 @@ export class HttpApiClient implements ElectronAPI {
       isLinux: boolean;
     }> => this.get("/api/setup/platform"),
 
-    verifyClaudeAuth: (authMethod?: "cli" | "api_key"): Promise<{
+    verifyClaudeAuth: (
+      authMethod?: "cli" | "api_key"
+    ): Promise<{
       success: boolean;
       authenticated: boolean;
       error?: string;
@@ -536,8 +538,16 @@ export class HttpApiClient implements ElectronAPI {
       }),
     verifyFeature: (projectPath: string, featureId: string) =>
       this.post("/api/auto-mode/verify-feature", { projectPath, featureId }),
-    resumeFeature: (projectPath: string, featureId: string, useWorktrees?: boolean) =>
-      this.post("/api/auto-mode/resume-feature", { projectPath, featureId, useWorktrees }),
+    resumeFeature: (
+      projectPath: string,
+      featureId: string,
+      useWorktrees?: boolean
+    ) =>
+      this.post("/api/auto-mode/resume-feature", {
+        projectPath,
+        featureId,
+        useWorktrees,
+      }),
     contextExists: (projectPath: string, featureId: string) =>
       this.post("/api/auto-mode/context-exists", { projectPath, featureId }),
     analyzeProject: (projectPath: string) =>
@@ -556,8 +566,16 @@ export class HttpApiClient implements ElectronAPI {
         imagePaths,
         worktreePath,
       }),
-    commitFeature: (projectPath: string, featureId: string, worktreePath?: string) =>
-      this.post("/api/auto-mode/commit-feature", { projectPath, featureId, worktreePath }),
+    commitFeature: (
+      projectPath: string,
+      featureId: string,
+      worktreePath?: string
+    ) =>
+      this.post("/api/auto-mode/commit-feature", {
+        projectPath,
+        featureId,
+        worktreePath,
+      }),
     onEvent: (callback: (event: AutoModeEvent) => void) => {
       return this.subscribeToEvent(
         "auto-mode:event",
@@ -582,8 +600,6 @@ export class HttpApiClient implements ElectronAPI {
 
   // Worktree API
   worktree: WorktreeAPI = {
-    revertFeature: (projectPath: string, featureId: string) =>
-      this.post("/api/worktree/revert", { projectPath, featureId }),
     mergeFeature: (projectPath: string, featureId: string, options?: object) =>
       this.post("/api/worktree/merge", { projectPath, featureId, options }),
     getInfo: (projectPath: string, featureId: string) =>
@@ -595,9 +611,21 @@ export class HttpApiClient implements ElectronAPI {
     listAll: (projectPath: string, includeDetails?: boolean) =>
       this.post("/api/worktree/list", { projectPath, includeDetails }),
     create: (projectPath: string, branchName: string, baseBranch?: string) =>
-      this.post("/api/worktree/create", { projectPath, branchName, baseBranch }),
-    delete: (projectPath: string, worktreePath: string, deleteBranch?: boolean) =>
-      this.post("/api/worktree/delete", { projectPath, worktreePath, deleteBranch }),
+      this.post("/api/worktree/create", {
+        projectPath,
+        branchName,
+        baseBranch,
+      }),
+    delete: (
+      projectPath: string,
+      worktreePath: string,
+      deleteBranch?: boolean
+    ) =>
+      this.post("/api/worktree/delete", {
+        projectPath,
+        worktreePath,
+        deleteBranch,
+      }),
     commit: (worktreePath: string, message: string) =>
       this.post("/api/worktree/commit", { worktreePath, message }),
     push: (worktreePath: string, force?: boolean) =>
@@ -622,18 +650,14 @@ export class HttpApiClient implements ElectronAPI {
       this.post("/api/worktree/switch-branch", { worktreePath, branchName }),
     openInEditor: (worktreePath: string) =>
       this.post("/api/worktree/open-in-editor", { worktreePath }),
-    getDefaultEditor: () =>
-      this.get("/api/worktree/default-editor"),
+    getDefaultEditor: () => this.get("/api/worktree/default-editor"),
     initGit: (projectPath: string) =>
       this.post("/api/worktree/init-git", { projectPath }),
-    activate: (projectPath: string, worktreePath: string | null) =>
-      this.post("/api/worktree/activate", { projectPath, worktreePath }),
     startDevServer: (projectPath: string, worktreePath: string) =>
       this.post("/api/worktree/start-dev", { projectPath, worktreePath }),
     stopDevServer: (worktreePath: string) =>
       this.post("/api/worktree/stop-dev", { worktreePath }),
-    listDevServers: () =>
-      this.post("/api/worktree/list-dev-servers", {}),
+    listDevServers: () => this.post("/api/worktree/list-dev-servers", {}),
   };
 
   // Git API
@@ -689,7 +713,10 @@ export class HttpApiClient implements ElectronAPI {
         maxFeatures,
       }),
     generateFeatures: (projectPath: string, maxFeatures?: number) =>
-      this.post("/api/spec-regeneration/generate-features", { projectPath, maxFeatures }),
+      this.post("/api/spec-regeneration/generate-features", {
+        projectPath,
+        maxFeatures,
+      }),
     stop: () => this.post("/api/spec-regeneration/stop"),
     status: () => this.get("/api/spec-regeneration/status"),
     onEvent: (callback: (event: SpecRegenerationEvent) => void) => {

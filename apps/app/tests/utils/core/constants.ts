@@ -24,7 +24,6 @@ export const API_ENDPOINTS = {
     switchBranch: `${API_BASE_URL}/api/worktree/switch-branch`,
     listBranches: `${API_BASE_URL}/api/worktree/list-branches`,
     status: `${API_BASE_URL}/api/worktree/status`,
-    revert: `${API_BASE_URL}/api/worktree/revert`,
     info: `${API_BASE_URL}/api/worktree/info`,
   },
   fs: {

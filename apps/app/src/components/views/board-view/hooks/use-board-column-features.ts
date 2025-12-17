@@ -57,22 +57,22 @@ export function useBoardColumnFeatures({
 
       // Check if feature matches the current worktree
       // Match by worktreePath if set, OR by branchName if set
-      // Features with neither are considered unassigned (show on main only)
+      // Features with neither are considered unassigned (show on ALL worktrees)
       const featureBranch = f.branchName || "main";
       const hasWorktreeAssigned = f.worktreePath || f.branchName;
 
       let matchesWorktree: boolean;
       if (!hasWorktreeAssigned) {
-        // No worktree or branch assigned - show only on main
-        matchesWorktree = !currentWorktreePath;
+        // No worktree or branch assigned - show on ALL worktrees (unassigned)
+        matchesWorktree = true;
       } else if (f.worktreePath) {
         // Has worktreePath - match by path (use pathsEqual for cross-platform compatibility)
         matchesWorktree = pathsEqual(f.worktreePath, effectiveWorktreePath);
       } else if (effectiveBranch === null) {
-        // We're selecting a non-main worktree but can't determine its branch yet
-        // (worktrees haven't loaded). Don't show branch-only features until we know.
-        // This prevents showing wrong features during loading.
-        matchesWorktree = false;
+        // We're viewing main but branch hasn't been initialized yet
+        // (worktrees disabled or haven't loaded yet).
+        // Show features assigned to main/master branch since we're on the main worktree.
+        matchesWorktree = featureBranch === "main" || featureBranch === "master";
       } else {
         // Has branchName but no worktreePath - match by branch name
         matchesWorktree = featureBranch === effectiveBranch;

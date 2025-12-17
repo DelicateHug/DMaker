@@ -286,7 +286,10 @@ export interface SpecRegenerationAPI {
     error?: string;
   }>;
 
-  generateFeatures: (projectPath: string, maxFeatures?: number) => Promise<{
+  generateFeatures: (
+    projectPath: string,
+    maxFeatures?: number
+  ) => Promise<{
     success: boolean;
     error?: string;
   }>;
@@ -574,16 +577,6 @@ export interface FileDiffResult {
 }
 
 export interface WorktreeAPI {
-  // Revert feature changes by removing the worktree
-  revertFeature: (
-    projectPath: string,
-    featureId: string
-  ) => Promise<{
-    success: boolean;
-    removedPath?: string;
-    error?: string;
-  }>;
-
   // Merge feature worktree changes back to main branch
   mergeFeature: (
     projectPath: string,
@@ -824,20 +817,6 @@ export interface WorktreeAPI {
     error?: string;
   }>;
 
-  // Activate a worktree (switch main project to that branch)
-  activate: (
-    projectPath: string,
-    worktreePath: string | null
-  ) => Promise<{
-    success: boolean;
-    result?: {
-      previousBranch: string;
-      currentBranch: string;
-      message: string;
-    };
-    error?: string;
-  }>;
-
   // Start a dev server for a worktree
   startDevServer: (
     projectPath: string,
@@ -854,9 +833,7 @@ export interface WorktreeAPI {
   }>;
 
   // Stop a dev server for a worktree
-  stopDevServer: (
-    worktreePath: string
-  ) => Promise<{
+  stopDevServer: (worktreePath: string) => Promise<{
     success: boolean;
     result?: {
       worktreePath: string;

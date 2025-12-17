@@ -101,7 +101,9 @@ export function WorktreeSelector({
   const [behindCount, setBehindCount] = useState(0);
   const [isLoadingBranches, setIsLoadingBranches] = useState(false);
   const [branchFilter, setBranchFilter] = useState("");
-  const [runningDevServers, setRunningDevServers] = useState<Map<string, DevServerInfo>>(new Map());
+  const [runningDevServers, setRunningDevServers] = useState<
+    Map<string, DevServerInfo>
+  >(new Map());
   const [defaultEditorName, setDefaultEditorName] = useState<string>("Editor");
   const currentWorktree = useAppStore((s) => s.getCurrentWorktree(projectPath));
   const setCurrentWorktree = useAppStore((s) => s.setCurrentWorktree);
@@ -197,18 +199,37 @@ export function WorktreeSelector({
     }
   }, [refreshTrigger, fetchWorktrees]);
 
-  // Initialize selection to main if not set
+  // Initialize selection to main if not set OR if the stored worktree no longer exists
+  // This handles stale data (e.g., a worktree that was deleted)
   useEffect(() => {
-    if (worktrees.length > 0 && currentWorktree === undefined) {
-      const mainWorktree = worktrees.find(w => w.isMain);
-      const mainBranch = mainWorktree?.branch || "main";
-      setCurrentWorktree(projectPath, null, mainBranch); // null = main worktree
+    if (worktrees.length > 0) {
+      const currentPath = currentWorktree?.path;
+
+      // Check if the currently selected worktree still exists
+      // null path means main (which always exists if worktrees has items)
+      // Non-null path means we need to verify it exists in the worktrees list
+      const currentWorktreeExists = currentPath === null
+        ? true
+        : worktrees.some((w) => !w.isMain && pathsEqual(w.path, currentPath));
+
+      // Reset to main if:
+      // 1. No worktree is set (currentWorktree is null/undefined)
+      // 2. Current worktree has a path that doesn't exist in the list (stale data)
+      if (currentWorktree == null || (currentPath !== null && !currentWorktreeExists)) {
+        const mainWorktree = worktrees.find((w) => w.isMain);
+        const mainBranch = mainWorktree?.branch || "main";
+        setCurrentWorktree(projectPath, null, mainBranch); // null = main worktree
+      }
     }
   }, [worktrees, currentWorktree, projectPath, setCurrentWorktree]);
 
   const handleSelectWorktree = async (worktree: WorktreeInfo) => {
     // Simply select the worktree in the UI with both path and branch
-    setCurrentWorktree(projectPath, worktree.isMain ? null : worktree.path, worktree.branch);
+    setCurrentWorktree(
+      projectPath,
+      worktree.isMain ? null : worktree.path,
+      worktree.branch
+    );
   };
 
   const handleStartDevServer = async (worktree: WorktreeInfo) => {
@@ -326,57 +347,6 @@ export function WorktreeSelector({
     });
   };
 
-  const handleActivateWorktree = async (worktree: WorktreeInfo) => {
-    if (isActivating) return;
-    setIsActivating(true);
-    try {
-      const api = getElectronAPI();
-      if (!api?.worktree?.activate) {
-        toast.error("Activate worktree API not available");
-        return;
-      }
-      const result = await api.worktree.activate(projectPath, worktree.path);
-      if (result.success && result.result) {
-        toast.success(result.result.message);
-        // After activation, refresh to show updated state
-        fetchWorktrees();
-      } else {
-        toast.error(result.error || "Failed to activate worktree");
-      }
-    } catch (error) {
-      console.error("Activate worktree failed:", error);
-      toast.error("Failed to activate worktree");
-    } finally {
-      setIsActivating(false);
-    }
-  };
-
-  const handleSwitchToBranch = async (branchName: string) => {
-    if (isActivating) return;
-    setIsActivating(true);
-    try {
-      const api = getElectronAPI();
-      if (!api?.worktree?.activate) {
-        toast.error("Activate API not available");
-        return;
-      }
-      // Pass null as worktreePath to switch to a branch without a worktree
-      // We'll need to update the activate endpoint to handle this case
-      const result = await api.worktree.switchBranch(projectPath, branchName);
-      if (result.success && result.result) {
-        toast.success(result.result.message);
-        fetchWorktrees();
-      } else {
-        toast.error(result.error || "Failed to switch branch");
-      }
-    } catch (error) {
-      console.error("Switch branch failed:", error);
-      toast.error("Failed to switch branch");
-    } finally {
-      setIsActivating(false);
-    }
-  };
-
   const handleOpenInEditor = async (worktree: WorktreeInfo) => {
     try {
       const api = getElectronAPI();
@@ -395,7 +365,10 @@ export function WorktreeSelector({
     }
   };
 
-  const handleSwitchBranch = async (worktree: WorktreeInfo, branchName: string) => {
+  const handleSwitchBranch = async (
+    worktree: WorktreeInfo,
+    branchName: string
+  ) => {
     if (isSwitching || branchName === worktree.branch) return;
     setIsSwitching(true);
     try {
@@ -478,13 +451,14 @@ export function WorktreeSelector({
     ? worktrees.find((w) => pathsEqual(w.path, currentWorktreePath))
     : worktrees.find((w) => w.isMain);
 
-
   // Render a worktree tab with branch selector (for main) and actions dropdown
   const renderWorktreeTab = (worktree: WorktreeInfo) => {
     // Selection is based on UI state, not git's current branch
     // Default to main selected if currentWorktree is null/undefined or path is null
     const isSelected = worktree.isMain
-      ? currentWorktree === null || currentWorktree === undefined || currentWorktree.path === null
+      ? currentWorktree === null ||
+        currentWorktree === undefined ||
+        currentWorktree.path === null
       : pathsEqual(worktree.path, currentWorktreePath);
 
     const isRunning = hasRunningFeatures(worktree);
@@ -508,7 +482,9 @@ export function WorktreeSelector({
               title="Click to preview main"
             >
               {isRunning && <Loader2 className="w-3 h-3 animate-spin" />}
-              {isActivating && !isRunning && <RefreshCw className="w-3 h-3 animate-spin" />}
+              {isActivating && !isRunning && (
+                <RefreshCw className="w-3 h-3 animate-spin" />
+              )}
               {worktree.branch}
               {worktree.hasChanges && (
                 <span className="inline-flex items-center justify-center h-4 min-w-[1rem] px-1 text-[10px] font-medium rounded bg-background/80 text-foreground border border-border">
@@ -517,12 +493,14 @@ export function WorktreeSelector({
               )}
             </Button>
             {/* Branch switch dropdown button */}
-            <DropdownMenu onOpenChange={(open) => {
-              if (open) {
-                fetchBranches(worktree.path);
-                setBranchFilter("");
-              }
-            }}>
+            <DropdownMenu
+              onOpenChange={(open) => {
+                if (open) {
+                  fetchBranches(worktree.path);
+                  setBranchFilter("");
+                }
+              }}
+            >
               <DropdownMenuTrigger asChild>
                 <Button
                   variant={isSelected ? "default" : "outline"}
@@ -538,7 +516,9 @@ export function WorktreeSelector({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" className="w-64">
-                <DropdownMenuLabel className="text-xs">Switch Branch</DropdownMenuLabel>
+                <DropdownMenuLabel className="text-xs">
+                  Switch Branch
+                </DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 {/* Search input */}
                 <div className="px-2 py-1.5">
@@ -563,33 +543,43 @@ export function WorktreeSelector({
                       <RefreshCw className="w-3.5 h-3.5 mr-2 animate-spin" />
                       Loading branches...
                     </DropdownMenuItem>
-                  ) : (() => {
-                    const filteredBranches = branches.filter((b) =>
-                      b.name.toLowerCase().includes(branchFilter.toLowerCase())
-                    );
-                    if (filteredBranches.length === 0) {
-                      return (
-                        <DropdownMenuItem disabled className="text-xs">
-                          {branchFilter ? "No matching branches" : "No branches found"}
-                        </DropdownMenuItem>
+                  ) : (
+                    (() => {
+                      const filteredBranches = branches.filter((b) =>
+                        b.name
+                          .toLowerCase()
+                          .includes(branchFilter.toLowerCase())
                       );
-                    }
-                    return filteredBranches.map((branch) => (
-                      <DropdownMenuItem
-                        key={branch.name}
-                        onClick={() => handleSwitchBranch(worktree, branch.name)}
-                        disabled={isSwitching || branch.name === worktree.branch}
-                        className="text-xs font-mono"
-                      >
-                        {branch.name === worktree.branch ? (
-                          <Check className="w-3.5 h-3.5 mr-2 flex-shrink-0" />
-                        ) : (
-                          <span className="w-3.5 mr-2 flex-shrink-0" />
-                        )}
-                        <span className="truncate">{branch.name}</span>
-                      </DropdownMenuItem>
-                    ));
-                  })()}
+                      if (filteredBranches.length === 0) {
+                        return (
+                          <DropdownMenuItem disabled className="text-xs">
+                            {branchFilter
+                              ? "No matching branches"
+                              : "No branches found"}
+                          </DropdownMenuItem>
+                        );
+                      }
+                      return filteredBranches.map((branch) => (
+                        <DropdownMenuItem
+                          key={branch.name}
+                          onClick={() =>
+                            handleSwitchBranch(worktree, branch.name)
+                          }
+                          disabled={
+                            isSwitching || branch.name === worktree.branch
+                          }
+                          className="text-xs font-mono"
+                        >
+                          {branch.name === worktree.branch ? (
+                            <Check className="w-3.5 h-3.5 mr-2 flex-shrink-0" />
+                          ) : (
+                            <span className="w-3.5 mr-2 flex-shrink-0" />
+                          )}
+                          <span className="truncate">{branch.name}</span>
+                        </DropdownMenuItem>
+                      ));
+                    })()
+                  )}
                 </div>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
@@ -615,12 +605,16 @@ export function WorktreeSelector({
             )}
             onClick={() => handleSelectWorktree(worktree)}
             disabled={isActivating}
-            title={worktree.hasWorktree
-              ? "Click to switch to this worktree's branch"
-              : "Click to switch to this branch"}
+            title={
+              worktree.hasWorktree
+                ? "Click to switch to this worktree's branch"
+                : "Click to switch to this branch"
+            }
           >
             {isRunning && <Loader2 className="w-3 h-3 animate-spin" />}
-            {isActivating && !isRunning && <RefreshCw className="w-3 h-3 animate-spin" />}
+            {isActivating && !isRunning && (
+              <RefreshCw className="w-3 h-3 animate-spin" />
+            )}
             {worktree.branch}
             {worktree.hasChanges && (
               <span className="inline-flex items-center justify-center h-4 min-w-[1rem] px-1 text-[10px] font-medium rounded bg-background/80 text-foreground border border-border">
@@ -642,18 +636,22 @@ export function WorktreeSelector({
               "text-green-500"
             )}
             onClick={() => handleOpenDevServerUrl(worktree)}
-            title={`Open dev server (port ${runningDevServers.get(getWorktreeKey(worktree))?.port})`}
+            title={`Open dev server (port ${
+              runningDevServers.get(getWorktreeKey(worktree))?.port
+            })`}
           >
             <Globe className="w-3 h-3" />
           </Button>
         )}
 
         {/* Actions dropdown */}
-        <DropdownMenu onOpenChange={(open) => {
-          if (open) {
-            fetchBranches(worktree.path);
-          }
-        }}>
+        <DropdownMenu
+          onOpenChange={(open) => {
+            if (open) {
+              fetchBranches(worktree.path);
+            }
+          }}
+        >
           <DropdownMenuTrigger asChild>
             <Button
               variant={isSelected ? "default" : "outline"}
@@ -673,7 +671,8 @@ export function WorktreeSelector({
               <>
                 <DropdownMenuLabel className="text-xs flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                  Dev Server Running (:{runningDevServers.get(getWorktreeKey(worktree))?.port})
+                  Dev Server Running (:
+                  {runningDevServers.get(getWorktreeKey(worktree))?.port})
                 </DropdownMenuLabel>
                 <DropdownMenuItem
                   onClick={() => handleOpenDevServerUrl(worktree)}
@@ -698,7 +697,12 @@ export function WorktreeSelector({
                   disabled={isStartingDevServer}
                   className="text-xs"
                 >
-                  <Play className={cn("w-3.5 h-3.5 mr-2", isStartingDevServer && "animate-pulse")} />
+                  <Play
+                    className={cn(
+                      "w-3.5 h-3.5 mr-2",
+                      isStartingDevServer && "animate-pulse"
+                    )}
+                  />
                   {isStartingDevServer ? "Starting..." : "Start Dev Server"}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
@@ -710,7 +714,9 @@ export function WorktreeSelector({
               disabled={isPulling}
               className="text-xs"
             >
-              <Download className={cn("w-3.5 h-3.5 mr-2", isPulling && "animate-pulse")} />
+              <Download
+                className={cn("w-3.5 h-3.5 mr-2", isPulling && "animate-pulse")}
+              />
               {isPulling ? "Pulling..." : "Pull"}
               {behindCount > 0 && (
                 <span className="ml-auto text-[10px] bg-muted px-1.5 py-0.5 rounded">
@@ -724,7 +730,9 @@ export function WorktreeSelector({
               disabled={isPushing || aheadCount === 0}
               className="text-xs"
             >
-              <Upload className={cn("w-3.5 h-3.5 mr-2", isPushing && "animate-pulse")} />
+              <Upload
+                className={cn("w-3.5 h-3.5 mr-2", isPushing && "animate-pulse")}
+              />
               {isPushing ? "Pushing..." : "Push"}
               {aheadCount > 0 && (
                 <span className="ml-auto text-[10px] bg-primary/20 text-primary px-1.5 py-0.5 rounded">
@@ -815,7 +823,9 @@ export function WorktreeSelector({
           disabled={isLoading}
           title="Refresh worktrees"
         >
-          <RefreshCw className={cn("w-3.5 h-3.5", isLoading && "animate-spin")} />
+          <RefreshCw
+            className={cn("w-3.5 h-3.5", isLoading && "animate-spin")}
+          />
         </Button>
       </div>
     </div>

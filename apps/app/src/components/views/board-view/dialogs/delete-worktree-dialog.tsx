@@ -29,7 +29,7 @@ interface DeleteWorktreeDialogProps {
   onOpenChange: (open: boolean) => void;
   projectPath: string;
   worktree: WorktreeInfo | null;
-  onDeleted: () => void;
+  onDeleted: (deletedWorktree: WorktreeInfo, deletedBranch: boolean) => void;
 }
 
 export function DeleteWorktreeDialog({
@@ -64,7 +64,7 @@ export function DeleteWorktreeDialog({
             ? `Branch "${worktree.branch}" was also deleted`
             : `Branch "${worktree.branch}" was kept`,
         });
-        onDeleted();
+        onDeleted(worktree, deleteBranch);
         onOpenChange(false);
         setDeleteBranch(false);
       } else {

@@ -352,6 +352,106 @@ export async function setupProjectWithPath(page: Page, projectPath: string): Pro
   }, projectPath);
 }
 
+/**
+ * Set up localStorage with a project pointing to a test repo with worktrees DISABLED
+ * Use this to test scenarios where the worktree feature flag is off
+ */
+export async function setupProjectWithPathNoWorktrees(page: Page, projectPath: string): Promise<void> {
+  await page.addInitScript((pathArg: string) => {
+    const mockProject = {
+      id: "test-project-no-worktree",
+      name: "Test Project (No Worktrees)",
+      path: pathArg,
+      lastOpened: new Date().toISOString(),
+    };
+
+    const mockState = {
+      state: {
+        projects: [mockProject],
+        currentProject: mockProject,
+        currentView: "board",
+        theme: "dark",
+        sidebarOpen: true,
+        apiKeys: { anthropic: "", google: "" },
+        chatSessions: [],
+        chatHistoryOpen: false,
+        maxConcurrency: 3,
+        aiProfiles: [],
+        useWorktrees: false, // Worktree feature DISABLED
+        currentWorktreeByProject: {},
+        worktreesByProject: {},
+      },
+      version: 0,
+    };
+
+    localStorage.setItem("automaker-storage", JSON.stringify(mockState));
+
+    // Mark setup as complete to skip the setup wizard
+    const setupState = {
+      state: {
+        isFirstRun: false,
+        setupComplete: true,
+        currentStep: "complete",
+        skipClaudeSetup: false,
+      },
+      version: 0,
+    };
+    localStorage.setItem("automaker-setup", JSON.stringify(setupState));
+  }, projectPath);
+}
+
+/**
+ * Set up localStorage with a project that has STALE worktree data
+ * The currentWorktreeByProject points to a worktree path that no longer exists
+ * This simulates the scenario where a user previously selected a worktree that was later deleted
+ */
+export async function setupProjectWithStaleWorktree(page: Page, projectPath: string): Promise<void> {
+  await page.addInitScript((pathArg: string) => {
+    const mockProject = {
+      id: "test-project-stale-worktree",
+      name: "Stale Worktree Test Project",
+      path: pathArg,
+      lastOpened: new Date().toISOString(),
+    };
+
+    const mockState = {
+      state: {
+        projects: [mockProject],
+        currentProject: mockProject,
+        currentView: "board",
+        theme: "dark",
+        sidebarOpen: true,
+        apiKeys: { anthropic: "", google: "" },
+        chatSessions: [],
+        chatHistoryOpen: false,
+        maxConcurrency: 3,
+        aiProfiles: [],
+        useWorktrees: true, // Enable worktree feature for tests
+        currentWorktreeByProject: {
+          // This is STALE data - pointing to a worktree path that doesn't exist
+          [pathArg]: { path: "/non/existent/worktree/path", branch: "feature/deleted-branch" },
+        },
+        worktreesByProject: {},
+      },
+      version: 0,
+    };
+
+    localStorage.setItem("automaker-storage", JSON.stringify(mockState));
+
+    // Mark setup as complete to skip the setup wizard
+    const setupState = {
+      state: {
+        isFirstRun: false,
+        setupComplete: true,
+        currentStep: "complete",
+        skipClaudeSetup: false,
+      },
+      version: 0,
+    };
+    localStorage.setItem("automaker-setup", JSON.stringify(setupState));
+  }, projectPath);
+}
+
 // ============================================================================
 // Wait Utilities
 // ============================================================================

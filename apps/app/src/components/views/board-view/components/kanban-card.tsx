@@ -328,8 +328,8 @@ export const KanbanCard = memo(function KanbanCard({
             <TooltipTrigger asChild>
               <div
                 className={cn(
-                  "absolute px-2 py-1 text-sm font-bold rounded-md flex items-center justify-center z-10",
-                  "top-2 left-2 min-w-[36px]",
+                  "absolute px-2 rounded-md z-10",
+                  "top-2 left-2",
                   feature.priority === 1 &&
                     "bg-red-500/20 text-red-500 border-2 border-red-500/50",
                   feature.priority === 2 &&
@@ -337,9 +337,22 @@ export const KanbanCard = memo(function KanbanCard({
                   feature.priority === 3 &&
                     "bg-blue-500/20 text-blue-500 border-2 border-blue-500/50"
                 )}
+                style={{ height: "28px" }}
                 data-testid={`priority-badge-${feature.id}`}
               >
-                P{feature.priority}
+                {Array.from({ length: 4 - feature.priority }).map((_, i) => (
+                  <ChevronUp
+                    key={i}
+                    style={{
+                      position: "absolute",
+                      left: "50%",
+                      transform: "translateX(-50%)",
+                      top: `${2 + i * 3}px`,
+                      width: "12px",
+                      height: "12px",
+                    }}
+                  />
+                ))}
               </div>
             </TooltipTrigger>
             <TooltipContent side="right" className="text-xs">
@@ -347,8 +360,8 @@ export const KanbanCard = memo(function KanbanCard({
                 {feature.priority === 1
                   ? "High Priority"
                   : feature.priority === 2
-                    ? "Medium Priority"
-                    : "Low Priority"}
+                  ? "Medium Priority"
+                  : "Low Priority"}
               </p>
             </TooltipContent>
           </Tooltip>
@@ -1095,7 +1108,6 @@ export const KanbanCard = memo(function KanbanCard({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
     </Card>
   );
 

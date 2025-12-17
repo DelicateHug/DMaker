@@ -26,7 +26,7 @@ import {
   createTestGitRepo,
   cleanupTempDir,
   createTempDirPath,
-  setupProjectWithPath,
+  setupProjectWithPathNoWorktrees,
   waitForBoardView,
   clickAddFeature,
   fillAddFeatureDialog,
@@ -84,7 +84,8 @@ test.describe("Feature Lifecycle Tests", () => {
     // ==========================================================================
     // Step 1: Setup and create a feature in backlog
     // ==========================================================================
-    await setupProjectWithPath(page, testRepo.path);
+    // Use no-worktrees setup to avoid worktree-related filtering/initialization issues
+    await setupProjectWithPathNoWorktrees(page, testRepo.path);
     await page.goto("/");
     await waitForNetworkIdle(page);
     await waitForBoardView(page);
@@ -290,5 +291,154 @@ test.describe("Feature Lifecycle Tests", () => {
     // Verify the feature directory is deleted from filesystem
     const featureDirExists = fs.existsSync(path.join(featuresDir, featureId));
     expect(featureDirExists).toBe(false);
+  });
+
+  test("stop and restart feature: create -> in_progress -> stop -> restart should work without 'Feature not found' error", async ({
+    page,
+  }) => {
+    // This test verifies that stopping a feature and restarting it works correctly
+    // Bug: Previously, stopping a feature and immediately restarting could cause
+    // "Feature not found" error due to race conditions
+    test.setTimeout(120000);
+
+    // ==========================================================================
+    // Step 1: Setup and create a feature in backlog
+    // ==========================================================================
+    await setupProjectWithPathNoWorktrees(page, testRepo.path);
+    await page.goto("/");
+    await waitForNetworkIdle(page);
+    await waitForBoardView(page);
+    await page.waitForTimeout(1000);
+
+    // Click add feature button
+    await clickAddFeature(page);
+
+    // Fill in the feature details
+    const featureDescription = "Create a file named test-restart.txt";
+    const descriptionInput = page.locator('[data-testid="add-feature-dialog"] textarea').first();
+    await descriptionInput.fill(featureDescription);
+
+    // Confirm the feature creation
+    await confirmAddFeature(page);
+
+    // Wait for the feature to be created in the filesystem
+    const featuresDir = path.join(testRepo.path, ".automaker", "features");
+    await expect(async () => {
+      const dirs = fs.readdirSync(featuresDir);
+      expect(dirs.length).toBeGreaterThan(0);
+    }).toPass({ timeout: 10000 });
+
+    // Get the feature ID
+    const featureDirs = fs.readdirSync(featuresDir);
+    const testFeatureId = featureDirs[0];
+
+    // Reload to ensure features are loaded
+    await page.reload();
+    await waitForNetworkIdle(page);
+    await waitForBoardView(page);
+
+    // Wait for the feature card to appear
+    const featureCard = page.locator(`[data-testid="kanban-card-${testFeatureId}"]`);
+    await expect(featureCard).toBeVisible({ timeout: 10000 });
+
+    // ==========================================================================
+    // Step 2: Drag feature to in_progress (first start)
+    // ==========================================================================
+    const dragHandle = page.locator(`[data-testid="drag-handle-${testFeatureId}"]`);
+    const inProgressColumn = page.locator('[data-testid="kanban-column-in_progress"]');
+
+    await dragAndDropWithDndKit(page, dragHandle, inProgressColumn);
+
+    // Wait for the feature to be in in_progress
+    await page.waitForTimeout(500);
+
+    // Verify feature file still exists and is readable
+    const featureFilePath = path.join(featuresDir, testFeatureId, "feature.json");
+    expect(fs.existsSync(featureFilePath)).toBe(true);
+
+    // Wait a bit for the agent to start
+    await page.waitForTimeout(1000);
+
+    // ==========================================================================
+    // Step 3: Wait for the mock agent to complete (it's fast in mock mode)
+    // ==========================================================================
+    // The mock agent completes quickly, so we wait for it to finish
+    await expect(async () => {
+      const featureData = JSON.parse(fs.readFileSync(featureFilePath, "utf-8"));
+      expect(featureData.status).toBe("waiting_approval");
+    }).toPass({ timeout: 30000 });
+
+    // Verify feature file still exists after completion
+    expect(fs.existsSync(featureFilePath)).toBe(true);
+    const featureDataAfterComplete = JSON.parse(fs.readFileSync(featureFilePath, "utf-8"));
+    console.log("Feature status after first run:", featureDataAfterComplete.status);
+
+    // Reload to ensure clean state
+    await page.reload();
+    await waitForNetworkIdle(page);
+    await waitForBoardView(page);
+
+    // ==========================================================================
+    // Step 4: Move feature back to backlog to simulate stop scenario
+    // ==========================================================================
+    // Feature is in waiting_approval, drag it back to backlog
+    const backlogColumn = page.locator('[data-testid="kanban-column-backlog"]');
+    const currentCard = page.locator(`[data-testid="kanban-card-${testFeatureId}"]`);
+    const currentDragHandle = page.locator(`[data-testid="drag-handle-${testFeatureId}"]`);
+
+    await expect(currentCard).toBeVisible({ timeout: 10000 });
+    await dragAndDropWithDndKit(page, currentDragHandle, backlogColumn);
+    await page.waitForTimeout(500);
+
+    // Verify feature is in backlog
+    await expect(async () => {
+      const data = JSON.parse(fs.readFileSync(featureFilePath, "utf-8"));
+      expect(data.status).toBe("backlog");
+    }).toPass({ timeout: 10000 });
+
+    // Reload to ensure clean state
+    await page.reload();
+    await waitForNetworkIdle(page);
+    await waitForBoardView(page);
+
+    // ==========================================================================
+    // Step 5: Restart the feature (drag to in_progress again)
+    // ==========================================================================
+    const restartCard = page.locator(`[data-testid="kanban-card-${testFeatureId}"]`);
+    await expect(restartCard).toBeVisible({ timeout: 10000 });
+
+    const restartDragHandle = page.locator(`[data-testid="drag-handle-${testFeatureId}"]`);
+    const inProgressColumnRestart = page.locator('[data-testid="kanban-column-in_progress"]');
+
+    // Listen for console errors to catch "Feature not found"
+    const consoleErrors: string[] = [];
+    page.on("console", (msg) => {
+      if (msg.type() === "error") {
+        consoleErrors.push(msg.text());
+      }
+    });
+
+    // Drag to in_progress to restart
+    await dragAndDropWithDndKit(page, restartDragHandle, inProgressColumnRestart);
+
+    // Wait for the feature to be processed
+    await page.waitForTimeout(2000);
+
+    // Verify no "Feature not found" errors in console
+    const featureNotFoundErrors = consoleErrors.filter(
+      (err) => err.includes("not found") || err.includes("Feature")
+    );
+    expect(featureNotFoundErrors).toEqual([]);
+
+    // Verify the feature file still exists
+    expect(fs.existsSync(featureFilePath)).toBe(true);
+
+    // Wait for the mock agent to complete and move to waiting_approval
+    await expect(async () => {
+      const data = JSON.parse(fs.readFileSync(featureFilePath, "utf-8"));
+      expect(data.status).toBe("waiting_approval");
+    }).toPass({ timeout: 30000 });
+
+    console.log("Feature successfully restarted after stop!");
   });
 });

@@ -32,6 +32,8 @@ import {
   listWorktrees,
   listBranches,
   setupProjectWithPath,
+  setupProjectWithPathNoWorktrees,
+  setupProjectWithStaleWorktree,
   waitForBoardView,
   clickAddFeature,
   fillAddFeatureDialog,
@@ -104,6 +106,30 @@ test.describe("Worktree Integration Tests", () => {
     // Verify main branch button is displayed
     const mainBranchButton = page.getByRole("button", { name: "main" });
     await expect(mainBranchButton).toBeVisible({ timeout: 10000 });
+  });
+
+  test("should select main branch by default when app loads with stale worktree data", async ({
+    page,
+  }) => {
+    // Set up project with STALE worktree data in localStorage
+    // This simulates a user who previously selected a worktree that was later deleted
+    await setupProjectWithStaleWorktree(page, testRepo.path);
+    await page.goto("/");
+    await waitForNetworkIdle(page);
+    await waitForBoardView(page);
+
+    // Wait for the worktree selector to load
+    const branchLabel = page.getByText("Branch:");
+    await expect(branchLabel).toBeVisible({ timeout: 10000 });
+
+    // Verify main branch button is displayed
+    const mainBranchButton = page.getByRole("button", { name: "main" }).first();
+    await expect(mainBranchButton).toBeVisible({ timeout: 10000 });
+
+    // CRITICAL: Verify the main branch button is SELECTED (has primary variant styling)
+    // The button should have the "bg-primary" class indicating it's selected
+    // When the bug exists, this will fail because stale data prevents initialization
+    await expect(mainBranchButton).toHaveClass(/bg-primary/, { timeout: 5000 });
   });
 
   test("should create a worktree via API and verify filesystem", async ({
@@ -749,6 +775,175 @@ test.describe("Worktree Integration Tests", () => {
     expect(featureData.status).toBe("backlog");
   });
 
+  test("should create worktree automatically when adding feature with new branch", async ({
+    page,
+  }) => {
+    await setupProjectWithPath(page, testRepo.path);
+    await page.goto("/");
+    await waitForNetworkIdle(page);
+    await waitForBoardView(page);
+
+    // Use a branch name that doesn't exist yet - NO worktree is pre-created
+    const branchName = "feature/auto-create-worktree";
+    const expectedWorktreePath = getWorktreePath(testRepo.path, branchName);
+
+    // Verify worktree does NOT exist before we create the feature
+    expect(fs.existsSync(expectedWorktreePath)).toBe(false);
+
+    // Click add feature button
+    await clickAddFeature(page);
+
+    // Fill in the feature details with the new branch
+    await fillAddFeatureDialog(page, "Feature that should auto-create worktree", {
+      branch: branchName,
+      category: "Testing",
+    });
+
+    // Confirm
+    await confirmAddFeature(page);
+
+    // Wait for the worktree to be created
+    await page.waitForTimeout(2000);
+
+    // Verify worktree was automatically created when feature was added
+    expect(fs.existsSync(expectedWorktreePath)).toBe(true);
+
+    // Verify the branch was created
+    const branches = await listBranches(testRepo.path);
+    expect(branches).toContain(branchName);
+
+    // Verify feature was created with correct branch
+    const featuresDir = path.join(testRepo.path, ".automaker", "features");
+    const featureDirs = fs.readdirSync(featuresDir);
+    expect(featureDirs.length).toBeGreaterThan(0);
+
+    const featureDir = featureDirs.find((dir) => {
+      const featureFilePath = path.join(featuresDir, dir, "feature.json");
+      if (fs.existsSync(featureFilePath)) {
+        const data = JSON.parse(fs.readFileSync(featureFilePath, "utf-8"));
+        return data.description === "Feature that should auto-create worktree";
+      }
+      return false;
+    });
+    expect(featureDir).toBeDefined();
+
+    const featureFilePath = path.join(featuresDir, featureDir!, "feature.json");
+    const featureData = JSON.parse(fs.readFileSync(featureFilePath, "utf-8"));
+    expect(featureData.branchName).toBe(branchName);
+    expect(featureData.worktreePath).toBe(expectedWorktreePath);
+  });
+
+  test("should reset feature branch and worktree when worktree is deleted", async ({
+    page,
+  }) => {
+    await setupProjectWithPath(page, testRepo.path);
+    await page.goto("/");
+    await waitForNetworkIdle(page);
+    await waitForBoardView(page);
+
+    // Create a worktree
+    const branchName = "feature/to-be-deleted";
+    const worktreePath = getWorktreePath(testRepo.path, branchName);
+    await apiCreateWorktree(page, testRepo.path, branchName);
+    expect(fs.existsSync(worktreePath)).toBe(true);
+
+    // Refresh worktrees in the UI
+    const refreshButton = page.locator('button[title="Refresh worktrees"]');
+    await refreshButton.click();
+    await page.waitForTimeout(1000);
+
+    // Select the worktree in the UI
+    const worktreeButton = page.getByRole("button", {
+      name: /feature\/to-be-deleted/i,
+    });
+    await expect(worktreeButton).toBeVisible({ timeout: 5000 });
+    await worktreeButton.click();
+    await page.waitForTimeout(500);
+
+    // Create a feature assigned to this worktree
+    await clickAddFeature(page);
+    await fillAddFeatureDialog(page, "Feature on deletable worktree", {
+      branch: branchName,
+      category: "Testing",
+    });
+    await confirmAddFeature(page);
+    await page.waitForTimeout(1000);
+
+    // Verify feature was created with the branch
+    const featuresDir = path.join(testRepo.path, ".automaker", "features");
+    let featureDirs = fs.readdirSync(featuresDir);
+    expect(featureDirs.length).toBeGreaterThan(0);
+
+    // Find the feature
+    let featureDir = featureDirs.find((dir) => {
+      const featureFilePath = path.join(featuresDir, dir, "feature.json");
+      if (fs.existsSync(featureFilePath)) {
+        const data = JSON.parse(fs.readFileSync(featureFilePath, "utf-8"));
+        return data.description === "Feature on deletable worktree";
+      }
+      return false;
+    });
+    expect(featureDir).toBeDefined();
+
+    let featureFilePath = path.join(featuresDir, featureDir!, "feature.json");
+    let featureData = JSON.parse(fs.readFileSync(featureFilePath, "utf-8"));
+    expect(featureData.branchName).toBe(branchName);
+    expect(featureData.worktreePath).toBe(worktreePath);
+
+    // Delete the worktree via UI
+    // Open the worktree actions menu
+    const actionsButton = page
+      .locator(`button:has-text("${branchName}")`)
+      .locator("xpath=following-sibling::button")
+      .last();
+    await actionsButton.click();
+    await page.waitForTimeout(300);
+
+    // Click "Delete Worktree"
+    await page.getByText("Delete Worktree").click();
+    await page.waitForTimeout(300);
+
+    // Confirm deletion in the dialog
+    const deleteButton = page.getByRole("button", { name: "Delete" });
+    await deleteButton.click();
+    await page.waitForTimeout(1000);
+
+    // Verify worktree is deleted
+    expect(fs.existsSync(worktreePath)).toBe(false);
+
+    // Verify feature's branchName and worktreePath are reset to null
+    featureData = JSON.parse(fs.readFileSync(featureFilePath, "utf-8"));
+    expect(featureData.branchName).toBeNull();
+    expect(featureData.worktreePath).toBeNull();
+
+    // Verify the feature appears in the backlog when main is selected
+    const mainButton = page.getByRole("button", { name: "main" }).first();
+    await mainButton.click();
+    await page.waitForTimeout(500);
+
+    const featureText = page.getByText("Feature on deletable worktree");
+    await expect(featureText).toBeVisible({ timeout: 5000 });
+
+    // Verify the feature also appears when switching to a different worktree
+    // Create another worktree
+    await apiCreateWorktree(page, testRepo.path, "feature/other-branch");
+    await page.waitForTimeout(500);
+
+    // Refresh worktrees
+    await refreshButton.click();
+    await page.waitForTimeout(500);
+
+    // Select the other worktree
+    const otherWorktreeButton = page.getByRole("button", {
+      name: /feature\/other-branch/i,
+    });
+    await otherWorktreeButton.click();
+    await page.waitForTimeout(500);
+
+    // Unassigned features should still be visible in the backlog
+    await expect(featureText).toBeVisible({ timeout: 5000 });
+  });
+
   test("should filter features by selected worktree", async ({ page }) => {
     // Create the worktrees first (using git directly for setup)
     await execAsync(
@@ -945,5 +1140,1452 @@ test.describe("Worktree Integration Tests", () => {
     const result2 = await response2.json();
     expect(result2.success).toBe(false);
     expect(result2.error).toContain("branchName");
+  });
+
+  // ==========================================================================
+  // Keyboard Input in Dropdowns
+  // ==========================================================================
+
+  test("should allow typing in branch filter input without triggering navigation shortcuts", async ({
+    page,
+  }) => {
+    await setupProjectWithPath(page, testRepo.path);
+    await page.goto("/");
+    await waitForNetworkIdle(page);
+    await waitForBoardView(page);
+
+    // Find the main branch button and its associated branch switch dropdown trigger
+    // The branch switch dropdown has a GitBranch icon button next to the main button
+    const branchSwitchButton = page.locator('button[title="Switch branch"]');
+    await expect(branchSwitchButton).toBeVisible({ timeout: 10000 });
+
+    // Click to open the branch switch dropdown
+    await branchSwitchButton.click();
+
+    // Wait for the dropdown to open and the filter input to appear
+    const filterInput = page.getByPlaceholder("Filter branches...");
+    await expect(filterInput).toBeVisible({ timeout: 5000 });
+
+    // DON'T explicitly focus the input - rely on autoFocus
+    // This tests the real scenario where user opens dropdown and types immediately
+
+    // Use keyboard.press() to simulate a single key press
+    // "m" is the keyboard shortcut for profiles view, so this should test the bug
+    await page.keyboard.press("m");
+
+    // Verify the "m" was typed into the input (not triggering navigation)
+    await expect(filterInput).toHaveValue("m");
+
+    // Verify we're still on the board view (not navigated to profiles)
+    await expect(page.locator('[data-testid="board-view"]')).toBeVisible();
+
+    // Type more characters to ensure all navigation shortcut letters work
+    // k=board, a=agent, d=spec, c=context, s=settings, t=terminal
+    await page.keyboard.press("a");
+    await page.keyboard.press("i");
+    await page.keyboard.press("n");
+    await expect(filterInput).toHaveValue("main");
+  });
+
+  // ==========================================================================
+  // Worktree Feature Flag Disabled
+  // ==========================================================================
+
+  test("should not show worktree panel when useWorktrees is disabled", async ({
+    page,
+  }) => {
+    // Use the setup function that disables worktrees
+    await setupProjectWithPathNoWorktrees(page, testRepo.path);
+    await page.goto("/");
+    await waitForNetworkIdle(page);
+    await waitForBoardView(page);
+
+    // The worktree selector should NOT be visible
+    const branchLabel = page.getByText("Branch:");
+    await expect(branchLabel).not.toBeVisible({ timeout: 5000 });
+
+    // The switch branch button should NOT be visible
+    const branchSwitchButton = page.locator('button[title="Switch branch"]');
+    await expect(branchSwitchButton).not.toBeVisible();
+  });
+
+  test("should allow creating and moving features when worktrees are disabled", async ({
+    page,
+  }) => {
+    // Use the setup function that disables worktrees
+    await setupProjectWithPathNoWorktrees(page, testRepo.path);
+    await page.goto("/");
+    await waitForNetworkIdle(page);
+    await waitForBoardView(page);
+
+    // Verify worktree selector is NOT visible
+    const branchLabel = page.getByText("Branch:");
+    await expect(branchLabel).not.toBeVisible({ timeout: 5000 });
+
+    // Create a feature
+    await clickAddFeature(page);
+
+    // Fill in the feature details (without branch since worktrees are disabled)
+    const descriptionInput = page
+      .locator('[data-testid="add-feature-dialog"] textarea')
+      .first();
+    await descriptionInput.fill("Test feature without worktrees");
+
+    // Confirm
+    await confirmAddFeature(page);
+
+    // Wait for the feature to appear in the backlog
+    const featureCard = page.getByText("Test feature without worktrees");
+    await expect(featureCard).toBeVisible({ timeout: 10000 });
+
+    // Verify the feature was created on the filesystem
+    const featuresDir = path.join(testRepo.path, ".automaker", "features");
+    const featureDirs = fs.readdirSync(featuresDir);
+    expect(featureDirs.length).toBeGreaterThan(0);
+
+    // Find the feature file and verify it exists
+    const featureDir = featureDirs.find((dir) => {
+      const featureFilePath = path.join(featuresDir, dir, "feature.json");
+      if (fs.existsSync(featureFilePath)) {
+        const data = JSON.parse(fs.readFileSync(featureFilePath, "utf-8"));
+        return data.description === "Test feature without worktrees";
+      }
+      return false;
+    });
+    expect(featureDir).toBeDefined();
+
+    // Read the feature data
+    const featureFilePath = path.join(
+      featuresDir,
+      featureDir!,
+      "feature.json"
+    );
+    const featureData = JSON.parse(fs.readFileSync(featureFilePath, "utf-8"));
+    expect(featureData.status).toBe("backlog");
+
+    // Now move the feature to in_progress using the "Make" button
+    // Find the feature card (uses kanban-card-{id} test id)
+    const featureCardLocator = page
+      .locator('[data-testid^="kanban-card-"]')
+      .filter({ hasText: "Test feature without worktrees" });
+    await expect(featureCardLocator).toBeVisible();
+
+    // Click the "Make" button to start working on the feature
+    const makeButton = featureCardLocator.getByRole("button", { name: "Make" });
+    await makeButton.click();
+
+    // Wait for the feature to move to in_progress column
+    await expect(async () => {
+      const updatedData = JSON.parse(
+        fs.readFileSync(featureFilePath, "utf-8")
+      );
+      expect(updatedData.status).toBe("in_progress");
+    }).toPass({ timeout: 10000 });
+
+    // Verify the UI shows the feature in the in_progress column
+    const inProgressColumn = page.locator(
+      '[data-testid="kanban-column-in_progress"]'
+    );
+    await expect(
+      inProgressColumn.getByText("Test feature without worktrees")
+    ).toBeVisible({ timeout: 10000 });
+  });
+
+  // ==========================================================================
+  // Status Endpoint Tests
+  // ==========================================================================
+
+  test("should get status for worktree with changes", async ({ page }) => {
+    await setupProjectWithPath(page, testRepo.path);
+    await page.goto("/");
+    await waitForNetworkIdle(page);
+    await waitForBoardView(page);
+
+    const branchName = "feature/status-changes";
+    const worktreePath = getWorktreePath(testRepo.path, branchName);
+
+    // Create worktree
+    await apiCreateWorktree(page, testRepo.path, branchName);
+
+    // Create modified files in the worktree
+    fs.writeFileSync(path.join(worktreePath, "changed1.txt"), "Change 1");
+    fs.writeFileSync(path.join(worktreePath, "changed2.txt"), "Change 2");
+
+    // Call status endpoint
+    // The featureId is the sanitized directory name
+    const featureId = branchName.replace(/[^a-zA-Z0-9_-]/g, "-");
+    const response = await page.request.post(
+      "http://localhost:3008/api/worktree/status",
+      {
+        data: {
+          projectPath: testRepo.path,
+          featureId,
+        },
+      }
+    );
+
+    expect(response.ok()).toBe(true);
+    const data = await response.json();
+
+    expect(data.success).toBe(true);
+    expect(data.modifiedFiles).toBeGreaterThanOrEqual(2);
+    expect(data.files).toContain("changed1.txt");
+    expect(data.files).toContain("changed2.txt");
+  });
+
+  test("should get status for worktree without changes", async ({ page }) => {
+    await setupProjectWithPath(page, testRepo.path);
+    await page.goto("/");
+    await waitForNetworkIdle(page);
+    await waitForBoardView(page);
+
+    const branchName = "feature/status-no-changes";
+
+    // Create worktree (no modifications)
+    await apiCreateWorktree(page, testRepo.path, branchName);
+
+    const featureId = branchName.replace(/[^a-zA-Z0-9_-]/g, "-");
+    const response = await page.request.post(
+      "http://localhost:3008/api/worktree/status",
+      {
+        data: {
+          projectPath: testRepo.path,
+          featureId,
+        },
+      }
+    );
+
+    expect(response.ok()).toBe(true);
+    const data = await response.json();
+
+    expect(data.success).toBe(true);
+    expect(data.modifiedFiles).toBe(0);
+    expect(data.files).toHaveLength(0);
+  });
+
+  test("should verify diff stat in status response", async ({ page }) => {
+    await setupProjectWithPath(page, testRepo.path);
+    await page.goto("/");
+    await waitForNetworkIdle(page);
+    await waitForBoardView(page);
+
+    const branchName = "feature/status-diffstat";
+    const worktreePath = getWorktreePath(testRepo.path, branchName);
+
+    await apiCreateWorktree(page, testRepo.path, branchName);
+
+    // Add a tracked file and modify it
+    fs.writeFileSync(path.join(worktreePath, "tracked.txt"), "initial content");
+    await execAsync("git add tracked.txt", { cwd: worktreePath });
+    await execAsync('git commit -m "Add tracked file"', { cwd: worktreePath });
+
+    // Modify the file
+    fs.writeFileSync(
+      path.join(worktreePath, "tracked.txt"),
+      "modified content"
+    );
+
+    const featureId = branchName.replace(/[^a-zA-Z0-9_-]/g, "-");
+    const response = await page.request.post(
+      "http://localhost:3008/api/worktree/status",
+      {
+        data: {
+          projectPath: testRepo.path,
+          featureId,
+        },
+      }
+    );
+
+    const data = await response.json();
+
+    expect(data.success).toBe(true);
+    expect(data.diffStat).toBeDefined();
+    // diffStat should contain info about tracked.txt
+    expect(data.diffStat).toContain("tracked.txt");
+  });
+
+  test("should verify recent commits in status response", async ({ page }) => {
+    await setupProjectWithPath(page, testRepo.path);
+    await page.goto("/");
+    await waitForNetworkIdle(page);
+    await waitForBoardView(page);
+
+    const branchName = "feature/status-commits";
+    const worktreePath = getWorktreePath(testRepo.path, branchName);
+
+    await apiCreateWorktree(page, testRepo.path, branchName);
+
+    // Make some commits
+    fs.writeFileSync(path.join(worktreePath, "file1.txt"), "content1");
+    await execAsync("git add file1.txt", { cwd: worktreePath });
+    await execAsync('git commit -m "First status test commit"', {
+      cwd: worktreePath,
+    });
+
+    fs.writeFileSync(path.join(worktreePath, "file2.txt"), "content2");
+    await execAsync("git add file2.txt", { cwd: worktreePath });
+    await execAsync('git commit -m "Second status test commit"', {
+      cwd: worktreePath,
+    });
+
+    const featureId = branchName.replace(/[^a-zA-Z0-9_-]/g, "-");
+    const response = await page.request.post(
+      "http://localhost:3008/api/worktree/status",
+      {
+        data: {
+          projectPath: testRepo.path,
+          featureId,
+        },
+      }
+    );
+
+    const data = await response.json();
+
+    expect(data.success).toBe(true);
+    expect(data.recentCommits).toBeDefined();
+    expect(data.recentCommits.length).toBeGreaterThanOrEqual(2);
+    // Check that our commits are in the list
+    const commitsStr = data.recentCommits.join("\n");
+    expect(commitsStr).toContain("First status test commit");
+    expect(commitsStr).toContain("Second status test commit");
+  });
+
+  test("should return empty status for non-existent worktree", async ({
+    page,
+  }) => {
+    await setupProjectWithPath(page, testRepo.path);
+    await page.goto("/");
+    await waitForNetworkIdle(page);
+
+    const response = await page.request.post(
+      "http://localhost:3008/api/worktree/status",
+      {
+        data: {
+          projectPath: testRepo.path,
+          featureId: "non-existent-worktree",
+        },
+      }
+    );
+
+    // According to the implementation, non-existent worktree returns success with empty data
+    expect(response.ok()).toBe(true);
+    const data = await response.json();
+
+    expect(data.success).toBe(true);
+    expect(data.modifiedFiles).toBe(0);
+    expect(data.files).toHaveLength(0);
+    expect(data.diffStat).toBe("");
+    expect(data.recentCommits).toHaveLength(0);
+  });
+
+  test("should handle status with missing required fields", async ({
+    page,
+  }) => {
+    await setupProjectWithPath(page, testRepo.path);
+    await page.goto("/");
+    await waitForNetworkIdle(page);
+
+    // Missing featureId
+    const response1 = await page.request.post(
+      "http://localhost:3008/api/worktree/status",
+      {
+        data: {
+          projectPath: testRepo.path,
+        },
+      }
+    );
+
+    expect(response1.ok()).toBe(false);
+    const data1 = await response1.json();
+    expect(data1.success).toBe(false);
+    expect(data1.error).toContain("featureId");
+
+    // Missing projectPath
+    const response2 = await page.request.post(
+      "http://localhost:3008/api/worktree/status",
+      {
+        data: {
+          featureId: "some-id",
+        },
+      }
+    );
+
+    expect(response2.ok()).toBe(false);
+    const data2 = await response2.json();
+    expect(data2.success).toBe(false);
+    expect(data2.error).toContain("projectPath");
+  });
+
+  // ==========================================================================
+  // Info Endpoint Tests
+  // ==========================================================================
+
+  test("should get info for existing worktree", async ({ page }) => {
+    await setupProjectWithPath(page, testRepo.path);
+    await page.goto("/");
+    await waitForNetworkIdle(page);
+    await waitForBoardView(page);
+
+    const branchName = "feature/info-test";
+
+    await apiCreateWorktree(page, testRepo.path, branchName);
+
+    const featureId = branchName.replace(/[^a-zA-Z0-9_-]/g, "-");
+    const response = await page.request.post(
+      "http://localhost:3008/api/worktree/info",
+      {
+        data: {
+          projectPath: testRepo.path,
+          featureId,
+        },
+      }
+    );
+
+    expect(response.ok()).toBe(true);
+    const data = await response.json();
+
+    expect(data.success).toBe(true);
+    expect(data.worktreePath).toBeDefined();
+    expect(data.branchName).toBe(branchName);
+    // Verify path uses forward slashes (normalized)
+    expect(data.worktreePath).toContain("/");
+    expect(data.worktreePath).not.toContain("\\\\");
+  });
+
+  test("should return null for non-existent worktree info", async ({
+    page,
+  }) => {
+    await setupProjectWithPath(page, testRepo.path);
+    await page.goto("/");
+    await waitForNetworkIdle(page);
+
+    const response = await page.request.post(
+      "http://localhost:3008/api/worktree/info",
+      {
+        data: {
+          projectPath: testRepo.path,
+          featureId: "non-existent-info-worktree",
+        },
+      }
+    );
+
+    expect(response.ok()).toBe(true);
+    const data = await response.json();
+
+    expect(data.success).toBe(true);
+    expect(data.worktreePath).toBeNull();
+    expect(data.branchName).toBeNull();
+  });
+
+  test("should handle info with missing required fields", async ({ page }) => {
+    await setupProjectWithPath(page, testRepo.path);
+    await page.goto("/");
+    await waitForNetworkIdle(page);
+
+    // Missing featureId
+    const response1 = await page.request.post(
+      "http://localhost:3008/api/worktree/info",
+      {
+        data: {
+          projectPath: testRepo.path,
+        },
+      }
+    );
+
+    expect(response1.ok()).toBe(false);
+    const data1 = await response1.json();
+    expect(data1.success).toBe(false);
+    expect(data1.error).toContain("featureId");
+  });
+
+  // ==========================================================================
+  // Diffs Endpoint Tests
+  // ==========================================================================
+
+  test("should get diffs for worktree with changes", async ({ page }) => {
+    await setupProjectWithPath(page, testRepo.path);
+    await page.goto("/");
+    await waitForNetworkIdle(page);
+    await waitForBoardView(page);
+
+    const branchName = "feature/diffs-with-changes";
+    const worktreePath = getWorktreePath(testRepo.path, branchName);
+
+    await apiCreateWorktree(page, testRepo.path, branchName);
+
+    // Add a tracked file and modify it
+    fs.writeFileSync(path.join(worktreePath, "diff-test.txt"), "initial");
+    await execAsync("git add diff-test.txt", { cwd: worktreePath });
+    await execAsync('git commit -m "Add file for diff test"', {
+      cwd: worktreePath,
+    });
+
+    // Modify the file to create a diff
+    fs.writeFileSync(path.join(worktreePath, "diff-test.txt"), "modified");
+
+    const featureId = branchName.replace(/[^a-zA-Z0-9_-]/g, "-");
+    const response = await page.request.post(
+      "http://localhost:3008/api/worktree/diffs",
+      {
+        data: {
+          projectPath: testRepo.path,
+          featureId,
+        },
+      }
+    );
+
+    expect(response.ok()).toBe(true);
+    const data = await response.json();
+
+    expect(data.success).toBe(true);
+    expect(data.hasChanges).toBe(true);
+    expect(data.diff).toContain("diff-test.txt");
+    // files can be either strings or objects with path property
+    const filePaths = data.files.map((f: string | { path: string }) =>
+      typeof f === "string" ? f : f.path
+    );
+    expect(filePaths).toContain("diff-test.txt");
+  });
+
+  test("should get diffs for worktree without changes", async ({ page }) => {
+    await setupProjectWithPath(page, testRepo.path);
+    await page.goto("/");
+    await waitForNetworkIdle(page);
+    await waitForBoardView(page);
+
+    const branchName = "feature/diffs-no-changes";
+
+    await apiCreateWorktree(page, testRepo.path, branchName);
+
+    const featureId = branchName.replace(/[^a-zA-Z0-9_-]/g, "-");
+    const response = await page.request.post(
+      "http://localhost:3008/api/worktree/diffs",
+      {
+        data: {
+          projectPath: testRepo.path,
+          featureId,
+        },
+      }
+    );
+
+    expect(response.ok()).toBe(true);
+    const data = await response.json();
+
+    expect(data.success).toBe(true);
+    expect(data.hasChanges).toBe(false);
+    expect(data.files).toHaveLength(0);
+  });
+
+  test("should fallback to main project when worktree does not exist for diffs", async ({
+    page,
+  }) => {
+    await setupProjectWithPath(page, testRepo.path);
+    await page.goto("/");
+    await waitForNetworkIdle(page);
+
+    // Call diffs endpoint with non-existent worktree
+    // It should fallback to main project path
+    const response = await page.request.post(
+      "http://localhost:3008/api/worktree/diffs",
+      {
+        data: {
+          projectPath: testRepo.path,
+          featureId: "non-existent-diffs-worktree",
+        },
+      }
+    );
+
+    expect(response.ok()).toBe(true);
+    const data = await response.json();
+
+    // Should still succeed but with main project diffs
+    expect(data.success).toBe(true);
+    expect(data.hasChanges).toBeDefined();
+    expect(data.files).toBeDefined();
+  });
+
+  test("should handle diffs with missing required fields", async ({ page }) => {
+    await setupProjectWithPath(page, testRepo.path);
+    await page.goto("/");
+    await waitForNetworkIdle(page);
+
+    // Missing featureId
+    const response = await page.request.post(
+      "http://localhost:3008/api/worktree/diffs",
+      {
+        data: {
+          projectPath: testRepo.path,
+        },
+      }
+    );
+
+    expect(response.ok()).toBe(false);
+    const data = await response.json();
+    expect(data.success).toBe(false);
+    expect(data.error).toContain("featureId");
+  });
+
+  // ==========================================================================
+  // File Diff Endpoint Tests
+  // ==========================================================================
+
+  test("should get diff for a modified tracked file", async ({ page }) => {
+    await setupProjectWithPath(page, testRepo.path);
+    await page.goto("/");
+    await waitForNetworkIdle(page);
+    await waitForBoardView(page);
+
+    const branchName = "feature/file-diff-tracked";
+    const worktreePath = getWorktreePath(testRepo.path, branchName);
+
+    await apiCreateWorktree(page, testRepo.path, branchName);
+
+    // Create, add, and commit a file
+    fs.writeFileSync(
+      path.join(worktreePath, "tracked-file.txt"),
+      "line 1\nline 2\nline 3"
+    );
+    await execAsync("git add tracked-file.txt", { cwd: worktreePath });
+    await execAsync('git commit -m "Add tracked file"', { cwd: worktreePath });
+
+    // Modify the file
+    fs.writeFileSync(
+      path.join(worktreePath, "tracked-file.txt"),
+      "line 1\nmodified line 2\nline 3\nline 4"
+    );
+
+    const featureId = branchName.replace(/[^a-zA-Z0-9_-]/g, "-");
+    const response = await page.request.post(
+      "http://localhost:3008/api/worktree/file-diff",
+      {
+        data: {
+          projectPath: testRepo.path,
+          featureId,
+          filePath: "tracked-file.txt",
+        },
+      }
+    );
+
+    expect(response.ok()).toBe(true);
+    const data = await response.json();
+
+    expect(data.success).toBe(true);
+    expect(data.filePath).toBe("tracked-file.txt");
+    expect(data.diff).toContain("tracked-file.txt");
+    expect(data.diff).toContain("-line 2");
+    expect(data.diff).toContain("+modified line 2");
+  });
+
+  test("should get synthetic diff for untracked/new file", async ({ page }) => {
+    await setupProjectWithPath(page, testRepo.path);
+    await page.goto("/");
+    await waitForNetworkIdle(page);
+    await waitForBoardView(page);
+
+    const branchName = "feature/file-diff-untracked";
+    const worktreePath = getWorktreePath(testRepo.path, branchName);
+
+    await apiCreateWorktree(page, testRepo.path, branchName);
+
+    // Create an untracked file (don't git add)
+    fs.writeFileSync(
+      path.join(worktreePath, "new-untracked.txt"),
+      "new file content\nline 2"
+    );
+
+    const featureId = branchName.replace(/[^a-zA-Z0-9_-]/g, "-");
+    const response = await page.request.post(
+      "http://localhost:3008/api/worktree/file-diff",
+      {
+        data: {
+          projectPath: testRepo.path,
+          featureId,
+          filePath: "new-untracked.txt",
+        },
+      }
+    );
+
+    expect(response.ok()).toBe(true);
+    const data = await response.json();
+
+    expect(data.success).toBe(true);
+    expect(data.filePath).toBe("new-untracked.txt");
+    // Synthetic diff should show all lines as added
+    expect(data.diff).toContain("+new file content");
+    expect(data.diff).toContain("+line 2");
+  });
+
+  test("should return empty diff for non-existent file", async ({ page }) => {
+    await setupProjectWithPath(page, testRepo.path);
+    await page.goto("/");
+    await waitForNetworkIdle(page);
+    await waitForBoardView(page);
+
+    const branchName = "feature/file-diff-nonexistent";
+
+    await apiCreateWorktree(page, testRepo.path, branchName);
+
+    const featureId = branchName.replace(/[^a-zA-Z0-9_-]/g, "-");
+    const response = await page.request.post(
+      "http://localhost:3008/api/worktree/file-diff",
+      {
+        data: {
+          projectPath: testRepo.path,
+          featureId,
+          filePath: "does-not-exist.txt",
+        },
+      }
+    );
+
+    expect(response.ok()).toBe(true);
+    const data = await response.json();
+
+    expect(data.success).toBe(true);
+    expect(data.diff).toBe("");
+  });
+
+  test("should handle file-diff with missing required fields", async ({
+    page,
+  }) => {
+    await setupProjectWithPath(page, testRepo.path);
+    await page.goto("/");
+    await waitForNetworkIdle(page);
+
+    // Missing filePath
+    const response = await page.request.post(
+      "http://localhost:3008/api/worktree/file-diff",
+      {
+        data: {
+          projectPath: testRepo.path,
+          featureId: "some-id",
+        },
+      }
+    );
+
+    expect(response.ok()).toBe(false);
+    const data = await response.json();
+    expect(data.success).toBe(false);
+    expect(data.error).toContain("filePath");
+  });
+
+  // ==========================================================================
+  // Merge Endpoint Tests
+  // Note: These tests are skipped because the merge endpoint expects a specific
+  // worktree path structure (.worktrees/{featureId}) that doesn't match how
+  // apiCreateWorktree creates worktrees (uses sanitized branch names).
+  // The endpoints have different conventions for featureId vs branchName.
+  // ==========================================================================
+
+  test.skip("should merge worktree branch into main", async ({ page }) => {
+    await setupProjectWithPath(page, testRepo.path);
+    await page.goto("/");
+    await waitForNetworkIdle(page);
+    await waitForBoardView(page);
+
+    // The merge endpoint expects featureId (not full branch name)
+    // and constructs branch name as `feature/${featureId}`
+    const featureId = "merge-test";
+    const branchName = `feature/${featureId}`;
+    const worktreePath = getWorktreePath(testRepo.path, branchName);
+
+    await apiCreateWorktree(page, testRepo.path, branchName);
+
+    // Add a file and commit in the worktree
+    fs.writeFileSync(path.join(worktreePath, "merge-file.txt"), "merge content");
+    await execAsync("git add merge-file.txt", { cwd: worktreePath });
+    await execAsync('git commit -m "Add file for merge test"', {
+      cwd: worktreePath,
+    });
+
+    // Call merge endpoint
+    const response = await page.request.post(
+      "http://localhost:3008/api/worktree/merge",
+      {
+        data: {
+          projectPath: testRepo.path,
+          featureId,
+        },
+      }
+    );
+
+    expect(response.ok()).toBe(true);
+    const data = await response.json();
+
+    expect(data.success).toBe(true);
+    expect(data.mergedBranch).toBe(branchName);
+
+    // Verify the file from the feature branch is now in main
+    const mergedFilePath = path.join(testRepo.path, "merge-file.txt");
+    expect(fs.existsSync(mergedFilePath)).toBe(true);
+    const content = fs.readFileSync(mergedFilePath, "utf-8");
+    expect(content).toBe("merge content");
+
+    // Verify worktree was cleaned up
+    expect(fs.existsSync(worktreePath)).toBe(false);
+
+    // Verify branch was deleted
+    const branches = await listBranches(testRepo.path);
+    expect(branches).not.toContain(branchName);
+  });
+
+  test.skip("should merge with squash option", async ({ page }) => {
+    await setupProjectWithPath(page, testRepo.path);
+    await page.goto("/");
+    await waitForNetworkIdle(page);
+    await waitForBoardView(page);
+
+    const featureId = "squash-merge-test";
+    const branchName = `feature/${featureId}`;
+    const worktreePath = getWorktreePath(testRepo.path, branchName);
+
+    await apiCreateWorktree(page, testRepo.path, branchName);
+
+    // Make multiple commits
+    fs.writeFileSync(path.join(worktreePath, "squash1.txt"), "content 1");
+    await execAsync("git add squash1.txt", { cwd: worktreePath });
+    await execAsync('git commit -m "First squash commit"', {
+      cwd: worktreePath,
+    });
+
+    fs.writeFileSync(path.join(worktreePath, "squash2.txt"), "content 2");
+    await execAsync("git add squash2.txt", { cwd: worktreePath });
+    await execAsync('git commit -m "Second squash commit"', {
+      cwd: worktreePath,
+    });
+
+    // Merge with squash
+    const response = await page.request.post(
+      "http://localhost:3008/api/worktree/merge",
+      {
+        data: {
+          projectPath: testRepo.path,
+          featureId,
+          options: {
+            squash: true,
+            message: "Squashed feature commits",
+          },
+        },
+      }
+    );
+
+    expect(response.ok()).toBe(true);
+    const data = await response.json();
+
+    expect(data.success).toBe(true);
+
+    // Verify files are present
+    expect(fs.existsSync(path.join(testRepo.path, "squash1.txt"))).toBe(true);
+    expect(fs.existsSync(path.join(testRepo.path, "squash2.txt"))).toBe(true);
+
+    // Verify commit message
+    const { stdout: logOutput } = await execAsync("git log --oneline -1", {
+      cwd: testRepo.path,
+    });
+    expect(logOutput).toContain("Squashed feature commits");
+  });
+
+  test("should handle merge with missing required fields", async ({ page }) => {
+    await setupProjectWithPath(page, testRepo.path);
+    await page.goto("/");
+    await waitForNetworkIdle(page);
+
+    // Missing featureId
+    const response = await page.request.post(
+      "http://localhost:3008/api/worktree/merge",
+      {
+        data: {
+          projectPath: testRepo.path,
+        },
+      }
+    );
+
+    expect(response.ok()).toBe(false);
+    const data = await response.json();
+    expect(data.success).toBe(false);
+    expect(data.error).toContain("featureId");
+  });
+
+  // ==========================================================================
+  // Create Worktree with baseBranch Parameter Tests
+  // ==========================================================================
+
+  test("should create worktree from specific base branch", async ({ page }) => {
+    await setupProjectWithPath(page, testRepo.path);
+    await page.goto("/");
+    await waitForNetworkIdle(page);
+    await waitForBoardView(page);
+
+    // Create a base branch with a specific file
+    await execAsync("git checkout -b develop", { cwd: testRepo.path });
+    fs.writeFileSync(
+      path.join(testRepo.path, "develop-only.txt"),
+      "This file only exists on develop"
+    );
+    await execAsync("git add develop-only.txt", { cwd: testRepo.path });
+    await execAsync('git commit -m "Add develop-only file"', {
+      cwd: testRepo.path,
+    });
+    await execAsync("git checkout main", { cwd: testRepo.path });
+
+    // Verify file doesn't exist on main
+    expect(fs.existsSync(path.join(testRepo.path, "develop-only.txt"))).toBe(
+      false
+    );
+
+    // Create worktree from develop branch
+    const { response, data } = await apiCreateWorktree(
+      page,
+      testRepo.path,
+      "feature/from-develop",
+      "develop" // baseBranch
+    );
+
+    expect(response.ok()).toBe(true);
+    expect(data.success).toBe(true);
+
+    // Verify the worktree has the file from develop
+    const worktreePath = getWorktreePath(testRepo.path, "feature/from-develop");
+    expect(
+      fs.existsSync(path.join(worktreePath, "develop-only.txt"))
+    ).toBe(true);
+    const content = fs.readFileSync(
+      path.join(worktreePath, "develop-only.txt"),
+      "utf-8"
+    );
+    expect(content).toBe("This file only exists on develop");
+  });
+
+  test("should create worktree from HEAD when baseBranch not provided", async ({
+    page,
+  }) => {
+    await setupProjectWithPath(page, testRepo.path);
+    await page.goto("/");
+    await waitForNetworkIdle(page);
+    await waitForBoardView(page);
+
+    // Get the current commit hash on main
+    const { stdout: mainHash } = await execAsync("git rev-parse HEAD", {
+      cwd: testRepo.path,
+    });
+
+    // Create worktree without specifying baseBranch
+    const { response, data } = await apiCreateWorktree(
+      page,
+      testRepo.path,
+      "feature/from-head"
+    );
+
+    expect(response.ok()).toBe(true);
+    expect(data.success).toBe(true);
+
+    // Verify the worktree starts from the same commit as main
+    const worktreePath = getWorktreePath(testRepo.path, "feature/from-head");
+    const { stdout: worktreeHash } = await execAsync(
+      "git rev-parse HEAD~0",
+      { cwd: worktreePath }
+    );
+
+    // The worktree's initial commit should be the same as main's HEAD
+    // (Since it was just created, we check the parent commit)
+    // Actually, a new worktree from HEAD should have the same commit
+    expect(worktreeHash.trim()).toBe(mainHash.trim());
+  });
+
+  // ==========================================================================
+  // Branch Name Sanitization Tests
+  // ==========================================================================
+
+  test("should create worktree with special characters in branch name", async ({
+    page,
+  }) => {
+    await setupProjectWithPath(page, testRepo.path);
+    await page.goto("/");
+    await waitForNetworkIdle(page);
+    await waitForBoardView(page);
+
+    // Branch name with special characters
+    const branchName = "feature/test@special#chars";
+
+    const { response, data } = await apiCreateWorktree(
+      page,
+      testRepo.path,
+      branchName
+    );
+
+    expect(response.ok()).toBe(true);
+    expect(data.success).toBe(true);
+
+    // Verify the sanitized path doesn't contain special characters
+    const expectedSanitizedName = branchName.replace(/[^a-zA-Z0-9_-]/g, "-");
+    const expectedPath = path.join(
+      testRepo.path,
+      ".worktrees",
+      expectedSanitizedName
+    );
+
+    expect(fs.existsSync(expectedPath)).toBe(true);
+  });
+
+  test("should create worktree with nested slashes in branch name", async ({
+    page,
+  }) => {
+    await setupProjectWithPath(page, testRepo.path);
+    await page.goto("/");
+    await waitForNetworkIdle(page);
+    await waitForBoardView(page);
+
+    // Branch name with nested slashes
+    const branchName = "feature/nested/deep/branch";
+
+    const { response, data } = await apiCreateWorktree(
+      page,
+      testRepo.path,
+      branchName
+    );
+
+    expect(response.ok()).toBe(true);
+    expect(data.success).toBe(true);
+
+    // Verify the worktree was created
+    const expectedSanitizedName = branchName.replace(/[^a-zA-Z0-9_-]/g, "-");
+    const expectedPath = path.join(
+      testRepo.path,
+      ".worktrees",
+      expectedSanitizedName
+    );
+
+    expect(fs.existsSync(expectedPath)).toBe(true);
+
+    // Verify the branch exists
+    const branches = await listBranches(testRepo.path);
+    expect(branches).toContain(branchName);
+  });
+
+  // ==========================================================================
+  // Push Endpoint Tests
+  // ==========================================================================
+
+  test("should handle push with missing required fields", async ({ page }) => {
+    await setupProjectWithPath(page, testRepo.path);
+    await page.goto("/");
+    await waitForNetworkIdle(page);
+
+    // Missing worktreePath
+    const response = await page.request.post(
+      "http://localhost:3008/api/worktree/push",
+      {
+        data: {},
+      }
+    );
+
+    expect(response.ok()).toBe(false);
+    const data = await response.json();
+    expect(data.success).toBe(false);
+    expect(data.error).toContain("worktreePath");
+  });
+
+  test("should fail push when no remote is configured", async ({ page }) => {
+    await setupProjectWithPath(page, testRepo.path);
+    await page.goto("/");
+    await waitForNetworkIdle(page);
+    await waitForBoardView(page);
+
+    const branchName = "feature/push-no-remote";
+    const worktreePath = getWorktreePath(testRepo.path, branchName);
+
+    await apiCreateWorktree(page, testRepo.path, branchName);
+
+    // Try to push (should fail because there's no remote)
+    const response = await page.request.post(
+      "http://localhost:3008/api/worktree/push",
+      {
+        data: {
+          worktreePath,
+        },
+      }
+    );
+
+    expect(response.ok()).toBe(false);
+    const data = await response.json();
+    expect(data.success).toBe(false);
+    // Error message should indicate no remote
+    expect(data.error).toBeDefined();
+  });
+
+  // ==========================================================================
+  // Pull Endpoint Tests
+  // ==========================================================================
+
+  test("should handle pull with missing required fields", async ({ page }) => {
+    await setupProjectWithPath(page, testRepo.path);
+    await page.goto("/");
+    await waitForNetworkIdle(page);
+
+    // Missing worktreePath
+    const response = await page.request.post(
+      "http://localhost:3008/api/worktree/pull",
+      {
+        data: {},
+      }
+    );
+
+    expect(response.ok()).toBe(false);
+    const data = await response.json();
+    expect(data.success).toBe(false);
+    expect(data.error).toContain("worktreePath");
+  });
+
+  // Skip: This test requires a remote configured because pull does `git fetch origin`
+  // before checking for local changes. Without a remote, the fetch fails first.
+  test.skip("should fail pull when there are uncommitted local changes", async ({
+    page,
+  }) => {
+    await setupProjectWithPath(page, testRepo.path);
+    await page.goto("/");
+    await waitForNetworkIdle(page);
+    await waitForBoardView(page);
+
+    const branchName = "feature/pull-uncommitted";
+    const worktreePath = getWorktreePath(testRepo.path, branchName);
+
+    await apiCreateWorktree(page, testRepo.path, branchName);
+
+    // Create uncommitted changes
+    fs.writeFileSync(
+      path.join(worktreePath, "uncommitted.txt"),
+      "uncommitted changes"
+    );
+
+    // Try to pull (should fail because of uncommitted changes)
+    const response = await page.request.post(
+      "http://localhost:3008/api/worktree/pull",
+      {
+        data: {
+          worktreePath,
+        },
+      }
+    );
+
+    expect(response.ok()).toBe(false);
+    const data = await response.json();
+    expect(data.success).toBe(false);
+    expect(data.error).toContain("local changes");
+  });
+
+  // ==========================================================================
+  // Create PR Endpoint Tests
+  // ==========================================================================
+
+  test("should handle create-pr with missing required fields", async ({
+    page,
+  }) => {
+    await setupProjectWithPath(page, testRepo.path);
+    await page.goto("/");
+    await waitForNetworkIdle(page);
+
+    // Missing worktreePath
+    const response = await page.request.post(
+      "http://localhost:3008/api/worktree/create-pr",
+      {
+        data: {},
+      }
+    );
+
+    expect(response.ok()).toBe(false);
+    const data = await response.json();
+    expect(data.success).toBe(false);
+    expect(data.error).toContain("worktreePath");
+  });
+
+  test("should fail create-pr when push fails (no remote)", async ({
+    page,
+  }) => {
+    await setupProjectWithPath(page, testRepo.path);
+    await page.goto("/");
+    await waitForNetworkIdle(page);
+    await waitForBoardView(page);
+
+    const branchName = "feature/pr-no-remote";
+    const worktreePath = getWorktreePath(testRepo.path, branchName);
+
+    await apiCreateWorktree(page, testRepo.path, branchName);
+
+    // Add some changes to commit
+    fs.writeFileSync(path.join(worktreePath, "pr-file.txt"), "pr content");
+
+    // Try to create PR (should fail because there's no remote)
+    const response = await page.request.post(
+      "http://localhost:3008/api/worktree/create-pr",
+      {
+        data: {
+          worktreePath,
+          commitMessage: "Test commit",
+          prTitle: "Test PR",
+          prBody: "Test PR body",
+        },
+      }
+    );
+
+    expect(response.ok()).toBe(false);
+    const data = await response.json();
+    expect(data.success).toBe(false);
+    // Should fail during push
+    expect(data.error).toContain("push");
+  });
+
+  // ==========================================================================
+  // Edit Feature with Branch Change
+  // ==========================================================================
+
+  test("should create worktree when editing a feature and selecting a new branch", async ({
+    page,
+  }) => {
+    await setupProjectWithPath(page, testRepo.path);
+    await page.goto("/");
+    await waitForNetworkIdle(page);
+    await waitForBoardView(page);
+
+    // First, create a feature on main branch (default)
+    await clickAddFeature(page);
+    await fillAddFeatureDialog(page, "Feature to edit branch", {
+      category: "Testing",
+    });
+    await confirmAddFeature(page);
+
+    // Wait for the feature to appear
+    await page.waitForTimeout(1000);
+
+    // Verify feature was created on main branch
+    const featuresDir = path.join(testRepo.path, ".automaker", "features");
+    const featureDirs = fs.readdirSync(featuresDir);
+    expect(featureDirs.length).toBeGreaterThan(0);
+
+    // Find the feature we just created
+    const featureDir = featureDirs.find((dir) => {
+      const featureFilePath = path.join(featuresDir, dir, "feature.json");
+      if (fs.existsSync(featureFilePath)) {
+        const data = JSON.parse(fs.readFileSync(featureFilePath, "utf-8"));
+        return data.description === "Feature to edit branch";
+      }
+      return false;
+    });
+    expect(featureDir).toBeDefined();
+
+    const featureFilePath = path.join(featuresDir, featureDir!, "feature.json");
+    let featureData = JSON.parse(fs.readFileSync(featureFilePath, "utf-8"));
+
+    // Initially, the feature should be on main or have no branch set
+    expect(
+      !featureData.branchName || featureData.branchName === "main"
+    ).toBe(true);
+
+    // The new branch we want to assign
+    const newBranchName = "feature/edited-branch";
+    const expectedWorktreePath = getWorktreePath(testRepo.path, newBranchName);
+
+    // Verify worktree does NOT exist before editing
+    expect(fs.existsSync(expectedWorktreePath)).toBe(false);
+
+    // Find and click the edit button on the feature card
+    const featureCard = page.getByText("Feature to edit branch");
+    await expect(featureCard).toBeVisible({ timeout: 10000 });
+
+    // Double-click to open edit dialog
+    await featureCard.dblclick();
+    await page.waitForTimeout(500);
+
+    // Wait for edit dialog to open
+    const editDialog = page.locator('[data-testid="edit-feature-dialog"]');
+    await expect(editDialog).toBeVisible({ timeout: 5000 });
+
+    // Find and click on the branch input to open the autocomplete
+    const branchInput = page.locator('[data-testid="edit-feature-branch"]');
+    await branchInput.click();
+    await page.waitForTimeout(300);
+
+    // Type the new branch name
+    const commandInput = page.locator('[cmdk-input]');
+    await commandInput.fill(newBranchName);
+
+    // Press Enter to select/create the branch
+    await commandInput.press("Enter");
+    await page.waitForTimeout(200);
+
+    // Click Save Changes
+    const saveButton = page.locator('[data-testid="confirm-edit-feature"]');
+    await saveButton.click();
+
+    // Wait for the dialog to close and worktree to be created
+    await page.waitForTimeout(2000);
+
+    // Verify worktree was automatically created
+    expect(fs.existsSync(expectedWorktreePath)).toBe(true);
+
+    // Verify the branch was created
+    const branches = await listBranches(testRepo.path);
+    expect(branches).toContain(newBranchName);
+
+    // Verify feature was updated with correct branch and worktreePath
+    featureData = JSON.parse(fs.readFileSync(featureFilePath, "utf-8"));
+    expect(featureData.branchName).toBe(newBranchName);
+    expect(featureData.worktreePath).toBe(expectedWorktreePath);
+  });
+
+  test("should not create worktree when editing a feature and selecting main branch", async ({
+    page,
+  }) => {
+    await setupProjectWithPath(page, testRepo.path);
+    await page.goto("/");
+    await waitForNetworkIdle(page);
+    await waitForBoardView(page);
+
+    // First, create a worktree with a feature assigned to it
+    const existingBranch = "feature/existing-branch";
+    await apiCreateWorktree(page, testRepo.path, existingBranch);
+
+    // Refresh to see the new worktree
+    const refreshButton = page.locator('button[title="Refresh worktrees"]');
+    await refreshButton.click();
+    await page.waitForTimeout(500);
+
+    // Select the worktree
+    const worktreeButton = page.getByRole("button", {
+      name: new RegExp(existingBranch, "i"),
+    });
+    await worktreeButton.click();
+    await page.waitForTimeout(500);
+
+    // Create a feature on this branch
+    await clickAddFeature(page);
+    await fillAddFeatureDialog(page, "Feature to change to main", {
+      branch: existingBranch,
+      category: "Testing",
+    });
+    await confirmAddFeature(page);
+    await page.waitForTimeout(1000);
+
+    // Verify feature was created with the branch
+    const featuresDir = path.join(testRepo.path, ".automaker", "features");
+    const featureDirs = fs.readdirSync(featuresDir);
+    const featureDir = featureDirs.find((dir) => {
+      const featureFilePath = path.join(featuresDir, dir, "feature.json");
+      if (fs.existsSync(featureFilePath)) {
+        const data = JSON.parse(fs.readFileSync(featureFilePath, "utf-8"));
+        return data.description === "Feature to change to main";
+      }
+      return false;
+    });
+    expect(featureDir).toBeDefined();
+
+    const featureFilePath = path.join(featuresDir, featureDir!, "feature.json");
+    let featureData = JSON.parse(fs.readFileSync(featureFilePath, "utf-8"));
+    expect(featureData.branchName).toBe(existingBranch);
+
+    // Now edit and change to main branch
+    const featureCard = page.getByText("Feature to change to main");
+    await featureCard.dblclick();
+    await page.waitForTimeout(500);
+
+    // Wait for edit dialog to open
+    const editDialog = page.locator('[data-testid="edit-feature-dialog"]');
+    await expect(editDialog).toBeVisible({ timeout: 5000 });
+
+    // Find and click on the branch input
+    const branchInput = page.locator('[data-testid="edit-feature-branch"]');
+    await branchInput.click();
+    await page.waitForTimeout(300);
+
+    // Type "main" to change to main branch
+    const commandInput = page.locator('[cmdk-input]');
+    await commandInput.fill("main");
+    await commandInput.press("Enter");
+    await page.waitForTimeout(200);
+
+    // Save changes
+    const saveButton = page.locator('[data-testid="confirm-edit-feature"]');
+    await saveButton.click();
+    await page.waitForTimeout(1000);
+
+    // Verify feature was updated to main branch
+    featureData = JSON.parse(fs.readFileSync(featureFilePath, "utf-8"));
+    expect(featureData.branchName).toBe("main");
+
+    // worktreePath should be cleared (null or undefined) for main branch
+    expect(
+      featureData.worktreePath === null ||
+        featureData.worktreePath === undefined
+    ).toBe(true);
+  });
+
+  test("should reuse existing worktree when editing feature to an existing branch", async ({
+    page,
+  }) => {
+    await setupProjectWithPath(page, testRepo.path);
+    await page.goto("/");
+    await waitForNetworkIdle(page);
+    await waitForBoardView(page);
+
+    // Create a worktree first
+    const existingBranch = "feature/already-exists";
+    const existingWorktreePath = getWorktreePath(testRepo.path, existingBranch);
+    await apiCreateWorktree(page, testRepo.path, existingBranch);
+
+    // Verify worktree exists
+    expect(fs.existsSync(existingWorktreePath)).toBe(true);
+
+    // Create a feature on main
+    await clickAddFeature(page);
+    await fillAddFeatureDialog(page, "Feature to use existing worktree", {
+      category: "Testing",
+    });
+    await confirmAddFeature(page);
+    await page.waitForTimeout(1000);
+
+    // Edit the feature to use the existing branch
+    const featureCard = page.getByText("Feature to use existing worktree");
+    await featureCard.dblclick();
+    await page.waitForTimeout(500);
+
+    const editDialog = page.locator('[data-testid="edit-feature-dialog"]');
+    await expect(editDialog).toBeVisible({ timeout: 5000 });
+
+    // Change to the existing branch
+    const branchInput = page.locator('[data-testid="edit-feature-branch"]');
+    await branchInput.click();
+    await page.waitForTimeout(300);
+
+    const commandInput = page.locator('[cmdk-input]');
+    await commandInput.fill(existingBranch);
+    await commandInput.press("Enter");
+    await page.waitForTimeout(200);
+
+    // Save changes
+    const saveButton = page.locator('[data-testid="confirm-edit-feature"]');
+    await saveButton.click();
+    await page.waitForTimeout(1000);
+
+    // Verify the existing worktree is still there (not duplicated)
+    const worktrees = await listWorktrees(testRepo.path);
+    const matchingWorktrees = worktrees.filter(
+      (wt) => wt === existingWorktreePath
+    );
+    expect(matchingWorktrees.length).toBe(1);
+
+    // Verify feature was updated with the correct worktreePath
+    const featuresDir = path.join(testRepo.path, ".automaker", "features");
+    const featureDirs = fs.readdirSync(featuresDir);
+    const featureDir = featureDirs.find((dir) => {
+      const featureFilePath = path.join(featuresDir, dir, "feature.json");
+      if (fs.existsSync(featureFilePath)) {
+        const data = JSON.parse(fs.readFileSync(featureFilePath, "utf-8"));
+        return data.description === "Feature to use existing worktree";
+      }
+      return false;
+    });
+
+    const featureFilePath = path.join(featuresDir, featureDir!, "feature.json");
+    const featureData = JSON.parse(fs.readFileSync(featureFilePath, "utf-8"));
+    expect(featureData.branchName).toBe(existingBranch);
+    expect(featureData.worktreePath).toBe(existingWorktreePath);
   });
 });

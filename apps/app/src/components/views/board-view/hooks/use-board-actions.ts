@@ -137,7 +137,7 @@ export function useBoardActions({
   );
 
   const handleAddFeature = useCallback(
-    (featureData: {
+    async (featureData: {
       category: string;
       description: string;
       steps: string[];
@@ -149,19 +149,38 @@ export function useBoardActions({
       branchName: string;
       priority: number;
     }) => {
+      let worktreePath: string | undefined;
+
+      // If worktrees are enabled and a non-main branch is selected, create the worktree
+      if (useWorktrees && featureData.branchName) {
+        const branchName = featureData.branchName;
+        if (branchName !== "main" && branchName !== "master") {
+          // Create a temporary feature-like object for getOrCreateWorktreeForFeature
+          const tempFeature = { branchName } as Feature;
+          const path = await getOrCreateWorktreeForFeature(tempFeature);
+          if (path && path !== projectPath) {
+            worktreePath = path;
+            // Refresh worktree selector after creating worktree
+            onWorktreeCreated?.();
+          }
+        }
+      }
+
       const newFeatureData = {
         ...featureData,
         status: "backlog" as const,
+        worktreePath,
       };
       const createdFeature = addFeature(newFeatureData);
-      persistFeatureCreate(createdFeature);
+      // Must await to ensure feature exists on server before user can drag it
+      await persistFeatureCreate(createdFeature);
       saveCategory(featureData.category);
     },
-    [addFeature, persistFeatureCreate, saveCategory]
+    [addFeature, persistFeatureCreate, saveCategory, useWorktrees, getOrCreateWorktreeForFeature, projectPath, onWorktreeCreated]
   );
 
   const handleUpdateFeature = useCallback(
-    (
+    async (
       featureId: string,
       updates: {
         category: string;
@@ -175,14 +194,53 @@ export function useBoardActions({
         priority: number;
       }
     ) => {
-      updateFeature(featureId, updates);
-      persistFeatureUpdate(featureId, updates);
+      // Get the current feature to check if branch is changing
+      const currentFeature = features.find((f) => f.id === featureId);
+      const currentBranch = currentFeature?.branchName || "main";
+      const newBranch = updates.branchName || "main";
+      const branchIsChanging = currentBranch !== newBranch;
+
+      let worktreePath: string | undefined;
+      let shouldClearWorktreePath = false;
+
+      // If worktrees are enabled and branch is changing to a non-main branch, create worktree
+      if (useWorktrees && branchIsChanging) {
+        if (newBranch === "main" || newBranch === "master") {
+          // Changing to main - clear the worktreePath
+          shouldClearWorktreePath = true;
+        } else {
+          // Changing to a feature branch - create worktree if needed
+          const tempFeature = { branchName: newBranch } as Feature;
+          const path = await getOrCreateWorktreeForFeature(tempFeature);
+          if (path && path !== projectPath) {
+            worktreePath = path;
+            // Refresh worktree selector after creating worktree
+            onWorktreeCreated?.();
+          }
+        }
+      }
+
+      // Build final updates with worktreePath if it was changed
+      let finalUpdates: typeof updates & { worktreePath?: string };
+      if (branchIsChanging && useWorktrees) {
+        if (shouldClearWorktreePath) {
+          // Use null to clear the value in persistence (cast to work around type system)
+          finalUpdates = { ...updates, worktreePath: null as unknown as string | undefined };
+        } else {
+          finalUpdates = { ...updates, worktreePath };
+        }
+      } else {
+        finalUpdates = updates;
+      }
+
+      updateFeature(featureId, finalUpdates);
+      persistFeatureUpdate(featureId, finalUpdates);
       if (updates.category) {
         saveCategory(updates.category);
       }
       setEditingFeature(null);
     },
-    [updateFeature, persistFeatureUpdate, saveCategory, setEditingFeature]
+    [updateFeature, persistFeatureUpdate, saveCategory, setEditingFeature, features, useWorktrees, getOrCreateWorktreeForFeature, projectPath, onWorktreeCreated]
   );
 
   const handleDeleteFeature = useCallback(
@@ -291,7 +349,8 @@ export function useBoardActions({
         startedAt: new Date().toISOString(),
       };
       updateFeature(feature.id, updates);
-      persistFeatureUpdate(feature.id, updates);
+      // Must await to ensure feature status is persisted before starting agent
+      await persistFeatureUpdate(feature.id, updates);
       console.log("[Board] Feature moved to in_progress, starting agent...");
       await handleRunFeature(feature);
       return true;
@@ -535,50 +594,6 @@ export function useBoardActions({
     ]
   );
 
-  const handleRevertFeature = useCallback(
-    async (feature: Feature) => {
-      if (!currentProject) return;
-
-      try {
-        const api = getElectronAPI();
-        if (!api?.worktree?.revertFeature) {
-          console.error("Worktree API not available");
-          toast.error("Revert not available", {
-            description:
-              "This feature is not available in the current version.",
-          });
-          return;
-        }
-
-        const result = await api.worktree.revertFeature(
-          currentProject.path,
-          feature.id
-        );
-
-        if (result.success) {
-          await loadFeatures();
-          toast.success("Feature reverted", {
-            description: `All changes discarded. Moved back to backlog: ${truncateDescription(
-              feature.description
-            )}`,
-          });
-        } else {
-          console.error("[Board] Failed to revert feature:", result.error);
-          toast.error("Failed to revert feature", {
-            description: result.error || "An error occurred",
-          });
-        }
-      } catch (error) {
-        console.error("[Board] Error reverting feature:", error);
-        toast.error("Failed to revert feature", {
-          description:
-            error instanceof Error ? error.message : "An error occurred",
-        });
-      }
-    },
-    [currentProject, loadFeatures]
-  );
-
   const handleMergeFeature = useCallback(
     async (feature: Feature) => {
       if (!currentProject) return;
@@ -698,7 +713,8 @@ export function useBoardActions({
 
         if (targetStatus !== feature.status) {
           moveFeature(feature.id, targetStatus);
-          persistFeatureUpdate(feature.id, { status: targetStatus });
+          // Must await to ensure file is written before user can restart
+          await persistFeatureUpdate(feature.id, { status: targetStatus });
         }
 
         toast.success("Agent stopped", {
@@ -733,8 +749,16 @@ export function useBoardActions({
 
       // If no worktree is selected (currentWorktreeBranch is null or main-like),
       // show features with no branch or "main"/"master" branch
-      if (!currentWorktreeBranch || currentWorktreeBranch === "main" || currentWorktreeBranch === "master") {
-        return !f.branchName || featureBranch === "main" || featureBranch === "master";
+      if (
+        !currentWorktreeBranch ||
+        currentWorktreeBranch === "main" ||
+        currentWorktreeBranch === "master"
+      ) {
+        return (
+          !f.branchName ||
+          featureBranch === "main" ||
+          featureBranch === "master"
+        );
       }
 
       // Otherwise, only show features matching the selected worktree branch
@@ -754,9 +778,12 @@ export function useBoardActions({
 
     if (backlogFeatures.length === 0) {
       toast.info("Backlog empty", {
-        description: currentWorktreeBranch && currentWorktreeBranch !== "main" && currentWorktreeBranch !== "master"
-          ? `No features in backlog for branch "${currentWorktreeBranch}".`
-          : "No features in backlog to start.",
+        description:
+          currentWorktreeBranch &&
+          currentWorktreeBranch !== "main" &&
+          currentWorktreeBranch !== "master"
+            ? `No features in backlog for branch "${currentWorktreeBranch}".`
+            : "No features in backlog to start.",
       });
       return;
     }
@@ -833,7 +860,6 @@ export function useBoardActions({
     handleOpenFollowUp,
     handleSendFollowUp,
     handleCommitFeature,
-    handleRevertFeature,
     handleMergeFeature,
     handleCompleteFeature,
     handleUnarchiveFeature,
