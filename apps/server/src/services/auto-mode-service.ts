@@ -1352,8 +1352,9 @@ This mock response was generated because AUTOMAKER_MOCK_AGENT=true was set.
         // Handle error messages
         throw new Error(msg.error || "Unknown error");
       } else if (msg.type === "result" && msg.subtype === "success") {
-        responseText = msg.result || responseText;
-        // Schedule write for final result
+        // Don't replace responseText - the accumulated content is the full history
+        // The msg.result is just a summary which would lose all tool use details
+        // Just ensure final write happens
         scheduleWrite();
       }
     }
