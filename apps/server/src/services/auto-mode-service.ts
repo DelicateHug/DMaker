@@ -531,13 +531,15 @@ Address the follow-up instructions above. Review the previous work and make the 
       }
 
       // Use fullPrompt (already built above) with model and all images
+      // Pass previousContext so the history is preserved in the output file
       await this.runAgent(
         workDir,
         featureId,
         fullPrompt,
         abortController,
         allImagePaths.length > 0 ? allImagePaths : imagePaths,
-        model
+        model,
+        previousContext || undefined
       );
 
       // Mark as waiting_approval for user review
@@ -1137,7 +1139,22 @@ Implement this feature by:
 4. Add or update tests as needed
 5. Ensure the code follows existing patterns and conventions
 
-When done, summarize what you implemented and any notes for the developer.`;
+When done, wrap your final summary in <summary> tags like this:
+
+<summary>
+## Summary: [Feature Title]
+
+### Changes Implemented
+- [List of changes made]
+
+### Files Modified
+- [List of files]
+
+### Notes for Developer
+- [Any important notes]
+</summary>
+
+This helps parse your summary correctly in the output logs.`;
 
     return prompt;
   }
@@ -1148,7 +1165,8 @@ When done, summarize what you implemented and any notes for the developer.`;
     prompt: string,
     abortController: AbortController,
     imagePaths?: string[],
-    model?: string
+    model?: string,
+    previousContent?: string
   ): Promise<void> {
     // CI/CD Mock Mode: Return early with mock response when AUTOMAKER_MOCK_AGENT is set
     // This prevents actual API calls during automated testing
@@ -1250,7 +1268,10 @@ This mock response was generated because AUTOMAKER_MOCK_AGENT=true was set.
 
     // Execute via provider
     const stream = provider.executeQuery(options);
-    let responseText = "";
+    // Initialize with previous content if this is a follow-up, with a separator
+    let responseText = previousContent
+      ? `${previousContent}\n\n---\n\n## Follow-up Session\n\n`
+      : "";
     // Agent output goes to .automaker directory
     // Note: We use the original projectPath here (from config), not workDir
     // because workDir might be a worktree path
@@ -1258,10 +1279,43 @@ This mock response was generated because AUTOMAKER_MOCK_AGENT=true was set.
     const featureDirForOutput = getFeatureDir(configProjectPath, featureId);
     const outputPath = path.join(featureDirForOutput, "agent-output.md");
 
+    // Incremental file writing state
+    let writeTimeout: ReturnType<typeof setTimeout> | null = null;
+    const WRITE_DEBOUNCE_MS = 500; // Batch writes every 500ms
+
+    // Helper to write current responseText to file
+    const writeToFile = async (): Promise<void> => {
+      try {
+        await fs.mkdir(path.dirname(outputPath), { recursive: true });
+        await fs.writeFile(outputPath, responseText);
+      } catch (error) {
+        // Log but don't crash - file write errors shouldn't stop execution
+        console.error(`[AutoMode] Failed to write agent output for ${featureId}:`, error);
+      }
+    };
+
+    // Debounced write - schedules a write after WRITE_DEBOUNCE_MS
+    const scheduleWrite = (): void => {
+      if (writeTimeout) {
+        clearTimeout(writeTimeout);
+      }
+      writeTimeout = setTimeout(() => {
+        writeToFile();
+      }, WRITE_DEBOUNCE_MS);
+    };
+
     for await (const msg of stream) {
       if (msg.type === "assistant" && msg.message?.content) {
         for (const block of msg.message.content) {
           if (block.type === "text") {
+            // Add separator before new text if we already have content and it doesn't end with newlines
+            if (responseText.length > 0 && !responseText.endsWith('\n\n')) {
+              if (responseText.endsWith('\n')) {
+                responseText += '\n';
+              } else {
+                responseText += '\n\n';
+              }
+            }
             responseText += block.text || "";
 
             // Check for authentication errors in the response
@@ -1277,33 +1331,49 @@ This mock response was generated because AUTOMAKER_MOCK_AGENT=true was set.
               );
             }
 
+            // Schedule incremental file write (debounced)
+            scheduleWrite();
+
             this.emitAutoModeEvent("auto_mode_progress", {
               featureId,
               content: block.text,
             });
           } else if (block.type === "tool_use") {
+            // Emit event for real-time UI
             this.emitAutoModeEvent("auto_mode_tool", {
               featureId,
               tool: block.name,
               input: block.input,
             });
+
+            // Also add to file output for persistence
+            if (responseText.length > 0 && !responseText.endsWith('\n')) {
+              responseText += '\n';
+            }
+            responseText += `\n🔧 Tool: ${block.name}\n`;
+            if (block.input) {
+              responseText += `Input: ${JSON.stringify(block.input, null, 2)}\n`;
+            }
+            scheduleWrite();
           }
         }
       } else if (msg.type === "error") {
         // Handle error messages
         throw new Error(msg.error || "Unknown error");
       } else if (msg.type === "result" && msg.subtype === "success") {
-        responseText = msg.result || responseText;
+        // Don't replace responseText - the accumulated content is the full history
+        // The msg.result is just a summary which would lose all tool use details
+        // Just ensure final write happens
+        scheduleWrite();
       }
     }
 
-    // Save agent output
-    try {
-      await fs.mkdir(path.dirname(outputPath), { recursive: true });
-      await fs.writeFile(outputPath, responseText);
-    } catch {
-      // May fail if directory doesn't exist
+    // Clear any pending timeout and do a final write to ensure all content is saved
+    if (writeTimeout) {
+      clearTimeout(writeTimeout);
     }
+    // Final write - ensure all accumulated content is saved
+    await writeToFile();
   }
 
   private async executeFeatureWithContext(
