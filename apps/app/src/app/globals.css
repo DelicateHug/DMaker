@@ -1551,44 +1551,53 @@
   height: 8px;
 }
 
-.cream ::-webkit-scrollbar-thumb {
+.cream ::-webkit-scrollbar-thumb,
+.cream .scrollbar-visible::-webkit-scrollbar-thumb {
   background: oklch(0.7 0.03 60);
   border-radius: 4px;
 }
 
-.cream ::-webkit-scrollbar-thumb:hover {
+.cream ::-webkit-scrollbar-thumb:hover,
+.cream .scrollbar-visible::-webkit-scrollbar-thumb:hover {
   background: oklch(0.6 0.04 60);
 }
 
-.cream ::-webkit-scrollbar-track {
+.cream ::-webkit-scrollbar-track,
+.cream .scrollbar-visible::-webkit-scrollbar-track {
   background: oklch(0.9 0.015 70);
 }
 
 /* Sunset theme scrollbar */
-.sunset ::-webkit-scrollbar-thumb {
+.sunset ::-webkit-scrollbar-thumb,
+.sunset .scrollbar-visible::-webkit-scrollbar-thumb {
   background: oklch(0.5 0.14 45);
   border-radius: 4px;
 }
 
-.sunset ::-webkit-scrollbar-thumb:hover {
+.sunset ::-webkit-scrollbar-thumb:hover,
+.sunset .scrollbar-visible::-webkit-scrollbar-thumb:hover {
   background: oklch(0.58 0.16 45);
 }
 
-.sunset ::-webkit-scrollbar-track {
+.sunset ::-webkit-scrollbar-track,
+.sunset .scrollbar-visible::-webkit-scrollbar-track {
   background: oklch(0.18 0.03 280);
 }
 
 /* Gray theme scrollbar */
-.gray ::-webkit-scrollbar-thumb {
+.gray ::-webkit-scrollbar-thumb,
+.gray .scrollbar-visible::-webkit-scrollbar-thumb {
   background: oklch(0.4 0.01 250);
   border-radius: 4px;
 }
 
-.gray ::-webkit-scrollbar-thumb:hover {
+.gray ::-webkit-scrollbar-thumb:hover,
+.gray .scrollbar-visible::-webkit-scrollbar-thumb:hover {
   background: oklch(0.5 0.02 250);
 }
 
-.gray ::-webkit-scrollbar-track {
+.gray ::-webkit-scrollbar-track,
+.gray .scrollbar-visible::-webkit-scrollbar-track {
   background: oklch(0.25 0.005 250);
 }
 
@@ -1646,45 +1655,6 @@
 .retro .scrollbar-visible::-webkit-scrollbar-track {
   background: var(--background);
   border-radius: 0;
-}
-
-/* Cream theme scrollbar-visible adjustments */
-.cream .scrollbar-visible::-webkit-scrollbar-track {
-  background: oklch(0.9 0.015 70);
-}
-
-.cream .scrollbar-visible::-webkit-scrollbar-thumb {
-  background: oklch(0.7 0.03 60);
-}
-
-.cream .scrollbar-visible::-webkit-scrollbar-thumb:hover {
-  background: oklch(0.6 0.04 60);
-}
-
-/* Sunset theme scrollbar-visible adjustments */
-.sunset .scrollbar-visible::-webkit-scrollbar-track {
-  background: oklch(0.18 0.03 280);
-}
-
-.sunset .scrollbar-visible::-webkit-scrollbar-thumb {
-  background: oklch(0.5 0.14 45);
-}
-
-.sunset .scrollbar-visible::-webkit-scrollbar-thumb:hover {
-  background: oklch(0.58 0.16 45);
-}
-
-/* Gray theme scrollbar-visible adjustments */
-.gray .scrollbar-visible::-webkit-scrollbar-track {
-  background: oklch(0.25 0.005 250);
-}
-
-.gray .scrollbar-visible::-webkit-scrollbar-thumb {
-  background: oklch(0.4 0.01 250);
-}
-
-.gray .scrollbar-visible::-webkit-scrollbar-thumb:hover {
-  background: oklch(0.5 0.02 250);
 }
 
 /* Glass morphism utilities */
