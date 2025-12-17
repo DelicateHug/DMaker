@@ -52,6 +52,8 @@ export default defineConfig({
             env: {
               ...process.env,
               VITE_SKIP_SETUP: "true",
+              // Skip electron plugin in CI - no display available for Electron
+              VITE_SKIP_ELECTRON: process.env.CI === "true" ? "true" : undefined,
             },
           },
         ],
