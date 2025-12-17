@@ -1143,7 +1143,22 @@ Implement this feature by:
 4. Add or update tests as needed
 5. Ensure the code follows existing patterns and conventions
 
-When done, summarize what you implemented and any notes for the developer.`;
+When done, wrap your final summary in <summary> tags like this:
+
+<summary>
+## Summary: [Feature Title]
+
+### Changes Implemented
+- [List of changes made]
+
+### Files Modified
+- [List of files]
+
+### Notes for Developer
+- [Any important notes]
+</summary>
+
+This helps parse your summary correctly in the output logs.`;
 
     return prompt;
   }

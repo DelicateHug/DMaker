@@ -156,6 +156,13 @@ function LogEntryItem({ entry, isExpanded, onToggle }: LogEntryItemProps) {
       content = content.trim();
     }
 
+    // For summary entries, remove the <summary> and </summary> tags
+    if (entry.title === "Summary") {
+      content = content.replace(/^<summary>\s*/i, "");
+      content = content.replace(/\s*<\/summary>\s*$/i, "");
+      content = content.trim();
+    }
+
     // Try to find and format JSON blocks
     const jsonRegex = /(\{[\s\S]*?\}|\[[\s\S]*?\])/g;
     let lastIndex = 0;
@@ -192,7 +199,7 @@ function LogEntryItem({ entry, isExpanded, onToggle }: LogEntryItemProps) {
     }
 
     return parts.length > 0 ? parts : [{ type: "text" as const, content }];
-  }, [entry.content, isToolCall]);
+  }, [entry.content, entry.title, isToolCall]);
 
   // Get colors - use tool category colors for tool_call entries
   const colorParts = toolCategoryColors.split(" ");

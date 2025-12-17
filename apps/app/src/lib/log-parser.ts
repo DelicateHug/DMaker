@@ -126,7 +126,9 @@ function detectEntryType(content: string): LogEntryType {
     trimmed.startsWith("✅") ||
     trimmed.toLowerCase().includes("success") ||
     trimmed.toLowerCase().includes("completed") ||
-    // Markdown summary headers
+    // Summary tags (preferred format from agent)
+    trimmed.startsWith("<summary>") ||
+    // Markdown summary headers (fallback)
     trimmed.match(/^##\s+(Summary|Feature|Changes|Implementation)/i) ||
     trimmed.match(/^(I've|I have) (successfully |now )?(completed|finished|implemented)/i)
   ) {
@@ -138,10 +140,11 @@ function detectEntryType(content: string): LogEntryType {
     return "warning";
   }
 
-  // Thinking/Preparation info
+  // Thinking/Preparation info (be specific to avoid matching summary content)
   if (
     trimmed.toLowerCase().includes("ultrathink") ||
-    trimmed.toLowerCase().includes("thinking level") ||
+    trimmed.match(/thinking level[:\s]*(low|medium|high|none|\d)/i) ||
+    trimmed.match(/^thinking level\s*$/i) ||
     trimmed.toLowerCase().includes("estimated cost") ||
     trimmed.toLowerCase().includes("estimated time") ||
     trimmed.toLowerCase().includes("budget tokens") ||
@@ -346,6 +349,9 @@ function generateTitle(type: LogEntryType, content: string): string {
       return "Error";
     case "success": {
       // Check if it's a summary section
+      if (content.startsWith("<summary>") || content.includes("<summary>")) {
+        return "Summary";
+      }
       if (content.match(/^##\s+(Summary|Feature|Changes|Implementation)/i)) {
         return "Summary";
       }
@@ -420,6 +426,9 @@ export function parseLogOutput(rawOutput: string): LogEntry[] {
   let jsonBraceDepth = 0;
   let jsonBracketDepth = 0;
 
+  // Summary tag accumulation state
+  let inSummaryAccumulation = false;
+
   const finalizeEntry = () => {
     if (currentEntry && currentContent.length > 0) {
       currentEntry.content = currentContent.join("\n").trim();
@@ -451,6 +460,7 @@ export function parseLogOutput(rawOutput: string): LogEntry[] {
     inJsonAccumulation = false;
     jsonBraceDepth = 0;
     jsonBracketDepth = 0;
+    inSummaryAccumulation = false;
   };
 
   let lineIndex = 0;
@@ -480,6 +490,18 @@ export function parseLogOutput(rawOutput: string): LogEntry[] {
       continue;
     }
 
+    // If we're in summary accumulation mode, keep accumulating until </summary>
+    if (inSummaryAccumulation) {
+      currentContent.push(line);
+      // Summary is complete when we see closing tag
+      if (trimmedLine.includes("</summary>")) {
+        inSummaryAccumulation = false;
+        // Don't finalize here - let normal flow handle it
+      }
+      lineIndex++;
+      continue;
+    }
+
     // Detect if this line starts a new entry
     const lineType = detectEntryType(trimmedLine);
     const isNewEntry =
@@ -498,8 +520,10 @@ export function parseLogOutput(rawOutput: string): LogEntry[] {
       trimmedLine.match(/\[ERROR\]/i) ||
       trimmedLine.match(/\[Status\]/i) ||
       trimmedLine.toLowerCase().includes("ultrathink preparation") ||
-      trimmedLine.toLowerCase().includes("thinking level") ||
-      // Agent summary sections (markdown headers after tool calls)
+      trimmedLine.match(/thinking level[:\s]*(low|medium|high|none|\d)/i) ||
+      // Summary tags (preferred format from agent)
+      trimmedLine.startsWith("<summary>") ||
+      // Agent summary sections (markdown headers - fallback)
       trimmedLine.match(/^##\s+(Summary|Feature|Changes|Implementation)/i) ||
       // Summary introduction lines
       trimmedLine.match(/^All tasks completed/i) ||
@@ -526,6 +550,11 @@ export function parseLogOutput(rawOutput: string): LogEntry[] {
         },
       };
       currentContent.push(trimmedLine);
+
+      // If this is a <summary> tag, start summary accumulation mode
+      if (trimmedLine.startsWith("<summary>") && !trimmedLine.includes("</summary>")) {
+        inSummaryAccumulation = true;
+      }
     } else if (isInputLine && currentEntry) {
       // Start JSON accumulation mode
       currentContent.push(trimmedLine);
