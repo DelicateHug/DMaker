@@ -272,17 +272,13 @@ export function BoardView() {
 
   // Calculate unarchived card counts per branch
   const branchCardCounts = useMemo(() => {
-    const counts: Record<string, number> = {};
-    
-    // Count unarchived features (status !== "completed") per branch
-    hookFeatures.forEach((feature) => {
+    return hookFeatures.reduce((counts, feature) => {
       if (feature.status !== "completed") {
-        const branch = feature.branchName || "main";
+        const branch = feature.branchName ?? "main";
         counts[branch] = (counts[branch] || 0) + 1;
       }
-    });
-    
-    return counts;
+      return counts;
+    }, {} as Record<string, number>);
   }, [hookFeatures]);
 
   // Custom collision detection that prioritizes columns over cards

@@ -33,8 +33,8 @@ export function BranchAutocomplete({
     return Array.from(branchSet).map((branch) => {
       const cardCount = branchCardCounts?.[branch];
       // Show card count if available, otherwise show "default" for main branch only
-      const badge = cardCount !== undefined 
-        ? String(cardCount) 
+      const badge = branchCardCounts !== undefined
+        ? String(cardCount ?? 0)
         : branch === "main" 
           ? "default" 
           : undefined;
