@@ -75,6 +75,7 @@ export function TerminalPanel({
   const isMacRef = useRef(false);
   const contextMenuRef = useRef<HTMLDivElement>(null);
   const [focusedMenuIndex, setFocusedMenuIndex] = useState(0);
+  const focusedMenuIndexRef = useRef(0);
 
   // Detect platform on mount
   useEffect(() => {
@@ -683,12 +684,18 @@ export function TerminalPanel({
   // Context menu actions for keyboard navigation
   const menuActions = ["copy", "paste", "selectAll", "clear"] as const;
 
+  // Keep ref in sync with state for use in event handlers
+  useEffect(() => {
+    focusedMenuIndexRef.current = focusedMenuIndex;
+  }, [focusedMenuIndex]);
+
   // Close context menu on click outside or scroll, handle keyboard navigation
   useEffect(() => {
     if (!contextMenu) return;
 
     // Reset focus index and focus menu when opened
     setFocusedMenuIndex(0);
+    focusedMenuIndexRef.current = 0;
     requestAnimationFrame(() => {
       const firstButton = contextMenuRef.current?.querySelector<HTMLButtonElement>('[role="menuitem"]');
       firstButton?.focus();
@@ -697,6 +704,11 @@ export function TerminalPanel({
     const handleClick = () => closeContextMenu();
     const handleScroll = () => closeContextMenu();
     const handleKeyDown = (e: KeyboardEvent) => {
+      const updateFocusIndex = (newIndex: number) => {
+        focusedMenuIndexRef.current = newIndex;
+        setFocusedMenuIndex(newIndex);
+      };
+
       switch (e.key) {
         case "Escape":
           e.preventDefault();
@@ -704,16 +716,16 @@ export function TerminalPanel({
           break;
         case "ArrowDown":
           e.preventDefault();
-          setFocusedMenuIndex((prev) => (prev + 1) % menuActions.length);
+          updateFocusIndex((focusedMenuIndexRef.current + 1) % menuActions.length);
           break;
         case "ArrowUp":
           e.preventDefault();
-          setFocusedMenuIndex((prev) => (prev - 1 + menuActions.length) % menuActions.length);
+          updateFocusIndex((focusedMenuIndexRef.current - 1 + menuActions.length) % menuActions.length);
           break;
         case "Enter":
         case " ":
           e.preventDefault();
-          handleContextMenuAction(menuActions[focusedMenuIndex]);
+          handleContextMenuAction(menuActions[focusedMenuIndexRef.current]);
           break;
         case "Tab":
           e.preventDefault();
@@ -731,7 +743,7 @@ export function TerminalPanel({
       document.removeEventListener("scroll", handleScroll, true);
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [contextMenu, closeContextMenu, focusedMenuIndex, handleContextMenuAction]);
+  }, [contextMenu, closeContextMenu, handleContextMenuAction]);
 
   // Focus the correct menu item when navigation changes
   useEffect(() => {
