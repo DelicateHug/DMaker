@@ -84,7 +84,9 @@ export function classifyError(error: unknown): ErrorInfo {
   let type: ErrorType;
   if (isAuth) {
     type = "authentication";
-  } else if (isCancellation || isAbort) {
+  } else if (isAbort) {
+    type = "abort";
+  } else if (isCancellation) {
     type = "cancellation";
   } else if (error instanceof Error) {
     type = "execution";

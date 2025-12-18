@@ -2,9 +2,10 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { cn } from "@/lib/utils";
-import { CheckCircle2, Circle, Loader2, ChevronDown, ChevronRight } from "lucide-react";
+import { Check, Loader2, Circle, ChevronDown, ChevronRight, FileCode } from "lucide-react";
 import { getElectronAPI } from "@/lib/electron";
 import type { AutoModeEvent } from "@/types/electron";
+import { Badge } from "@/components/ui/badge";
 
 interface TaskInfo {
   id: string;
@@ -23,8 +24,8 @@ interface TaskProgressPanelProps {
 export function TaskProgressPanel({ featureId, projectPath, className }: TaskProgressPanelProps) {
   const [tasks, setTasks] = useState<TaskInfo[]>([]);
   const [isExpanded, setIsExpanded] = useState(true);
-  const [currentTaskId, setCurrentTaskId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [currentTaskId, setCurrentTaskId] = useState<string | null>(null);
 
   // Load initial tasks from feature's planSpec
   const loadInitialTasks = useCallback(async () => {
@@ -91,14 +92,24 @@ export function TaskProgressPanel({ featureId, projectPath, className }: TaskPro
 
             setTasks((prev) => {
               // Check if task already exists
-              const existing = prev.find((t) => t.id === taskEvent.taskId);
-              if (existing) {
-                // Update status to in_progress
-                return prev.map((t) =>
-                  t.id === taskEvent.taskId ? { ...t, status: "in_progress" as const } : t
-                );
+              const existingIndex = prev.findIndex((t) => t.id === taskEvent.taskId);
+              
+              if (existingIndex !== -1) {
+                // Update status to in_progress and mark previous as completed
+                return prev.map((t, idx) => {
+                   if (t.id === taskEvent.taskId) {
+                     return { ...t, status: "in_progress" as const };
+                   }
+                   // If we are moving to a task that is further down the list, assume previous ones are completed
+                   // This is a heuristic, but usually correct for sequential execution
+                   if (idx < existingIndex && t.status !== "completed") {
+                     return { ...t, status: "completed" as const };
+                   }
+                   return t;
+                });
               }
-              // Add new task
+              
+              // Add new task if it doesn't exist (fallback)
               return [
                 ...prev,
                 {
@@ -128,106 +139,136 @@ export function TaskProgressPanel({ featureId, projectPath, className }: TaskPro
     return unsubscribe;
   }, [featureId]);
 
-  // Calculate progress
   const completedCount = tasks.filter((t) => t.status === "completed").length;
   const totalCount = tasks.length;
   const progressPercent = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
 
-  // Don't render if loading or no tasks
-  if (isLoading) {
-    return null;
-  }
-
-  if (tasks.length === 0) {
+  if (isLoading || tasks.length === 0) {
     return null;
   }
 
   return (
-    <div className={cn("border rounded-lg bg-muted/30", className)}>
-      {/* Header with progress */}
+    <div className={cn("group rounded-xl border bg-card/50 shadow-sm overflow-hidden transition-all duration-200", className)}>
       <button
         onClick={() => setIsExpanded(!isExpanded)}
-        className="w-full flex items-center justify-between p-3 hover:bg-muted/50 transition-colors"
+        className="w-full flex items-center justify-between p-4 bg-muted/10 hover:bg-muted/20 transition-colors"
       >
-        <div className="flex items-center gap-2">
-          {isExpanded ? (
-            <ChevronDown className="h-4 w-4 text-muted-foreground" />
-          ) : (
-            <ChevronRight className="h-4 w-4 text-muted-foreground" />
-          )}
-          <span className="font-medium text-sm">Task Progress</span>
-          <span className="text-xs text-muted-foreground">
-            ({completedCount}/{totalCount})
-          </span>
+        <div className="flex items-center gap-3">
+          <div className={cn(
+            "flex h-8 w-8 items-center justify-center rounded-lg border shadow-sm transition-colors",
+            isExpanded ? "bg-background border-border" : "bg-muted border-transparent"
+          )}>
+            {isExpanded ? (
+               <ChevronDown className="h-4 w-4 text-foreground/70" />
+            ) : (
+               <ChevronRight className="h-4 w-4 text-muted-foreground" />
+            )}
+          </div>
+          <div className="flex flex-col items-start gap-0.5">
+            <h3 className="font-semibold text-sm tracking-tight">Execution Plan</h3>
+            <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">
+              {completedCount} of {totalCount} tasks completed
+            </span>
+          </div>
         </div>
 
-        {/* Progress bar */}
-        <div className="flex items-center gap-2">
-          <div className="w-24 h-2 bg-muted rounded-full overflow-hidden">
-            <div
-              className="h-full bg-primary transition-all duration-300 ease-out"
-              style={{ width: `${progressPercent}%` }}
-            />
+        <div className="flex items-center gap-3">
+          {/* Circular Progress (Mini) */}
+          <div className="relative h-8 w-8 flex items-center justify-center">
+             <svg className="h-full w-full -rotate-90 text-muted/20" viewBox="0 0 24 24">
+                <circle className="text-muted/20" cx="12" cy="12" r="10" strokeWidth="3" fill="none" stroke="currentColor" />
+                <circle 
+                   className="text-primary transition-all duration-500 ease-in-out" 
+                   cx="12" cy="12" r="10" strokeWidth="3" fill="none" stroke="currentColor"
+                   strokeDasharray={63}
+                   strokeDashoffset={63 - (63 * progressPercent) / 100}
+                   strokeLinecap="round"
+                />
+             </svg>
+             <span className="absolute text-[9px] font-bold">{progressPercent}%</span>
           </div>
-          <span className="text-xs text-muted-foreground w-8">{progressPercent}%</span>
         </div>
       </button>
 
-      {/* Task list */}
-      {isExpanded && (
-        <div className="border-t px-3 py-2 space-y-1 max-h-48 overflow-y-auto">
-          {tasks.map((task) => (
-            <div
-              key={task.id}
-              className={cn(
-                "flex items-start gap-2 py-1.5 px-2 rounded text-sm",
-                task.status === "in_progress" && "bg-primary/10 border border-primary/20",
-                task.status === "completed" && "text-muted-foreground"
-              )}
-            >
-              {/* Status icon */}
-              {task.status === "completed" ? (
-                <CheckCircle2 className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
-              ) : task.status === "in_progress" ? (
-                <Loader2 className="h-4 w-4 text-primary animate-spin mt-0.5 flex-shrink-0" />
-              ) : (
-                <Circle className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
-              )}
+      <div className={cn(
+          "grid transition-all duration-300 ease-in-out",
+          isExpanded ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
+        )}>
+        <div className="overflow-hidden">
+          <div className="p-5 pt-2 relative max-h-[300px] overflow-y-auto scrollbar-visible">
+            {/* Vertical Connector Line */}
+            <div className="absolute left-[2.35rem] top-4 bottom-8 w-px bg-gradient-to-b from-border/80 via-border/40 to-transparent" />
+            
+            <div className="space-y-5">
+              {tasks.map((task, index) => {
+                const isActive = task.status === "in_progress";
+                const isCompleted = task.status === "completed";
+                const isPending = task.status === "pending";
 
-              {/* Task info */}
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-1.5">
-                  <span
+                return (
+                  <div 
+                    key={task.id} 
                     className={cn(
-                      "font-mono text-xs px-1 py-0.5 rounded",
-                      task.status === "in_progress"
-                        ? "bg-primary/20 text-primary"
-                        : task.status === "completed"
-                        ? "bg-green-500/20 text-green-600 dark:text-green-400"
-                        : "bg-muted text-muted-foreground"
+                      "relative flex gap-4 group/item transition-all duration-300",
+                      isPending && "opacity-60 hover:opacity-100"
                     )}
                   >
-                    {task.id}
-                  </span>
-                  <span
-                    className={cn(
-                      "truncate",
-                      task.status === "in_progress" && "font-medium"
-                    )}
-                  >
-                    {task.description}
-                  </span>
-                </div>
-                {task.filePath && (
-                  <span className="text-xs text-muted-foreground font-mono truncate block">
-                    {task.filePath}
-                  </span>
-                )}
-              </div>
+                    {/* Icon Status */}
+                    <div className={cn(
+                      "relative z-10 flex h-7 w-7 items-center justify-center rounded-full border shadow-sm transition-all duration-300",
+                      isCompleted && "bg-green-500/10 border-green-500/20 text-green-600 dark:text-green-400",
+                      isActive && "bg-primary border-primary text-primary-foreground ring-4 ring-primary/10 scale-110",
+                      isPending && "bg-muted border-border text-muted-foreground"
+                    )}>
+                      {isCompleted && <Check className="h-3.5 w-3.5" />}
+                      {isActive && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                      {isPending && <Circle className="h-2 w-2 fill-current opacity-50" />}
+                    </div>
+
+                    {/* Task Content */}
+                    <div className={cn(
+                      "flex-1 pt-1 min-w-0 transition-all",
+                      isActive && "translate-x-1"
+                    )}>
+                      <div className="flex flex-col gap-1.5">
+                        <div className="flex items-center justify-between gap-4">
+                           <p className={cn(
+                             "text-sm font-medium leading-none truncate pr-4",
+                             isCompleted && "text-muted-foreground line-through decoration-border/60",
+                             isActive && "text-primary font-semibold"
+                           )}>
+                             {task.description}
+                           </p>
+                           {isActive && (
+                              <Badge variant="outline" className="h-5 px-1.5 text-[10px] bg-primary/5 text-primary border-primary/20 animate-pulse">
+                                Active
+                              </Badge>
+                           )}
+                        </div>
+                        
+                        {(task.filePath || isActive) && (
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground font-mono">
+                            {task.filePath ? (
+                              <>
+                                <FileCode className="h-3 w-3 opacity-70" />
+                                <span className="truncate opacity-80 hover:opacity-100 transition-opacity">
+                                  {task.filePath}
+                                </span>
+                              </>
+                            ) : (
+                               <span className="h-3 block" /> /* Spacer */
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
-          ))}
+          </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }

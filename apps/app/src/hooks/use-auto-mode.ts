@@ -155,10 +155,10 @@ export function useAutoMode() {
 
         case "auto_mode_error":
           if (event.featureId && event.error) {
-            // Check if this is a user-initiated cancellation (not a real error)
-            if (event.errorType === "cancellation") {
-              // User cancelled the feature - just log as info, not an error
-              console.log("[AutoMode] Feature cancelled:", event.error);
+            // Check if this is a user-initiated cancellation or abort (not a real error)
+            if (event.errorType === "cancellation" || event.errorType === "abort") {
+              // User cancelled/aborted the feature - just log as info, not an error
+              console.log("[AutoMode] Feature cancelled/aborted:", event.error);
               // Remove from running tasks
               if (eventProjectId) {
                 removeRunningTask(eventProjectId, event.featureId);
