@@ -305,6 +305,15 @@ export interface Feature {
   requirePlanApproval?: boolean; // Whether to pause and require manual approval before implementation
 }
 
+// Parsed task from spec (for spec and full planning modes)
+export interface ParsedTask {
+  id: string;          // e.g., "T001"
+  description: string; // e.g., "Create user model"
+  filePath?: string;   // e.g., "src/models/user.ts"
+  phase?: string;      // e.g., "Phase 1: Foundation" (for full mode)
+  status: 'pending' | 'in_progress' | 'completed' | 'failed';
+}
+
 // PlanSpec status for feature planning/specification
 export interface PlanSpec {
   status: 'pending' | 'generating' | 'generated' | 'approved' | 'rejected';
@@ -315,6 +324,8 @@ export interface PlanSpec {
   reviewedByUser: boolean; // True if user has seen the spec
   tasksCompleted?: number;
   tasksTotal?: number;
+  currentTaskId?: string; // ID of the task currently being worked on
+  tasks?: ParsedTask[];   // Parsed tasks from the spec
 }
 
 // File tree node for project analysis

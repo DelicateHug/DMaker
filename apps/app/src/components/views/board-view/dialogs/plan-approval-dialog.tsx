@@ -14,7 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Markdown } from "@/components/ui/markdown";
 import { Label } from "@/components/ui/label";
 import { Feature } from "@/store/app-store";
-import { Check, X, Edit2, Eye, Loader2 } from "lucide-react";
+import { Check, RefreshCw, Edit2, Eye, Loader2 } from "lucide-react";
 
 interface PlanApprovalDialogProps {
   open: boolean;
@@ -143,18 +143,21 @@ export function PlanApprovalDialog({
             )}
           </div>
 
-          {/* Reject Feedback Section - Only show when not in viewOnly mode */}
+          {/* Revision Feedback Section - Only show when not in viewOnly mode */}
           {showRejectFeedback && !viewOnly && (
             <div className="mt-4 space-y-2">
-              <Label htmlFor="reject-feedback">Feedback (optional)</Label>
+              <Label htmlFor="reject-feedback">What changes would you like?</Label>
               <Textarea
                 id="reject-feedback"
                 value={rejectFeedback}
                 onChange={(e) => setRejectFeedback(e.target.value)}
-                placeholder="Provide feedback on why this plan is being rejected..."
+                placeholder="Describe the changes you'd like to see in the plan..."
                 className="min-h-[80px]"
                 disabled={isLoading}
               />
+              <p className="text-xs text-muted-foreground">
+                Leave empty to cancel the feature, or provide feedback to regenerate the plan.
+              </p>
             </div>
           )}
         </div>
@@ -171,30 +174,30 @@ export function PlanApprovalDialog({
                 onClick={handleCancelReject}
                 disabled={isLoading}
               >
-                Cancel
+                Back
               </Button>
               <Button
-                variant="destructive"
+                variant="secondary"
                 onClick={handleReject}
                 disabled={isLoading}
               >
                 {isLoading ? (
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                 ) : (
-                  <X className="w-4 h-4 mr-2" />
+                  <RefreshCw className="w-4 h-4 mr-2" />
                 )}
-                Confirm Reject
+                {rejectFeedback.trim() ? "Revise Plan" : "Cancel Feature"}
               </Button>
             </>
           ) : (
             <>
               <Button
-                variant="destructive"
+                variant="outline"
                 onClick={handleReject}
                 disabled={isLoading}
               >
-                <X className="w-4 h-4 mr-2" />
-                Reject
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Request Changes
               </Button>
               <Button
                 onClick={handleApprove}

@@ -294,6 +294,20 @@ export function useAutoMode() {
           }
           break;
 
+        case "plan_revision_requested":
+          // Log when user requests plan revision with feedback
+          if (event.featureId) {
+            const revisionEvent = event as Extract<AutoModeEvent, { type: "plan_revision_requested" }>;
+            console.log(`[AutoMode] Plan revision requested for ${event.featureId} (v${revisionEvent.planVersion})`);
+            addAutoModeActivity({
+              featureId: event.featureId,
+              type: "planning",
+              message: `Revising plan based on feedback (v${revisionEvent.planVersion})...`,
+              phase: "planning",
+            });
+          }
+          break;
+
         case "auto_mode_task_started":
           // Task started - show which task is being worked on
           if (event.featureId && "taskId" in event && "taskDescription" in event) {

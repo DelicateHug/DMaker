@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { cn } from "@/lib/utils";
 import { CheckCircle2, Circle, Loader2, ChevronDown, ChevronRight } from "lucide-react";
 import { getElectronAPI } from "@/lib/electron";
@@ -16,15 +16,65 @@ interface TaskInfo {
 
 interface TaskProgressPanelProps {
   featureId: string;
+  projectPath?: string;
   className?: string;
 }
 
-export function TaskProgressPanel({ featureId, className }: TaskProgressPanelProps) {
+export function TaskProgressPanel({ featureId, projectPath, className }: TaskProgressPanelProps) {
   const [tasks, setTasks] = useState<TaskInfo[]>([]);
   const [isExpanded, setIsExpanded] = useState(true);
   const [currentTaskId, setCurrentTaskId] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Listen to task events
+  // Load initial tasks from feature's planSpec
+  const loadInitialTasks = useCallback(async () => {
+    if (!projectPath) {
+      setIsLoading(false);
+      return;
+    }
+
+    try {
+      const api = getElectronAPI();
+      if (!api?.features) {
+        setIsLoading(false);
+        return;
+      }
+
+      const result = await api.features.get(projectPath, featureId);
+      if (result.success && result.feature?.planSpec?.tasks) {
+        const planTasks = result.feature.planSpec.tasks;
+        const currentId = result.feature.planSpec.currentTaskId;
+        const completedCount = result.feature.planSpec.tasksCompleted || 0;
+
+        // Convert planSpec tasks to TaskInfo with proper status
+        const initialTasks: TaskInfo[] = planTasks.map((t: any, index: number) => ({
+          id: t.id,
+          description: t.description,
+          filePath: t.filePath,
+          phase: t.phase,
+          status: index < completedCount
+            ? "completed" as const
+            : t.id === currentId
+              ? "in_progress" as const
+              : "pending" as const,
+        }));
+
+        setTasks(initialTasks);
+        setCurrentTaskId(currentId || null);
+      }
+    } catch (error) {
+      console.error("Failed to load initial tasks:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [featureId, projectPath]);
+
+  // Load initial state on mount
+  useEffect(() => {
+    loadInitialTasks();
+  }, [loadInitialTasks]);
+
+  // Listen to task events for real-time updates
   useEffect(() => {
     const api = getElectronAPI();
     if (!api?.autoMode) return;
@@ -69,24 +119,25 @@ export function TaskProgressPanel({ featureId, className }: TaskProgressPanelPro
                 t.id === taskEvent.taskId ? { ...t, status: "completed" as const } : t
               )
             );
-            // Clear current task if it was completed
-            if (currentTaskId === taskEvent.taskId) {
-              setCurrentTaskId(null);
-            }
+            setCurrentTaskId(null);
           }
           break;
       }
     });
 
     return unsubscribe;
-  }, [featureId, currentTaskId]);
+  }, [featureId]);
 
   // Calculate progress
   const completedCount = tasks.filter((t) => t.status === "completed").length;
   const totalCount = tasks.length;
   const progressPercent = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
 
-  // Don't render if no tasks
+  // Don't render if loading or no tasks
+  if (isLoading) {
+    return null;
+  }
+
   if (tasks.length === 0) {
     return null;
   }

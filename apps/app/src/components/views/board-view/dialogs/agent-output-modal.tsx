@@ -218,6 +218,13 @@ export function AgentOutputModal({
           // Show when plan is auto-approved
           newContent = `\n✅ Plan auto-approved - continuing to implementation...\n`;
           break;
+        case "plan_revision_requested":
+          // Show when user requests plan revision
+          if ("planVersion" in event) {
+            const revisionEvent = event as Extract<AutoModeEvent, { type: "plan_revision_requested" }>;
+            newContent = `\n🔄 Revising plan based on your feedback (v${revisionEvent.planVersion})...\n`;
+          }
+          break;
         case "auto_mode_task_started":
           // Show when a task starts
           if ("taskId" in event && "taskDescription" in event) {
@@ -362,7 +369,11 @@ export function AgentOutputModal({
         </DialogHeader>
 
         {/* Task Progress Panel - shows when tasks are being executed */}
-        <TaskProgressPanel featureId={featureId} className="flex-shrink-0 mx-1" />
+        <TaskProgressPanel
+          featureId={featureId}
+          projectPath={projectPath}
+          className="flex-shrink-0 mx-1"
+        />
 
         {viewMode === "changes" ? (
           <div className="flex-1 min-h-[400px] max-h-[60vh] overflow-y-auto scrollbar-visible">

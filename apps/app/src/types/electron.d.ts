@@ -244,6 +244,7 @@ export type AutoModeEvent =
       projectPath?: string;
       planContent: string;
       planningMode: "lite" | "spec" | "full";
+      planVersion?: number;
     }
   | {
       type: "plan_auto_approved";
@@ -257,12 +258,21 @@ export type AutoModeEvent =
       featureId: string;
       projectPath?: string;
       hasEdits: boolean;
+      planVersion?: number;
     }
   | {
       type: "plan_rejected";
       featureId: string;
       projectPath?: string;
       feedback?: string;
+    }
+  | {
+      type: "plan_revision_requested";
+      featureId: string;
+      projectPath?: string;
+      feedback?: string;
+      hasEdits?: boolean;
+      planVersion?: number;
     }
   | {
       type: "planning_started";
