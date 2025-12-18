@@ -302,6 +302,7 @@ export interface Feature {
   justFinishedAt?: string; // ISO timestamp when agent just finished and moved to waiting_approval (shows badge for 2 minutes)
   planningMode?: PlanningMode; // Planning mode for this feature
   planSpec?: PlanSpec; // Generated spec/plan data
+  requirePlanApproval?: boolean; // Whether to pause and require manual approval before implementation
 }
 
 // PlanSpec status for feature planning/specification
@@ -461,6 +462,16 @@ export interface AppState {
   specCreatingForProject: string | null;
 
   defaultPlanningMode: PlanningMode;
+  defaultRequirePlanApproval: boolean;
+
+  // Plan Approval State
+  // When a plan requires user approval, this holds the pending approval details
+  pendingPlanApproval: {
+    featureId: string;
+    projectPath: string;
+    planContent: string;
+    planningMode: "lite" | "spec" | "full";
+  } | null;
 }
 
 // Default background settings for board backgrounds
@@ -671,6 +682,15 @@ export interface AppActions {
   isSpecCreatingForProject: (projectPath: string) => boolean;
 
   setDefaultPlanningMode: (mode: PlanningMode) => void;
+  setDefaultRequirePlanApproval: (require: boolean) => void;
+
+  // Plan Approval actions
+  setPendingPlanApproval: (approval: {
+    featureId: string;
+    projectPath: string;
+    planContent: string;
+    planningMode: "lite" | "spec" | "full";
+  } | null) => void;
 
   // Reset
   reset: () => void;
@@ -758,6 +778,8 @@ const initialState: AppState = {
   },
   specCreatingForProject: null,
   defaultPlanningMode: 'skip' as PlanningMode,
+  defaultRequirePlanApproval: false,
+  pendingPlanApproval: null,
 };
 
 export const useAppStore = create<AppState & AppActions>()(
@@ -2138,6 +2160,10 @@ export const useAppStore = create<AppState & AppActions>()(
       },
 
       setDefaultPlanningMode: (mode) => set({ defaultPlanningMode: mode }),
+      setDefaultRequirePlanApproval: (require) => set({ defaultRequirePlanApproval: require }),
+
+      // Plan Approval actions
+      setPendingPlanApproval: (approval) => set({ pendingPlanApproval: approval }),
 
       // Reset
       reset: () => set(initialState),
@@ -2205,6 +2231,7 @@ export const useAppStore = create<AppState & AppActions>()(
         // Board background settings
         boardBackgroundByProject: state.boardBackgroundByProject,
         defaultPlanningMode: state.defaultPlanningMode,
+        defaultRequirePlanApproval: state.defaultRequirePlanApproval,
       }),
     }
   )

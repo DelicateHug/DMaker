@@ -60,6 +60,7 @@ interface AddFeatureDialogProps {
     thinkingLevel: ThinkingLevel;
     priority: number;
     planningMode: PlanningMode;
+    requirePlanApproval: boolean;
   }) => void;
   categorySuggestions: string[];
   defaultSkipTests: boolean;
@@ -96,9 +97,10 @@ export function AddFeatureDialog({
   const [isEnhancing, setIsEnhancing] = useState(false);
   const [enhancementMode, setEnhancementMode] = useState<'improve' | 'technical' | 'simplify' | 'acceptance'>('improve');
   const [planningMode, setPlanningMode] = useState<PlanningMode>('skip');
+  const [requirePlanApproval, setRequirePlanApproval] = useState(false);
 
   // Get enhancement model and default planning mode from store
-  const { enhancementModel, defaultPlanningMode } = useAppStore();
+  const { enhancementModel, defaultPlanningMode, defaultRequirePlanApproval } = useAppStore();
 
   // Sync defaults when dialog opens
   useEffect(() => {
@@ -108,8 +110,9 @@ export function AddFeatureDialog({
         skipTests: defaultSkipTests,
       }));
       setPlanningMode(defaultPlanningMode);
+      setRequirePlanApproval(defaultRequirePlanApproval);
     }
-  }, [open, defaultSkipTests, defaultPlanningMode]);
+  }, [open, defaultSkipTests, defaultPlanningMode, defaultRequirePlanApproval]);
 
   const handleAdd = () => {
     if (!newFeature.description.trim()) {
@@ -134,6 +137,7 @@ export function AddFeatureDialog({
       thinkingLevel: normalizedThinking,
       priority: newFeature.priority,
       planningMode,
+      requirePlanApproval,
     });
 
     // Reset form
@@ -149,6 +153,7 @@ export function AddFeatureDialog({
       thinkingLevel: "none",
     });
     setPlanningMode(defaultPlanningMode);
+    setRequirePlanApproval(defaultRequirePlanApproval);
     setNewFeaturePreviewMap(new Map());
     setShowAdvancedOptions(false);
     setDescriptionError(false);
@@ -408,6 +413,8 @@ export function AddFeatureDialog({
             <PlanningModeSelector
               mode={planningMode}
               onModeChange={setPlanningMode}
+              requireApproval={requirePlanApproval}
+              onRequireApprovalChange={setRequirePlanApproval}
               featureDescription={newFeature.description}
               testIdPrefix="add-feature"
               compact

@@ -49,6 +49,8 @@ interface KanbanBoardProps {
   onMerge: (feature: Feature) => void;
   onComplete: (feature: Feature) => void;
   onImplement: (feature: Feature) => void;
+  onViewPlan: (feature: Feature) => void;
+  onApprovePlan: (feature: Feature) => void;
   featuresWithContext: Set<string>;
   runningAutoTasks: string[];
   shortcuts: ReturnType<typeof useKeyboardShortcutsConfig>;
@@ -81,6 +83,8 @@ export function KanbanBoard({
   onMerge,
   onComplete,
   onImplement,
+  onViewPlan,
+  onApprovePlan,
   featuresWithContext,
   runningAutoTasks,
   shortcuts,
@@ -195,6 +199,8 @@ export function KanbanBoard({
                         onMerge={() => onMerge(feature)}
                         onComplete={() => onComplete(feature)}
                         onImplement={() => onImplement(feature)}
+                        onViewPlan={() => onViewPlan(feature)}
+                        onApprovePlan={() => onApprovePlan(feature)}
                         hasContext={featuresWithContext.has(feature.id)}
                         isCurrentAutoTask={runningAutoTasks.includes(
                           feature.id

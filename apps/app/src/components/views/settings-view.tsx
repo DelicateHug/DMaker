@@ -40,6 +40,8 @@ export function SettingsView() {
     moveProjectToTrash,
     defaultPlanningMode,
     setDefaultPlanningMode,
+    defaultRequirePlanApproval,
+    setDefaultRequirePlanApproval,
   } = useAppStore();
 
   // Convert electron Project to settings-view Project type
@@ -122,10 +124,12 @@ export function SettingsView() {
             defaultSkipTests={defaultSkipTests}
             useWorktrees={useWorktrees}
             defaultPlanningMode={defaultPlanningMode}
+            defaultRequirePlanApproval={defaultRequirePlanApproval}
             onShowProfilesOnlyChange={setShowProfilesOnly}
             onDefaultSkipTestsChange={setDefaultSkipTests}
             onUseWorktreesChange={setUseWorktrees}
             onDefaultPlanningModeChange={setDefaultPlanningMode}
+            onDefaultRequirePlanApprovalChange={setDefaultRequirePlanApproval}
           />
         );
       case "danger":

@@ -2,7 +2,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   FlaskConical, Settings2, TestTube, GitBranch,
-  Zap, ClipboardList, FileText, ScrollText
+  Zap, ClipboardList, FileText, ScrollText, ShieldCheck
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -20,10 +20,12 @@ interface FeatureDefaultsSectionProps {
   defaultSkipTests: boolean;
   useWorktrees: boolean;
   defaultPlanningMode: PlanningMode;
+  defaultRequirePlanApproval: boolean;
   onShowProfilesOnlyChange: (value: boolean) => void;
   onDefaultSkipTestsChange: (value: boolean) => void;
   onUseWorktreesChange: (value: boolean) => void;
   onDefaultPlanningModeChange: (value: PlanningMode) => void;
+  onDefaultRequirePlanApprovalChange: (value: boolean) => void;
 }
 
 export function FeatureDefaultsSection({
@@ -31,10 +33,12 @@ export function FeatureDefaultsSection({
   defaultSkipTests,
   useWorktrees,
   defaultPlanningMode,
+  defaultRequirePlanApproval,
   onShowProfilesOnlyChange,
   onDefaultSkipTestsChange,
   onUseWorktreesChange,
   onDefaultPlanningModeChange,
+  onDefaultRequirePlanApprovalChange,
 }: FeatureDefaultsSectionProps) {
   return (
     <div
@@ -126,8 +130,40 @@ export function FeatureDefaultsSection({
           </div>
         </div>
 
+        {/* Require Plan Approval Setting - only show when not skip */}
+        {defaultPlanningMode !== 'skip' && (
+          <>
+            <div className="group flex items-start space-x-3 p-3 rounded-xl hover:bg-accent/30 transition-colors duration-200 -mx-3">
+              <Checkbox
+                id="default-require-plan-approval"
+                checked={defaultRequirePlanApproval}
+                onCheckedChange={(checked) =>
+                  onDefaultRequirePlanApprovalChange(checked === true)
+                }
+                className="mt-1"
+                data-testid="default-require-plan-approval-checkbox"
+              />
+              <div className="space-y-1.5">
+                <Label
+                  htmlFor="default-require-plan-approval"
+                  className="text-foreground cursor-pointer font-medium flex items-center gap-2"
+                >
+                  <ShieldCheck className="w-4 h-4 text-brand-500" />
+                  Require manual plan approval by default
+                </Label>
+                <p className="text-xs text-muted-foreground/80 leading-relaxed">
+                  When enabled, the agent will pause after generating a plan and wait for you to
+                  review, edit, and approve before starting implementation. You can also view the
+                  plan from the feature card.
+                </p>
+              </div>
+            </div>
+            <div className="border-t border-border/30" />
+          </>
+        )}
+
         {/* Separator */}
-        <div className="border-t border-border/30" />
+        {defaultPlanningMode === 'skip' && <div className="border-t border-border/30" />}
 
         {/* Profiles Only Setting */}
         <div className="group flex items-start space-x-3 p-3 rounded-xl hover:bg-accent/30 transition-colors duration-200 -mx-3">

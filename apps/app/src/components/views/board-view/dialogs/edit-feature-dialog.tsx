@@ -62,6 +62,7 @@ interface EditFeatureDialogProps {
       imagePaths: DescriptionImagePath[];
       priority: number;
       planningMode: PlanningMode;
+      requirePlanApproval: boolean;
     }
   ) => void;
   categorySuggestions: string[];
@@ -89,6 +90,7 @@ export function EditFeatureDialog({
   const [enhancementMode, setEnhancementMode] = useState<'improve' | 'technical' | 'simplify' | 'acceptance'>('improve');
   const [showDependencyTree, setShowDependencyTree] = useState(false);
   const [planningMode, setPlanningMode] = useState<PlanningMode>(feature?.planningMode ?? 'skip');
+  const [requirePlanApproval, setRequirePlanApproval] = useState(feature?.requirePlanApproval ?? false);
 
   // Get enhancement model from store
   const { enhancementModel } = useAppStore();
@@ -97,6 +99,7 @@ export function EditFeatureDialog({
     setEditingFeature(feature);
     if (feature) {
       setPlanningMode(feature.planningMode ?? 'skip');
+      setRequirePlanApproval(feature.requirePlanApproval ?? false);
     } else {
       setEditFeaturePreviewMap(new Map());
       setShowEditAdvancedOptions(false);
@@ -121,6 +124,7 @@ export function EditFeatureDialog({
       imagePaths: editingFeature.imagePaths ?? [],
       priority: editingFeature.priority ?? 2,
       planningMode,
+      requirePlanApproval,
     };
 
     onUpdate(editingFeature.id, updates);
@@ -394,6 +398,8 @@ export function EditFeatureDialog({
             <PlanningModeSelector
               mode={planningMode}
               onModeChange={setPlanningMode}
+              requireApproval={requirePlanApproval}
+              onRequireApprovalChange={setRequirePlanApproval}
               featureDescription={editingFeature.description}
               testIdPrefix="edit-feature"
               compact

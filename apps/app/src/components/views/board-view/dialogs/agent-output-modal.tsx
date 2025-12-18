@@ -187,6 +187,36 @@ export function AgentOutputModal({
 
           newContent = prepContent;
           break;
+        case "planning_started":
+          // Show when planning mode begins
+          if ("mode" in event && "message" in event) {
+            const modeLabel =
+              event.mode === "lite"
+                ? "Lite"
+                : event.mode === "spec"
+                ? "Spec"
+                : "Full";
+            newContent = `\n📋 Planning Mode: ${modeLabel}\n${event.message}\n`;
+          }
+          break;
+        case "plan_approval_required":
+          // Show when plan requires approval
+          if ("planningMode" in event) {
+            newContent = `\n⏸️ Plan generated - waiting for your approval...\n`;
+          }
+          break;
+        case "plan_approved":
+          // Show when plan is manually approved
+          if ("hasEdits" in event) {
+            newContent = event.hasEdits
+              ? `\n✅ Plan approved (with edits) - continuing to implementation...\n`
+              : `\n✅ Plan approved - continuing to implementation...\n`;
+          }
+          break;
+        case "plan_auto_approved":
+          // Show when plan is auto-approved
+          newContent = `\n✅ Plan auto-approved - continuing to implementation...\n`;
+          break;
         case "auto_mode_feature_complete":
           const emoji = event.passes ? "✅" : "⚠️";
           newContent = `\n${emoji} Task completed: ${event.message}\n`;

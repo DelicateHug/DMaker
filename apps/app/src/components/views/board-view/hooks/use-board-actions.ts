@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { Feature, FeatureImage, AgentModel, ThinkingLevel, useAppStore } from "@/store/app-store";
+import { Feature, FeatureImage, AgentModel, ThinkingLevel, PlanningMode, useAppStore } from "@/store/app-store";
 import { FeatureImagePath as DescriptionImagePath } from "@/components/ui/description-image-dropzone";
 import { getElectronAPI } from "@/lib/electron";
 import { toast } from "sonner";
@@ -67,6 +67,8 @@ export function useBoardActions({
       model: AgentModel;
       thinkingLevel: ThinkingLevel;
       priority: number;
+      planningMode: PlanningMode;
+      requirePlanApproval: boolean;
     }) => {
       const newFeatureData = {
         ...featureData,
@@ -91,6 +93,8 @@ export function useBoardActions({
         thinkingLevel: ThinkingLevel;
         imagePaths: DescriptionImagePath[];
         priority: number;
+        planningMode?: PlanningMode;
+        requirePlanApproval?: boolean;
       }
     ) => {
       updateFeature(featureId, updates);

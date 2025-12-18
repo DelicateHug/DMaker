@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 
 export type PlanningMode = 'skip' | 'lite' | 'spec' | 'full';
@@ -25,6 +26,8 @@ export interface PlanSpec {
 interface PlanningModeSelectorProps {
   mode: PlanningMode;
   onModeChange: (mode: PlanningMode) => void;
+  requireApproval?: boolean;
+  onRequireApprovalChange?: (require: boolean) => void;
   planSpec?: PlanSpec;
   onGenerateSpec?: () => void;
   onApproveSpec?: () => void;
@@ -81,6 +84,8 @@ const modes = [
 export function PlanningModeSelector({
   mode,
   onModeChange,
+  requireApproval,
+  onRequireApprovalChange,
   planSpec,
   onGenerateSpec,
   onApproveSpec,
@@ -194,6 +199,24 @@ export function PlanningModeSelector({
           );
         })}
       </div>
+
+      {/* Require Approval Checkbox - Only show when mode !== 'skip' */}
+      {mode !== 'skip' && onRequireApprovalChange && (
+        <div className="flex items-center gap-2 mt-3 pt-3 border-t border-border">
+          <Checkbox
+            id="require-approval"
+            checked={requireApproval}
+            onCheckedChange={(checked) => onRequireApprovalChange(checked === true)}
+            data-testid={`${testIdPrefix}-require-approval-checkbox`}
+          />
+          <Label
+            htmlFor="require-approval"
+            className="text-sm text-muted-foreground cursor-pointer"
+          >
+            Manually approve plan before implementation
+          </Label>
+        </div>
+      )}
 
       {/* Spec Preview/Actions Panel - Only for spec/full modes */}
       {requiresApproval && (

@@ -544,6 +544,20 @@ export class HttpApiClient implements ElectronAPI {
       }),
     commitFeature: (projectPath: string, featureId: string) =>
       this.post("/api/auto-mode/commit-feature", { projectPath, featureId }),
+    approvePlan: (
+      projectPath: string,
+      featureId: string,
+      approved: boolean,
+      editedPlan?: string,
+      feedback?: string
+    ) =>
+      this.post("/api/auto-mode/approve-plan", {
+        projectPath,
+        featureId,
+        approved,
+        editedPlan,
+        feedback,
+      }),
     onEvent: (callback: (event: AutoModeEvent) => void) => {
       return this.subscribeToEvent(
         "auto-mode:event",

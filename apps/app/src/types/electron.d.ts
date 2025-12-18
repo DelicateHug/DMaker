@@ -237,6 +237,38 @@ export type AutoModeEvent =
       recommendations: string[];
       estimatedCost?: number;
       estimatedTime?: string;
+    }
+  | {
+      type: "plan_approval_required";
+      featureId: string;
+      projectPath?: string;
+      planContent: string;
+      planningMode: "lite" | "spec" | "full";
+    }
+  | {
+      type: "plan_auto_approved";
+      featureId: string;
+      projectPath?: string;
+      planContent: string;
+      planningMode: "lite" | "spec" | "full";
+    }
+  | {
+      type: "plan_approved";
+      featureId: string;
+      projectPath?: string;
+      hasEdits: boolean;
+    }
+  | {
+      type: "plan_rejected";
+      featureId: string;
+      projectPath?: string;
+      feedback?: string;
+    }
+  | {
+      type: "planning_started";
+      featureId: string;
+      mode: "lite" | "spec" | "full";
+      message: string;
     };
 
 export type SpecRegenerationEvent =
@@ -393,6 +425,17 @@ export interface AutoModeAPI {
   commitFeature: (
     projectPath: string,
     featureId: string
+  ) => Promise<{
+    success: boolean;
+    error?: string;
+  }>;
+
+  approvePlan: (
+    projectPath: string,
+    featureId: string,
+    approved: boolean,
+    editedPlan?: string,
+    feedback?: string
   ) => Promise<{
     success: boolean;
     error?: string;

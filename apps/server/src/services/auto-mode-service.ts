@@ -47,7 +47,25 @@ Before implementing, create a brief planning outline:
 4. **Tasks**: Numbered task list (3-7 items)
 5. **Risks**: Any gotchas to watch for
 
-Present this outline, then proceed with implementation.`,
+After generating the outline, output:
+"[PLAN_GENERATED] Planning outline complete."
+
+Then proceed with implementation.`,
+
+  lite_with_approval: `## Planning Phase (Lite Mode)
+
+Before implementing, create a brief planning outline:
+
+1. **Goal**: What are we accomplishing? (1 sentence)
+2. **Approach**: How will we do it? (2-3 sentences)
+3. **Files to Touch**: List files and what changes
+4. **Tasks**: Numbered task list (3-7 items)
+5. **Risks**: Any gotchas to watch for
+
+After generating the outline, output:
+"[SPEC_GENERATED] Please review the planning outline above. Reply with 'approved' to proceed or provide feedback for revisions."
+
+DO NOT proceed with implementation until you receive explicit approval.`,
 
   spec: `## Specification Phase (Spec Mode)
 
@@ -110,6 +128,7 @@ interface Feature {
   >;
   planningMode?: PlanningMode;
   planSpec?: PlanSpec;
+  requirePlanApproval?: boolean; // If true, pause for user approval before implementation
 }
 
 interface RunningFeature {
@@ -128,12 +147,20 @@ interface AutoModeConfig {
   projectPath: string;
 }
 
+interface PendingApproval {
+  resolve: (result: { approved: boolean; editedPlan?: string; feedback?: string }) => void;
+  reject: (error: Error) => void;
+  featureId: string;
+  projectPath: string;
+}
+
 export class AutoModeService {
   private events: EventEmitter;
   private runningFeatures = new Map<string, RunningFeature>();
   private autoLoopRunning = false;
   private autoLoopAbortController: AbortController | null = null;
   private config: AutoModeConfig | null = null;
+  private pendingApprovals = new Map<string, PendingApproval>();
 
   constructor(events: EventEmitter) {
     this.events = events;
@@ -252,7 +279,8 @@ export class AutoModeService {
     projectPath: string,
     featureId: string,
     useWorktrees = true,
-    isAutoMode = false
+    isAutoMode = false,
+    customPrompt?: string
   ): Promise<void> {
     if (this.runningFeatures.has(featureId)) {
       throw new Error(`Feature ${featureId} is already running`);
@@ -304,10 +332,15 @@ export class AutoModeService {
       // Update feature status to in_progress
       await this.updateFeatureStatus(projectPath, featureId, "in_progress");
 
-      // Build the prompt with planning phase if needed
-      const featurePrompt = this.buildFeaturePrompt(feature);
-      const planningPrefix = this.getPlanningPromptPrefix(feature);
-      const prompt = planningPrefix + featurePrompt;
+      // Use custom prompt if provided, otherwise build the prompt with planning phase
+      let prompt: string;
+      if (customPrompt) {
+        prompt = customPrompt;
+      } else {
+        const featurePrompt = this.buildFeaturePrompt(feature);
+        const planningPrefix = this.getPlanningPromptPrefix(feature);
+        prompt = planningPrefix + featurePrompt;
+      }
 
       // Emit planning mode info
       if (feature.planningMode && feature.planningMode !== 'skip') {
@@ -336,7 +369,12 @@ export class AutoModeService {
         prompt,
         abortController,
         imagePaths,
-        model
+        model,
+        {
+          projectPath,
+          planningMode: feature.planningMode,
+          requirePlanApproval: feature.requirePlanApproval,
+        }
       );
 
       // Mark as waiting_approval for user review
@@ -375,6 +413,8 @@ export class AutoModeService {
         });
       }
     } finally {
+      console.log(`[AutoMode] Feature ${featureId} execution ended, cleaning up runningFeatures`);
+      console.log(`[AutoMode] Pending approvals at cleanup: ${Array.from(this.pendingApprovals.keys()).join(', ') || 'none'}`);
       this.runningFeatures.delete(featureId);
     }
   }
@@ -387,6 +427,9 @@ export class AutoModeService {
     if (!running) {
       return false;
     }
+
+    // Cancel any pending plan approval for this feature
+    this.cancelPlanApproval(featureId);
 
     running.abortController.abort();
     return true;
@@ -614,13 +657,18 @@ Address the follow-up instructions above. Review the previous work and make the 
       }
 
       // Use fullPrompt (already built above) with model and all images
+      // Note: Follow-ups skip planning mode - they continue from previous work
       await this.runAgent(
         workDir,
         featureId,
         fullPrompt,
         abortController,
         allImagePaths.length > 0 ? allImagePaths : imagePaths,
-        model
+        model,
+        {
+          projectPath,
+          planningMode: 'skip', // Follow-ups don't require approval
+        }
       );
 
       // Mark as waiting_approval for user review
@@ -925,6 +973,155 @@ Format your response as a structured markdown document.`;
     }));
   }
 
+  /**
+   * Wait for plan approval from the user.
+   * Returns a promise that resolves when the user approves/rejects the plan.
+   */
+  waitForPlanApproval(
+    featureId: string,
+    projectPath: string
+  ): Promise<{ approved: boolean; editedPlan?: string; feedback?: string }> {
+    console.log(`[AutoMode] Registering pending approval for feature ${featureId}`);
+    console.log(`[AutoMode] Current pending approvals: ${Array.from(this.pendingApprovals.keys()).join(', ') || 'none'}`);
+    return new Promise((resolve, reject) => {
+      this.pendingApprovals.set(featureId, {
+        resolve,
+        reject,
+        featureId,
+        projectPath,
+      });
+      console.log(`[AutoMode] Pending approval registered for feature ${featureId}`);
+    });
+  }
+
+  /**
+   * Resolve a pending plan approval.
+   * Called when the user approves or rejects the plan via API.
+   */
+  async resolvePlanApproval(
+    featureId: string,
+    approved: boolean,
+    editedPlan?: string,
+    feedback?: string,
+    projectPathFromClient?: string
+  ): Promise<{ success: boolean; error?: string }> {
+    console.log(`[AutoMode] resolvePlanApproval called for feature ${featureId}, approved=${approved}`);
+    console.log(`[AutoMode] Current pending approvals: ${Array.from(this.pendingApprovals.keys()).join(', ') || 'none'}`);
+    const pending = this.pendingApprovals.get(featureId);
+
+    if (!pending) {
+      console.log(`[AutoMode] No pending approval in Map for feature ${featureId}`);
+
+      // RECOVERY: If no pending approval but we have projectPath from client,
+      // check if feature's planSpec.status is 'generated' and handle recovery
+      if (projectPathFromClient) {
+        console.log(`[AutoMode] Attempting recovery with projectPath: ${projectPathFromClient}`);
+        const feature = await this.loadFeature(projectPathFromClient, featureId);
+
+        if (feature?.planSpec?.status === 'generated') {
+          console.log(`[AutoMode] Feature ${featureId} has planSpec.status='generated', performing recovery`);
+
+          if (approved) {
+            // Update planSpec to approved
+            await this.updateFeaturePlanSpec(projectPathFromClient, featureId, {
+              status: 'approved',
+              approvedAt: new Date().toISOString(),
+              reviewedByUser: true,
+              content: editedPlan || feature.planSpec.content,
+            });
+
+            // Build continuation prompt and re-run the feature
+            const planContent = editedPlan || feature.planSpec.content || '';
+            let continuationPrompt = `The plan/specification has been approved. `;
+            if (feedback) {
+              continuationPrompt += `\n\nUser feedback: ${feedback}\n\n`;
+            }
+            continuationPrompt += `Now proceed with the implementation as specified in the plan:\n\n${planContent}\n\nImplement the feature now.`;
+
+            console.log(`[AutoMode] Starting recovery execution for feature ${featureId}`);
+
+            // Start feature execution with the continuation prompt (async, don't await)
+            this.executeFeature(projectPathFromClient, featureId, true, false, continuationPrompt)
+              .catch((error) => {
+                console.error(`[AutoMode] Recovery execution failed for feature ${featureId}:`, error);
+              });
+
+            return { success: true };
+          } else {
+            // Rejected - update status and emit event
+            await this.updateFeaturePlanSpec(projectPathFromClient, featureId, {
+              status: 'rejected',
+              reviewedByUser: true,
+            });
+
+            await this.updateFeatureStatus(projectPathFromClient, featureId, 'backlog');
+
+            this.emitAutoModeEvent('plan_rejected', {
+              featureId,
+              projectPath: projectPathFromClient,
+              feedback,
+            });
+
+            return { success: true };
+          }
+        }
+      }
+
+      console.log(`[AutoMode] ERROR: No pending approval found for feature ${featureId} and recovery not possible`);
+      return { success: false, error: `No pending approval for feature ${featureId}` };
+    }
+    console.log(`[AutoMode] Found pending approval for feature ${featureId}, proceeding...`);
+
+    const { projectPath } = pending;
+
+    // Update feature's planSpec status
+    await this.updateFeaturePlanSpec(projectPath, featureId, {
+      status: approved ? 'approved' : 'rejected',
+      approvedAt: approved ? new Date().toISOString() : undefined,
+      reviewedByUser: true,
+      content: editedPlan, // Update content if user provided an edited version
+    });
+
+    // If rejected with feedback, we can store it for the user to see
+    if (!approved && feedback) {
+      // Emit event so client knows the rejection reason
+      this.emitAutoModeEvent('plan_rejected', {
+        featureId,
+        projectPath,
+        feedback,
+      });
+    }
+
+    // Resolve the promise with all data including feedback
+    pending.resolve({ approved, editedPlan, feedback });
+    this.pendingApprovals.delete(featureId);
+
+    return { success: true };
+  }
+
+  /**
+   * Cancel a pending plan approval (e.g., when feature is stopped).
+   */
+  cancelPlanApproval(featureId: string): void {
+    console.log(`[AutoMode] cancelPlanApproval called for feature ${featureId}`);
+    console.log(`[AutoMode] Current pending approvals: ${Array.from(this.pendingApprovals.keys()).join(', ') || 'none'}`);
+    const pending = this.pendingApprovals.get(featureId);
+    if (pending) {
+      console.log(`[AutoMode] Found and cancelling pending approval for feature ${featureId}`);
+      pending.reject(new Error('Plan approval cancelled - feature was stopped'));
+      this.pendingApprovals.delete(featureId);
+    } else {
+      console.log(`[AutoMode] No pending approval to cancel for feature ${featureId}`);
+    }
+  }
+
+  /**
+   * Check if a feature has a pending plan approval.
+   */
+  hasPendingApproval(featureId: string): boolean {
+    return this.pendingApprovals.has(featureId);
+  }
+
   // Private helpers
 
   private async setupWorktree(
@@ -1018,6 +1215,50 @@ Format your response as a structured markdown document.`;
     }
   }
 
+  /**
+   * Update the planSpec of a feature
+   */
+  private async updateFeaturePlanSpec(
+    projectPath: string,
+    featureId: string,
+    updates: Partial<PlanSpec>
+  ): Promise<void> {
+    const featurePath = path.join(
+      projectPath,
+      ".automaker",
+      "features",
+      featureId,
+      "feature.json"
+    );
+
+    try {
+      const data = await fs.readFile(featurePath, "utf-8");
+      const feature = JSON.parse(data);
+
+      // Initialize planSpec if it doesn't exist
+      if (!feature.planSpec) {
+        feature.planSpec = {
+          status: 'pending',
+          version: 1,
+          reviewedByUser: false,
+        };
+      }
+
+      // Apply updates
+      Object.assign(feature.planSpec, updates);
+
+      // If content is being updated and it's a new version, increment version
+      if (updates.content && updates.content !== feature.planSpec.content) {
+        feature.planSpec.version = (feature.planSpec.version || 0) + 1;
+      }
+
+      feature.updatedAt = new Date().toISOString();
+      await fs.writeFile(featurePath, JSON.stringify(feature, null, 2));
+    } catch (error) {
+      console.error(`[AutoMode] Failed to update planSpec for ${featureId}:`, error);
+    }
+  }
+
   private async loadPendingFeatures(projectPath: string): Promise<Feature[]> {
     const featuresDir = path.join(projectPath, ".automaker", "features");
 
@@ -1083,37 +1324,18 @@ Format your response as a structured markdown document.`;
       return ''; // No planning phase
     }
 
-    const planningPrompt = PLANNING_PROMPTS[mode];
+    // For lite mode, use the approval variant if requirePlanApproval is true
+    let promptKey: string = mode;
+    if (mode === 'lite' && feature.requirePlanApproval === true) {
+      promptKey = 'lite_with_approval';
+    }
+
+    const planningPrompt = PLANNING_PROMPTS[promptKey as keyof typeof PLANNING_PROMPTS];
     if (!planningPrompt) {
       return '';
     }
 
     return planningPrompt + '\n\n---\n\n## Feature Request\n\n';
-  }
-
-  /**
-   * Extract image paths from feature's imagePaths array
-   * Handles both string paths and objects with path property
-   */
-  private extractImagePaths(
-    imagePaths:
-      | Array<string | { path: string; [key: string]: unknown }>
-      | undefined,
-    projectPath: string
-  ): string[] {
-    if (!imagePaths || imagePaths.length === 0) {
-      return [];
-    }
-
-    return imagePaths
-      .map((imgPath) => {
-        const pathStr = typeof imgPath === "string" ? imgPath : imgPath.path;
-        // Resolve relative paths to absolute paths
-        return path.isAbsolute(pathStr)
-          ? pathStr
-          : path.join(projectPath, pathStr);
-      })
-      .filter((p) => p); // Filter out any empty paths
   }
 
   private buildFeaturePrompt(feature: Feature): string {
@@ -1181,8 +1403,24 @@ When done, summarize what you implemented and any notes for the developer.`;
     prompt: string,
     abortController: AbortController,
     imagePaths?: string[],
-    model?: string
+    model?: string,
+    options?: {
+      projectPath?: string;
+      planningMode?: PlanningMode;
+      requirePlanApproval?: boolean;
+    }
   ): Promise<void> {
+    const projectPath = options?.projectPath || workDir;
+    const planningMode = options?.planningMode || 'skip';
+    // Check if this planning mode can generate a spec/plan that needs approval
+    // - spec and full always generate specs
+    // - lite only generates approval-ready content when requirePlanApproval is true
+    const planningModeRequiresApproval =
+      planningMode === 'spec' ||
+      planningMode === 'full' ||
+      (planningMode === 'lite' && options?.requirePlanApproval === true);
+    const requiresApproval = planningModeRequiresApproval && options?.requirePlanApproval === true;
+
     // Build SDK options using centralized configuration for feature implementation
     const sdkOptions = createAutoModeOptions({
       cwd: workDir,
@@ -1196,7 +1434,7 @@ When done, summarize what you implemented and any notes for the developer.`;
     const allowedTools = sdkOptions.allowedTools as string[] | undefined;
 
     console.log(
-      `[AutoMode] runAgent called for feature ${featureId} with model: ${finalModel}`
+      `[AutoMode] runAgent called for feature ${featureId} with model: ${finalModel}, planningMode: ${planningMode}, requiresApproval: ${requiresApproval}`
     );
 
     // Get provider for this model
@@ -1214,7 +1452,7 @@ When done, summarize what you implemented and any notes for the developer.`;
       false // don't duplicate paths in text
     );
 
-    const options: ExecuteOptions = {
+    const executeOptions: ExecuteOptions = {
       prompt: promptContent,
       model: finalModel,
       maxTurns: maxTurns,
@@ -1224,8 +1462,9 @@ When done, summarize what you implemented and any notes for the developer.`;
     };
 
     // Execute via provider
-    const stream = provider.executeQuery(options);
+    const stream = provider.executeQuery(executeOptions);
     let responseText = "";
+    let specDetected = false;
     const outputPath = path.join(
       workDir,
       ".automaker",
@@ -1234,7 +1473,7 @@ When done, summarize what you implemented and any notes for the developer.`;
       "agent-output.md"
     );
 
-    for await (const msg of stream) {
+    streamLoop: for await (const msg of stream) {
       if (msg.type === "assistant" && msg.message?.content) {
         for (const block of msg.message.content) {
           if (block.type === "text") {
@@ -1253,10 +1492,157 @@ When done, summarize what you implemented and any notes for the developer.`;
               );
             }
 
-            this.emitAutoModeEvent("auto_mode_progress", {
-              featureId,
-              content: block.text,
-            });
+            // Check for [SPEC_GENERATED] marker in planning modes (spec or full)
+            if (planningModeRequiresApproval && !specDetected && responseText.includes('[SPEC_GENERATED]')) {
+              specDetected = true;
+
+              // Extract plan content (everything before the marker)
+              const markerIndex = responseText.indexOf('[SPEC_GENERATED]');
+              const planContent = responseText.substring(0, markerIndex).trim();
+
+              // Update planSpec status to 'generated' and save content
+              await this.updateFeaturePlanSpec(projectPath, featureId, {
+                status: 'generated',
+                content: planContent,
+                version: 1,
+                generatedAt: new Date().toISOString(),
+                reviewedByUser: false,
+              });
+
+              let approvedPlanContent = planContent;
+              let userFeedback: string | undefined;
+
+              // Only pause for approval if requirePlanApproval is true
+              if (requiresApproval) {
+                console.log(`[AutoMode] Spec generated for feature ${featureId}, waiting for approval`);
+
+                // CRITICAL: Register pending approval BEFORE emitting event
+                // This prevents race condition where frontend tries to approve before
+                // the approval is registered in pendingApprovals Map
+                const approvalPromise = this.waitForPlanApproval(featureId, projectPath);
+
+                // NOW emit plan_approval_required event (approval is already registered)
+                this.emitAutoModeEvent('plan_approval_required', {
+                  featureId,
+                  projectPath,
+                  planContent,
+                  planningMode,
+                });
+
+                // Wait for user approval
+                try {
+                  const approvalResult = await approvalPromise;
+
+                  if (!approvalResult.approved) {
+                    // User rejected the plan - abort feature execution
+                    console.log(`[AutoMode] Plan rejected for feature ${featureId}`);
+                    throw new Error('Plan rejected by user');
+                  }
+
+                  console.log(`[AutoMode] Plan approved for feature ${featureId}, continuing with implementation`);
+
+                  // If user provided an edited plan, update the planSpec content
+                  if (approvalResult.editedPlan) {
+                    approvedPlanContent = approvalResult.editedPlan;
+                    await this.updateFeaturePlanSpec(projectPath, featureId, {
+                      content: approvalResult.editedPlan,
+                    });
+                  }
+
+                  // Capture user feedback if provided
+                  userFeedback = approvalResult.feedback;
+
+                  // Emit event to notify implementation is starting
+                  this.emitAutoModeEvent('plan_approved', {
+                    featureId,
+                    projectPath,
+                    hasEdits: !!approvalResult.editedPlan,
+                  });
+
+                } catch (error) {
+                  if ((error as Error).message.includes('cancelled')) {
+                    throw error; // Re-throw cancellation errors
+                  }
+                  throw new Error(`Plan approval failed: ${(error as Error).message}`);
+                }
+              } else {
+                // Auto-approve: requirePlanApproval is false, just continue without pausing
+                console.log(`[AutoMode] Spec generated for feature ${featureId}, auto-approving (requirePlanApproval=false)`);
+
+                // Emit info event for frontend
+                this.emitAutoModeEvent('plan_auto_approved', {
+                  featureId,
+                  projectPath,
+                  planContent,
+                  planningMode,
+                });
+              }
+
+              // CRITICAL: After approval, we need to make a second call to continue implementation
+              // The agent is waiting for "approved" - we need to send it and continue
+              console.log(`[AutoMode] Making continuation call after plan approval for feature ${featureId}`);
+
+              // Update planSpec status to approved (handles both manual and auto-approval paths)
+              await this.updateFeaturePlanSpec(projectPath, featureId, {
+                status: 'approved',
+                approvedAt: new Date().toISOString(),
+                reviewedByUser: requiresApproval,
+              });
+
+              // Build continuation prompt
+              let continuationPrompt = `The plan/specification has been approved. `;
+              if (userFeedback) {
+                continuationPrompt += `\n\nUser feedback: ${userFeedback}\n\n`;
+              }
+              continuationPrompt += `Now proceed with the implementation as specified in the plan:\n\n${approvedPlanContent}\n\nImplement the feature now.`;
+
+              // Make continuation call
+              const continuationStream = provider.executeQuery({
+                prompt: continuationPrompt,
+                model: finalModel,
+                maxTurns: maxTurns,
+                cwd: workDir,
+                allowedTools: allowedTools,
+                abortController,
+              });
+
+              // Process continuation stream
+              for await (const contMsg of continuationStream) {
+                if (contMsg.type === "assistant" && contMsg.message?.content) {
+                  for (const contBlock of contMsg.message.content) {
+                    if (contBlock.type === "text") {
+                      responseText += contBlock.text || "";
+                      this.emitAutoModeEvent("auto_mode_progress", {
+                        featureId,
+                        content: contBlock.text,
+                      });
+                    } else if (contBlock.type === "tool_use") {
+                      this.emitAutoModeEvent("auto_mode_tool", {
+                        featureId,
+                        tool: contBlock.name,
+                        input: contBlock.input,
+                      });
+                    }
+                  }
+                } else if (contMsg.type === "error") {
+                  throw new Error(contMsg.error || "Unknown error during implementation");
+                } else if (contMsg.type === "result" && contMsg.subtype === "success") {
+                  responseText += contMsg.result || "";
+                }
+              }
+
+              console.log(`[AutoMode] Implementation completed for feature ${featureId}`);
+              // Exit the original stream loop since continuation is done
+              break streamLoop;
+            }
+
+            // Only emit progress for non-marker text (marker was already handled above)
+            if (!specDetected) {
+              this.emitAutoModeEvent("auto_mode_progress", {
+                featureId,
+                content: block.text,
+              });
+            }
           } else if (block.type === "tool_use") {
             this.emitAutoModeEvent("auto_mode_tool", {
               featureId,
@@ -1305,7 +1691,7 @@ ${context}
 ## Instructions
 Review the previous work and continue the implementation. If the feature appears complete, verify it works correctly.`;
 
-    return this.executeFeature(projectPath, featureId, useWorktrees, false);
+    return this.executeFeature(projectPath, featureId, useWorktrees, false, prompt);
   }
 
   /**
