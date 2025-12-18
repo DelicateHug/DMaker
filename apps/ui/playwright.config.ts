@@ -1,6 +1,6 @@
 import { defineConfig, devices } from "@playwright/test";
 
-const port = process.env.TEST_PORT || 5173;
+const port = process.env.TEST_PORT || 3007;
 const serverPort = process.env.TEST_SERVER_PORT || 3008;
 const reuseServer = process.env.TEST_REUSE_SERVER === "true";
 const mockAgent =
