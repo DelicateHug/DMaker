@@ -29,7 +29,7 @@ let mainWindow: BrowserWindow | null = null;
 let serverProcess: ChildProcess | null = null;
 let staticServer: Server | null = null;
 const SERVER_PORT = 3008;
-const STATIC_PORT = 5173;
+const STATIC_PORT = 3007;
 
 /**
  * Get icon path - works in both dev and production, cross-platform

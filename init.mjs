@@ -301,8 +301,8 @@ async function main() {
   }
 
   // Kill any existing processes on required ports
-  log('Checking for processes on ports 5173 and 3008...', 'yellow');
-  await killPort(5173);
+  log('Checking for processes on ports 3007 and 3008...', 'yellow');
+  await killPort(3007);
   await killPort(3008);
   console.log('');
 
@@ -377,7 +377,7 @@ async function main() {
       }
 
       log('✓ Server is ready!', 'green');
-      log(`The application will be available at: http://localhost:5173`, 'green');
+      log(`The application will be available at: http://localhost:3007`, 'green');
       console.log('');
 
       // Start web app
