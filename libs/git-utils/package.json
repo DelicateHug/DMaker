@@ -1,0 +1,22 @@
+{
+  "name": "@automaker/git-utils",
+  "version": "1.0.0",
+  "description": "Git operations utilities for AutoMaker",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch"
+  },
+  "keywords": ["automaker", "git", "utils"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@automaker/types": "^1.0.0",
+    "@automaker/utils": "^1.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "typescript": "^5.7.3"
+  }
+}
