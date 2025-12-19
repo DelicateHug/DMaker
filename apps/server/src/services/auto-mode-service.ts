@@ -551,7 +551,7 @@ export class AutoModeService {
 
       // Update running feature with actual worktree info
       tempRunningFeature.worktreePath = worktreePath;
-      tempRunningFeature.branchName = branchName;
+      tempRunningFeature.branchName = branchName ?? null;
 
       // Update feature status to in_progress
       await this.updateFeatureStatus(projectPath, featureId, "in_progress");
