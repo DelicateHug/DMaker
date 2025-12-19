@@ -10,7 +10,6 @@
   },
   "keywords": ["automaker", "platform"],
   "author": "",
-  "license": "MIT",
   "dependencies": {
     "@automaker/types": "^1.0.0"
   },
