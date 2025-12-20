@@ -1,4 +1,3 @@
-
 import { useSetupStore } from "@/store/setup-store";
 import { StepIndicator } from "./setup-view/components";
 import {
@@ -12,12 +11,8 @@ import { useNavigate } from "@tanstack/react-router";
 
 // Main Setup View
 export function SetupView() {
-  const {
-    currentStep,
-    setCurrentStep,
-    completeSetup,
-    setSkipClaudeSetup,
-  } = useSetupStore();
+  const { currentStep, setCurrentStep, completeSetup, setSkipClaudeSetup } =
+    useSetupStore();
   const navigate = useNavigate();
 
   const steps = ["welcome", "theme", "claude", "github", "complete"] as const;
