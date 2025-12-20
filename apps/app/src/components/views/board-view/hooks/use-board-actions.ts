@@ -41,6 +41,7 @@ interface UseBoardActionsProps {
   outputFeature: Feature | null;
   projectPath: string | null;
   onWorktreeCreated?: () => void;
+  onWorktreeAutoSelect?: (worktree: { path: string; branch: string }) => void;
   currentWorktreeBranch: string | null; // Branch name of the selected worktree for filtering
 }
 
@@ -68,6 +69,7 @@ export function useBoardActions({
   outputFeature,
   projectPath,
   onWorktreeCreated,
+  onWorktreeAutoSelect,
   currentWorktreeBranch,
 }: UseBoardActionsProps) {
   const {
@@ -114,15 +116,20 @@ export function useBoardActions({
               currentProject.path,
               finalBranchName
             );
-            if (result.success) {
+            if (result.success && result.worktree) {
               console.log(
                 `[Board] Worktree for branch "${finalBranchName}" ${
                   result.worktree?.isNew ? "created" : "already exists"
                 }`
               );
+              // Auto-select the worktree when creating a feature for it
+              onWorktreeAutoSelect?.({
+                path: result.worktree.path,
+                branch: result.worktree.branch,
+              });
               // Refresh worktree list in UI
               onWorktreeCreated?.();
-            } else {
+            } else if (!result.success) {
               console.error(
                 `[Board] Failed to create worktree for branch "${finalBranchName}":`,
                 result.error
@@ -151,7 +158,7 @@ export function useBoardActions({
       await persistFeatureCreate(createdFeature);
       saveCategory(featureData.category);
     },
-    [addFeature, persistFeatureCreate, saveCategory, useWorktrees, currentProject, onWorktreeCreated]
+    [addFeature, persistFeatureCreate, saveCategory, useWorktrees, currentProject, onWorktreeCreated, onWorktreeAutoSelect]
   );
 
   const handleUpdateFeature = useCallback(
