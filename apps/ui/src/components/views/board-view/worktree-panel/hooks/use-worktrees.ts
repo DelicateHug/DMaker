@@ -20,9 +20,12 @@ export function useWorktrees({ projectPath, refreshTrigger = 0, onRemovedWorktre
   const setWorktreesInStore = useAppStore((s) => s.setWorktrees);
   const useWorktreesEnabled = useAppStore((s) => s.useWorktrees);
 
-  const fetchWorktrees = useCallback(async () => {
+  const fetchWorktrees = useCallback(async (options?: { silent?: boolean }) => {
     if (!projectPath) return;
-    setIsLoading(true);
+    const silent = options?.silent ?? false;
+    if (!silent) {
+      setIsLoading(true);
+    }
     try {
       const api = getElectronAPI();
       if (!api?.worktree?.listAll) {
@@ -40,7 +43,9 @@ export function useWorktrees({ projectPath, refreshTrigger = 0, onRemovedWorktre
       console.error("Failed to fetch worktrees:", error);
       return undefined;
     } finally {
-      setIsLoading(false);
+      if (!silent) {
+        setIsLoading(false);
+      }
     }
   }, [projectPath, setWorktreesInStore]);
 
