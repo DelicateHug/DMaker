@@ -1945,7 +1945,7 @@ This mock response was generated because AUTOMAKER_MOCK_AGENT=true was set.
             ) {
               throw new Error(
                 "Authentication failed: Invalid or expired API key. " +
-                  "Please check your ANTHROPIC_API_KEY or GOOGLE_API_KEY, or run 'claude login' to re-authenticate."
+                  "Please check your ANTHROPIC_API_KEY, or run 'claude login' to re-authenticate."
               );
             }
 

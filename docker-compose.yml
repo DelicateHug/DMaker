@@ -48,10 +48,6 @@ services:
 
       # Optional - CORS origin (default allows all)
       - CORS_ORIGIN=${CORS_ORIGIN:-*}
-
-      # Optional - additional API keys
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
-      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
     volumes:
       # ONLY named volumes - these are isolated from your host filesystem
       # This volume persists data between restarts but is container-managed
