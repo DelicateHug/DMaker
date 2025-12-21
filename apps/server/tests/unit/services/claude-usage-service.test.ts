@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ClaudeUsageService } from '@/services/claude-usage-service.js';
 import { spawn } from 'child_process';
 import * as pty from 'node-pty';
@@ -563,18 +563,21 @@ Resets in 2h
       const mockOutput = 'Current session\n65% left';
 
       let dataCallback: Function | undefined;
+      let exitCallback: Function | undefined;
 
       const mockPty = {
         onData: vi.fn((callback: Function) => {
           dataCallback = callback;
         }),
-        onExit: vi.fn(),
+        onExit: vi.fn((callback: Function) => {
+          exitCallback = callback;
+        }),
         write: vi.fn(),
         kill: vi.fn(),
       };
       vi.mocked(pty.spawn).mockReturnValue(mockPty as any);
 
-      windowsService.fetchUsageData();
+      const promise = windowsService.fetchUsageData();
 
       // Simulate seeing usage data
       dataCallback!(mockOutput);
@@ -583,6 +586,10 @@ Resets in 2h
       vi.advanceTimersByTime(2100);
 
       expect(mockPty.write).toHaveBeenCalledWith('\x1b');
+
+      // Complete the promise to avoid unhandled rejection
+      exitCallback!({ exitCode: 0 });
+      await promise;
 
       vi.useRealTimers();
     });

@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 
 interface UseSidebarAutoCollapseProps {
   sidebarOpen: boolean;
@@ -9,6 +9,8 @@ export function useSidebarAutoCollapse({
   sidebarOpen,
   toggleSidebar,
 }: UseSidebarAutoCollapseProps) {
+  const isMountedRef = useRef(false);
+
   // Auto-collapse sidebar on small screens
   useEffect(() => {
     const mediaQuery = window.matchMedia('(max-width: 1024px)'); // lg breakpoint
@@ -20,8 +22,11 @@ export function useSidebarAutoCollapse({
       }
     };
 
-    // Check on mount
-    handleResize();
+    // Check on mount only
+    if (!isMountedRef.current) {
+      isMountedRef.current = true;
+      handleResize();
+    }
 
     // Listen for changes
     mediaQuery.addEventListener('change', handleResize);
