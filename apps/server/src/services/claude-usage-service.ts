@@ -316,17 +316,19 @@ export class ClaudeUsageService {
     const searchWindow = lines.slice(sectionIndex, sectionIndex + 5);
 
     for (const line of searchWindow) {
-      // Extract percentage - look for patterns like "65% left" or "35% used"
-      const percentMatch = line.match(/(\d{1,3})\s*%\s*(left|used|remaining)/i);
-      if (percentMatch) {
-        const value = parseInt(percentMatch[1], 10);
-        const isUsed = percentMatch[2].toLowerCase() === "used";
-        // Convert "left" to "used" percentage (our UI shows % used)
-        percentage = isUsed ? value : (100 - value);
+      // Extract percentage - only take the first match (avoid picking up next section's data)
+      if (percentage === 0) {
+        const percentMatch = line.match(/(\d{1,3})\s*%\s*(left|used|remaining)/i);
+        if (percentMatch) {
+          const value = parseInt(percentMatch[1], 10);
+          const isUsed = percentMatch[2].toLowerCase() === "used";
+          // Convert "left" to "used" percentage (our UI shows % used)
+          percentage = isUsed ? value : (100 - value);
+        }
       }
 
-      // Extract reset time
-      if (line.toLowerCase().includes("reset")) {
+      // Extract reset time - only take the first match
+      if (!resetText && line.toLowerCase().includes("reset")) {
         resetText = line;
       }
     }

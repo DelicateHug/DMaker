@@ -1,18 +1,6 @@
-import { Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useState, useEffect } from "react";
-import { Slider } from "@/components/ui/slider";
-import { useAppStore } from "@/store/app-store";
 
 export function ClaudeUsageSection() {
-  const { claudeRefreshInterval, setClaudeRefreshInterval } = useAppStore();
-  const [localInterval, setLocalInterval] = useState(claudeRefreshInterval);
-
-  // Sync local state with store when store changes (e.g. initial load)
-  useEffect(() => {
-    setLocalInterval(claudeRefreshInterval);
-  }, [claudeRefreshInterval]);
-
   return (
     <div
       className={cn(
@@ -40,34 +28,8 @@ export function ClaudeUsageSection() {
           <ol className="list-decimal list-inside space-y-1 ml-1">
             <li>Install Claude Code CLI if not already installed</li>
             <li>Run <code className="font-mono bg-muted px-1 rounded">claude login</code> to authenticate</li>
-            <li>Usage data will be fetched automatically</li>
+            <li>Usage data will be fetched automatically every ~minute</li>
           </ol>
-        </div>
-
-        {/* Refresh Interval Section */}
-        <div className="space-y-4">
-            <div className="space-y-1">
-                <h3 className="text-sm font-medium text-foreground flex items-center gap-2">
-                    <Clock className="w-4 h-4 text-muted-foreground" />
-                    Refresh Interval
-                </h3>
-                <p className="text-xs text-muted-foreground">
-                    How often to check for usage updates.
-                </p>
-            </div>
-
-            <div className="flex items-center gap-4">
-                <Slider
-                    value={[Math.max(30, Math.min(120, localInterval || 30))]}
-                    onValueChange={(vals) => setLocalInterval(vals[0])}
-                    onValueCommit={(vals) => setClaudeRefreshInterval(vals[0])}
-                    min={30}
-                    max={120}
-                    step={5}
-                    className="flex-1"
-                />
-                <span className="w-12 text-sm font-mono text-right">{Math.max(30, Math.min(120, localInterval || 30))}s</span>
-            </div>
         </div>
       </div>
     </div>

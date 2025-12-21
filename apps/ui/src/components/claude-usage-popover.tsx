@@ -31,9 +31,11 @@ type UsageError = {
   message: string;
 };
 
+// Fixed refresh interval (45 seconds)
+const REFRESH_INTERVAL_SECONDS = 45;
+
 export function ClaudeUsagePopover() {
-  const { claudeRefreshInterval, claudeUsage, claudeUsageLastUpdated, setClaudeUsage } =
-    useAppStore();
+  const { claudeUsage, claudeUsageLastUpdated, setClaudeUsage } = useAppStore();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<UsageError | null>(null);
@@ -94,16 +96,16 @@ export function ClaudeUsagePopover() {
 
     // Auto-refresh interval (only when open)
     let intervalId: NodeJS.Timeout | null = null;
-    if (open && claudeRefreshInterval > 0) {
+    if (open) {
       intervalId = setInterval(() => {
         fetchUsage(true);
-      }, claudeRefreshInterval * 1000);
+      }, REFRESH_INTERVAL_SECONDS * 1000);
     }
 
     return () => {
       if (intervalId) clearInterval(intervalId);
     };
-  }, [open, claudeUsage, isStale, claudeRefreshInterval, fetchUsage]);
+  }, [open, claudeUsage, isStale, fetchUsage]);
 
   // Derived status color/icon helper
   const getStatusInfo = (percentage: number) => {
@@ -244,14 +246,16 @@ export function ClaudeUsagePopover() {
           <div className="flex items-center gap-2">
             <span className="text-sm font-semibold">Claude Usage</span>
           </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            className={cn('h-6 w-6', loading && 'opacity-80')}
-            onClick={() => !loading && fetchUsage(false)}
-          >
-            <RefreshCw className="w-3.5 h-3.5" />
-          </Button>
+          {error && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className={cn('h-6 w-6', loading && 'opacity-80')}
+              onClick={() => !loading && fetchUsage(false)}
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+            </Button>
+          )}
         </div>
 
         {/* Content */}
@@ -337,7 +341,7 @@ export function ClaudeUsagePopover() {
             Claude Status <ExternalLink className="w-2.5 h-2.5" />
           </a>
 
-          <div className="flex gap-2">{/* Could add quick settings link here */}</div>
+          <span className="text-[10px] text-muted-foreground">Updates every minute</span>
         </div>
       </PopoverContent>
     </Popover>
