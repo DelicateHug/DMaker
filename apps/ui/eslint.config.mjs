@@ -2,6 +2,7 @@ import { defineConfig, globalIgnores } from "eslint/config";
 import js from "@eslint/js";
 import ts from "@typescript-eslint/eslint-plugin";
 import tsParser from "@typescript-eslint/parser";
+import globals from "globals";
 
 const eslintConfig = defineConfig([
   js.configs.recommended,
@@ -12,6 +13,10 @@ const eslintConfig = defineConfig([
       parserOptions: {
         ecmaVersion: "latest",
         sourceType: "module",
+      },
+      globals: {
+        ...globals.browser,
+        ...globals.es2021,
       },
     },
     plugins: {

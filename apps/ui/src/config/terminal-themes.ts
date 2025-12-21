@@ -30,6 +30,30 @@ export interface TerminalTheme {
   brightWhite: string;
 }
 
+/**
+ * Terminal font options for user selection
+ * These are monospace fonts commonly available on different platforms
+ */
+export interface TerminalFontOption {
+  value: string;
+  label: string;
+}
+
+export const TERMINAL_FONT_OPTIONS: TerminalFontOption[] = [
+  { value: "Menlo, Monaco, 'Courier New', monospace", label: "Menlo / Monaco" },
+  { value: "'SF Mono', Menlo, Monaco, monospace", label: "SF Mono" },
+  { value: "'JetBrains Mono', monospace", label: "JetBrains Mono" },
+  { value: "'Fira Code', monospace", label: "Fira Code" },
+  { value: "'Source Code Pro', monospace", label: "Source Code Pro" },
+  { value: "Consolas, 'Courier New', monospace", label: "Consolas" },
+  { value: "'Ubuntu Mono', monospace", label: "Ubuntu Mono" },
+];
+
+/**
+ * Default terminal font family (first option)
+ */
+export const DEFAULT_TERMINAL_FONT = TERMINAL_FONT_OPTIONS[0].value;
+
 // Dark theme (default)
 const darkTheme: TerminalTheme = {
   background: "#0a0a0a",
@@ -206,11 +230,11 @@ const tokyonightTheme: TerminalTheme = {
   brightWhite: "#c0caf5",
 };
 
-// Solarized Dark theme
+// Solarized Dark theme (improved contrast for WCAG compliance)
 const solarizedTheme: TerminalTheme = {
   background: "#002b36",
-  foreground: "#839496",
-  cursor: "#839496",
+  foreground: "#93a1a1", // Changed from #839496 (base0) to #93a1a1 (base1) for better contrast
+  cursor: "#93a1a1",
   cursorAccent: "#002b36",
   selectionBackground: "#073642",
   black: "#073642",

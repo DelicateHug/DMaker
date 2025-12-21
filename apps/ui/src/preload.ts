@@ -32,6 +32,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("shell:openExternal", url),
   openPath: (filePath: string): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke("shell:openPath", filePath),
+  openInEditor: (filePath: string, line?: number, column?: number): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke("shell:openInEditor", filePath, line, column),
 
   // App info
   getPath: (name: string): Promise<string> => ipcRenderer.invoke("app:getPath", name),

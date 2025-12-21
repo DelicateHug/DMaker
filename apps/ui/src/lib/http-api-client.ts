@@ -217,6 +217,44 @@ export class HttpApiClient implements ElectronAPI {
     return { success: true };
   }
 
+  async openInEditor(
+    filePath: string,
+    line?: number,
+    column?: number
+  ): Promise<{ success: boolean; error?: string }> {
+    // Build VS Code URL scheme: vscode://file/path:line:column
+    // This works on systems where VS Code's URL handler is registered
+    // URL encode the path to handle special characters (spaces, brackets, etc.)
+    // but preserve the leading slash for absolute paths
+    const encodedPath = filePath.startsWith('/')
+      ? '/' + filePath.slice(1).split('/').map(encodeURIComponent).join('/')
+      : filePath.split('/').map(encodeURIComponent).join('/');
+    let url = `vscode://file${encodedPath}`;
+    if (line !== undefined && line > 0) {
+      url += `:${line}`;
+      if (column !== undefined && column > 0) {
+        url += `:${column}`;
+      }
+    }
+
+    try {
+      // Use anchor click approach which is most reliable for custom URL schemes
+      // This triggers the browser's URL handler without navigation issues
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.style.display = "none";
+      document.body.appendChild(anchor);
+      anchor.click();
+      document.body.removeChild(anchor);
+      return { success: true };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Failed to open in editor",
+      };
+    }
+  }
+
   // File picker - uses server-side file browser dialog
   async openDirectory(): Promise<DialogResult> {
     const fileBrowser = getGlobalFileBrowser();

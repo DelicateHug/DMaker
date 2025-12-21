@@ -5,6 +5,7 @@ export type SettingsViewId =
   | "claude"
   | "ai-enhancement"
   | "appearance"
+  | "terminal"
   | "keyboard"
   | "audio"
   | "defaults"

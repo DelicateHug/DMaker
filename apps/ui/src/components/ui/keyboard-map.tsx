@@ -103,6 +103,7 @@ const SHORTCUT_LABELS: Record<keyof KeyboardShortcuts, string> = {
   splitTerminalRight: "Split Right",
   splitTerminalDown: "Split Down",
   closeTerminal: "Close Terminal",
+  newTerminalTab: "New Tab",
 };
 
 // Categorize shortcuts for color coding
@@ -127,6 +128,7 @@ const SHORTCUT_CATEGORIES: Record<keyof KeyboardShortcuts, "navigation" | "ui" |
   splitTerminalRight: "action",
   splitTerminalDown: "action",
   closeTerminal: "action",
+  newTerminalTab: "action",
 };
 
 // Category colors

@@ -12,6 +12,7 @@ import { ApiKeysSection } from "./settings-view/api-keys/api-keys-section";
 import { ClaudeCliStatus } from "./settings-view/cli-status/claude-cli-status";
 import { AIEnhancementSection } from "./settings-view/ai-enhancement";
 import { AppearanceSection } from "./settings-view/appearance/appearance-section";
+import { TerminalSection } from "./settings-view/terminal/terminal-section";
 import { AudioSection } from "./settings-view/audio/audio-section";
 import { KeyboardShortcutsSection } from "./settings-view/keyboard-shortcuts/keyboard-shortcuts-section";
 import { FeatureDefaultsSection } from "./settings-view/feature-defaults/feature-defaults-section";
@@ -108,6 +109,8 @@ export function SettingsView() {
             onThemeChange={handleSetTheme}
           />
         );
+      case "terminal":
+        return <TerminalSection />;
       case "keyboard":
         return (
           <KeyboardShortcutsSection

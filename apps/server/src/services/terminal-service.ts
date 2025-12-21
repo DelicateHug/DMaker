@@ -13,9 +13,16 @@ import * as fs from "fs";
 // Maximum scrollback buffer size (characters)
 const MAX_SCROLLBACK_SIZE = 50000; // ~50KB per terminal
 
+// Maximum number of concurrent terminal sessions
+// Can be overridden via TERMINAL_MAX_SESSIONS environment variable
+// Default set to 1000 - effectively unlimited for most use cases
+let maxSessions = parseInt(process.env.TERMINAL_MAX_SESSIONS || "1000", 10);
+
 // Throttle output to prevent overwhelming WebSocket under heavy load
-const OUTPUT_THROTTLE_MS = 16; // ~60fps max update rate
-const OUTPUT_BATCH_SIZE = 8192; // Max bytes to send per batch
+// Using 4ms for responsive input feedback while still preventing flood
+// Note: 16ms caused perceived input lag, especially with backspace
+const OUTPUT_THROTTLE_MS = 4; // ~250fps max update rate for responsive input
+const OUTPUT_BATCH_SIZE = 4096; // Smaller batches for lower latency
 
 export interface TerminalSession {
   id: string;
@@ -176,9 +183,40 @@ export class TerminalService extends EventEmitter {
   }
 
   /**
-   * Create a new terminal session
+   * Get current session count
    */
-  createSession(options: TerminalOptions = {}): TerminalSession {
+  getSessionCount(): number {
+    return this.sessions.size;
+  }
+
+  /**
+   * Get maximum allowed sessions
+   */
+  getMaxSessions(): number {
+    return maxSessions;
+  }
+
+  /**
+   * Set maximum allowed sessions (can be called dynamically)
+   */
+  setMaxSessions(limit: number): void {
+    if (limit >= 1 && limit <= 500) {
+      maxSessions = limit;
+      console.log(`[Terminal] Max sessions limit updated to ${limit}`);
+    }
+  }
+
+  /**
+   * Create a new terminal session
+   * Returns null if the maximum session limit has been reached
+   */
+  createSession(options: TerminalOptions = {}): TerminalSession | null {
+    // Check session limit
+    if (this.sessions.size >= maxSessions) {
+      console.error(`[Terminal] Max sessions (${maxSessions}) reached, refusing new session`);
+      return null;
+    }
+
     const id = `term-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
     const { shell: detectedShell, args: shellArgs } = this.detectShell();
@@ -188,11 +226,15 @@ export class TerminalService extends EventEmitter {
     const cwd = this.resolveWorkingDirectory(options.cwd);
 
     // Build environment with some useful defaults
+    // These settings ensure consistent terminal behavior across platforms
     const env: Record<string, string> = {
       ...process.env,
       TERM: "xterm-256color",
       COLORTERM: "truecolor",
       TERM_PROGRAM: "automaker-terminal",
+      // Ensure proper locale for character handling
+      LANG: process.env.LANG || "en_US.UTF-8",
+      LC_ALL: process.env.LC_ALL || process.env.LANG || "en_US.UTF-8",
       ...options.env,
     };
 
@@ -350,12 +392,16 @@ export class TerminalService extends EventEmitter {
         clearTimeout(session.resizeDebounceTimeout);
         session.resizeDebounceTimeout = null;
       }
-      session.pty.kill();
+      // Use SIGKILL for forceful termination - shell processes may ignore SIGTERM/SIGHUP
+      // This ensures the PTY process is actually killed, especially on WSL
+      session.pty.kill("SIGKILL");
       this.sessions.delete(sessionId);
       console.log(`[Terminal] Session ${sessionId} killed`);
       return true;
     } catch (error) {
       console.error(`[Terminal] Error killing session ${sessionId}:`, error);
+      // Still try to remove from map even if kill fails
+      this.sessions.delete(sessionId);
       return false;
     }
   }

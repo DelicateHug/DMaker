@@ -34,6 +34,21 @@ export function createSessionsCreateHandler() {
         shell,
       });
 
+      // Check if session creation was refused due to limit
+      if (!session) {
+        const maxSessions = terminalService.getMaxSessions();
+        const currentSessions = terminalService.getSessionCount();
+        logger.warn(`Session limit reached: ${currentSessions}/${maxSessions}`);
+        res.status(429).json({
+          success: false,
+          error: "Maximum terminal sessions reached",
+          details: `Server limit is ${maxSessions} concurrent sessions. Please close unused terminals.`,
+          currentSessions,
+          maxSessions,
+        });
+        return;
+      }
+
       res.json({
         success: true,
         data: {
