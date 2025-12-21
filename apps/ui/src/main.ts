@@ -411,6 +411,29 @@ ipcMain.handle("shell:openPath", async (_, filePath: string) => {
   }
 });
 
+// Open file in editor (VS Code, etc.) with optional line/column
+ipcMain.handle("shell:openInEditor", async (_, filePath: string, line?: number, column?: number) => {
+  try {
+    // Build VS Code URL scheme: vscode://file/path:line:column
+    // This works on all platforms where VS Code is installed
+    // URL encode the path to handle special characters (spaces, brackets, etc.)
+    const encodedPath = filePath.startsWith('/')
+      ? '/' + filePath.slice(1).split('/').map(encodeURIComponent).join('/')
+      : filePath.split('/').map(encodeURIComponent).join('/');
+    let url = `vscode://file${encodedPath}`;
+    if (line !== undefined && line > 0) {
+      url += `:${line}`;
+      if (column !== undefined && column > 0) {
+        url += `:${column}`;
+      }
+    }
+    await shell.openExternal(url);
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: (error as Error).message };
+  }
+});
+
 // App info
 ipcMain.handle("app:getPath", async (_, name: Parameters<typeof app.getPath>[0]) => {
   return app.getPath(name);

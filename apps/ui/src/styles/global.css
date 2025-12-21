@@ -2929,3 +2929,23 @@
 .animate-accordion-up {
   animation: accordion-up 0.2s ease-out forwards;
 }
+
+/* Terminal scrollbar theming */
+.xterm-viewport::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.xterm-viewport::-webkit-scrollbar-track {
+  background: var(--muted);
+  border-radius: 4px;
+}
+
+.xterm-viewport::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
+}
+
+.xterm-viewport::-webkit-scrollbar-thumb:hover {
+  background: var(--muted-foreground);
+}
