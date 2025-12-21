@@ -375,6 +375,19 @@ export function Sidebar() {
     return () => mediaQuery.removeEventListener('change', handleResize);
   }, [sidebarOpen, toggleSidebar]);
 
+  // Update Electron window minWidth when sidebar state changes
+  // This ensures the window can't be resized smaller than what the kanban board needs
+  useEffect(() => {
+    const electronAPI = (
+      window as unknown as {
+        electronAPI?: { updateMinWidth?: (expanded: boolean) => Promise<void> };
+      }
+    ).electronAPI;
+    if (electronAPI?.updateMinWidth) {
+      electronAPI.updateMinWidth(sidebarOpen);
+    }
+  }, [sidebarOpen]);
+
   // Filtered projects based on search query
   const filteredProjects = useMemo(() => {
     if (!projectSearchQuery.trim()) {
