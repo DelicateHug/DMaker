@@ -23,6 +23,7 @@ const BUNDLE_DIR = join(APP_DIR, 'server-bundle');
 const LOCAL_PACKAGES = [
   '@automaker/types',
   '@automaker/utils',
+  '@automaker/prompts',
   '@automaker/platform',
   '@automaker/model-resolver',
   '@automaker/dependency-resolver',
