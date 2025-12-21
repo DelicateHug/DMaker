@@ -25,7 +25,15 @@ export function createSettingsUpdateHandler() {
       const terminalService = getTerminalService();
       const { maxSessions } = req.body;
 
-      if (typeof maxSessions === "number") {
+      // Validate maxSessions if provided
+      if (maxSessions !== undefined) {
+        if (typeof maxSessions !== "number") {
+          res.status(400).json({
+            success: false,
+            error: "maxSessions must be a number",
+          });
+          return;
+        }
         if (!Number.isInteger(maxSessions)) {
           res.status(400).json({
             success: false,

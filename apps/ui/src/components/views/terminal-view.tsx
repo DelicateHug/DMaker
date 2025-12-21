@@ -579,7 +579,7 @@ export function TerminalView() {
 
             return {
               type: "split",
-              id: persisted.id || `split-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+              id: persisted.id || `split-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`,
               direction: persisted.direction,
               panels: childPanels,
               size: persisted.size,

@@ -233,7 +233,7 @@ export class TerminalService extends EventEmitter {
       return null;
     }
 
-    const id = `term-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const id = `term-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
 
     const { shell: detectedShell, args: shellArgs } = this.detectShell();
     const shell = options.shell || detectedShell;

@@ -54,7 +54,7 @@ export function getTokenData(
 export function generateToken(): string {
   return `term-${Date.now()}-${Math.random()
     .toString(36)
-    .substr(2, 15)}${Math.random().toString(36).substr(2, 15)}`;
+    .slice(2, 17)}${Math.random().toString(36).slice(2, 17)}`;
 }
 
 /**
