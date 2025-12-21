@@ -75,14 +75,7 @@ import { DeleteProjectDialog } from '@/components/views/settings-view/components
 import { NewProjectModal } from '@/components/dialogs/new-project-modal';
 import { CreateSpecDialog } from '@/components/views/spec-view/dialogs';
 import type { FeatureCount } from '@/components/views/spec-view/types';
-import {
-  DndContext,
-  DragEndEvent,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  closestCenter,
-} from '@dnd-kit/core';
+import { DndContext, closestCenter } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { getHttpApiClient } from '@/lib/http-api-client';
 import type { StarterTemplate } from '@/lib/templates';
@@ -95,6 +88,7 @@ import {
   PROJECT_LIGHT_THEMES,
   SIDEBAR_FEATURE_FLAGS,
 } from './sidebar/constants';
+import { useThemePreview, useSidebarAutoCollapse, useDragAndDrop } from './sidebar/hooks';
 
 export function Sidebar() {
   const navigate = useNavigate();
@@ -164,45 +158,8 @@ export function Sidebar() {
   const [featureCount, setFeatureCount] = useState<FeatureCount>(50);
   const [showSpecIndicator, setShowSpecIndicator] = useState(true);
 
-  // Debounced preview theme handlers to prevent excessive re-renders
-  const previewTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const handlePreviewEnter = useCallback(
-    (value: string) => {
-      // Clear any pending timeout
-      if (previewTimeoutRef.current) {
-        clearTimeout(previewTimeoutRef.current);
-      }
-      // Small delay to debounce rapid hover changes
-      previewTimeoutRef.current = setTimeout(() => {
-        setPreviewTheme(value as ThemeMode);
-      }, 16); // ~1 frame delay
-    },
-    [setPreviewTheme]
-  );
-
-  const handlePreviewLeave = useCallback(
-    (e: React.PointerEvent) => {
-      const relatedTarget = e.relatedTarget as HTMLElement;
-      if (!relatedTarget?.closest('[data-testid^="project-theme-"]')) {
-        // Clear any pending timeout
-        if (previewTimeoutRef.current) {
-          clearTimeout(previewTimeoutRef.current);
-        }
-        setPreviewTheme(null);
-      }
-    },
-    [setPreviewTheme]
-  );
-
-  // Cleanup timeout on unmount
-  useEffect(() => {
-    return () => {
-      if (previewTimeoutRef.current) {
-        clearTimeout(previewTimeoutRef.current);
-      }
-    };
-  }, []);
+  // Debounced preview theme handlers
+  const { handlePreviewEnter, handlePreviewLeave } = useThemePreview({ setPreviewTheme });
 
   // Derive isCreatingSpec from store state
   const isCreatingSpec = specCreatingForProject !== null;
@@ -212,23 +169,7 @@ export function Sidebar() {
   const projectSearchInputRef = useRef<HTMLInputElement>(null);
 
   // Auto-collapse sidebar on small screens
-  useEffect(() => {
-    const mediaQuery = window.matchMedia('(max-width: 1024px)'); // lg breakpoint
-
-    const handleResize = () => {
-      if (mediaQuery.matches && sidebarOpen) {
-        // Auto-collapse on small screens
-        toggleSidebar();
-      }
-    };
-
-    // Check on mount
-    handleResize();
-
-    // Listen for changes
-    mediaQuery.addEventListener('change', handleResize);
-    return () => mediaQuery.removeEventListener('change', handleResize);
-  }, [sidebarOpen, toggleSidebar]);
+  useSidebarAutoCollapse({ sidebarOpen, toggleSidebar });
 
   // Filtered projects based on search query
   const filteredProjects = useMemo(() => {
@@ -262,31 +203,8 @@ export function Sidebar() {
     }
   }, [isProjectPickerOpen]);
 
-  // Sensors for drag-and-drop
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 5, // Small distance to start drag
-      },
-    })
-  );
-
-  // Handle drag end for reordering projects
-  const handleDragEnd = useCallback(
-    (event: DragEndEvent) => {
-      const { active, over } = event;
-
-      if (over && active.id !== over.id) {
-        const oldIndex = projects.findIndex((p) => p.id === active.id);
-        const newIndex = projects.findIndex((p) => p.id === over.id);
-
-        if (oldIndex !== -1 && newIndex !== -1) {
-          reorderProjects(oldIndex, newIndex);
-        }
-      }
-    },
-    [projects, reorderProjects]
-  );
+  // Drag-and-drop for project reordering
+  const { sensors, handleDragEnd } = useDragAndDrop({ projects, reorderProjects });
 
   // Subscribe to spec regeneration events
   useEffect(() => {
