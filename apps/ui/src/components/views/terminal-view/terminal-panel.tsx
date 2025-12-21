@@ -30,8 +30,9 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
-import { useAppStore } from "@/store/app-store";
+import { useAppStore, DEFAULT_KEYBOARD_SHORTCUTS, type KeyboardShortcuts } from "@/store/app-store";
 import { useShallow } from "zustand/react/shallow";
+import { matchesShortcutWithCode } from "@/hooks/use-keyboard-shortcuts";
 import { getTerminalTheme, TERMINAL_FONT_OPTIONS, DEFAULT_TERMINAL_FONT } from "@/config/terminal-themes";
 import { toast } from "sonner";
 import { getElectronAPI } from "@/lib/electron";
@@ -62,6 +63,11 @@ interface TerminalPanelProps {
   onSplitHorizontal: () => void;
   onSplitVertical: () => void;
   onNewTab?: () => void;
+  onNavigateUp?: () => void; // Navigate to terminal pane above
+  onNavigateDown?: () => void; // Navigate to terminal pane below
+  onNavigateLeft?: () => void; // Navigate to terminal pane on the left
+  onNavigateRight?: () => void; // Navigate to terminal pane on the right
+  onSessionInvalid?: () => void; // Called when session is no longer valid on server (e.g., server restarted)
   isDragging?: boolean;
   isDropTarget?: boolean;
   fontSize: number;
@@ -87,6 +93,11 @@ export function TerminalPanel({
   onSplitHorizontal,
   onSplitVertical,
   onNewTab,
+  onNavigateUp,
+  onNavigateDown,
+  onNavigateLeft,
+  onNavigateRight,
+  onSessionInvalid,
   isDragging = false,
   isDropTarget = false,
   fontSize,
@@ -177,6 +188,15 @@ export function TerminalPanel({
   const getEffectiveTheme = useAppStore((state) => state.getEffectiveTheme);
   const effectiveTheme = getEffectiveTheme();
 
+  // Get keyboard shortcuts from store - merged with defaults
+  const keyboardShortcuts = useAppStore((state) => state.keyboardShortcuts);
+  const mergedShortcuts: KeyboardShortcuts = {
+    ...DEFAULT_KEYBOARD_SHORTCUTS,
+    ...keyboardShortcuts,
+  };
+  const shortcutsRef = useRef(mergedShortcuts);
+  shortcutsRef.current = mergedShortcuts;
+
   // Track system dark mode preference for "system" theme
   const [systemIsDark, setSystemIsDark] = useState(() => {
     if (typeof window !== "undefined") {
@@ -212,6 +232,16 @@ export function TerminalPanel({
   onSplitVerticalRef.current = onSplitVertical;
   const onNewTabRef = useRef(onNewTab);
   onNewTabRef.current = onNewTab;
+  const onNavigateUpRef = useRef(onNavigateUp);
+  onNavigateUpRef.current = onNavigateUp;
+  const onNavigateDownRef = useRef(onNavigateDown);
+  onNavigateDownRef.current = onNavigateDown;
+  const onNavigateLeftRef = useRef(onNavigateLeft);
+  onNavigateLeftRef.current = onNavigateLeft;
+  const onNavigateRightRef = useRef(onNavigateRight);
+  onNavigateRightRef.current = onNavigateRight;
+  const onSessionInvalidRef = useRef(onSessionInvalid);
+  onSessionInvalidRef.current = onSessionInvalid;
   const fontSizeRef = useRef(fontSize);
   fontSizeRef.current = fontSize;
   const themeRef = useRef(resolvedTheme);
@@ -348,18 +378,33 @@ export function TerminalPanel({
     xtermRef.current?.clear();
   }, []);
 
+  // Get theme colors for search highlighting
+  const terminalTheme = getTerminalTheme(effectiveTheme);
+  const searchOptions = {
+    caseSensitive: false,
+    regex: false,
+    decorations: {
+      matchBackground: terminalTheme.searchMatchBackground,
+      matchBorder: terminalTheme.searchMatchBorder,
+      matchOverviewRuler: terminalTheme.searchMatchBorder,
+      activeMatchBackground: terminalTheme.searchActiveMatchBackground,
+      activeMatchBorder: terminalTheme.searchActiveMatchBorder,
+      activeMatchColorOverviewRuler: terminalTheme.searchActiveMatchBorder,
+    },
+  };
+
   // Search functions
   const searchNext = useCallback(() => {
     if (searchAddonRef.current && searchQuery) {
-      searchAddonRef.current.findNext(searchQuery, { caseSensitive: false, regex: false });
+      searchAddonRef.current.findNext(searchQuery, searchOptions);
     }
-  }, [searchQuery]);
+  }, [searchQuery, searchOptions]);
 
   const searchPrevious = useCallback(() => {
     if (searchAddonRef.current && searchQuery) {
-      searchAddonRef.current.findPrevious(searchQuery, { caseSensitive: false, regex: false });
+      searchAddonRef.current.findPrevious(searchQuery, searchOptions);
     }
-  }, [searchQuery]);
+  }, [searchQuery, searchOptions]);
 
   const closeSearch = useCallback(() => {
     setShowSearch(false);
@@ -368,6 +413,32 @@ export function TerminalPanel({
     searchAddonRef.current?.clearDecorations();
     xtermRef.current?.focus();
   }, []);
+
+  // Handle pane navigation keyboard shortcuts at container level (capture phase)
+  // This ensures we intercept before xterm can process the event
+  const handleContainerKeyDownCapture = useCallback((event: React.KeyboardEvent) => {
+    // Ctrl+Alt+Arrow / Cmd+Alt+Arrow - Navigate between panes directionally
+    if ((event.ctrlKey || event.metaKey) && event.altKey && !event.shiftKey) {
+      const code = event.nativeEvent.code;
+      if (code === 'ArrowRight') {
+        event.preventDefault();
+        event.stopPropagation();
+        onNavigateRight?.();
+      } else if (code === 'ArrowLeft') {
+        event.preventDefault();
+        event.stopPropagation();
+        onNavigateLeft?.();
+      } else if (code === 'ArrowDown') {
+        event.preventDefault();
+        event.stopPropagation();
+        onNavigateDown?.();
+      } else if (code === 'ArrowUp') {
+        event.preventDefault();
+        event.stopPropagation();
+        onNavigateUp?.();
+      }
+    }
+  }, [onNavigateUp, onNavigateDown, onNavigateLeft, onNavigateRight]);
 
   // Scroll to bottom of terminal
   const scrollToBottom = useCallback(() => {
@@ -482,8 +553,21 @@ export function TerminalPanel({
       terminal.loadAddon(searchAddon);
       searchAddonRef.current = searchAddon;
 
-      // Create web links addon for clickable URLs
-      const webLinksAddon = new WebLinksAddon();
+      // Create web links addon for clickable URLs with custom handler for Electron
+      const webLinksAddon = new WebLinksAddon((_event: MouseEvent, uri: string) => {
+        // Use Electron API to open external links in system browser
+        const api = getElectronAPI();
+        if (api?.openExternalLink) {
+          api.openExternalLink(uri).catch((error) => {
+            console.error("[Terminal] Failed to open URL:", error);
+            // Fallback to window.open if Electron API fails
+            window.open(uri, "_blank", "noopener,noreferrer");
+          });
+        } else {
+          // Web fallback
+          window.open(uri, "_blank", "noopener,noreferrer");
+        }
+      });
       terminal.loadAddon(webLinksAddon);
 
       // Open terminal
@@ -661,15 +745,45 @@ export function TerminalPanel({
         // Only intercept keydown events
         if (event.type !== 'keydown') return true;
 
+        // Use event.code for keyboard-layout-independent key detection
+        const code = event.code;
+
+        // Ctrl+Alt+Arrow / Cmd+Alt+Arrow - Navigate between panes directionally
+        // Handle this FIRST before any other checks to prevent xterm from capturing it
+        // Use explicit check for both Ctrl and Meta to work on all platforms
+        if ((event.ctrlKey || event.metaKey) && event.altKey && !event.shiftKey) {
+          if (code === 'ArrowRight') {
+            event.preventDefault();
+            event.stopPropagation();
+            onNavigateRightRef.current?.();
+            return false;
+          } else if (code === 'ArrowLeft') {
+            event.preventDefault();
+            event.stopPropagation();
+            onNavigateLeftRef.current?.();
+            return false;
+          } else if (code === 'ArrowDown') {
+            event.preventDefault();
+            event.stopPropagation();
+            onNavigateDownRef.current?.();
+            return false;
+          } else if (code === 'ArrowUp') {
+            event.preventDefault();
+            event.stopPropagation();
+            onNavigateUpRef.current?.();
+            return false;
+          }
+        }
+
         // Check cooldown to prevent rapid terminal creation
         const now = Date.now();
         const canTrigger = now - lastShortcutTimeRef.current > SHORTCUT_COOLDOWN_MS;
 
-        // Use event.code for keyboard-layout-independent key detection
-        const code = event.code;
+        // Get current shortcuts from ref (allows customization)
+        const shortcuts = shortcutsRef.current;
 
-        // Alt+D - Split right
-        if (event.altKey && !event.ctrlKey && !event.shiftKey && !event.metaKey && code === 'KeyD') {
+        // Split right (default: Alt+D)
+        if (matchesShortcutWithCode(event, shortcuts.splitTerminalRight)) {
           event.preventDefault();
           if (canTrigger) {
             lastShortcutTimeRef.current = now;
@@ -678,8 +792,8 @@ export function TerminalPanel({
           return false;
         }
 
-        // Alt+S - Split down
-        if (event.altKey && !event.ctrlKey && !event.shiftKey && !event.metaKey && code === 'KeyS') {
+        // Split down (default: Alt+S)
+        if (matchesShortcutWithCode(event, shortcuts.splitTerminalDown)) {
           event.preventDefault();
           if (canTrigger) {
             lastShortcutTimeRef.current = now;
@@ -688,8 +802,8 @@ export function TerminalPanel({
           return false;
         }
 
-        // Alt+W - Close terminal
-        if (event.altKey && !event.ctrlKey && !event.shiftKey && !event.metaKey && code === 'KeyW') {
+        // Close terminal (default: Alt+W)
+        if (matchesShortcutWithCode(event, shortcuts.closeTerminal)) {
           event.preventDefault();
           if (canTrigger) {
             lastShortcutTimeRef.current = now;
@@ -698,8 +812,8 @@ export function TerminalPanel({
           return false;
         }
 
-        // Alt+T - New terminal tab
-        if (event.altKey && !event.ctrlKey && !event.shiftKey && !event.metaKey && code === 'KeyT') {
+        // New terminal tab (default: Alt+T)
+        if (matchesShortcutWithCode(event, shortcuts.newTerminalTab)) {
           event.preventDefault();
           if (canTrigger && onNewTabRef.current) {
             lastShortcutTimeRef.current = now;
@@ -843,11 +957,20 @@ export function TerminalPanel({
                 hasRunInitialCommandRef.current = true;
               }
               break;
-            case "connected":
+            case "connected": {
               console.log(`[Terminal] Session connected: ${msg.shell} in ${msg.cwd}`);
+              // Detect shell type from path
+              const shellPath = (msg.shell || "").toLowerCase();
+              // Windows shells use backslash paths and include powershell/pwsh/cmd
+              const isWindowsShell = shellPath.includes("\\") ||
+                shellPath.includes("powershell") ||
+                shellPath.includes("pwsh") ||
+                shellPath.includes("cmd.exe");
+              const isPowerShell = shellPath.includes("powershell") || shellPath.includes("pwsh");
+
               if (msg.shell) {
-                // Extract shell name from path (e.g., "/bin/bash" -> "bash")
-                const name = msg.shell.split("/").pop() || msg.shell;
+                // Extract shell name from path (e.g., "/bin/bash" -> "bash", "C:\...\powershell.exe" -> "powershell.exe")
+                const name = msg.shell.split(/[/\\]/).pop() || msg.shell;
                 setShellName(name);
               }
               // Run initial command if specified and not already run
@@ -858,15 +981,22 @@ export function TerminalPanel({
                 ws.readyState === WebSocket.OPEN
               ) {
                 hasRunInitialCommandRef.current = true;
-                // Small delay to let the shell prompt appear
+                // Use appropriate line ending for the shell type
+                // Windows shells (PowerShell, cmd) expect \r\n, Unix shells expect \n
+                const lineEnding = isWindowsShell ? "\r\n" : "\n";
+                // PowerShell takes longer to initialize (profile loading, etc.)
+                // Use 500ms for PowerShell, 100ms for other shells
+                const delay = isPowerShell ? 500 : 100;
+
                 setTimeout(() => {
                   if (ws.readyState === WebSocket.OPEN) {
-                    ws.send(JSON.stringify({ type: "input", data: runCommandOnConnect + "\n" }));
+                    ws.send(JSON.stringify({ type: "input", data: runCommandOnConnect + lineEnding }));
                     onCommandRan?.();
                   }
-                }, 100);
+                }, delay);
               }
               break;
+            }
             case "exit":
               terminal.write(`\r\n\x1b[33m[Process exited with code ${msg.exitCode}]\x1b[0m\r\n`);
               setProcessExitCode(msg.exitCode);
@@ -907,10 +1037,20 @@ export function TerminalPanel({
 
         if (event.code === 4004) {
           setConnectionStatus("disconnected");
-          toast.error("Terminal session not found", {
-            description: "The session may have expired. Please create a new terminal.",
-            duration: 5000,
-          });
+          // Notify parent that this session is no longer valid on the server
+          // This allows automatic cleanup of stale sessions (e.g., after server restart)
+          if (onSessionInvalidRef.current) {
+            onSessionInvalidRef.current();
+            toast.info("Terminal session expired", {
+              description: "The session was automatically removed. Create a new terminal to continue.",
+              duration: 5000,
+            });
+          } else {
+            toast.error("Terminal session not found", {
+              description: "The session may have expired. Please create a new terminal.",
+              duration: 5000,
+            });
+          }
           return;
         }
 
@@ -1472,6 +1612,7 @@ export function TerminalPanel({
         isOver && isDropTarget && "ring-2 ring-green-500 ring-inset"
       )}
       onClick={onFocus}
+      onKeyDownCapture={handleContainerKeyDownCapture}
       tabIndex={0}
       data-terminal-container="true"
     >
@@ -1818,7 +1959,7 @@ export function TerminalPanel({
               setSearchQuery(e.target.value);
               // Auto-search as user types
               if (searchAddonRef.current && e.target.value) {
-                searchAddonRef.current.findNext(e.target.value, { caseSensitive: false, regex: false });
+                searchAddonRef.current.findNext(e.target.value, searchOptions);
               } else if (searchAddonRef.current) {
                 searchAddonRef.current.clearDecorations();
               }

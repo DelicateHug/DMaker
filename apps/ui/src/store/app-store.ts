@@ -2239,6 +2239,9 @@ export const useAppStore = create<AppState & AppActions>()(
             ...current,
             activeTabId: tabId,
             activeSessionId: newActiveSessionId,
+            // Clear maximized state when switching tabs - the maximized terminal
+            // belongs to the previous tab and shouldn't persist across tab switches
+            maximizedSessionId: null,
           },
         });
       },
@@ -2636,6 +2639,36 @@ export const useAppStore = create<AppState & AppActions>()(
     {
       name: "automaker-storage",
       version: 2, // Increment when making breaking changes to persisted state
+      // Custom merge function to properly restore terminal settings on every load
+      // The default shallow merge doesn't work because we persist terminalSettings
+      // separately from terminalState (to avoid persisting session data like tabs)
+      merge: (persistedState, currentState) => {
+        const persisted = persistedState as Partial<AppState> & { terminalSettings?: PersistedTerminalSettings };
+        const current = currentState as AppState & AppActions;
+
+        // Start with default shallow merge
+        const merged = { ...current, ...persisted } as AppState & AppActions;
+
+        // Restore terminal settings into terminalState
+        // terminalSettings is persisted separately from terminalState to avoid
+        // persisting session data (tabs, activeSessionId, etc.)
+        if (persisted.terminalSettings) {
+          merged.terminalState = {
+            // Start with current (initial) terminalState for session fields
+            ...current.terminalState,
+            // Override with persisted settings
+            defaultFontSize: persisted.terminalSettings.defaultFontSize ?? current.terminalState.defaultFontSize,
+            defaultRunScript: persisted.terminalSettings.defaultRunScript ?? current.terminalState.defaultRunScript,
+            screenReaderMode: persisted.terminalSettings.screenReaderMode ?? current.terminalState.screenReaderMode,
+            fontFamily: persisted.terminalSettings.fontFamily ?? current.terminalState.fontFamily,
+            scrollbackLines: persisted.terminalSettings.scrollbackLines ?? current.terminalState.scrollbackLines,
+            lineHeight: persisted.terminalSettings.lineHeight ?? current.terminalState.lineHeight,
+            maxSessions: persisted.terminalSettings.maxSessions ?? current.terminalState.maxSessions,
+          };
+        }
+
+        return merged;
+      },
       migrate: (persistedState: unknown, version: number) => {
         const state = persistedState as Partial<AppState>;
 

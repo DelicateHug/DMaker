@@ -78,6 +78,102 @@ function isInputFocused(): boolean {
 }
 
 /**
+ * Convert a key character to its corresponding event.code
+ * This is used for keyboard-layout independent matching in terminals
+ */
+function keyToCode(key: string): string {
+  const upperKey = key.toUpperCase();
+
+  // Letters A-Z map to KeyA-KeyZ
+  if (/^[A-Z]$/.test(upperKey)) {
+    return `Key${upperKey}`;
+  }
+
+  // Numbers 0-9 on main row map to Digit0-Digit9
+  if (/^[0-9]$/.test(key)) {
+    return `Digit${key}`;
+  }
+
+  // Special key mappings
+  const specialMappings: Record<string, string> = {
+    "`": "Backquote",
+    "~": "Backquote",
+    "-": "Minus",
+    "_": "Minus",
+    "=": "Equal",
+    "+": "Equal",
+    "[": "BracketLeft",
+    "{": "BracketLeft",
+    "]": "BracketRight",
+    "}": "BracketRight",
+    "\\": "Backslash",
+    "|": "Backslash",
+    ";": "Semicolon",
+    ":": "Semicolon",
+    "'": "Quote",
+    '"': "Quote",
+    ",": "Comma",
+    "<": "Comma",
+    ".": "Period",
+    ">": "Period",
+    "/": "Slash",
+    "?": "Slash",
+    " ": "Space",
+    "Enter": "Enter",
+    "Tab": "Tab",
+    "Escape": "Escape",
+    "Backspace": "Backspace",
+    "Delete": "Delete",
+    "ArrowUp": "ArrowUp",
+    "ArrowDown": "ArrowDown",
+    "ArrowLeft": "ArrowLeft",
+    "ArrowRight": "ArrowRight",
+  };
+
+  return specialMappings[key] || specialMappings[upperKey] || key;
+}
+
+/**
+ * Check if a keyboard event matches a shortcut definition using event.code
+ * This is keyboard-layout independent - useful for terminals where Alt+key
+ * combinations can produce special characters with event.key
+ */
+export function matchesShortcutWithCode(event: KeyboardEvent, shortcutStr: string): boolean {
+  const shortcut = parseShortcut(shortcutStr);
+  if (!shortcut.key) return false;
+
+  // Convert the shortcut key to event.code format
+  const expectedCode = keyToCode(shortcut.key);
+
+  // Check if the code matches
+  if (event.code !== expectedCode) {
+    return false;
+  }
+
+  // Check modifier keys
+  const cmdCtrlPressed = event.metaKey || event.ctrlKey;
+  const shiftPressed = event.shiftKey;
+  const altPressed = event.altKey;
+
+  // If shortcut requires cmdCtrl, it must be pressed
+  if (shortcut.cmdCtrl && !cmdCtrlPressed) return false;
+  // If shortcut doesn't require cmdCtrl, it shouldn't be pressed
+  if (!shortcut.cmdCtrl && cmdCtrlPressed) return false;
+
+  // If shortcut requires shift, it must be pressed
+  if (shortcut.shift && !shiftPressed) return false;
+  // If shortcut doesn't require shift, it shouldn't be pressed
+  if (!shortcut.shift && shiftPressed) return false;
+
+  // If shortcut requires alt, it must be pressed
+  if (shortcut.alt && !altPressed) return false;
+  // If shortcut doesn't require alt, it shouldn't be pressed
+  if (!shortcut.alt && altPressed) return false;
+
+  return true;
+}
+
+/**
  * Check if a keyboard event matches a shortcut definition
  */
 function matchesShortcut(event: KeyboardEvent, shortcutStr: string): boolean {

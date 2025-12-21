@@ -28,6 +28,11 @@ export interface TerminalTheme {
   brightMagenta: string;
   brightCyan: string;
   brightWhite: string;
+  // Search highlighting colors - for xterm SearchAddon
+  searchMatchBackground: string;
+  searchMatchBorder: string;
+  searchActiveMatchBackground: string;
+  searchActiveMatchBorder: string;
 }
 
 /**
@@ -77,6 +82,11 @@ const darkTheme: TerminalTheme = {
   brightMagenta: "#c586c0",
   brightCyan: "#4ec9b0",
   brightWhite: "#ffffff",
+  // Search colors - bright yellow for visibility on dark background
+  searchMatchBackground: "#6b5300",
+  searchMatchBorder: "#e2ac00",
+  searchActiveMatchBackground: "#ff8c00",
+  searchActiveMatchBorder: "#ffb74d",
 };
 
 // Light theme
@@ -102,6 +112,11 @@ const lightTheme: TerminalTheme = {
   brightMagenta: "#c678dd",
   brightCyan: "#56b6c2",
   brightWhite: "#ffffff",
+  // Search colors - darker for visibility on light background
+  searchMatchBackground: "#fff3b0",
+  searchMatchBorder: "#c9a500",
+  searchActiveMatchBackground: "#ffcc00",
+  searchActiveMatchBorder: "#996600",
 };
 
 // Retro / Cyberpunk theme - neon green on black
@@ -128,6 +143,11 @@ const retroTheme: TerminalTheme = {
   brightMagenta: "#ff55ff",
   brightCyan: "#55ffff",
   brightWhite: "#ffffff",
+  // Search colors - magenta/pink for contrast with green text
+  searchMatchBackground: "#660066",
+  searchMatchBorder: "#ff00ff",
+  searchActiveMatchBackground: "#cc00cc",
+  searchActiveMatchBorder: "#ff66ff",
 };
 
 // Dracula theme
@@ -153,6 +173,11 @@ const draculaTheme: TerminalTheme = {
   brightMagenta: "#ff92df",
   brightCyan: "#a4ffff",
   brightWhite: "#ffffff",
+  // Search colors - orange for visibility
+  searchMatchBackground: "#8b5a00",
+  searchMatchBorder: "#ffb86c",
+  searchActiveMatchBackground: "#ff9500",
+  searchActiveMatchBorder: "#ffcc80",
 };
 
 // Nord theme
@@ -178,6 +203,11 @@ const nordTheme: TerminalTheme = {
   brightMagenta: "#b48ead",
   brightCyan: "#8fbcbb",
   brightWhite: "#eceff4",
+  // Search colors - warm yellow/orange for cold blue theme
+  searchMatchBackground: "#5e4a00",
+  searchMatchBorder: "#ebcb8b",
+  searchActiveMatchBackground: "#d08770",
+  searchActiveMatchBorder: "#e8a87a",
 };
 
 // Monokai theme
@@ -203,6 +233,11 @@ const monokaiTheme: TerminalTheme = {
   brightMagenta: "#ae81ff",
   brightCyan: "#a1efe4",
   brightWhite: "#f9f8f5",
+  // Search colors - orange/gold for contrast
+  searchMatchBackground: "#6b4400",
+  searchMatchBorder: "#f4bf75",
+  searchActiveMatchBackground: "#e69500",
+  searchActiveMatchBorder: "#ffd080",
 };
 
 // Tokyo Night theme
@@ -228,6 +263,11 @@ const tokyonightTheme: TerminalTheme = {
   brightMagenta: "#bb9af7",
   brightCyan: "#7dcfff",
   brightWhite: "#c0caf5",
+  // Search colors - warm orange for cold blue theme
+  searchMatchBackground: "#5c4a00",
+  searchMatchBorder: "#e0af68",
+  searchActiveMatchBackground: "#ff9e64",
+  searchActiveMatchBorder: "#ffb380",
 };
 
 // Solarized Dark theme (improved contrast for WCAG compliance)
@@ -253,6 +293,11 @@ const solarizedTheme: TerminalTheme = {
   brightMagenta: "#6c71c4",
   brightCyan: "#93a1a1",
   brightWhite: "#fdf6e3",
+  // Search colors - orange (solarized orange) for visibility
+  searchMatchBackground: "#5c3d00",
+  searchMatchBorder: "#b58900",
+  searchActiveMatchBackground: "#cb4b16",
+  searchActiveMatchBorder: "#e07040",
 };
 
 // Gruvbox Dark theme
@@ -278,6 +323,11 @@ const gruvboxTheme: TerminalTheme = {
   brightMagenta: "#d3869b",
   brightCyan: "#8ec07c",
   brightWhite: "#ebdbb2",
+  // Search colors - bright orange for gruvbox
+  searchMatchBackground: "#6b4500",
+  searchMatchBorder: "#d79921",
+  searchActiveMatchBackground: "#fe8019",
+  searchActiveMatchBorder: "#ffaa40",
 };
 
 // Catppuccin Mocha theme
@@ -303,6 +353,11 @@ const catppuccinTheme: TerminalTheme = {
   brightMagenta: "#cba6f7",
   brightCyan: "#94e2d5",
   brightWhite: "#a6adc8",
+  // Search colors - peach/orange from catppuccin palette
+  searchMatchBackground: "#5c4020",
+  searchMatchBorder: "#fab387",
+  searchActiveMatchBackground: "#fab387",
+  searchActiveMatchBorder: "#fcc8a0",
 };
 
 // One Dark theme
@@ -328,6 +383,11 @@ const onedarkTheme: TerminalTheme = {
   brightMagenta: "#c678dd",
   brightCyan: "#56b6c2",
   brightWhite: "#ffffff",
+  // Search colors - orange/gold for visibility
+  searchMatchBackground: "#5c4500",
+  searchMatchBorder: "#e5c07b",
+  searchActiveMatchBackground: "#d19a66",
+  searchActiveMatchBorder: "#e8b888",
 };
 
 // Synthwave '84 theme
@@ -353,6 +413,11 @@ const synthwaveTheme: TerminalTheme = {
   brightMagenta: "#ff7edb",
   brightCyan: "#03edf9",
   brightWhite: "#ffffff",
+  // Search colors - hot pink/magenta for synthwave aesthetic
+  searchMatchBackground: "#6b2a7a",
+  searchMatchBorder: "#ff7edb",
+  searchActiveMatchBackground: "#ff7edb",
+  searchActiveMatchBorder: "#ffffff",
 };
 
 // Red theme - Dark theme with red accents
@@ -378,6 +443,11 @@ const redTheme: TerminalTheme = {
   brightMagenta: "#cc77aa",
   brightCyan: "#77aaaa",
   brightWhite: "#d0c0c0",
+  // Search colors - orange/gold to contrast with red theme
+  searchMatchBackground: "#5a3520",
+  searchMatchBorder: "#ccaa55",
+  searchActiveMatchBackground: "#ddbb66",
+  searchActiveMatchBorder: "#ffdd88",
 };
 
 // Cream theme - Warm, soft, easy on the eyes
@@ -403,6 +473,11 @@ const creamTheme: TerminalTheme = {
   brightMagenta: "#c080a0",
   brightCyan: "#70b0a0",
   brightWhite: "#d0c0b0",
+  // Search colors - blue for contrast on light cream background
+  searchMatchBackground: "#c0d4e8",
+  searchMatchBorder: "#6b8aaa",
+  searchActiveMatchBackground: "#6b8aaa",
+  searchActiveMatchBorder: "#4a6a8a",
 };
 
 // Sunset theme - Mellow oranges and soft pastels
@@ -428,6 +503,11 @@ const sunsetTheme: TerminalTheme = {
   brightMagenta: "#dd88aa",
   brightCyan: "#88ddbb",
   brightWhite: "#f5e8dd",
+  // Search colors - orange for warm sunset theme
+  searchMatchBackground: "#5a3a30",
+  searchMatchBorder: "#ddaa66",
+  searchActiveMatchBackground: "#eebb77",
+  searchActiveMatchBorder: "#ffdd99",
 };
 
 // Gray theme - Modern, minimal gray scheme inspired by Cursor
@@ -453,6 +533,11 @@ const grayTheme: TerminalTheme = {
   brightMagenta: "#c098c8",
   brightCyan: "#80b8c8",
   brightWhite: "#e0e0e8",
+  // Search colors - blue for modern feel
+  searchMatchBackground: "#3a4a60",
+  searchMatchBorder: "#7090c0",
+  searchActiveMatchBackground: "#90b0d8",
+  searchActiveMatchBorder: "#b0d0f0",
 };
 
 // Theme mapping

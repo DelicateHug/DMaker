@@ -447,7 +447,8 @@ export function TerminalView() {
     // The path check in restoreLayout will handle this
 
     // Save layout for previous project (if there was one and has terminals)
-    if (prevPath && terminalState.tabs.length > 0) {
+    // BUT don't save if we were mid-restore for that project (would save incomplete state)
+    if (prevPath && terminalState.tabs.length > 0 && restoringProjectPathRef.current !== prevPath) {
       saveTerminalLayout(prevPath);
     }
 
@@ -460,19 +461,25 @@ export function TerminalView() {
       return;
     }
 
+    // ALWAYS clear existing terminals when switching projects
+    // This is critical - prevents old project's terminals from "bleeding" into new project
+    clearTerminalState();
+
     // Check for saved layout for this project
     const savedLayout = getPersistedTerminalLayout(currentPath);
 
-    if (savedLayout && savedLayout.tabs.length > 0) {
-      // Restore the saved layout - try to reconnect to existing sessions
-      // Track which project we're restoring to detect stale restores
-      restoringProjectPathRef.current = currentPath;
+    // If no saved layout or no tabs, we're done - terminal starts fresh for this project
+    if (!savedLayout || savedLayout.tabs.length === 0) {
+      console.log("[Terminal] No saved layout for project, starting fresh");
+      return;
+    }
 
-      // Clear existing terminals first (only client state, sessions stay on server)
-      clearTerminalState();
+    // Restore the saved layout - try to reconnect to existing sessions
+    // Track which project we're restoring to detect stale restores
+    restoringProjectPathRef.current = currentPath;
 
-      // Create terminals and build layout - try to reconnect or create new
-      const restoreLayout = async () => {
+    // Create terminals and build layout - try to reconnect or create new
+    const restoreLayout = async () => {
         // Check if we're still restoring the same project (user may have switched)
         if (restoringProjectPathRef.current !== currentPath) {
           console.log("[Terminal] Restore cancelled - project changed");
@@ -643,21 +650,29 @@ export function TerminalView() {
       };
 
       restoreLayout();
-    }
   }, [currentProject?.path, saveTerminalLayout, getPersistedTerminalLayout, clearTerminalState, addTerminalTab, serverUrl]);
 
   // Save terminal layout whenever it changes (debounced to prevent excessive writes)
   // Also save when tabs become empty so closed terminals stay closed on refresh
   const saveLayoutTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const pendingSavePathRef = useRef<string | null>(null);
   useEffect(() => {
+    const projectPath = currentProject?.path;
     // Don't save while restoring this project's layout
-    if (currentProject?.path && restoringProjectPathRef.current !== currentProject.path) {
+    if (projectPath && restoringProjectPathRef.current !== projectPath) {
       // Debounce saves to prevent excessive localStorage writes during rapid changes
       if (saveLayoutTimeoutRef.current) {
         clearTimeout(saveLayoutTimeoutRef.current);
       }
+      // Capture the project path at schedule time so we save to the correct project
+      // even if user switches projects before the timeout fires
+      pendingSavePathRef.current = projectPath;
       saveLayoutTimeoutRef.current = setTimeout(() => {
-        saveTerminalLayout(currentProject.path);
+        // Only save if we're still on the same project
+        if (pendingSavePathRef.current === projectPath) {
+          saveTerminalLayout(projectPath);
+        }
+        pendingSavePathRef.current = null;
         saveLayoutTimeoutRef.current = null;
       }, 500); // 500ms debounce
     }
@@ -949,28 +964,93 @@ export function TerminalView() {
     });
   }, []);
 
-  // Navigate between terminal panes with Ctrl+Alt+Arrow keys
-  const navigateToTerminal = useCallback((direction: "next" | "prev") => {
+  // Navigate between terminal panes with directional awareness
+  // Arrow keys navigate in the actual spatial direction within the layout
+  const navigateToTerminal = useCallback((direction: "up" | "down" | "left" | "right") => {
     if (!activeTab?.layout) return;
 
-    const terminalIds = getTerminalIds(activeTab.layout);
-    if (terminalIds.length <= 1) return;
-
-    const currentIndex = terminalIds.indexOf(terminalState.activeSessionId || "");
-    if (currentIndex === -1) {
+    const currentSessionId = terminalState.activeSessionId;
+    if (!currentSessionId) {
       // If no terminal is active, focus the first one
-      setActiveTerminalSession(terminalIds[0]);
+      const terminalIds = getTerminalIds(activeTab.layout);
+      if (terminalIds.length > 0) {
+        setActiveTerminalSession(terminalIds[0]);
+      }
       return;
     }
 
-    let newIndex: number;
-    if (direction === "next") {
-      newIndex = (currentIndex + 1) % terminalIds.length;
-    } else {
-      newIndex = (currentIndex - 1 + terminalIds.length) % terminalIds.length;
-    }
+    // Find the terminal in the given direction
+    // The algorithm traverses the layout tree to find spatially adjacent terminals
+    const findTerminalInDirection = (
+      layout: TerminalPanelContent,
+      targetId: string,
+      dir: "up" | "down" | "left" | "right"
+    ): string | null => {
+      // Helper to get all terminal IDs from a layout subtree
+      const getAllTerminals = (node: TerminalPanelContent): string[] => {
+        if (node.type === "terminal") return [node.sessionId];
+        return node.panels.flatMap(getAllTerminals);
+      };
 
-    setActiveTerminalSession(terminalIds[newIndex]);
+      // Helper to find terminal and its path in the tree
+      type PathEntry = { node: TerminalPanelContent; index: number; direction: "horizontal" | "vertical" };
+      const findPath = (
+        node: TerminalPanelContent,
+        target: string,
+        path: PathEntry[] = []
+      ): PathEntry[] | null => {
+        if (node.type === "terminal") {
+          return node.sessionId === target ? path : null;
+        }
+        for (let i = 0; i < node.panels.length; i++) {
+          const result = findPath(node.panels[i], target, [
+            ...path,
+            { node, index: i, direction: node.direction },
+          ]);
+          if (result) return result;
+        }
+        return null;
+      };
+
+      const path = findPath(layout, targetId);
+      if (!path || path.length === 0) return null;
+
+      // Determine which split direction we need based on arrow direction
+      // left/right navigation works in "horizontal" splits (panels side by side)
+      // up/down navigation works in "vertical" splits (panels stacked)
+      const neededDirection = dir === "left" || dir === "right" ? "horizontal" : "vertical";
+      const goingForward = dir === "right" || dir === "down";
+
+      // Walk up the path to find a split in the right direction with an adjacent panel
+      for (let i = path.length - 1; i >= 0; i--) {
+        const entry = path[i];
+        if (entry.direction === neededDirection) {
+          const siblings = entry.node.type === "split" ? entry.node.panels : [];
+          const nextIndex = goingForward ? entry.index + 1 : entry.index - 1;
+
+          if (nextIndex >= 0 && nextIndex < siblings.length) {
+            // Found an adjacent panel in the right direction
+            const adjacentPanel = siblings[nextIndex];
+            const adjacentTerminals = getAllTerminals(adjacentPanel);
+
+            if (adjacentTerminals.length > 0) {
+              // When moving forward (right/down), pick the first terminal in that subtree
+              // When moving backward (left/up), pick the last terminal in that subtree
+              return goingForward
+                ? adjacentTerminals[0]
+                : adjacentTerminals[adjacentTerminals.length - 1];
+            }
+          }
+        }
+      }
+
+      return null;
+    };
+
+    const nextTerminal = findTerminalInDirection(activeTab.layout, currentSessionId, direction);
+    if (nextTerminal) {
+      setActiveTerminalSession(nextTerminal);
+    }
   }, [activeTab?.layout, terminalState.activeSessionId, setActiveTerminalSession]);
 
   // Handle global keyboard shortcuts for pane navigation
@@ -978,12 +1058,18 @@ export function TerminalView() {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Ctrl+Alt+Arrow (or Cmd+Alt+Arrow on Mac) for pane navigation
       if ((e.ctrlKey || e.metaKey) && e.altKey && !e.shiftKey) {
-        if (e.key === "ArrowRight" || e.key === "ArrowDown") {
+        if (e.key === "ArrowRight") {
           e.preventDefault();
-          navigateToTerminal("next");
-        } else if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
+          navigateToTerminal("right");
+        } else if (e.key === "ArrowLeft") {
           e.preventDefault();
-          navigateToTerminal("prev");
+          navigateToTerminal("left");
+        } else if (e.key === "ArrowDown") {
+          e.preventDefault();
+          navigateToTerminal("down");
+        } else if (e.key === "ArrowUp") {
+          e.preventDefault();
+          navigateToTerminal("up");
         }
       }
     };
@@ -1019,6 +1105,16 @@ export function TerminalView() {
             onSplitHorizontal={() => createTerminal("horizontal", content.sessionId)}
             onSplitVertical={() => createTerminal("vertical", content.sessionId)}
             onNewTab={createTerminalInNewTab}
+            onNavigateUp={() => navigateToTerminal("up")}
+            onNavigateDown={() => navigateToTerminal("down")}
+            onNavigateLeft={() => navigateToTerminal("left")}
+            onNavigateRight={() => navigateToTerminal("right")}
+            onSessionInvalid={() => {
+              // Auto-remove stale session when server says it doesn't exist
+              // This handles cases like server restart where sessions are lost
+              console.log(`[Terminal] Session ${content.sessionId} is invalid, removing from layout`);
+              killTerminal(content.sessionId);
+            }}
             isDragging={activeDragId === content.sessionId}
             isDropTarget={activeDragId !== null && activeDragId !== content.sessionId}
             fontSize={terminalFontSize}
@@ -1384,6 +1480,11 @@ export function TerminalView() {
                 onSplitHorizontal={() => createTerminal("horizontal", terminalState.maximizedSessionId!)}
                 onSplitVertical={() => createTerminal("vertical", terminalState.maximizedSessionId!)}
                 onNewTab={createTerminalInNewTab}
+                onSessionInvalid={() => {
+                  const sessionId = terminalState.maximizedSessionId!;
+                  console.log(`[Terminal] Maximized session ${sessionId} is invalid, removing from layout`);
+                  killTerminal(sessionId);
+                }}
                 isDragging={false}
                 isDropTarget={false}
                 fontSize={findTerminalFontSize(terminalState.maximizedSessionId)}
