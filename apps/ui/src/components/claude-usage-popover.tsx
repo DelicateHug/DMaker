@@ -17,37 +17,65 @@ import { cn } from "@/lib/utils";
 import { getElectronAPI } from "@/lib/electron";
 import { useAppStore } from "@/store/app-store";
 
+// Error codes for distinguishing failure modes
+const ERROR_CODES = {
+  API_BRIDGE_UNAVAILABLE: "API_BRIDGE_UNAVAILABLE",
+  AUTH_ERROR: "AUTH_ERROR",
+  UNKNOWN: "UNKNOWN",
+} as const;
+
+type ErrorCode = (typeof ERROR_CODES)[keyof typeof ERROR_CODES];
+
+type UsageError = {
+  code: ErrorCode;
+  message: string;
+};
+
 export function ClaudeUsagePopover() {
   const { claudeRefreshInterval, claudeUsage, claudeUsageLastUpdated, setClaudeUsage } =
     useAppStore();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<UsageError | null>(null);
 
   // Check if data is stale (older than 2 minutes) - recalculates when claudeUsageLastUpdated changes
   const isStale = useMemo(() => {
     return !claudeUsageLastUpdated || Date.now() - claudeUsageLastUpdated > 2 * 60 * 1000;
   }, [claudeUsageLastUpdated]);
 
-  const fetchUsage = useCallback(async (isAutoRefresh = false) => {
-    if (!isAutoRefresh) setLoading(true);
-    setError(null);
-    try {
-      const api = getElectronAPI();
-      if (!api.claude) {
-        throw new Error("Claude API not available");
+  const fetchUsage = useCallback(
+    async (isAutoRefresh = false) => {
+      if (!isAutoRefresh) setLoading(true);
+      setError(null);
+      try {
+        const api = getElectronAPI();
+        if (!api.claude) {
+          setError({
+            code: ERROR_CODES.API_BRIDGE_UNAVAILABLE,
+            message: 'Claude API bridge not available',
+          });
+          return;
+        }
+        const data = await api.claude.getUsage();
+        if ('error' in data) {
+          setError({
+            code: ERROR_CODES.AUTH_ERROR,
+            message: data.message || data.error,
+          });
+          return;
+        }
+        setClaudeUsage(data);
+      } catch (err) {
+        setError({
+          code: ERROR_CODES.UNKNOWN,
+          message: err instanceof Error ? err.message : 'Failed to fetch usage',
+        });
+      } finally {
+        if (!isAutoRefresh) setLoading(false);
       }
-      const data = await api.claude.getUsage();
-      if ("error" in data) {
-        throw new Error(data.message || data.error);
-      }
-      setClaudeUsage(data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to fetch usage");
-    } finally {
-      if (!isAutoRefresh) setLoading(false);
-    }
-  }, [setClaudeUsage]);
+    },
+    [setClaudeUsage]
+  );
 
   // Auto-fetch on mount if data is stale
   useEffect(() => {
@@ -79,11 +107,10 @@ export function ClaudeUsagePopover() {
 
   // Derived status color/icon helper
   const getStatusInfo = (percentage: number) => {
-    if (percentage >= 80)
-      return { color: "text-red-500", icon: XCircle, bg: "bg-red-500" };
+    if (percentage >= 75) return { color: 'text-red-500', icon: XCircle, bg: 'bg-red-500' };
     if (percentage >= 50)
-      return { color: "text-orange-500", icon: AlertTriangle, bg: "bg-orange-500" };
-    return { color: "text-green-500", icon: CheckCircle, bg: "bg-green-500" };
+      return { color: 'text-orange-500', icon: AlertTriangle, bg: 'bg-orange-500' };
+    return { color: 'text-green-500', icon: CheckCircle, bg: 'bg-green-500' };
   };
 
   // Helper component for the progress bar
@@ -175,8 +202,8 @@ export function ClaudeUsagePopover() {
     : 0;
 
   const getProgressBarColor = (percentage: number) => {
-    if (percentage >= 100) return "bg-red-500";
-    if (percentage >= 75) return "bg-yellow-500";
+    if (percentage >= 80) return 'bg-red-500';
+    if (percentage >= 50) return 'bg-yellow-500';
     return "bg-green-500";
   };
 
@@ -220,7 +247,7 @@ export function ClaudeUsagePopover() {
           <Button
             variant="ghost"
             size="icon"
-            className={cn("h-6 w-6", loading && "opacity-80")}
+            className={cn('h-6 w-6', loading && 'opacity-80')}
             onClick={() => !loading && fetchUsage(false)}
           >
             <RefreshCw className="w-3.5 h-3.5" />
@@ -233,9 +260,16 @@ export function ClaudeUsagePopover() {
             <div className="flex flex-col items-center justify-center py-6 text-center space-y-3">
               <AlertTriangle className="w-8 h-8 text-yellow-500/80" />
               <div className="space-y-1 flex flex-col items-center">
-                <p className="text-sm font-medium">{error}</p>
+                <p className="text-sm font-medium">{error.message}</p>
                 <p className="text-xs text-muted-foreground">
-                  Make sure Claude CLI is installed and authenticated via <code className="font-mono bg-muted px-1 rounded">claude login</code>
+                  {error.code === ERROR_CODES.API_BRIDGE_UNAVAILABLE ? (
+                    'Ensure the Electron bridge is running or restart the app'
+                  ) : (
+                    <>
+                      Make sure Claude CLI is installed and authenticated via{' '}
+                      <code className="font-mono bg-muted px-1 rounded">claude login</code>
+                    </>
+                  )}
                 </p>
               </div>
             </div>
@@ -279,7 +313,7 @@ export function ClaudeUsagePopover() {
               {claudeUsage.costLimit && claudeUsage.costLimit > 0 && (
                 <UsageCard
                   title="Extra Usage"
-                  subtitle={`${claudeUsage.costUsed ?? 0} / ${claudeUsage.costLimit} ${claudeUsage.costCurrency ?? ""}`}
+                  subtitle={`${claudeUsage.costUsed ?? 0} / ${claudeUsage.costLimit} ${claudeUsage.costCurrency ?? ''}`}
                   percentage={
                     claudeUsage.costLimit > 0
                       ? ((claudeUsage.costUsed ?? 0) / claudeUsage.costLimit) * 100
