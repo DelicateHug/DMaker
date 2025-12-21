@@ -10,7 +10,11 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 
-/** Pattern to match version directories (e.g., "v18.17.0", "18.17.0") */
+/**
+ * Pattern to match version directories (e.g., "v18.17.0", "18.17.0", "v18")
+ * Intentionally permissive to match pre-release versions (v18.17.0-beta, v18.17.0-rc1)
+ * since localeCompare with numeric:true handles sorting correctly
+ */
 const VERSION_DIR_PATTERN = /^v?\d+/;
 
 /** Result of finding Node.js executable */
@@ -236,7 +240,8 @@ function findNodeViaShell(
     // 'where' on Windows can return multiple lines, take the first
     const nodePath = result.split(/\r?\n/)[0];
 
-    if (nodePath && fs.existsSync(nodePath)) {
+    // Validate path: check for null bytes (security) and existence
+    if (nodePath && !nodePath.includes('\x00') && fs.existsSync(nodePath)) {
       return {
         nodePath,
         source: platform === 'win32' ? 'where' : 'which',
