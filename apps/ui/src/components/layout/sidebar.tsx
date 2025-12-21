@@ -83,159 +83,18 @@ import {
   useSensors,
   closestCenter,
 } from '@dnd-kit/core';
-import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
+import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { getHttpApiClient } from '@/lib/http-api-client';
 import type { StarterTemplate } from '@/lib/templates';
 
-interface NavSection {
-  label?: string;
-  items: NavItem[];
-}
-
-interface NavItem {
-  id: string;
-  label: string;
-  icon: any;
-  shortcut?: string;
-}
-
-// Sortable Project Item Component
-interface SortableProjectItemProps {
-  project: Project;
-  currentProjectId: string | undefined;
-  isHighlighted: boolean;
-  onSelect: (project: Project) => void;
-}
-
-function SortableProjectItem({
-  project,
-  currentProjectId,
-  isHighlighted,
-  onSelect,
-}: SortableProjectItemProps) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: project.id,
-  });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
-  };
-
-  return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className={cn(
-        'flex items-center gap-2 px-2.5 py-2 rounded-lg cursor-pointer transition-all duration-200',
-        'text-muted-foreground hover:text-foreground hover:bg-accent/80',
-        isDragging && 'bg-accent shadow-lg scale-[1.02]',
-        isHighlighted && 'bg-brand-500/10 text-foreground ring-1 ring-brand-500/20'
-      )}
-      data-testid={`project-option-${project.id}`}
-    >
-      {/* Drag Handle */}
-      <button
-        {...attributes}
-        {...listeners}
-        className="p-0.5 rounded-md hover:bg-accent/50 cursor-grab active:cursor-grabbing transition-colors"
-        data-testid={`project-drag-handle-${project.id}`}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <GripVertical className="h-3.5 w-3.5 text-muted-foreground/60" />
-      </button>
-
-      {/* Project content - clickable area */}
-      <div className="flex items-center gap-2.5 flex-1 min-w-0" onClick={() => onSelect(project)}>
-        <Folder className="h-4 w-4 shrink-0 text-muted-foreground" />
-        <span className="flex-1 truncate text-sm font-medium">{project.name}</span>
-        {currentProjectId === project.id && <Check className="h-4 w-4 text-brand-500 shrink-0" />}
-      </div>
-    </div>
-  );
-}
-
-// Theme options for project theme selector - derived from the shared config
-import { darkThemes, lightThemes } from '@/config/theme-options';
-
-const PROJECT_DARK_THEMES = darkThemes.map((opt) => ({
-  value: opt.value,
-  label: opt.label,
-  icon: opt.Icon,
-  color: opt.color,
-}));
-
-const PROJECT_LIGHT_THEMES = lightThemes.map((opt) => ({
-  value: opt.value,
-  label: opt.label,
-  icon: opt.Icon,
-  color: opt.color,
-}));
-
-// Memoized theme menu item to prevent re-renders during hover
-interface ThemeMenuItemProps {
-  option: {
-    value: string;
-    label: string;
-    icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>;
-    color: string;
-  };
-  onPreviewEnter: (value: string) => void;
-  onPreviewLeave: (e: React.PointerEvent) => void;
-}
-
-const ThemeMenuItem = memo(function ThemeMenuItem({
-  option,
-  onPreviewEnter,
-  onPreviewLeave,
-}: ThemeMenuItemProps) {
-  const Icon = option.icon;
-  return (
-    <div
-      key={option.value}
-      onPointerEnter={() => onPreviewEnter(option.value)}
-      onPointerLeave={onPreviewLeave}
-    >
-      <DropdownMenuRadioItem
-        value={option.value}
-        data-testid={`project-theme-${option.value}`}
-        className="text-xs py-1.5"
-      >
-        <Icon className="w-3.5 h-3.5 mr-1.5" style={{ color: option.color }} />
-        <span>{option.label}</span>
-      </DropdownMenuRadioItem>
-    </div>
-  );
-});
-
-// Reusable Bug Report Button Component
-const BugReportButton = ({
-  sidebarExpanded,
-  onClick,
-}: {
-  sidebarExpanded: boolean;
-  onClick: () => void;
-}) => {
-  return (
-    <button
-      onClick={onClick}
-      className={cn(
-        'titlebar-no-drag px-3 py-2.5 rounded-xl',
-        'text-muted-foreground hover:text-foreground hover:bg-accent/80',
-        'border border-transparent hover:border-border/40',
-        'transition-all duration-200 ease-out',
-        'hover:scale-[1.02] active:scale-[0.97]',
-        sidebarExpanded && 'absolute right-3'
-      )}
-      title="Report Bug / Feature Request"
-      data-testid={sidebarExpanded ? 'bug-report-link' : 'bug-report-link-collapsed'}
-    >
-      <Bug className="w-4 h-4" />
-    </button>
-  );
-};
+// Local imports from subfolder
+import type { NavSection, NavItem } from './sidebar/types';
+import { SortableProjectItem, ThemeMenuItem, BugReportButton } from './sidebar/components';
+import {
+  PROJECT_DARK_THEMES,
+  PROJECT_LIGHT_THEMES,
+  SIDEBAR_FEATURE_FLAGS,
+} from './sidebar/constants';
 
 export function Sidebar() {
   const navigate = useNavigate();
@@ -267,12 +126,8 @@ export function Sidebar() {
   } = useAppStore();
 
   // Environment variable flags for hiding sidebar items
-  const hideTerminal = import.meta.env.VITE_HIDE_TERMINAL === 'true';
-  const hideWiki = import.meta.env.VITE_HIDE_WIKI === 'true';
-  const hideRunningAgents = import.meta.env.VITE_HIDE_RUNNING_AGENTS === 'true';
-  const hideContext = import.meta.env.VITE_HIDE_CONTEXT === 'true';
-  const hideSpecEditor = import.meta.env.VITE_HIDE_SPEC_EDITOR === 'true';
-  const hideAiProfiles = import.meta.env.VITE_HIDE_AI_PROFILES === 'true';
+  const { hideTerminal, hideWiki, hideRunningAgents, hideContext, hideSpecEditor, hideAiProfiles } =
+    SIDEBAR_FEATURE_FLAGS;
 
   // Get customizable keyboard shortcuts
   const shortcuts = useKeyboardShortcutsConfig();
