@@ -9,6 +9,7 @@ import * as pty from "node-pty";
 import { EventEmitter } from "events";
 import * as os from "os";
 import * as fs from "fs";
+import * as path from "path";
 
 // Maximum scrollback buffer size (characters)
 const MAX_SCROLLBACK_SIZE = 50000; // ~50KB per terminal
@@ -155,6 +156,7 @@ export class TerminalService extends EventEmitter {
 
   /**
    * Validate and resolve a working directory path
+   * Includes basic sanitization against null bytes and path normalization
    */
   private resolveWorkingDirectory(requestedCwd?: string): string {
     const homeDir = os.homedir();
@@ -167,10 +169,20 @@ export class TerminalService extends EventEmitter {
     // Clean up the path
     let cwd = requestedCwd.trim();
 
+    // Reject paths with null bytes (could bypass path checks)
+    if (cwd.includes("\0")) {
+      console.warn(`[Terminal] Rejecting path with null byte: ${cwd.replace(/\0/g, "\\0")}`);
+      return homeDir;
+    }
+
     // Fix double slashes at start (but not for Windows UNC paths)
     if (cwd.startsWith("//") && !cwd.startsWith("//wsl")) {
       cwd = cwd.slice(1);
     }
+
+    // Normalize the path to resolve . and .. segments
+    // This converts relative paths to absolute and cleans up the path
+    cwd = path.resolve(cwd);
 
     // Check if path exists and is a directory
     try {
@@ -379,6 +391,7 @@ export class TerminalService extends EventEmitter {
 
   /**
    * Kill a terminal session
+   * Attempts graceful SIGTERM first, then SIGKILL after 1 second if still alive
    */
   killSession(sessionId: string): boolean {
     const session = this.sessions.get(sessionId);
@@ -396,11 +409,27 @@ export class TerminalService extends EventEmitter {
         clearTimeout(session.resizeDebounceTimeout);
         session.resizeDebounceTimeout = null;
       }
-      // Use SIGKILL for forceful termination - shell processes may ignore SIGTERM/SIGHUP
-      // This ensures the PTY process is actually killed, especially on WSL
-      session.pty.kill("SIGKILL");
-      this.sessions.delete(sessionId);
-      console.log(`[Terminal] Session ${sessionId} killed`);
+
+      // First try graceful SIGTERM to allow process cleanup
+      console.log(`[Terminal] Session ${sessionId} sending SIGTERM`);
+      session.pty.kill("SIGTERM");
+
+      // Schedule SIGKILL fallback if process doesn't exit gracefully
+      // The onExit handler will remove session from map when it actually exits
+      setTimeout(() => {
+        if (this.sessions.has(sessionId)) {
+          console.log(`[Terminal] Session ${sessionId} still alive after SIGTERM, sending SIGKILL`);
+          try {
+            session.pty.kill("SIGKILL");
+          } catch {
+            // Process may have already exited
+          }
+          // Force remove from map if still present
+          this.sessions.delete(sessionId);
+        }
+      }, 1000);
+
+      console.log(`[Terminal] Session ${sessionId} kill initiated`);
       return true;
     } catch (error) {
       console.error(`[Terminal] Error killing session ${sessionId}:`, error);
