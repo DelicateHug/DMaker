@@ -6,3 +6,5 @@ export { AutomakerLogo } from './automaker-logo';
 export { SidebarHeader } from './sidebar-header';
 export { ProjectActions } from './project-actions';
 export { SidebarNavigation } from './sidebar-navigation';
+export { ProjectSelectorWithOptions } from './project-selector-with-options';
+export { SidebarFooter } from './sidebar-footer';
