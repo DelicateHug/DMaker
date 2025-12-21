@@ -1016,6 +1016,11 @@ export class HttpApiClient implements ElectronAPI {
     ): Promise<{ success: boolean; error?: string }> =>
       this.httpDelete(`/api/sessions/${sessionId}`),
   };
+
+  // Claude API
+  claude = {
+    getUsage: (): Promise<any> => this.get("/api/claude/usage"),
+  };
 }
 
 // Singleton instance
