@@ -26,6 +26,13 @@ export function createSettingsUpdateHandler() {
       const { maxSessions } = req.body;
 
       if (typeof maxSessions === "number") {
+        if (!Number.isInteger(maxSessions)) {
+          res.status(400).json({
+            success: false,
+            error: "maxSessions must be an integer",
+          });
+          return;
+        }
         if (maxSessions < MIN_MAX_SESSIONS || maxSessions > MAX_MAX_SESSIONS) {
           res.status(400).json({
             success: false,

@@ -245,7 +245,7 @@ export function TerminalView() {
   const lastCreateTimeRef = useRef<number>(0);
   const isCreatingRef = useRef<boolean>(false);
   const prevProjectPathRef = useRef<string | null>(null);
-  const isRestoringLayoutRef = useRef<boolean>(false);
+  const restoringProjectPathRef = useRef<string | null>(null);
   const [newSessionIds, setNewSessionIds] = useState<Set<string>>(new Set());
   const [serverSessionInfo, setServerSessionInfo] = useState<{ current: number; max: number } | null>(null);
   const hasShownHighRamWarningRef = useRef<boolean>(false);
@@ -438,10 +438,13 @@ export function TerminalView() {
     const currentPath = currentProject?.path || null;
     const prevPath = prevProjectPathRef.current;
 
-    // Skip if no change or if we're restoring layout
-    if (currentPath === prevPath || isRestoringLayoutRef.current) {
+    // Skip if no change
+    if (currentPath === prevPath) {
       return;
     }
+
+    // If we're restoring a different project, that restore will be stale - let it finish but ignore results
+    // The path check in restoreLayout will handle this
 
     // Save layout for previous project (if there was one and has terminals)
     if (prevPath && terminalState.tabs.length > 0) {
@@ -462,13 +465,20 @@ export function TerminalView() {
 
     if (savedLayout && savedLayout.tabs.length > 0) {
       // Restore the saved layout - try to reconnect to existing sessions
-      isRestoringLayoutRef.current = true;
+      // Track which project we're restoring to detect stale restores
+      restoringProjectPathRef.current = currentPath;
 
       // Clear existing terminals first (only client state, sessions stay on server)
       clearTerminalState();
 
       // Create terminals and build layout - try to reconnect or create new
       const restoreLayout = async () => {
+        // Check if we're still restoring the same project (user may have switched)
+        if (restoringProjectPathRef.current !== currentPath) {
+          console.log("[Terminal] Restore cancelled - project changed");
+          return;
+        }
+
         let failedSessions = 0;
         let totalSessions = 0;
         let reconnectedSessions = 0;
@@ -578,6 +588,12 @@ export function TerminalView() {
 
           // For each saved tab, rebuild the layout
           for (let tabIndex = 0; tabIndex < savedLayout.tabs.length; tabIndex++) {
+            // Check if project changed during restore - bail out early
+            if (restoringProjectPathRef.current !== currentPath) {
+              console.log("[Terminal] Restore cancelled mid-loop - project changed");
+              return;
+            }
+
             const savedTab = savedLayout.tabs[tabIndex];
 
             // Create the tab first
@@ -619,7 +635,10 @@ export function TerminalView() {
             duration: 5000,
           });
         } finally {
-          isRestoringLayoutRef.current = false;
+          // Only clear if we're still the active restore
+          if (restoringProjectPathRef.current === currentPath) {
+            restoringProjectPathRef.current = null;
+          }
         }
       };
 
@@ -631,7 +650,8 @@ export function TerminalView() {
   // Also save when tabs become empty so closed terminals stay closed on refresh
   const saveLayoutTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   useEffect(() => {
-    if (currentProject?.path && !isRestoringLayoutRef.current) {
+    // Don't save while restoring this project's layout
+    if (currentProject?.path && restoringProjectPathRef.current !== currentProject.path) {
       // Debounce saves to prevent excessive localStorage writes during rapid changes
       if (saveLayoutTimeoutRef.current) {
         clearTimeout(saveLayoutTimeoutRef.current);
