@@ -1,5 +1,6 @@
 // Type definitions for Electron IPC API
 import type { SessionListItem, Message } from "@/types/electron";
+import type { ClaudeUsageResponse } from "@/store/app-store";
 import { getJSON, setJSON, removeItem } from "./storage";
 
 export interface FileEntry {
@@ -483,7 +484,7 @@ export interface ElectronAPI {
     ) => Promise<{ success: boolean; error?: string }>;
   };
   claude?: {
-    getUsage: () => Promise<ClaudeUsage>;
+    getUsage: () => Promise<ClaudeUsageResponse>;
   };
 }
 

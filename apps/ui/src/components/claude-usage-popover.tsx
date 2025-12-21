@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import {
   Popover,
   PopoverContent,
@@ -29,7 +29,7 @@ export function ClaudeUsagePopover() {
     return !claudeUsageLastUpdated || Date.now() - claudeUsageLastUpdated > 2 * 60 * 1000;
   }, [claudeUsageLastUpdated]);
 
-  const fetchUsage = async (isAutoRefresh = false) => {
+  const fetchUsage = useCallback(async (isAutoRefresh = false) => {
     if (!isAutoRefresh) setLoading(true);
     setError(null);
     try {
@@ -38,7 +38,7 @@ export function ClaudeUsagePopover() {
         throw new Error("Claude API not available");
       }
       const data = await api.claude.getUsage();
-      if (data.error) {
+      if ("error" in data) {
         throw new Error(data.message || data.error);
       }
       setClaudeUsage(data);
@@ -47,26 +47,20 @@ export function ClaudeUsagePopover() {
     } finally {
       if (!isAutoRefresh) setLoading(false);
     }
-  };
+  }, [setClaudeUsage]);
 
   // Auto-fetch on mount if data is stale
   useEffect(() => {
     if (isStale) {
       fetchUsage(true);
     }
-  }, []);
+  }, [isStale, fetchUsage]);
 
   useEffect(() => {
     // Initial fetch when opened
     if (open) {
-      if (!claudeUsage) {
+      if (!claudeUsage || isStale) {
         fetchUsage();
-      } else {
-        const now = Date.now();
-        const stale = !claudeUsageLastUpdated || now - claudeUsageLastUpdated > 2 * 60 * 1000;
-        if (stale) {
-          fetchUsage(false);
-        }
       }
     }
 
@@ -81,7 +75,7 @@ export function ClaudeUsagePopover() {
     return () => {
       if (intervalId) clearInterval(intervalId);
     };
-  }, [open]);
+  }, [open, claudeUsage, isStale, claudeRefreshInterval, fetchUsage]);
 
   // Derived status color/icon helper
   const getStatusInfo = (percentage: number) => {

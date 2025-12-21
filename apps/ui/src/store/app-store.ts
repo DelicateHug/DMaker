@@ -515,7 +515,7 @@ export interface AppState {
 }
 
 // Claude Usage interface matching the server response
-export interface ClaudeUsage {
+export type ClaudeUsage = {
   sessionTokensUsed: number;
   sessionLimit: number;
   sessionPercentage: number;
@@ -535,7 +535,15 @@ export interface ClaudeUsage {
   costUsed: number | null;
   costLimit: number | null;
   costCurrency: string | null;
-}
+
+  lastUpdated: string;
+  userTimezone: string;
+};
+
+// Response type for Claude usage API (can be success or error)
+export type ClaudeUsageResponse =
+  | ClaudeUsage
+  | { error: string; message?: string };
 
 /**
  * Check if Claude usage is at its limit (any of: session >= 100%, weekly >= 100%, OR cost >= limit)

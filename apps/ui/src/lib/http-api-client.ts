@@ -24,7 +24,7 @@ import type {
   SuggestionType,
 } from "./electron";
 import type { Message, SessionListItem } from "@/types/electron";
-import type { Feature } from "@/store/app-store";
+import type { Feature, ClaudeUsageResponse } from "@/store/app-store";
 import type {
   WorktreeAPI,
   GitAPI,
@@ -1019,7 +1019,7 @@ export class HttpApiClient implements ElectronAPI {
 
   // Claude API
   claude = {
-    getUsage: (): Promise<any> => this.get("/api/claude/usage"),
+    getUsage: (): Promise<ClaudeUsageResponse> => this.get("/api/claude/usage"),
   };
 }
 

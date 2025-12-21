@@ -1,9 +1,8 @@
 import { Router, Request, Response } from "express";
 import { ClaudeUsageService } from "../../services/claude-usage-service.js";
 
-export function createClaudeRoutes(): Router {
+export function createClaudeRoutes(service: ClaudeUsageService): Router {
   const router = Router();
-  const service = new ClaudeUsageService();
 
   // Get current usage (fetches from Claude CLI)
   router.get("/usage", async (req: Request, res: Response) => {
