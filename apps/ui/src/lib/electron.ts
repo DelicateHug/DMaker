@@ -483,7 +483,7 @@ export interface ElectronAPI {
     ) => Promise<{ success: boolean; error?: string }>;
   };
   claude?: {
-    getUsage: () => Promise<any>;
+    getUsage: () => Promise<ClaudeUsage>;
   };
 }
 
