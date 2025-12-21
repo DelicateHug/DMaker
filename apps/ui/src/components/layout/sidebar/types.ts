@@ -1,0 +1,36 @@
+import type { Project } from '@/lib/electron';
+
+export interface NavSection {
+  label?: string;
+  items: NavItem[];
+}
+
+export interface NavItem {
+  id: string;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  shortcut?: string;
+}
+
+export interface SortableProjectItemProps {
+  project: Project;
+  currentProjectId: string | undefined;
+  isHighlighted: boolean;
+  onSelect: (project: Project) => void;
+}
+
+export interface ThemeMenuItemProps {
+  option: {
+    value: string;
+    label: string;
+    icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>;
+    color: string;
+  };
+  onPreviewEnter: (value: string) => void;
+  onPreviewLeave: (e: React.PointerEvent) => void;
+}
+
+export interface BugReportButtonProps {
+  sidebarExpanded: boolean;
+  onClick: () => void;
+}
