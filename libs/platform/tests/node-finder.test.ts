@@ -4,6 +4,59 @@ import path from 'path';
 import fs from 'fs';
 
 describe('node-finder', () => {
+  describe('version sorting and pre-release filtering', () => {
+    // Test the PRE_RELEASE_PATTERN logic indirectly
+    const PRE_RELEASE_PATTERN = /-(beta|rc|alpha|nightly|canary|dev|pre)/i;
+
+    it('should identify pre-release versions correctly', () => {
+      const preReleaseVersions = [
+        'v20.0.0-beta',
+        'v18.17.0-rc1',
+        'v19.0.0-alpha',
+        'v21.0.0-nightly',
+        'v20.0.0-canary',
+        'v18.0.0-dev',
+        'v17.0.0-pre',
+      ];
+
+      for (const version of preReleaseVersions) {
+        expect(PRE_RELEASE_PATTERN.test(version)).toBe(true);
+      }
+    });
+
+    it('should not match stable versions as pre-release', () => {
+      const stableVersions = ['v18.17.0', 'v20.10.0', 'v16.20.2', '18.17.0', 'v21.0.0'];
+
+      for (const version of stableVersions) {
+        expect(PRE_RELEASE_PATTERN.test(version)).toBe(false);
+      }
+    });
+
+    it('should sort versions with numeric comparison', () => {
+      const versions = ['v18.9.0', 'v18.17.0', 'v20.0.0', 'v8.0.0'];
+      const sorted = [...versions].sort((a, b) =>
+        b.localeCompare(a, undefined, { numeric: true, sensitivity: 'base' })
+      );
+
+      expect(sorted).toEqual(['v20.0.0', 'v18.17.0', 'v18.9.0', 'v8.0.0']);
+    });
+
+    it('should prefer stable over pre-release when filtering', () => {
+      const allVersions = ['v20.0.0-beta', 'v19.9.9', 'v18.17.0', 'v21.0.0-rc1'];
+
+      const stableVersions = allVersions.filter((v) => !PRE_RELEASE_PATTERN.test(v));
+      const preReleaseVersions = allVersions.filter((v) => PRE_RELEASE_PATTERN.test(v));
+      const prioritized = [...stableVersions, ...preReleaseVersions];
+
+      // Stable versions should come first
+      expect(prioritized[0]).toBe('v19.9.9');
+      expect(prioritized[1]).toBe('v18.17.0');
+      // Pre-release versions should come after
+      expect(prioritized[2]).toBe('v20.0.0-beta');
+      expect(prioritized[3]).toBe('v21.0.0-rc1');
+    });
+  });
+
   describe('findNodeExecutable', () => {
     it("should return 'node' with fallback source when skipSearch is true", () => {
       const result = findNodeExecutable({ skipSearch: true });

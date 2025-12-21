@@ -10,12 +10,11 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 
-/**
- * Pattern to match version directories (e.g., "v18.17.0", "18.17.0", "v18")
- * Intentionally permissive to match pre-release versions (v18.17.0-beta, v18.17.0-rc1)
- * since localeCompare with numeric:true handles sorting correctly
- */
+/** Pattern to match version directories (e.g., "v18.17.0", "18.17.0", "v18") */
 const VERSION_DIR_PATTERN = /^v?\d+/;
+
+/** Pattern to identify pre-release versions (beta, rc, alpha, nightly, canary) */
+const PRE_RELEASE_PATTERN = /-(beta|rc|alpha|nightly|canary|dev|pre)/i;
 
 /** Result of finding Node.js executable */
 export interface NodeFinderResult {
@@ -65,11 +64,8 @@ function isExecutable(filePath: string): boolean {
 
 /**
  * Find Node.js executable from version manager directories (NVM, fnm)
- * Uses semantic version sorting to prefer the latest version
- *
- * Note: Version sorting uses localeCompare with numeric:true which handles most cases
- * correctly (e.g., v18.17.0 > v18.9.0) but may not perfectly sort pre-release versions
- * (e.g., v20.0.0-beta vs v19.9.9). This is acceptable as we prefer the latest stable.
+ * Uses semantic version sorting to prefer the latest stable version
+ * Pre-release versions (beta, rc, alpha) are deprioritized but used as fallback
  */
 function findNodeFromVersionManager(
   basePath: string,
@@ -78,13 +74,18 @@ function findNodeFromVersionManager(
   if (!fs.existsSync(basePath)) return null;
 
   try {
-    const versions = fs
+    const allVersions = fs
       .readdirSync(basePath)
       .filter((v) => VERSION_DIR_PATTERN.test(v))
       // Semantic version sort - newest first using localeCompare with numeric option
       .sort((a, b) => b.localeCompare(a, undefined, { numeric: true, sensitivity: 'base' }));
 
-    for (const version of versions) {
+    // Separate stable and pre-release versions, preferring stable
+    const stableVersions = allVersions.filter((v) => !PRE_RELEASE_PATTERN.test(v));
+    const preReleaseVersions = allVersions.filter((v) => PRE_RELEASE_PATTERN.test(v));
+
+    // Try stable versions first, then fall back to pre-release
+    for (const version of [...stableVersions, ...preReleaseVersions]) {
       const nodePath = path.join(basePath, version, binSubpath);
       if (isExecutable(nodePath)) {
         return nodePath;
