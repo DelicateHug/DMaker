@@ -3,7 +3,6 @@ import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { HotkeyButton } from '@/components/ui/hotkey-button';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { KanbanColumn, KanbanCard } from './components';
 import { Feature } from '@/store/app-store';
 import { FastForward, Lightbulb, Archive } from 'lucide-react';
