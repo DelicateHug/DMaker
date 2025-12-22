@@ -4,8 +4,7 @@ import { AutomakerLogo } from './automaker-logo';
 import { BugReportButton } from './bug-report-button';
 
 // Detect if running on macOS for traffic light button spacing
-const isMac =
-  typeof navigator !== 'undefined' && navigator.userAgentData?.platform === 'macOS';
+const isMac = typeof navigator !== 'undefined' && /Mac/.test(navigator.userAgent);
 
 interface SidebarHeaderProps {
   sidebarOpen: boolean;
