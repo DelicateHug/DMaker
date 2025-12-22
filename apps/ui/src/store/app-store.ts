@@ -4,13 +4,9 @@ import type { Project, TrashedProject } from '@/lib/electron';
 import type {
   Feature as BaseFeature,
   FeatureImagePath,
-  FeatureTextFilePath,
   AgentModel,
   PlanningMode,
-  ThinkingLevel,
-  ModelProvider,
   AIProfile,
-  ThemeMode,
 } from '@automaker/types';
 
 // Re-export ThemeMode for convenience
@@ -243,17 +239,6 @@ export interface ChatSession {
   archived: boolean;
 }
 
-// Re-export for backward compatibility
-export type {
-  FeatureImagePath,
-  FeatureTextFilePath,
-  AgentModel,
-  PlanningMode,
-  ThinkingLevel,
-  ModelProvider,
-  AIProfile,
-};
-
 // UI-specific: base64-encoded images (not in shared types)
 export interface FeatureImage {
   id: string;
@@ -263,18 +248,18 @@ export interface FeatureImage {
   size: number;
 }
 
-export interface FeatureImagePath {
-  id: string;
-  path: string; // Path to the temp file
-  filename: string;
-  mimeType: string;
-}
+// Available models for feature execution
+export type ClaudeModel = 'opus' | 'sonnet' | 'haiku';
 
-// UI-specific Feature extension with UI-only fields and stricter types
 export interface Feature extends Omit<
   BaseFeature,
   'steps' | 'imagePaths' | 'textFilePaths' | 'status'
 > {
+  id: string;
+  title?: string;
+  titleGenerating?: boolean;
+  category: string;
+  description: string;
   steps: string[]; // Required in UI (not optional)
   status: 'backlog' | 'in_progress' | 'waiting_approval' | 'verified' | 'completed';
   images?: FeatureImage[]; // UI-specific base64 images
