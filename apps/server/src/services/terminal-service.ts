@@ -5,11 +5,11 @@
  * Supports cross-platform shell detection including WSL.
  */
 
-import * as pty from "node-pty";
-import { EventEmitter } from "events";
-import * as os from "os";
-import * as fs from "fs";
-import * as path from "path";
+import * as pty from 'node-pty';
+import { EventEmitter } from 'events';
+import * as os from 'os';
+import * as fs from 'fs';
+import * as path from 'path';
 
 // Maximum scrollback buffer size (characters)
 const MAX_SCROLLBACK_SIZE = 50000; // ~50KB per terminal
@@ -21,7 +21,7 @@ export const MAX_MAX_SESSIONS = 1000;
 // Maximum number of concurrent terminal sessions
 // Can be overridden via TERMINAL_MAX_SESSIONS environment variable
 // Default set to 1000 - effectively unlimited for most use cases
-let maxSessions = parseInt(process.env.TERMINAL_MAX_SESSIONS || "1000", 10);
+let maxSessions = parseInt(process.env.TERMINAL_MAX_SESSIONS || '1000', 10);
 
 // Throttle output to prevent overwhelming WebSocket under heavy load
 // Using 4ms for responsive input feedback while still preventing flood
@@ -65,20 +65,20 @@ export class TerminalService extends EventEmitter {
     const platform = os.platform();
 
     // Check if running in WSL
-    if (platform === "linux" && this.isWSL()) {
+    if (platform === 'linux' && this.isWSL()) {
       // In WSL, prefer the user's configured shell or bash
-      const userShell = process.env.SHELL || "/bin/bash";
+      const userShell = process.env.SHELL || '/bin/bash';
       if (fs.existsSync(userShell)) {
-        return { shell: userShell, args: ["--login"] };
+        return { shell: userShell, args: ['--login'] };
       }
-      return { shell: "/bin/bash", args: ["--login"] };
+      return { shell: '/bin/bash', args: ['--login'] };
     }
 
     switch (platform) {
-      case "win32": {
+      case 'win32': {
         // Windows: prefer PowerShell, fall back to cmd
-        const pwsh = "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe";
-        const pwshCore = "C:\\Program Files\\PowerShell\\7\\pwsh.exe";
+        const pwsh = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe';
+        const pwshCore = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe';
 
         if (fs.existsSync(pwshCore)) {
           return { shell: pwshCore, args: [] };
@@ -86,32 +86,32 @@ export class TerminalService extends EventEmitter {
         if (fs.existsSync(pwsh)) {
           return { shell: pwsh, args: [] };
         }
-        return { shell: "cmd.exe", args: [] };
+        return { shell: 'cmd.exe', args: [] };
       }
 
-      case "darwin": {
+      case 'darwin': {
         // macOS: prefer user's shell, then zsh, then bash
         const userShell = process.env.SHELL;
         if (userShell && fs.existsSync(userShell)) {
-          return { shell: userShell, args: ["--login"] };
+          return { shell: userShell, args: ['--login'] };
         }
-        if (fs.existsSync("/bin/zsh")) {
-          return { shell: "/bin/zsh", args: ["--login"] };
+        if (fs.existsSync('/bin/zsh')) {
+          return { shell: '/bin/zsh', args: ['--login'] };
         }
-        return { shell: "/bin/bash", args: ["--login"] };
+        return { shell: '/bin/bash', args: ['--login'] };
       }
 
-      case "linux":
+      case 'linux':
       default: {
         // Linux: prefer user's shell, then bash, then sh
         const userShell = process.env.SHELL;
         if (userShell && fs.existsSync(userShell)) {
-          return { shell: userShell, args: ["--login"] };
+          return { shell: userShell, args: ['--login'] };
         }
-        if (fs.existsSync("/bin/bash")) {
-          return { shell: "/bin/bash", args: ["--login"] };
+        if (fs.existsSync('/bin/bash')) {
+          return { shell: '/bin/bash', args: ['--login'] };
         }
-        return { shell: "/bin/sh", args: [] };
+        return { shell: '/bin/sh', args: [] };
       }
     }
   }
@@ -122,9 +122,9 @@ export class TerminalService extends EventEmitter {
   isWSL(): boolean {
     try {
       // Check /proc/version for Microsoft/WSL indicators
-      if (fs.existsSync("/proc/version")) {
-        const version = fs.readFileSync("/proc/version", "utf-8").toLowerCase();
-        return version.includes("microsoft") || version.includes("wsl");
+      if (fs.existsSync('/proc/version')) {
+        const version = fs.readFileSync('/proc/version', 'utf-8').toLowerCase();
+        return version.includes('microsoft') || version.includes('wsl');
       }
       // Check for WSL environment variable
       if (process.env.WSL_DISTRO_NAME || process.env.WSLENV) {
@@ -170,19 +170,19 @@ export class TerminalService extends EventEmitter {
     let cwd = requestedCwd.trim();
 
     // Reject paths with null bytes (could bypass path checks)
-    if (cwd.includes("\0")) {
-      console.warn(`[Terminal] Rejecting path with null byte: ${cwd.replace(/\0/g, "\\0")}`);
+    if (cwd.includes('\0')) {
+      console.warn(`[Terminal] Rejecting path with null byte: ${cwd.replace(/\0/g, '\\0')}`);
       return homeDir;
     }
 
     // Fix double slashes at start (but not for Windows UNC paths)
-    if (cwd.startsWith("//") && !cwd.startsWith("//wsl")) {
+    if (cwd.startsWith('//') && !cwd.startsWith('//wsl')) {
       cwd = cwd.slice(1);
     }
 
     // Normalize the path to resolve . and .. segments
     // Skip normalization for WSL UNC paths as path.resolve would break them
-    if (!cwd.startsWith("//wsl")) {
+    if (!cwd.startsWith('//wsl')) {
       cwd = path.resolve(cwd);
     }
 
@@ -247,19 +247,19 @@ export class TerminalService extends EventEmitter {
     // These settings ensure consistent terminal behavior across platforms
     const env: Record<string, string> = {
       ...process.env,
-      TERM: "xterm-256color",
-      COLORTERM: "truecolor",
-      TERM_PROGRAM: "automaker-terminal",
+      TERM: 'xterm-256color',
+      COLORTERM: 'truecolor',
+      TERM_PROGRAM: 'automaker-terminal',
       // Ensure proper locale for character handling
-      LANG: process.env.LANG || "en_US.UTF-8",
-      LC_ALL: process.env.LC_ALL || process.env.LANG || "en_US.UTF-8",
+      LANG: process.env.LANG || 'en_US.UTF-8',
+      LC_ALL: process.env.LC_ALL || process.env.LANG || 'en_US.UTF-8',
       ...options.env,
     };
 
     console.log(`[Terminal] Creating session ${id} with shell: ${shell} in ${cwd}`);
 
     const ptyProcess = pty.spawn(shell, shellArgs, {
-      name: "xterm-256color",
+      name: 'xterm-256color',
       cols: options.cols || 80,
       rows: options.rows || 24,
       cwd,
@@ -272,8 +272,8 @@ export class TerminalService extends EventEmitter {
       cwd,
       createdAt: new Date(),
       shell,
-      scrollbackBuffer: "",
-      outputBuffer: "",
+      scrollbackBuffer: '',
+      outputBuffer: '',
       flushTimeout: null,
       resizeInProgress: false,
       resizeDebounceTimeout: null,
@@ -293,12 +293,12 @@ export class TerminalService extends EventEmitter {
         // Schedule another flush for remaining data
         session.flushTimeout = setTimeout(flushOutput, OUTPUT_THROTTLE_MS);
       } else {
-        session.outputBuffer = "";
+        session.outputBuffer = '';
         session.flushTimeout = null;
       }
 
       this.dataCallbacks.forEach((cb) => cb(id, dataToSend));
-      this.emit("data", id, dataToSend);
+      this.emit('data', id, dataToSend);
     };
 
     // Forward data events with throttling
@@ -331,7 +331,7 @@ export class TerminalService extends EventEmitter {
       console.log(`[Terminal] Session ${id} exited with code ${exitCode}`);
       this.sessions.delete(id);
       this.exitCallbacks.forEach((cb) => cb(id, exitCode));
-      this.emit("exit", id, exitCode);
+      this.emit('exit', id, exitCode);
     });
 
     console.log(`[Terminal] Session ${id} created successfully`);
@@ -414,7 +414,7 @@ export class TerminalService extends EventEmitter {
 
       // First try graceful SIGTERM to allow process cleanup
       console.log(`[Terminal] Session ${sessionId} sending SIGTERM`);
-      session.pty.kill("SIGTERM");
+      session.pty.kill('SIGTERM');
 
       // Schedule SIGKILL fallback if process doesn't exit gracefully
       // The onExit handler will remove session from map when it actually exits
@@ -422,7 +422,7 @@ export class TerminalService extends EventEmitter {
         if (this.sessions.has(sessionId)) {
           console.log(`[Terminal] Session ${sessionId} still alive after SIGTERM, sending SIGKILL`);
           try {
-            session.pty.kill("SIGKILL");
+            session.pty.kill('SIGKILL');
           } catch {
             // Process may have already exited
           }
@@ -467,7 +467,7 @@ export class TerminalService extends EventEmitter {
 
     // Clear any pending output that hasn't been flushed yet
     // This data is already in scrollbackBuffer
-    session.outputBuffer = "";
+    session.outputBuffer = '';
     if (session.flushTimeout) {
       clearTimeout(session.flushTimeout);
       session.flushTimeout = null;

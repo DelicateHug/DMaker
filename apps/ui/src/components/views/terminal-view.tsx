@@ -1,5 +1,4 @@
-
-import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   Terminal as TerminalIcon,
   Plus,
@@ -13,26 +12,23 @@ import {
   X,
   SquarePlus,
   Settings,
-} from "lucide-react";
-import { useAppStore, type TerminalPanelContent, type TerminalTab, type PersistedTerminalPanel } from "@/store/app-store";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Slider } from "@/components/ui/slider";
+} from 'lucide-react';
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { TERMINAL_FONT_OPTIONS } from "@/config/terminal-themes";
-import { toast } from "sonner";
-import {
-  Panel,
-  PanelGroup,
-  PanelResizeHandle,
-} from "react-resizable-panels";
-import { TerminalPanel } from "./terminal-view/terminal-panel";
-import { TerminalErrorBoundary } from "./terminal-view/terminal-error-boundary";
+  useAppStore,
+  type TerminalPanelContent,
+  type TerminalTab,
+  type PersistedTerminalPanel,
+} from '@/store/app-store';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Slider } from '@/components/ui/slider';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { TERMINAL_FONT_OPTIONS } from '@/config/terminal-themes';
+import { toast } from 'sonner';
+import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
+import { TerminalPanel } from './terminal-view/terminal-panel';
+import { TerminalErrorBoundary } from './terminal-view/terminal-error-boundary';
 import {
   DndContext,
   DragEndEvent,
@@ -48,8 +44,8 @@ import {
   useDroppable,
   useDraggable,
   defaultDropAnimationSideEffects,
-} from "@dnd-kit/core";
-import { cn } from "@/lib/utils";
+} from '@dnd-kit/core';
+import { cn } from '@/lib/utils';
 
 interface TerminalStatus {
   enabled: boolean;
@@ -86,7 +82,7 @@ function TerminalTabButton({
 
   const { setNodeRef: setDropRef, isOver } = useDroppable({
     id: `tab-${tab.id}`,
-    data: { type: "tab", tabId: tab.id },
+    data: { type: 'tab', tabId: tab.id },
   });
 
   const {
@@ -96,7 +92,7 @@ function TerminalTabButton({
     isDragging,
   } = useDraggable({
     id: `drag-tab-${tab.id}`,
-    data: { type: "drag-tab", tabId: tab.id },
+    data: { type: 'drag-tab', tabId: tab.id },
   });
 
   // Combine refs
@@ -121,10 +117,10 @@ function TerminalTabButton({
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     e.stopPropagation();
-    if (e.key === "Enter") {
+    if (e.key === 'Enter') {
       e.preventDefault();
       finishEditing();
-    } else if (e.key === "Escape") {
+    } else if (e.key === 'Escape') {
       e.preventDefault();
       setIsEditing(false);
       setEditName(tab.name);
@@ -145,12 +141,12 @@ function TerminalTabButton({
       {...dragAttributes}
       {...dragListeners}
       className={cn(
-        "flex items-center gap-1 px-3 py-1.5 text-sm rounded-t-md border-b-2 cursor-grab active:cursor-grabbing transition-colors select-none",
+        'flex items-center gap-1 px-3 py-1.5 text-sm rounded-t-md border-b-2 cursor-grab active:cursor-grabbing transition-colors select-none',
         isActive
-          ? "bg-background border-brand-500 text-foreground"
-          : "bg-muted border-transparent text-muted-foreground hover:text-foreground hover:bg-accent",
-        isOver && isDropTarget && isDraggingTab && "ring-2 ring-blue-500 bg-blue-500/10",
-        isDragging && "opacity-50"
+          ? 'bg-background border-brand-500 text-foreground'
+          : 'bg-muted border-transparent text-muted-foreground hover:text-foreground hover:bg-accent',
+        isOver && isDropTarget && isDraggingTab && 'ring-2 ring-blue-500 bg-blue-500/10',
+        isDragging && 'opacity-50'
       )}
       onClick={onClick}
       onDoubleClick={handleDoubleClick}
@@ -186,18 +182,18 @@ function TerminalTabButton({
 // New tab drop zone
 function NewTabDropZone({ isDropTarget }: { isDropTarget: boolean }) {
   const { setNodeRef, isOver } = useDroppable({
-    id: "new-tab-zone",
-    data: { type: "new-tab" },
+    id: 'new-tab-zone',
+    data: { type: 'new-tab' },
   });
 
   return (
     <div
       ref={setNodeRef}
       className={cn(
-        "flex items-center justify-center px-3 py-1.5 rounded-t-md border-2 border-dashed transition-all",
+        'flex items-center justify-center px-3 py-1.5 rounded-t-md border-2 border-dashed transition-all',
         isOver && isDropTarget
-          ? "border-green-500 bg-green-500/10 text-green-500"
-          : "border-transparent text-muted-foreground hover:border-border"
+          ? 'border-green-500 bg-green-500/10 text-green-500'
+          : 'border-transparent text-muted-foreground hover:border-border'
       )}
     >
       <SquarePlus className="h-4 w-4" />
@@ -236,7 +232,7 @@ export function TerminalView() {
   const [status, setStatus] = useState<TerminalStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [password, setPassword] = useState("");
+  const [password, setPassword] = useState('');
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
@@ -247,14 +243,21 @@ export function TerminalView() {
   const prevProjectPathRef = useRef<string | null>(null);
   const restoringProjectPathRef = useRef<string | null>(null);
   const [newSessionIds, setNewSessionIds] = useState<Set<string>>(new Set());
-  const [serverSessionInfo, setServerSessionInfo] = useState<{ current: number; max: number } | null>(null);
+  const [serverSessionInfo, setServerSessionInfo] = useState<{
+    current: number;
+    max: number;
+  } | null>(null);
   const hasShownHighRamWarningRef = useRef<boolean>(false);
 
   // Show warning when 20+ terminals are open
   useEffect(() => {
-    if (serverSessionInfo && serverSessionInfo.current >= 20 && !hasShownHighRamWarningRef.current) {
+    if (
+      serverSessionInfo &&
+      serverSessionInfo.current >= 20 &&
+      !hasShownHighRamWarningRef.current
+    ) {
       hasShownHighRamWarningRef.current = true;
-      toast.warning("Many terminals open", {
+      toast.warning('Many terminals open', {
         description: `${serverSessionInfo.current} terminals open. Each uses system resources (processes, memory). Consider closing unused terminals.`,
         duration: 8000,
       });
@@ -268,20 +271,20 @@ export function TerminalView() {
   // Get the default run script from terminal settings
   const defaultRunScript = useAppStore((state) => state.terminalState.defaultRunScript);
 
-  const serverUrl = import.meta.env.VITE_SERVER_URL || "http://localhost:3008";
+  const serverUrl = import.meta.env.VITE_SERVER_URL || 'http://localhost:3008';
 
   // Helper to collect all session IDs from all tabs
   const collectAllSessionIds = useCallback((): string[] => {
     const sessionIds: string[] = [];
     const collectFromLayout = (node: TerminalPanelContent | null): void => {
       if (!node) return;
-      if (node.type === "terminal") {
+      if (node.type === 'terminal') {
         sessionIds.push(node.sessionId);
       } else {
         node.panels.forEach(collectFromLayout);
       }
     };
-    terminalState.tabs.forEach(tab => collectFromLayout(tab.layout));
+    terminalState.tabs.forEach((tab) => collectFromLayout(tab.layout));
     return sessionIds;
   }, [terminalState.tabs]);
 
@@ -293,7 +296,7 @@ export function TerminalView() {
 
     const headers: Record<string, string> = {};
     if (terminalState.authToken) {
-      headers["X-Terminal-Token"] = terminalState.authToken;
+      headers['X-Terminal-Token'] = terminalState.authToken;
     }
 
     console.log(`[Terminal] Killing ${sessionIds.length} sessions on server`);
@@ -303,7 +306,7 @@ export function TerminalView() {
       sessionIds.map(async (sessionId) => {
         try {
           await fetch(`${serverUrl}/api/terminal/sessions/${sessionId}`, {
-            method: "DELETE",
+            method: 'DELETE',
             headers,
           });
         } catch (err) {
@@ -327,7 +330,7 @@ export function TerminalView() {
   };
 
   // Get active tab
-  const activeTab = terminalState.tabs.find(t => t.id === terminalState.activeTabId);
+  const activeTab = terminalState.tabs.find((t) => t.id === terminalState.activeTabId);
 
   // DnD sensors with activation constraint to avoid accidental drags
   const sensors = useSensors(
@@ -350,7 +353,7 @@ export function TerminalView() {
     const activeId = event.active.id as string;
     const activeData = event.active.data?.current;
 
-    if (activeData?.type === "drag-tab") {
+    if (activeData?.type === 'drag-tab') {
       // Tab being dragged
       setActiveDragTabId(activeData.tabId);
       setActiveDragId(null);
@@ -364,59 +367,62 @@ export function TerminalView() {
   // Handle drag over - track which tab we're hovering
   const handleDragOver = useCallback((event: DragOverEvent) => {
     const { over } = event;
-    if (over?.data?.current?.type === "tab") {
+    if (over?.data?.current?.type === 'tab') {
       setDragOverTabId(over.data.current.tabId);
-    } else if (over?.data?.current?.type === "new-tab") {
-      setDragOverTabId("new");
+    } else if (over?.data?.current?.type === 'new-tab') {
+      setDragOverTabId('new');
     } else {
       setDragOverTabId(null);
     }
   }, []);
 
   // Handle drag end
-  const handleDragEnd = useCallback((event: DragEndEvent) => {
-    const { active, over } = event;
-    const activeData = active.data?.current;
+  const handleDragEnd = useCallback(
+    (event: DragEndEvent) => {
+      const { active, over } = event;
+      const activeData = active.data?.current;
 
-    // Reset drag states
-    setActiveDragId(null);
-    setActiveDragTabId(null);
-    setDragOverTabId(null);
+      // Reset drag states
+      setActiveDragId(null);
+      setActiveDragTabId(null);
+      setDragOverTabId(null);
 
-    if (!over) return;
+      if (!over) return;
 
-    const overData = over.data?.current;
+      const overData = over.data?.current;
 
-    // Handle tab-to-tab drag (reordering)
-    if (activeData?.type === "drag-tab" && overData?.type === "tab") {
-      const fromTabId = activeData.tabId as string;
-      const toTabId = overData.tabId as string;
-      if (fromTabId !== toTabId) {
-        reorderTerminalTabs(fromTabId, toTabId);
+      // Handle tab-to-tab drag (reordering)
+      if (activeData?.type === 'drag-tab' && overData?.type === 'tab') {
+        const fromTabId = activeData.tabId as string;
+        const toTabId = overData.tabId as string;
+        if (fromTabId !== toTabId) {
+          reorderTerminalTabs(fromTabId, toTabId);
+        }
+        return;
       }
-      return;
-    }
 
-    // Handle terminal panel drops
-    const activeId = active.id as string;
+      // Handle terminal panel drops
+      const activeId = active.id as string;
 
-    // If dropped on a tab, move terminal to that tab
-    if (overData?.type === "tab") {
-      moveTerminalToTab(activeId, overData.tabId);
-      return;
-    }
+      // If dropped on a tab, move terminal to that tab
+      if (overData?.type === 'tab') {
+        moveTerminalToTab(activeId, overData.tabId);
+        return;
+      }
 
-    // If dropped on new tab zone, create new tab with this terminal
-    if (overData?.type === "new-tab") {
-      moveTerminalToTab(activeId, "new");
-      return;
-    }
+      // If dropped on new tab zone, create new tab with this terminal
+      if (overData?.type === 'new-tab') {
+        moveTerminalToTab(activeId, 'new');
+        return;
+      }
 
-    // Otherwise, swap terminals within current tab
-    if (active.id !== over.id) {
-      swapTerminals(activeId, over.id as string);
-    }
-  }, [swapTerminals, moveTerminalToTab, reorderTerminalTabs]);
+      // Otherwise, swap terminals within current tab
+      if (active.id !== over.id) {
+        swapTerminals(activeId, over.id as string);
+      }
+    },
+    [swapTerminals, moveTerminalToTab, reorderTerminalTabs]
+  );
 
   const handleDragCancel = useCallback(() => {
     setActiveDragId(null);
@@ -437,11 +443,11 @@ export function TerminalView() {
           setTerminalUnlocked(true);
         }
       } else {
-        setError(data.error || "Failed to get terminal status");
+        setError(data.error || 'Failed to get terminal status');
       }
     } catch (err) {
-      setError("Failed to connect to server");
-      console.error("[Terminal] Status fetch error:", err);
+      setError('Failed to connect to server');
+      console.error('[Terminal] Status fetch error:', err);
     } finally {
       setLoading(false);
     }
@@ -453,7 +459,7 @@ export function TerminalView() {
     try {
       const headers: Record<string, string> = {};
       if (terminalState.authToken) {
-        headers["X-Terminal-Token"] = terminalState.authToken;
+        headers['X-Terminal-Token'] = terminalState.authToken;
       }
       const response = await fetch(`${serverUrl}/api/terminal/settings`, { headers });
       const data = await response.json();
@@ -461,7 +467,7 @@ export function TerminalView() {
         setServerSessionInfo({ current: data.data.currentSessions, max: data.data.maxSessions });
       }
     } catch (err) {
-      console.error("[Terminal] Failed to fetch server settings:", err);
+      console.error('[Terminal] Failed to fetch server settings:', err);
     }
   }, [serverUrl, terminalState.isUnlocked, terminalState.authToken]);
 
@@ -479,10 +485,10 @@ export function TerminalView() {
       if (sessionIds.length === 0) return;
 
       const headers: Record<string, string> = {
-        "Content-Type": "application/json",
+        'Content-Type': 'application/json',
       };
       if (terminalState.authToken) {
-        headers["X-Terminal-Token"] = terminalState.authToken;
+        headers['X-Terminal-Token'] = terminalState.authToken;
       }
 
       // Try to use the bulk delete endpoint if available, otherwise delete individually
@@ -493,9 +499,9 @@ export function TerminalView() {
         // which is more reliable during page unload than fetch
         try {
           const xhr = new XMLHttpRequest();
-          xhr.open("DELETE", url, false); // synchronous
+          xhr.open('DELETE', url, false); // synchronous
           if (terminalState.authToken) {
-            xhr.setRequestHeader("X-Terminal-Token", terminalState.authToken);
+            xhr.setRequestHeader('X-Terminal-Token', terminalState.authToken);
           }
           xhr.send();
         } catch {
@@ -504,9 +510,9 @@ export function TerminalView() {
       });
     };
 
-    window.addEventListener("beforeunload", handleBeforeUnload);
+    window.addEventListener('beforeunload', handleBeforeUnload);
     return () => {
-      window.removeEventListener("beforeunload", handleBeforeUnload);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
     };
   }, [collectAllSessionIds, terminalState.authToken, serverUrl]);
 
@@ -562,7 +568,7 @@ export function TerminalView() {
 
     // If no saved layout or no tabs, we're done - terminal starts fresh for this project
     if (!savedLayout || savedLayout.tabs.length === 0) {
-      console.log("[Terminal] No saved layout for project, starting fresh");
+      console.log('[Terminal] No saved layout for project, starting fresh');
       return;
     }
 
@@ -572,177 +578,185 @@ export function TerminalView() {
 
     // Create terminals and build layout - try to reconnect or create new
     const restoreLayout = async () => {
-        // Check if we're still restoring the same project (user may have switched)
-        if (restoringProjectPathRef.current !== currentPath) {
-          console.log("[Terminal] Restore cancelled - project changed");
-          return;
+      // Check if we're still restoring the same project (user may have switched)
+      if (restoringProjectPathRef.current !== currentPath) {
+        console.log('[Terminal] Restore cancelled - project changed');
+        return;
+      }
+
+      let failedSessions = 0;
+      let totalSessions = 0;
+      let reconnectedSessions = 0;
+
+      try {
+        const headers: Record<string, string> = {
+          'Content-Type': 'application/json',
+        };
+        // Get fresh auth token from store
+        const authToken = useAppStore.getState().terminalState.authToken;
+        if (authToken) {
+          headers['X-Terminal-Token'] = authToken;
         }
 
-        let failedSessions = 0;
-        let totalSessions = 0;
-        let reconnectedSessions = 0;
-
-        try {
-          const headers: Record<string, string> = {
-            "Content-Type": "application/json",
-          };
-          // Get fresh auth token from store
-          const authToken = useAppStore.getState().terminalState.authToken;
-          if (authToken) {
-            headers["X-Terminal-Token"] = authToken;
+        // Helper to check if a session still exists on server
+        const checkSessionExists = async (sessionId: string): Promise<boolean> => {
+          try {
+            const response = await fetch(`${serverUrl}/api/terminal/sessions/${sessionId}`, {
+              method: 'GET',
+              headers,
+            });
+            const data = await response.json();
+            return data.success === true;
+          } catch {
+            return false;
           }
+        };
 
-          // Helper to check if a session still exists on server
-          const checkSessionExists = async (sessionId: string): Promise<boolean> => {
-            try {
-              const response = await fetch(`${serverUrl}/api/terminal/sessions/${sessionId}`, {
-                method: "GET",
-                headers,
-              });
-              const data = await response.json();
-              return data.success === true;
-            } catch {
-              return false;
+        // Helper to create a new terminal session
+        const createSession = async (): Promise<string | null> => {
+          try {
+            const response = await fetch(`${serverUrl}/api/terminal/sessions`, {
+              method: 'POST',
+              headers,
+              body: JSON.stringify({
+                cwd: currentPath,
+                cols: 80,
+                rows: 24,
+              }),
+            });
+            const data = await response.json();
+            return data.success ? data.data.id : null;
+          } catch (err) {
+            console.error('[Terminal] Failed to create terminal session:', err);
+            return null;
+          }
+        };
+
+        // Recursively rebuild the layout - reuse existing sessions or create new
+        const rebuildLayout = async (
+          persisted: PersistedTerminalPanel
+        ): Promise<TerminalPanelContent | null> => {
+          if (persisted.type === 'terminal') {
+            totalSessions++;
+            let sessionId: string | null = null;
+
+            // If we have a saved sessionId, try to reconnect to it
+            if (persisted.sessionId) {
+              const exists = await checkSessionExists(persisted.sessionId);
+              if (exists) {
+                sessionId = persisted.sessionId;
+                reconnectedSessions++;
+              }
             }
-          };
 
-          // Helper to create a new terminal session
-          const createSession = async (): Promise<string | null> => {
-            try {
-              const response = await fetch(`${serverUrl}/api/terminal/sessions`, {
-                method: "POST",
-                headers,
-                body: JSON.stringify({
-                  cwd: currentPath,
-                  cols: 80,
-                  rows: 24,
-                }),
-              });
-              const data = await response.json();
-              return data.success ? data.data.id : null;
-            } catch (err) {
-              console.error("[Terminal] Failed to create terminal session:", err);
+            // If no saved session or it's gone, create a new one
+            if (!sessionId) {
+              sessionId = await createSession();
+            }
+
+            if (!sessionId) {
+              failedSessions++;
               return null;
             }
-          };
-
-          // Recursively rebuild the layout - reuse existing sessions or create new
-          const rebuildLayout = async (
-            persisted: PersistedTerminalPanel
-          ): Promise<TerminalPanelContent | null> => {
-            if (persisted.type === "terminal") {
-              totalSessions++;
-              let sessionId: string | null = null;
-
-              // If we have a saved sessionId, try to reconnect to it
-              if (persisted.sessionId) {
-                const exists = await checkSessionExists(persisted.sessionId);
-                if (exists) {
-                  sessionId = persisted.sessionId;
-                  reconnectedSessions++;
-                }
-              }
-
-              // If no saved session or it's gone, create a new one
-              if (!sessionId) {
-                sessionId = await createSession();
-              }
-
-              if (!sessionId) {
-                failedSessions++;
-                return null;
-              }
-
-              return {
-                type: "terminal",
-                sessionId,
-                size: persisted.size,
-                fontSize: persisted.fontSize,
-              };
-            }
-
-            // It's a split - rebuild all child panels
-            const childPanels: TerminalPanelContent[] = [];
-            for (const childPersisted of persisted.panels) {
-              const rebuilt = await rebuildLayout(childPersisted);
-              if (rebuilt) {
-                childPanels.push(rebuilt);
-              }
-            }
-
-            // If no children were rebuilt, return null
-            if (childPanels.length === 0) return null;
-
-            // If only one child, return it directly (collapse the split)
-            if (childPanels.length === 1) return childPanels[0];
 
             return {
-              type: "split",
-              id: persisted.id || `split-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`,
-              direction: persisted.direction,
-              panels: childPanels,
+              type: 'terminal',
+              sessionId,
               size: persisted.size,
+              fontSize: persisted.fontSize,
             };
+          }
+
+          // It's a split - rebuild all child panels
+          const childPanels: TerminalPanelContent[] = [];
+          for (const childPersisted of persisted.panels) {
+            const rebuilt = await rebuildLayout(childPersisted);
+            if (rebuilt) {
+              childPanels.push(rebuilt);
+            }
+          }
+
+          // If no children were rebuilt, return null
+          if (childPanels.length === 0) return null;
+
+          // If only one child, return it directly (collapse the split)
+          if (childPanels.length === 1) return childPanels[0];
+
+          return {
+            type: 'split',
+            id: persisted.id || `split-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`,
+            direction: persisted.direction,
+            panels: childPanels,
+            size: persisted.size,
           };
+        };
 
-          // For each saved tab, rebuild the layout
-          for (let tabIndex = 0; tabIndex < savedLayout.tabs.length; tabIndex++) {
-            // Check if project changed during restore - bail out early
-            if (restoringProjectPathRef.current !== currentPath) {
-              console.log("[Terminal] Restore cancelled mid-loop - project changed");
-              return;
-            }
-
-            const savedTab = savedLayout.tabs[tabIndex];
-
-            // Create the tab first
-            const newTabId = addTerminalTab(savedTab.name);
-
-            if (savedTab.layout) {
-              const rebuiltLayout = await rebuildLayout(savedTab.layout);
-              if (rebuiltLayout) {
-                const { setTerminalTabLayout } = useAppStore.getState();
-                setTerminalTabLayout(newTabId, rebuiltLayout);
-              }
-            }
+        // For each saved tab, rebuild the layout
+        for (let tabIndex = 0; tabIndex < savedLayout.tabs.length; tabIndex++) {
+          // Check if project changed during restore - bail out early
+          if (restoringProjectPathRef.current !== currentPath) {
+            console.log('[Terminal] Restore cancelled mid-loop - project changed');
+            return;
           }
 
-          // Set active tab based on saved index
-          if (savedLayout.tabs.length > 0) {
-            const { setActiveTerminalTab } = useAppStore.getState();
-            const newTabs = useAppStore.getState().terminalState.tabs;
-            if (newTabs.length > savedLayout.activeTabIndex) {
-              setActiveTerminalTab(newTabs[savedLayout.activeTabIndex].id);
-            }
-          }
+          const savedTab = savedLayout.tabs[tabIndex];
 
-          if (failedSessions > 0) {
-            toast.error("Some terminals failed to restore", {
-              description: `${failedSessions} of ${totalSessions} terminal sessions could not be created. The server may be unavailable.`,
-              duration: 5000,
-            });
-          } else if (reconnectedSessions > 0) {
-            toast.success("Terminals restored", {
-              description: `Reconnected to ${reconnectedSessions} existing session${reconnectedSessions > 1 ? "s" : ""}`,
-              duration: 3000,
-            });
-          }
-        } catch (err) {
-          console.error("[Terminal] Failed to restore terminal layout:", err);
-          toast.error("Failed to restore terminals", {
-            description: "Could not restore terminal layout. Please try creating new terminals.",
-            duration: 5000,
-          });
-        } finally {
-          // Only clear if we're still the active restore
-          if (restoringProjectPathRef.current === currentPath) {
-            restoringProjectPathRef.current = null;
+          // Create the tab first
+          const newTabId = addTerminalTab(savedTab.name);
+
+          if (savedTab.layout) {
+            const rebuiltLayout = await rebuildLayout(savedTab.layout);
+            if (rebuiltLayout) {
+              const { setTerminalTabLayout } = useAppStore.getState();
+              setTerminalTabLayout(newTabId, rebuiltLayout);
+            }
           }
         }
-      };
 
-      restoreLayout();
-  }, [currentProject?.path, saveTerminalLayout, getPersistedTerminalLayout, clearTerminalState, addTerminalTab, serverUrl, killAllSessions]);
+        // Set active tab based on saved index
+        if (savedLayout.tabs.length > 0) {
+          const { setActiveTerminalTab } = useAppStore.getState();
+          const newTabs = useAppStore.getState().terminalState.tabs;
+          if (newTabs.length > savedLayout.activeTabIndex) {
+            setActiveTerminalTab(newTabs[savedLayout.activeTabIndex].id);
+          }
+        }
+
+        if (failedSessions > 0) {
+          toast.error('Some terminals failed to restore', {
+            description: `${failedSessions} of ${totalSessions} terminal sessions could not be created. The server may be unavailable.`,
+            duration: 5000,
+          });
+        } else if (reconnectedSessions > 0) {
+          toast.success('Terminals restored', {
+            description: `Reconnected to ${reconnectedSessions} existing session${reconnectedSessions > 1 ? 's' : ''}`,
+            duration: 3000,
+          });
+        }
+      } catch (err) {
+        console.error('[Terminal] Failed to restore terminal layout:', err);
+        toast.error('Failed to restore terminals', {
+          description: 'Could not restore terminal layout. Please try creating new terminals.',
+          duration: 5000,
+        });
+      } finally {
+        // Only clear if we're still the active restore
+        if (restoringProjectPathRef.current === currentPath) {
+          restoringProjectPathRef.current = null;
+        }
+      }
+    };
+
+    restoreLayout();
+  }, [
+    currentProject?.path,
+    saveTerminalLayout,
+    getPersistedTerminalLayout,
+    clearTerminalState,
+    addTerminalTab,
+    serverUrl,
+    killAllSessions,
+  ]);
 
   // Save terminal layout whenever it changes (debounced to prevent excessive writes)
   // Also save when tabs become empty so closed terminals stay closed on refresh
@@ -784,21 +798,21 @@ export function TerminalView() {
 
     try {
       const response = await fetch(`${serverUrl}/api/terminal/auth`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ password }),
       });
       const data = await response.json();
 
       if (data.success) {
         setTerminalUnlocked(true, data.data.token);
-        setPassword("");
+        setPassword('');
       } else {
-        setAuthError(data.error || "Authentication failed");
+        setAuthError(data.error || 'Authentication failed');
       }
     } catch (err) {
-      setAuthError("Failed to authenticate");
-      console.error("[Terminal] Auth error:", err);
+      setAuthError('Failed to authenticate');
+      console.error('[Terminal] Auth error:', err);
     } finally {
       setAuthLoading(false);
     }
@@ -806,21 +820,24 @@ export function TerminalView() {
 
   // Create a new terminal session
   // targetSessionId: the terminal to split (if splitting an existing terminal)
-  const createTerminal = async (direction?: "horizontal" | "vertical", targetSessionId?: string) => {
-    if (!canCreateTerminal("[Terminal] Debounced terminal creation")) {
+  const createTerminal = async (
+    direction?: 'horizontal' | 'vertical',
+    targetSessionId?: string
+  ) => {
+    if (!canCreateTerminal('[Terminal] Debounced terminal creation')) {
       return;
     }
 
     try {
       const headers: Record<string, string> = {
-        "Content-Type": "application/json",
+        'Content-Type': 'application/json',
       };
       if (terminalState.authToken) {
-        headers["X-Terminal-Token"] = terminalState.authToken;
+        headers['X-Terminal-Token'] = terminalState.authToken;
       }
 
       const response = await fetch(`${serverUrl}/api/terminal/sessions`, {
-        method: "POST",
+        method: 'POST',
         headers,
         body: JSON.stringify({
           cwd: currentProject?.path || undefined,
@@ -834,27 +851,29 @@ export function TerminalView() {
         addTerminalToLayout(data.data.id, direction, targetSessionId);
         // Mark this session as new for running initial command
         if (defaultRunScript) {
-          setNewSessionIds(prev => new Set(prev).add(data.data.id));
+          setNewSessionIds((prev) => new Set(prev).add(data.data.id));
         }
         // Refresh session count
         fetchServerSettings();
       } else {
         // Handle session limit error with a helpful toast
-        if (response.status === 429 || data.error?.includes("Maximum")) {
-          toast.error("Terminal session limit reached", {
-            description: data.details || `Please close unused terminals. Limit: ${data.maxSessions || "unknown"}`,
+        if (response.status === 429 || data.error?.includes('Maximum')) {
+          toast.error('Terminal session limit reached', {
+            description:
+              data.details ||
+              `Please close unused terminals. Limit: ${data.maxSessions || 'unknown'}`,
           });
         } else {
-          console.error("[Terminal] Failed to create session:", data.error);
-          toast.error("Failed to create terminal", {
-            description: data.error || "Unknown error",
+          console.error('[Terminal] Failed to create session:', data.error);
+          toast.error('Failed to create terminal', {
+            description: data.error || 'Unknown error',
           });
         }
       }
     } catch (err) {
-      console.error("[Terminal] Create session error:", err);
-      toast.error("Failed to create terminal", {
-        description: "Could not connect to server",
+      console.error('[Terminal] Create session error:', err);
+      toast.error('Failed to create terminal', {
+        description: 'Could not connect to server',
       });
     } finally {
       isCreatingRef.current = false;
@@ -863,21 +882,21 @@ export function TerminalView() {
 
   // Create terminal in new tab
   const createTerminalInNewTab = async () => {
-    if (!canCreateTerminal("[Terminal] Debounced terminal tab creation")) {
+    if (!canCreateTerminal('[Terminal] Debounced terminal tab creation')) {
       return;
     }
 
     const tabId = addTerminalTab();
     try {
       const headers: Record<string, string> = {
-        "Content-Type": "application/json",
+        'Content-Type': 'application/json',
       };
       if (terminalState.authToken) {
-        headers["X-Terminal-Token"] = terminalState.authToken;
+        headers['X-Terminal-Token'] = terminalState.authToken;
       }
 
       const response = await fetch(`${serverUrl}/api/terminal/sessions`, {
-        method: "POST",
+        method: 'POST',
         headers,
         body: JSON.stringify({
           cwd: currentProject?.path || undefined,
@@ -893,7 +912,7 @@ export function TerminalView() {
         addTerminalToTab(data.data.id, tabId);
         // Mark this session as new for running initial command
         if (defaultRunScript) {
-          setNewSessionIds(prev => new Set(prev).add(data.data.id));
+          setNewSessionIds((prev) => new Set(prev).add(data.data.id));
         }
         // Refresh session count
         fetchServerSettings();
@@ -903,23 +922,25 @@ export function TerminalView() {
         removeTerminalTab(tabId);
 
         // Handle session limit error with a helpful toast
-        if (response.status === 429 || data.error?.includes("Maximum")) {
-          toast.error("Terminal session limit reached", {
-            description: data.details || `Please close unused terminals. Limit: ${data.maxSessions || "unknown"}`,
+        if (response.status === 429 || data.error?.includes('Maximum')) {
+          toast.error('Terminal session limit reached', {
+            description:
+              data.details ||
+              `Please close unused terminals. Limit: ${data.maxSessions || 'unknown'}`,
           });
         } else {
-          toast.error("Failed to create terminal", {
-            description: data.error || "Unknown error",
+          toast.error('Failed to create terminal', {
+            description: data.error || 'Unknown error',
           });
         }
       }
     } catch (err) {
-      console.error("[Terminal] Create session error:", err);
+      console.error('[Terminal] Create session error:', err);
       // Remove the empty tab on error
       const { removeTerminalTab } = useAppStore.getState();
       removeTerminalTab(tabId);
-      toast.error("Failed to create terminal", {
-        description: "Could not connect to server",
+      toast.error('Failed to create terminal', {
+        description: 'Could not connect to server',
       });
     } finally {
       isCreatingRef.current = false;
@@ -931,11 +952,11 @@ export function TerminalView() {
     try {
       const headers: Record<string, string> = {};
       if (terminalState.authToken) {
-        headers["X-Terminal-Token"] = terminalState.authToken;
+        headers['X-Terminal-Token'] = terminalState.authToken;
       }
 
       const response = await fetch(`${serverUrl}/api/terminal/sessions/${sessionId}`, {
-        method: "DELETE",
+        method: 'DELETE',
         headers,
       });
 
@@ -945,13 +966,16 @@ export function TerminalView() {
       if (!response.ok && response.status !== 404) {
         // Log non-404 errors but still proceed with UI cleanup
         const data = await response.json().catch(() => ({}));
-        console.error("[Terminal] Server failed to kill session:", data.error || response.statusText);
+        console.error(
+          '[Terminal] Server failed to kill session:',
+          data.error || response.statusText
+        );
       }
 
       // Refresh session count
       fetchServerSettings();
     } catch (err) {
-      console.error("[Terminal] Kill session error:", err);
+      console.error('[Terminal] Kill session error:', err);
       // Still remove from UI on network error - better UX than leaving broken terminal
       removeTerminalFromLayout(sessionId);
     }
@@ -963,11 +987,9 @@ export function TerminalView() {
     if (!tab) return;
 
     // Collect all session IDs from the tab's layout
-    const collectSessionIds = (
-      node: TerminalPanelContent | null
-    ): string[] => {
+    const collectSessionIds = (node: TerminalPanelContent | null): string[] => {
       if (!node) return [];
-      if (node.type === "terminal") return [node.sessionId];
+      if (node.type === 'terminal') return [node.sessionId];
       return node.panels.flatMap(collectSessionIds);
     };
 
@@ -976,14 +998,14 @@ export function TerminalView() {
     // Kill all sessions on the server
     const headers: Record<string, string> = {};
     if (terminalState.authToken) {
-      headers["X-Terminal-Token"] = terminalState.authToken;
+      headers['X-Terminal-Token'] = terminalState.authToken;
     }
 
     await Promise.all(
       sessionIds.map(async (sessionId) => {
         try {
           await fetch(`${serverUrl}/api/terminal/sessions/${sessionId}`, {
-            method: "DELETE",
+            method: 'DELETE',
             headers,
           });
         } catch (err) {
@@ -1006,7 +1028,7 @@ export function TerminalView() {
 
   // Collect all terminal IDs from a panel tree in order
   const getTerminalIds = (panel: TerminalPanelContent): string[] => {
-    if (panel.type === "terminal") {
+    if (panel.type === 'terminal') {
       return [panel.sessionId];
     }
     return panel.panels.flatMap(getTerminalIds);
@@ -1015,41 +1037,44 @@ export function TerminalView() {
   // Get a STABLE key for a panel - uses the stable id for splits
   // This prevents unnecessary remounts when layout structure changes
   const getPanelKey = (panel: TerminalPanelContent): string => {
-    if (panel.type === "terminal") {
+    if (panel.type === 'terminal') {
       return panel.sessionId;
     }
     // Use the stable id for split nodes
     return panel.id;
   };
 
-  const findTerminalFontSize = useCallback((sessionId: string): number => {
-    const findInPanel = (panel: TerminalPanelContent): number | null => {
-      if (panel.type === "terminal") {
-        if (panel.sessionId === sessionId) {
-          return panel.fontSize ?? terminalState.defaultFontSize;
+  const findTerminalFontSize = useCallback(
+    (sessionId: string): number => {
+      const findInPanel = (panel: TerminalPanelContent): number | null => {
+        if (panel.type === 'terminal') {
+          if (panel.sessionId === sessionId) {
+            return panel.fontSize ?? terminalState.defaultFontSize;
+          }
+          return null;
+        }
+        for (const child of panel.panels) {
+          const found = findInPanel(child);
+          if (found !== null) return found;
         }
         return null;
-      }
-      for (const child of panel.panels) {
-        const found = findInPanel(child);
-        if (found !== null) return found;
-      }
-      return null;
-    };
+      };
 
-    // Search across all tabs
-    for (const tab of terminalState.tabs) {
-      if (tab.layout) {
-        const found = findInPanel(tab.layout);
-        if (found !== null) return found;
+      // Search across all tabs
+      for (const tab of terminalState.tabs) {
+        if (tab.layout) {
+          const found = findInPanel(tab.layout);
+          if (found !== null) return found;
+        }
       }
-    }
-    return terminalState.defaultFontSize;
-  }, [terminalState.tabs, terminalState.defaultFontSize]);
+      return terminalState.defaultFontSize;
+    },
+    [terminalState.tabs, terminalState.defaultFontSize]
+  );
 
   // Handler for when a terminal has run its initial command
   const handleCommandRan = useCallback((sessionId: string) => {
-    setNewSessionIds(prev => {
+    setNewSessionIds((prev) => {
       const next = new Set(prev);
       next.delete(sessionId);
       return next;
@@ -1058,121 +1083,128 @@ export function TerminalView() {
 
   // Navigate between terminal panes with directional awareness
   // Arrow keys navigate in the actual spatial direction within the layout
-  const navigateToTerminal = useCallback((direction: "up" | "down" | "left" | "right") => {
-    if (!activeTab?.layout) return;
+  const navigateToTerminal = useCallback(
+    (direction: 'up' | 'down' | 'left' | 'right') => {
+      if (!activeTab?.layout) return;
 
-    const currentSessionId = terminalState.activeSessionId;
-    if (!currentSessionId) {
-      // If no terminal is active, focus the first one
-      const terminalIds = getTerminalIds(activeTab.layout);
-      if (terminalIds.length > 0) {
-        setActiveTerminalSession(terminalIds[0]);
+      const currentSessionId = terminalState.activeSessionId;
+      if (!currentSessionId) {
+        // If no terminal is active, focus the first one
+        const terminalIds = getTerminalIds(activeTab.layout);
+        if (terminalIds.length > 0) {
+          setActiveTerminalSession(terminalIds[0]);
+        }
+        return;
       }
-      return;
-    }
 
-    // Find the terminal in the given direction
-    // The algorithm traverses the layout tree to find spatially adjacent terminals
-    const findTerminalInDirection = (
-      layout: TerminalPanelContent,
-      targetId: string,
-      dir: "up" | "down" | "left" | "right"
-    ): string | null => {
-      // Helper to get all terminal IDs from a layout subtree
-      const getAllTerminals = (node: TerminalPanelContent): string[] => {
-        if (node.type === "terminal") return [node.sessionId];
-        return node.panels.flatMap(getAllTerminals);
-      };
+      // Find the terminal in the given direction
+      // The algorithm traverses the layout tree to find spatially adjacent terminals
+      const findTerminalInDirection = (
+        layout: TerminalPanelContent,
+        targetId: string,
+        dir: 'up' | 'down' | 'left' | 'right'
+      ): string | null => {
+        // Helper to get all terminal IDs from a layout subtree
+        const getAllTerminals = (node: TerminalPanelContent): string[] => {
+          if (node.type === 'terminal') return [node.sessionId];
+          return node.panels.flatMap(getAllTerminals);
+        };
 
-      // Helper to find terminal and its path in the tree
-      type PathEntry = { node: TerminalPanelContent; index: number; direction: "horizontal" | "vertical" };
-      const findPath = (
-        node: TerminalPanelContent,
-        target: string,
-        path: PathEntry[] = []
-      ): PathEntry[] | null => {
-        if (node.type === "terminal") {
-          return node.sessionId === target ? path : null;
-        }
-        for (let i = 0; i < node.panels.length; i++) {
-          const result = findPath(node.panels[i], target, [
-            ...path,
-            { node, index: i, direction: node.direction },
-          ]);
-          if (result) return result;
-        }
-        return null;
-      };
+        // Helper to find terminal and its path in the tree
+        type PathEntry = {
+          node: TerminalPanelContent;
+          index: number;
+          direction: 'horizontal' | 'vertical';
+        };
+        const findPath = (
+          node: TerminalPanelContent,
+          target: string,
+          path: PathEntry[] = []
+        ): PathEntry[] | null => {
+          if (node.type === 'terminal') {
+            return node.sessionId === target ? path : null;
+          }
+          for (let i = 0; i < node.panels.length; i++) {
+            const result = findPath(node.panels[i], target, [
+              ...path,
+              { node, index: i, direction: node.direction },
+            ]);
+            if (result) return result;
+          }
+          return null;
+        };
 
-      const path = findPath(layout, targetId);
-      if (!path || path.length === 0) return null;
+        const path = findPath(layout, targetId);
+        if (!path || path.length === 0) return null;
 
-      // Determine which split direction we need based on arrow direction
-      // left/right navigation works in "horizontal" splits (panels side by side)
-      // up/down navigation works in "vertical" splits (panels stacked)
-      const neededDirection = dir === "left" || dir === "right" ? "horizontal" : "vertical";
-      const goingForward = dir === "right" || dir === "down";
+        // Determine which split direction we need based on arrow direction
+        // left/right navigation works in "horizontal" splits (panels side by side)
+        // up/down navigation works in "vertical" splits (panels stacked)
+        const neededDirection = dir === 'left' || dir === 'right' ? 'horizontal' : 'vertical';
+        const goingForward = dir === 'right' || dir === 'down';
 
-      // Walk up the path to find a split in the right direction with an adjacent panel
-      for (let i = path.length - 1; i >= 0; i--) {
-        const entry = path[i];
-        if (entry.direction === neededDirection) {
-          const siblings = entry.node.type === "split" ? entry.node.panels : [];
-          const nextIndex = goingForward ? entry.index + 1 : entry.index - 1;
+        // Walk up the path to find a split in the right direction with an adjacent panel
+        for (let i = path.length - 1; i >= 0; i--) {
+          const entry = path[i];
+          if (entry.direction === neededDirection) {
+            const siblings = entry.node.type === 'split' ? entry.node.panels : [];
+            const nextIndex = goingForward ? entry.index + 1 : entry.index - 1;
 
-          if (nextIndex >= 0 && nextIndex < siblings.length) {
-            // Found an adjacent panel in the right direction
-            const adjacentPanel = siblings[nextIndex];
-            const adjacentTerminals = getAllTerminals(adjacentPanel);
+            if (nextIndex >= 0 && nextIndex < siblings.length) {
+              // Found an adjacent panel in the right direction
+              const adjacentPanel = siblings[nextIndex];
+              const adjacentTerminals = getAllTerminals(adjacentPanel);
 
-            if (adjacentTerminals.length > 0) {
-              // When moving forward (right/down), pick the first terminal in that subtree
-              // When moving backward (left/up), pick the last terminal in that subtree
-              return goingForward
-                ? adjacentTerminals[0]
-                : adjacentTerminals[adjacentTerminals.length - 1];
+              if (adjacentTerminals.length > 0) {
+                // When moving forward (right/down), pick the first terminal in that subtree
+                // When moving backward (left/up), pick the last terminal in that subtree
+                return goingForward
+                  ? adjacentTerminals[0]
+                  : adjacentTerminals[adjacentTerminals.length - 1];
+              }
             }
           }
         }
+
+        return null;
+      };
+
+      const nextTerminal = findTerminalInDirection(activeTab.layout, currentSessionId, direction);
+      if (nextTerminal) {
+        setActiveTerminalSession(nextTerminal);
       }
-
-      return null;
-    };
-
-    const nextTerminal = findTerminalInDirection(activeTab.layout, currentSessionId, direction);
-    if (nextTerminal) {
-      setActiveTerminalSession(nextTerminal);
-    }
-  }, [activeTab?.layout, terminalState.activeSessionId, setActiveTerminalSession]);
+    },
+    [activeTab?.layout, terminalState.activeSessionId, setActiveTerminalSession]
+  );
 
   // Handle global keyboard shortcuts for pane navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Ctrl+Alt+Arrow (or Cmd+Alt+Arrow on Mac) for pane navigation
       if ((e.ctrlKey || e.metaKey) && e.altKey && !e.shiftKey) {
-        if (e.key === "ArrowRight") {
+        if (e.key === 'ArrowRight') {
           e.preventDefault();
-          navigateToTerminal("right");
-        } else if (e.key === "ArrowLeft") {
+          navigateToTerminal('right');
+        } else if (e.key === 'ArrowLeft') {
           e.preventDefault();
-          navigateToTerminal("left");
-        } else if (e.key === "ArrowDown") {
+          navigateToTerminal('left');
+        } else if (e.key === 'ArrowDown') {
           e.preventDefault();
-          navigateToTerminal("down");
-        } else if (e.key === "ArrowUp") {
+          navigateToTerminal('down');
+        } else if (e.key === 'ArrowUp') {
           e.preventDefault();
-          navigateToTerminal("up");
+          navigateToTerminal('up');
         }
       }
     };
 
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
   }, [navigateToTerminal]);
 
   // Render panel content recursively
   const renderPanelContent = (content: TerminalPanelContent): React.ReactNode => {
-    if (content.type === "terminal") {
+    if (content.type === 'terminal') {
       // Use per-terminal fontSize or fall back to default
       const terminalFontSize = content.fontSize ?? terminalState.defaultFontSize;
       // Only run command on new sessions (not restored ones)
@@ -1194,17 +1226,19 @@ export function TerminalView() {
             isActive={terminalState.activeSessionId === content.sessionId}
             onFocus={() => setActiveTerminalSession(content.sessionId)}
             onClose={() => killTerminal(content.sessionId)}
-            onSplitHorizontal={() => createTerminal("horizontal", content.sessionId)}
-            onSplitVertical={() => createTerminal("vertical", content.sessionId)}
+            onSplitHorizontal={() => createTerminal('horizontal', content.sessionId)}
+            onSplitVertical={() => createTerminal('vertical', content.sessionId)}
             onNewTab={createTerminalInNewTab}
-            onNavigateUp={() => navigateToTerminal("up")}
-            onNavigateDown={() => navigateToTerminal("down")}
-            onNavigateLeft={() => navigateToTerminal("left")}
-            onNavigateRight={() => navigateToTerminal("right")}
+            onNavigateUp={() => navigateToTerminal('up')}
+            onNavigateDown={() => navigateToTerminal('down')}
+            onNavigateLeft={() => navigateToTerminal('left')}
+            onNavigateRight={() => navigateToTerminal('right')}
             onSessionInvalid={() => {
               // Auto-remove stale session when server says it doesn't exist
               // This handles cases like server restart where sessions are lost
-              console.log(`[Terminal] Session ${content.sessionId} is invalid, removing from layout`);
+              console.log(
+                `[Terminal] Session ${content.sessionId} is invalid, removing from layout`
+              );
               killTerminal(content.sessionId);
             }}
             isDragging={activeDragId === content.sessionId}
@@ -1220,7 +1254,7 @@ export function TerminalView() {
       );
     }
 
-    const isHorizontal = content.direction === "horizontal";
+    const isHorizontal = content.direction === 'horizontal';
     const defaultSizePerPanel = 100 / content.panels.length;
 
     const handleLayoutChange = (sizes: number[]) => {
@@ -1232,9 +1266,8 @@ export function TerminalView() {
     return (
       <PanelGroup direction={content.direction} onLayout={handleLayoutChange}>
         {content.panels.map((panel, index) => {
-          const panelSize = panel.type === "terminal" && panel.size
-            ? panel.size
-            : defaultSizePerPanel;
+          const panelSize =
+            panel.type === 'terminal' && panel.size ? panel.size : defaultSizePerPanel;
 
           const panelKey = getPanelKey(panel);
           return (
@@ -1244,8 +1277,8 @@ export function TerminalView() {
                   key={`handle-${panelKey}`}
                   className={
                     isHorizontal
-                      ? "w-1 h-full bg-border hover:bg-brand-500 transition-colors data-[resize-handle-state=hover]:bg-brand-500 data-[resize-handle-state=drag]:bg-brand-500"
-                      : "h-1 w-full bg-border hover:bg-brand-500 transition-colors data-[resize-handle-state=hover]:bg-brand-500 data-[resize-handle-state=drag]:bg-brand-500"
+                      ? 'w-1 h-full bg-border hover:bg-brand-500 transition-colors data-[resize-handle-state=hover]:bg-brand-500 data-[resize-handle-state=drag]:bg-brand-500'
+                      : 'h-1 w-full bg-border hover:bg-brand-500 transition-colors data-[resize-handle-state=hover]:bg-brand-500 data-[resize-handle-state=drag]:bg-brand-500'
                   }
                 />
               )}
@@ -1294,7 +1327,9 @@ export function TerminalView() {
         </div>
         <h2 className="text-lg font-medium mb-2">Terminal Disabled</h2>
         <p className="text-muted-foreground max-w-md">
-          Terminal access has been disabled. Set <code className="px-1.5 py-0.5 rounded bg-muted">TERMINAL_ENABLED=true</code> in your server .env file to enable it.
+          Terminal access has been disabled. Set{' '}
+          <code className="px-1.5 py-0.5 rounded bg-muted">TERMINAL_ENABLED=true</code> in your
+          server .env file to enable it.
         </p>
       </div>
     );
@@ -1321,9 +1356,7 @@ export function TerminalView() {
             disabled={authLoading}
             autoFocus
           />
-          {authError && (
-            <p className="text-sm text-destructive">{authError}</p>
-          )}
+          {authError && <p className="text-sm text-destructive">{authError}</p>}
           <Button type="submit" className="w-full" disabled={authLoading || !password}>
             {authLoading ? (
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -1337,8 +1370,8 @@ export function TerminalView() {
         {status.platform && (
           <p className="text-xs text-muted-foreground mt-6">
             Platform: {status.platform.platform}
-            {status.platform.isWSL && " (WSL)"}
-            {" | "}Shell: {status.platform.defaultShell}
+            {status.platform.isWSL && ' (WSL)'}
+            {' | '}Shell: {status.platform.defaultShell}
           </p>
         )}
       </div>
@@ -1357,7 +1390,8 @@ export function TerminalView() {
           Create a new terminal session to start executing commands.
           {currentProject && (
             <span className="block mt-2 text-sm">
-              Working directory: <code className="px-1.5 py-0.5 rounded bg-muted">{currentProject.path}</code>
+              Working directory:{' '}
+              <code className="px-1.5 py-0.5 rounded bg-muted">{currentProject.path}</code>
             </span>
           )}
         </p>
@@ -1370,8 +1404,8 @@ export function TerminalView() {
         {status?.platform && (
           <p className="text-xs text-muted-foreground mt-6">
             Platform: {status.platform.platform}
-            {status.platform.isWSL && " (WSL)"}
-            {" | "}Shell: {status.platform.defaultShell}
+            {status.platform.isWSL && ' (WSL)'}
+            {' | '}Shell: {status.platform.defaultShell}
           </p>
         )}
       </div>
@@ -1406,9 +1440,7 @@ export function TerminalView() {
               />
             ))}
 
-            {(activeDragId || activeDragTabId) && (
-              <NewTabDropZone isDropTarget={true} />
-            )}
+            {(activeDragId || activeDragTabId) && <NewTabDropZone isDropTarget={true} />}
 
             {/* New tab button */}
             <button
@@ -1426,7 +1458,7 @@ export function TerminalView() {
               variant="ghost"
               size="sm"
               className="h-7 px-2 text-muted-foreground hover:text-foreground"
-              onClick={() => createTerminal("horizontal")}
+              onClick={() => createTerminal('horizontal')}
               title="Split Right"
             >
               <SplitSquareHorizontal className="h-4 w-4" />
@@ -1435,7 +1467,7 @@ export function TerminalView() {
               variant="ghost"
               size="sm"
               className="h-7 px-2 text-muted-foreground hover:text-foreground"
-              onClick={() => createTerminal("vertical")}
+              onClick={() => createTerminal('vertical')}
               title="Split Down"
             >
               <SplitSquareVertical className="h-4 w-4" />
@@ -1466,7 +1498,9 @@ export function TerminalView() {
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <Label className="text-sm">Default Font Size</Label>
-                      <span className="text-sm text-muted-foreground">{terminalState.defaultFontSize}px</span>
+                      <span className="text-sm text-muted-foreground">
+                        {terminalState.defaultFontSize}px
+                      </span>
                     </div>
                     <Slider
                       value={[terminalState.defaultFontSize]}
@@ -1475,8 +1509,8 @@ export function TerminalView() {
                       step={1}
                       onValueChange={([value]) => setTerminalDefaultFontSize(value)}
                       onValueCommit={() => {
-                        toast.info("Font size changed", {
-                          description: "New terminals will use this size",
+                        toast.info('Font size changed', {
+                          description: 'New terminals will use this size',
                         });
                       }}
                     />
@@ -1489,15 +1523,15 @@ export function TerminalView() {
                       value={terminalState.fontFamily}
                       onChange={(e) => {
                         setTerminalFontFamily(e.target.value);
-                        toast.info("Font family changed", {
-                          description: "Restart terminal for changes to take effect",
+                        toast.info('Font family changed', {
+                          description: 'Restart terminal for changes to take effect',
                         });
                       }}
                       className={cn(
-                        "w-full px-2 py-1.5 rounded-md text-sm",
-                        "bg-accent/50 border border-border",
-                        "text-foreground",
-                        "focus:outline-none focus:ring-2 focus:ring-ring"
+                        'w-full px-2 py-1.5 rounded-md text-sm',
+                        'bg-accent/50 border border-border',
+                        'text-foreground',
+                        'focus:outline-none focus:ring-2 focus:ring-ring'
                       )}
                     >
                       {TERMINAL_FONT_OPTIONS.map((font) => (
@@ -1512,7 +1546,9 @@ export function TerminalView() {
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <Label className="text-sm">Line Height</Label>
-                      <span className="text-sm text-muted-foreground">{terminalState.lineHeight.toFixed(1)}</span>
+                      <span className="text-sm text-muted-foreground">
+                        {terminalState.lineHeight.toFixed(1)}
+                      </span>
                     </div>
                     <Slider
                       value={[terminalState.lineHeight]}
@@ -1521,8 +1557,8 @@ export function TerminalView() {
                       step={0.1}
                       onValueChange={([value]) => setTerminalLineHeight(value)}
                       onValueCommit={() => {
-                        toast.info("Line height changed", {
-                          description: "Restart terminal for changes to take effect",
+                        toast.info('Line height changed', {
+                          description: 'Restart terminal for changes to take effect',
                         });
                       }}
                     />
@@ -1541,7 +1577,6 @@ export function TerminalView() {
                       Command to run when opening new terminals
                     </p>
                   </div>
-
                 </div>
               </PopoverContent>
             </Popover>
@@ -1569,18 +1604,26 @@ export function TerminalView() {
                 isActive={true}
                 onFocus={() => setActiveTerminalSession(terminalState.maximizedSessionId!)}
                 onClose={() => killTerminal(terminalState.maximizedSessionId!)}
-                onSplitHorizontal={() => createTerminal("horizontal", terminalState.maximizedSessionId!)}
-                onSplitVertical={() => createTerminal("vertical", terminalState.maximizedSessionId!)}
+                onSplitHorizontal={() =>
+                  createTerminal('horizontal', terminalState.maximizedSessionId!)
+                }
+                onSplitVertical={() =>
+                  createTerminal('vertical', terminalState.maximizedSessionId!)
+                }
                 onNewTab={createTerminalInNewTab}
                 onSessionInvalid={() => {
                   const sessionId = terminalState.maximizedSessionId!;
-                  console.log(`[Terminal] Maximized session ${sessionId} is invalid, removing from layout`);
+                  console.log(
+                    `[Terminal] Maximized session ${sessionId} is invalid, removing from layout`
+                  );
                   killTerminal(sessionId);
                 }}
                 isDragging={false}
                 isDropTarget={false}
                 fontSize={findTerminalFontSize(terminalState.maximizedSessionId)}
-                onFontSizeChange={(size) => setTerminalPanelFontSize(terminalState.maximizedSessionId!, size)}
+                onFontSizeChange={(size) =>
+                  setTerminalPanelFontSize(terminalState.maximizedSessionId!, size)
+                }
                 isMaximized={true}
                 onToggleMaximize={() => toggleTerminalMaximized(terminalState.maximizedSessionId!)}
               />
@@ -1590,11 +1633,7 @@ export function TerminalView() {
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center text-center p-6">
               <p className="text-muted-foreground mb-4">This tab is empty</p>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => createTerminal()}
-              >
+              <Button variant="outline" size="sm" onClick={() => createTerminal()}>
                 <Plus className="h-4 w-4 mr-2" />
                 New Terminal
               </Button>
@@ -1607,7 +1646,7 @@ export function TerminalView() {
       <DragOverlay
         dropAnimation={{
           sideEffects: defaultDropAnimationSideEffects({
-            styles: { active: { opacity: "0.5" } },
+            styles: { active: { opacity: '0.5' } },
           }),
         }}
         zIndex={1000}
@@ -1616,11 +1655,7 @@ export function TerminalView() {
           <div className="relative inline-flex items-center gap-2 px-3.5 py-2 bg-card border-2 border-brand-500 rounded-lg shadow-xl pointer-events-none overflow-hidden">
             <TerminalIcon className="h-4 w-4 text-brand-500 shrink-0" />
             <span className="text-sm font-medium text-foreground whitespace-nowrap">
-              {dragOverTabId === "new"
-                ? "New tab"
-                : dragOverTabId
-                ? "Move to tab"
-                : "Terminal"}
+              {dragOverTabId === 'new' ? 'New tab' : dragOverTabId ? 'Move to tab' : 'Terminal'}
             </span>
           </div>
         ) : null}

@@ -32,12 +32,12 @@ When password protection is enabled:
 
 When the terminal is focused, the following shortcuts are available:
 
-| Shortcut | Action                                   |
-| -------- | ---------------------------------------- |
-| `Alt+T`  | Open new terminal tab                    |
-| `Alt+D`  | Split terminal right (horizontal split)  |
-| `Alt+S`  | Split terminal down (vertical split)     |
-| `Alt+W`  | Close current terminal                   |
+| Shortcut | Action                                  |
+| -------- | --------------------------------------- |
+| `Alt+T`  | Open new terminal tab                   |
+| `Alt+D`  | Split terminal right (horizontal split) |
+| `Alt+S`  | Split terminal down (vertical split)    |
+| `Alt+W`  | Close current terminal                  |
 
 These shortcuts are customizable via the keyboard shortcuts settings (Settings > Keyboard Shortcuts).
 
@@ -45,12 +45,12 @@ These shortcuts are customizable via the keyboard shortcuts settings (Settings >
 
 Navigate between terminal panes using directional shortcuts:
 
-| Shortcut                          | Action                              |
-| --------------------------------- | ----------------------------------- |
-| `Ctrl+Alt+ArrowUp` (or `Cmd+Alt`) | Move focus to terminal pane above   |
-| `Ctrl+Alt+ArrowDown`              | Move focus to terminal pane below   |
-| `Ctrl+Alt+ArrowLeft`              | Move focus to terminal pane on left |
-| `Ctrl+Alt+ArrowRight`             | Move focus to terminal pane on right|
+| Shortcut                          | Action                               |
+| --------------------------------- | ------------------------------------ |
+| `Ctrl+Alt+ArrowUp` (or `Cmd+Alt`) | Move focus to terminal pane above    |
+| `Ctrl+Alt+ArrowDown`              | Move focus to terminal pane below    |
+| `Ctrl+Alt+ArrowLeft`              | Move focus to terminal pane on left  |
+| `Ctrl+Alt+ArrowRight`             | Move focus to terminal pane on right |
 
 The navigation is spatially aware - pressing Down will move to the terminal below your current one, not just cycle through terminals in order.
 

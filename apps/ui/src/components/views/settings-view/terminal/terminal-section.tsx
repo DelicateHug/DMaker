@@ -1,12 +1,12 @@
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
-import { Slider } from "@/components/ui/slider";
-import { Input } from "@/components/ui/input";
-import { SquareTerminal } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { useAppStore } from "@/store/app-store";
-import { toast } from "sonner";
-import { TERMINAL_FONT_OPTIONS } from "@/config/terminal-themes";
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
+import { Slider } from '@/components/ui/slider';
+import { Input } from '@/components/ui/input';
+import { SquareTerminal } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { useAppStore } from '@/store/app-store';
+import { toast } from 'sonner';
+import { TERMINAL_FONT_OPTIONS } from '@/config/terminal-themes';
 
 export function TerminalSection() {
   const {
@@ -31,10 +31,10 @@ export function TerminalSection() {
   return (
     <div
       className={cn(
-        "rounded-2xl overflow-hidden",
-        "border border-border/50",
-        "bg-gradient-to-br from-card/90 via-card/70 to-card/80 backdrop-blur-xl",
-        "shadow-sm shadow-black/5"
+        'rounded-2xl overflow-hidden',
+        'border border-border/50',
+        'bg-gradient-to-br from-card/90 via-card/70 to-card/80 backdrop-blur-xl',
+        'shadow-sm shadow-black/5'
       )}
     >
       <div className="p-6 border-b border-border/50 bg-gradient-to-r from-transparent via-accent/5 to-transparent">
@@ -45,7 +45,8 @@ export function TerminalSection() {
           <h2 className="text-lg font-semibold text-foreground tracking-tight">Terminal</h2>
         </div>
         <p className="text-sm text-muted-foreground/80 ml-12">
-          Customize terminal appearance and behavior. Theme follows your app theme in Appearance settings.
+          Customize terminal appearance and behavior. Theme follows your app theme in Appearance
+          settings.
         </p>
       </div>
       <div className="p-6 space-y-6">
@@ -56,15 +57,15 @@ export function TerminalSection() {
             value={fontFamily}
             onChange={(e) => {
               setTerminalFontFamily(e.target.value);
-              toast.info("Font family changed", {
-                description: "Restart terminal for changes to take effect",
+              toast.info('Font family changed', {
+                description: 'Restart terminal for changes to take effect',
               });
             }}
             className={cn(
-              "w-full px-3 py-2 rounded-lg",
-              "bg-accent/30 border border-border/50",
-              "text-foreground text-sm",
-              "focus:outline-none focus:ring-2 focus:ring-green-500/30"
+              'w-full px-3 py-2 rounded-lg',
+              'bg-accent/30 border border-border/50',
+              'text-foreground text-sm',
+              'focus:outline-none focus:ring-2 focus:ring-green-500/30'
             )}
           >
             {TERMINAL_FONT_OPTIONS.map((font) => (
@@ -106,8 +107,8 @@ export function TerminalSection() {
               setTerminalLineHeight(value);
             }}
             onValueCommit={() => {
-              toast.info("Line height changed", {
-                description: "Restart terminal for changes to take effect",
+              toast.info('Line height changed', {
+                description: 'Restart terminal for changes to take effect',
               });
             }}
             className="flex-1"
@@ -129,8 +130,8 @@ export function TerminalSection() {
             step={1000}
             onValueChange={([value]) => setTerminalScrollbackLines(value)}
             onValueCommit={() => {
-              toast.info("Scrollback changed", {
-                description: "Restart terminal for changes to take effect",
+              toast.info('Scrollback changed', {
+                description: 'Restart terminal for changes to take effect',
               });
             }}
             className="flex-1"
@@ -163,9 +164,12 @@ export function TerminalSection() {
             checked={screenReaderMode}
             onCheckedChange={(checked) => {
               setTerminalScreenReaderMode(checked);
-              toast.success(checked ? "Screen reader mode enabled" : "Screen reader mode disabled", {
-                description: "Restart terminal for changes to take effect",
-              });
+              toast.success(
+                checked ? 'Screen reader mode enabled' : 'Screen reader mode disabled',
+                {
+                  description: 'Restart terminal for changes to take effect',
+                }
+              );
             }}
           />
         </div>
