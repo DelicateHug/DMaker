@@ -3,6 +3,7 @@ import type { Project } from '@/lib/electron';
 
 interface UseProjectPickerProps {
   projects: Project[];
+  currentProject: Project | null;
   isProjectPickerOpen: boolean;
   setIsProjectPickerOpen: (value: boolean | ((prev: boolean) => boolean)) => void;
   setCurrentProject: (project: Project) => void;
@@ -10,6 +11,7 @@ interface UseProjectPickerProps {
 
 export function useProjectPicker({
   projects,
+  currentProject,
   isProjectPickerOpen,
   setIsProjectPickerOpen,
   setCurrentProject,
@@ -32,13 +34,18 @@ export function useProjectPicker({
     setSelectedProjectIndex(0);
   }, [filteredProjects.length, projectSearchQuery]);
 
-  // Reset search query when dropdown closes
+  // Reset search query when dropdown closes, set to current project index when it opens
   useEffect(() => {
     if (!isProjectPickerOpen) {
       setProjectSearchQuery('');
       setSelectedProjectIndex(0);
+    } else if (currentProject) {
+      const currentIndex = filteredProjects.findIndex((p) => p.id === currentProject.id);
+      if (currentIndex !== -1) {
+        setSelectedProjectIndex(currentIndex);
+      }
     }
-  }, [isProjectPickerOpen]);
+  }, [isProjectPickerOpen, currentProject, filteredProjects]);
 
   // Focus the search input when dropdown opens
   useEffect(() => {
