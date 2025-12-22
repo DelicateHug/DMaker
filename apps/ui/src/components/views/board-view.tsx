@@ -436,9 +436,9 @@ export function BoardView() {
 
       // Create the feature
       const featureData = {
+        title: `Address PR #${prNumber} Review Comments`,
         category: 'PR Review',
         description,
-        steps: [],
         images: [],
         imagePaths: [],
         skipTests: defaultSkipTests,
@@ -478,9 +478,9 @@ export function BoardView() {
 
       // Create the feature
       const featureData = {
+        title: `Resolve Merge Conflicts`,
         category: 'Maintenance',
         description,
-        steps: [],
         images: [],
         imagePaths: [],
         skipTests: defaultSkipTests,
