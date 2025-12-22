@@ -39,11 +39,11 @@ export function useMessageQueue({ onProcessNext }: UseMessageQueueOptions): UseM
       timestamp: new Date(),
     };
 
-    setQueuedMessages(prev => [...prev, queuedMessage]);
+    setQueuedMessages((prev) => [...prev, queuedMessage]);
   }, []);
 
   const removeFromQueue = useCallback((messageId: string) => {
-    setQueuedMessages(prev => prev.filter(msg => msg.id !== messageId));
+    setQueuedMessages((prev) => prev.filter((msg) => msg.id !== messageId));
   }, []);
 
   const clearQueue = useCallback(() => {
@@ -61,7 +61,7 @@ export function useMessageQueue({ onProcessNext }: UseMessageQueueOptions): UseM
     try {
       await onProcessNext(nextMessage);
       // Remove the processed message from queue
-      setQueuedMessages(prev => prev.slice(1));
+      setQueuedMessages((prev) => prev.slice(1));
     } catch (error) {
       console.error('Error processing queued message:', error);
       // Keep the message in queue for retry or manual removal

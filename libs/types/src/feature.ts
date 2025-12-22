@@ -45,7 +45,7 @@ export interface Feature {
   error?: string;
   summary?: string;
   startedAt?: string;
-  [key: string]: unknown;  // Keep catch-all for extensibility
+  [key: string]: unknown; // Keep catch-all for extensibility
 }
 
 export type FeatureStatus = 'pending' | 'running' | 'completed' | 'failed' | 'verified';
