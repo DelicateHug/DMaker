@@ -52,8 +52,8 @@ import { useNavigate } from '@tanstack/react-router';
 import {
   getAncestors,
   formatAncestorContextForPrompt,
-  AncestorContext,
-} from '@/components/views/graph-view/utils';
+  type AncestorContext,
+} from '@automaker/dependency-resolver';
 
 interface AddFeatureDialogProps {
   open: boolean;
