@@ -227,6 +227,11 @@ export interface GitHubAPI {
     isStale?: boolean;
     error?: string;
   }>;
+  /** Mark a validation as viewed by the user */
+  markValidationViewed: (
+    projectPath: string,
+    issueNumber: number
+  ) => Promise<{ success: boolean; error?: string }>;
   /** Subscribe to validation events */
   onValidationEvent: (callback: (event: IssueValidationEvent) => void) => () => void;
 }

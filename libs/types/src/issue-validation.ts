@@ -123,4 +123,6 @@ export interface StoredValidation {
   model: AgentModel;
   /** The validation result */
   result: IssueValidationResult;
+  /** ISO timestamp when user viewed this validation (undefined = not yet viewed) */
+  viewedAt?: string;
 }

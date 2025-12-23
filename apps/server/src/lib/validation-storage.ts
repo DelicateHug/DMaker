@@ -145,3 +145,35 @@ export async function getValidationWithFreshness(
     isStale: isValidationStale(validation),
   };
 }
+
+/**
+ * Mark a validation as viewed by the user
+ *
+ * @param projectPath - Absolute path to project directory
+ * @param issueNumber - GitHub issue number
+ * @returns true if validation was marked as viewed, false if not found
+ */
+export async function markValidationViewed(
+  projectPath: string,
+  issueNumber: number
+): Promise<boolean> {
+  const validation = await readValidation(projectPath, issueNumber);
+  if (!validation) {
+    return false;
+  }
+
+  validation.viewedAt = new Date().toISOString();
+  await writeValidation(projectPath, issueNumber, validation);
+  return true;
+}
+
+/**
+ * Get count of unviewed, non-stale validations for a project
+ *
+ * @param projectPath - Absolute path to project directory
+ * @returns Number of unviewed validations
+ */
+export async function getUnviewedValidationsCount(projectPath: string): Promise<number> {
+  const validations = await getAllValidations(projectPath);
+  return validations.filter((v) => !v.viewedAt && !isValidationStale(v)).length;
+}
