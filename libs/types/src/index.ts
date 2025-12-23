@@ -92,4 +92,6 @@ export type {
   IssueValidationResult,
   IssueValidationResponse,
   IssueValidationErrorResponse,
+  IssueValidationEvent,
+  StoredValidation,
 } from './issue-validation.js';

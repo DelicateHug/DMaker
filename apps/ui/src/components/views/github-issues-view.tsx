@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   CircleDot,
   Loader2,
@@ -10,12 +10,16 @@ import {
   Wand2,
   GitPullRequest,
   User,
+  CheckCircle,
+  Clock,
 } from 'lucide-react';
 import {
   getElectronAPI,
   GitHubIssue,
   IssueValidationResult,
   IssueComplexity,
+  IssueValidationEvent,
+  StoredValidation,
 } from '@/lib/electron';
 
 /**
@@ -48,10 +52,15 @@ export function GitHubIssuesView() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedIssue, setSelectedIssue] = useState<GitHubIssue | null>(null);
-  const [validating, setValidating] = useState(false);
+  const [validatingIssues, setValidatingIssues] = useState<Set<number>>(new Set());
   const [validationResult, setValidationResult] = useState<IssueValidationResult | null>(null);
   const [showValidationDialog, setShowValidationDialog] = useState(false);
-  const { currentProject } = useAppStore();
+  // Track cached validations for display
+  const [cachedValidations, setCachedValidations] = useState<Map<number, StoredValidation>>(
+    new Map()
+  );
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const { currentProject, validationModel, muteDoneSound } = useAppStore();
 
   const fetchIssues = useCallback(async () => {
     if (!currentProject?.path) {
@@ -85,6 +94,125 @@ export function GitHubIssuesView() {
     fetchIssues();
   }, [fetchIssues]);
 
+  // Load cached validations on mount
+  useEffect(() => {
+    const loadCachedValidations = async () => {
+      if (!currentProject?.path) return;
+
+      try {
+        const api = getElectronAPI();
+        if (api.github?.getValidations) {
+          const result = await api.github.getValidations(currentProject.path);
+          if (result.success && result.validations) {
+            const map = new Map<number, StoredValidation>();
+            for (const v of result.validations) {
+              map.set(v.issueNumber, v);
+            }
+            setCachedValidations(map);
+          }
+        }
+      } catch (err) {
+        console.error('[GitHubIssuesView] Failed to load cached validations:', err);
+      }
+    };
+
+    loadCachedValidations();
+  }, [currentProject?.path]);
+
+  // Subscribe to validation events
+  useEffect(() => {
+    const api = getElectronAPI();
+    if (!api.github?.onValidationEvent) return;
+
+    const handleValidationEvent = (event: IssueValidationEvent) => {
+      // Only handle events for current project
+      if (event.projectPath !== currentProject?.path) return;
+
+      switch (event.type) {
+        case 'issue_validation_start':
+          setValidatingIssues((prev) => new Set([...prev, event.issueNumber]));
+          break;
+
+        case 'issue_validation_complete':
+          setValidatingIssues((prev) => {
+            const next = new Set(prev);
+            next.delete(event.issueNumber);
+            return next;
+          });
+
+          // Update cached validations (use event.issueTitle to avoid stale closure)
+          setCachedValidations((prev) => {
+            const next = new Map(prev);
+            next.set(event.issueNumber, {
+              issueNumber: event.issueNumber,
+              issueTitle: event.issueTitle,
+              validatedAt: new Date().toISOString(),
+              model: validationModel,
+              result: event.result,
+            });
+            return next;
+          });
+
+          // Show toast notification
+          toast.success(`Issue #${event.issueNumber} validated: ${event.result.verdict}`, {
+            description:
+              event.result.verdict === 'valid'
+                ? 'Issue is ready to be converted to a task'
+                : event.result.verdict === 'invalid'
+                  ? 'Issue may have problems'
+                  : 'Issue needs clarification',
+          });
+
+          // Play audio notification (if not muted)
+          if (!muteDoneSound) {
+            try {
+              if (!audioRef.current) {
+                audioRef.current = new Audio('/sounds/ding.mp3');
+              }
+              audioRef.current.play().catch(() => {
+                // Audio play might fail due to browser restrictions
+              });
+            } catch {
+              // Ignore audio errors
+            }
+          }
+
+          // If validation dialog is open for this issue, update the result
+          if (selectedIssue?.number === event.issueNumber && showValidationDialog) {
+            setValidationResult(event.result);
+          }
+          break;
+
+        case 'issue_validation_error':
+          setValidatingIssues((prev) => {
+            const next = new Set(prev);
+            next.delete(event.issueNumber);
+            return next;
+          });
+          toast.error(`Validation failed for issue #${event.issueNumber}`, {
+            description: event.error,
+          });
+          if (selectedIssue?.number === event.issueNumber && showValidationDialog) {
+            setShowValidationDialog(false);
+          }
+          break;
+      }
+    };
+
+    const unsubscribe = api.github.onValidationEvent(handleValidationEvent);
+    return () => unsubscribe();
+  }, [currentProject?.path, selectedIssue, showValidationDialog, validationModel, muteDoneSound]);
+
+  // Cleanup audio element on unmount to prevent memory leaks
+  useEffect(() => {
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+    };
+  }, []);
+
   const handleRefresh = useCallback(() => {
     setRefreshing(true);
     fetchIssues();
@@ -96,42 +224,83 @@ export function GitHubIssuesView() {
   }, []);
 
   const handleValidateIssue = useCallback(
-    async (issue: GitHubIssue) => {
+    async (issue: GitHubIssue, showDialog = true) => {
       if (!currentProject?.path) {
         toast.error('No project selected');
         return;
       }
 
-      setValidating(true);
+      // Check if already validating this issue
+      if (validatingIssues.has(issue.number)) {
+        toast.info(`Validation already in progress for issue #${issue.number}`);
+        return;
+      }
+
+      // Check for cached result - if fresh, show it directly
+      const cached = cachedValidations.get(issue.number);
+      if (cached && showDialog) {
+        // Check if validation is stale (older than 24 hours)
+        const validatedAt = new Date(cached.validatedAt);
+        const hoursSinceValidation = (Date.now() - validatedAt.getTime()) / (1000 * 60 * 60);
+        const isStale = hoursSinceValidation > 24;
+
+        if (!isStale) {
+          // Show cached result directly
+          setValidationResult(cached.result);
+          setShowValidationDialog(true);
+          return;
+        }
+      }
+
+      // Start async validation
       setValidationResult(null);
-      setShowValidationDialog(true);
+      if (showDialog) {
+        setShowValidationDialog(true);
+      }
 
       try {
         const api = getElectronAPI();
         if (api.github?.validateIssue) {
-          const result = await api.github.validateIssue(currentProject.path, {
-            issueNumber: issue.number,
-            issueTitle: issue.title,
-            issueBody: issue.body || '',
-            issueLabels: issue.labels.map((l) => l.name),
-          });
+          const result = await api.github.validateIssue(
+            currentProject.path,
+            {
+              issueNumber: issue.number,
+              issueTitle: issue.title,
+              issueBody: issue.body || '',
+              issueLabels: issue.labels.map((l) => l.name),
+            },
+            validationModel
+          );
 
-          if (result.success) {
-            setValidationResult(result.validation);
-          } else {
-            toast.error(result.error || 'Failed to validate issue');
-            setShowValidationDialog(false);
+          if (!result.success) {
+            toast.error(result.error || 'Failed to start validation');
+            if (showDialog) {
+              setShowValidationDialog(false);
+            }
           }
+          // On success, the result will come through the event stream
         }
       } catch (err) {
         console.error('[GitHubIssuesView] Validation error:', err);
         toast.error(err instanceof Error ? err.message : 'Failed to validate issue');
-        setShowValidationDialog(false);
-      } finally {
-        setValidating(false);
+        if (showDialog) {
+          setShowValidationDialog(false);
+        }
       }
     },
-    [currentProject?.path]
+    [currentProject?.path, validatingIssues, cachedValidations, validationModel]
+  );
+
+  // View cached validation result
+  const handleViewCachedValidation = useCallback(
+    (issue: GitHubIssue) => {
+      const cached = cachedValidations.get(issue.number);
+      if (cached) {
+        setValidationResult(cached.result);
+        setShowValidationDialog(true);
+      }
+    },
+    [cachedValidations]
   );
 
   const handleConvertToTask = useCallback(
@@ -319,19 +488,79 @@ export function GitHubIssuesView() {
               </span>
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">
-              <Button
-                variant="default"
-                size="sm"
-                onClick={() => handleValidateIssue(selectedIssue)}
-                disabled={validating}
-              >
-                {validating ? (
-                  <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                ) : (
-                  <Wand2 className="h-4 w-4 mr-1" />
-                )}
-                Validate with AI
-              </Button>
+              {(() => {
+                const isValidating = validatingIssues.has(selectedIssue.number);
+                const cached = cachedValidations.get(selectedIssue.number);
+                const isStale =
+                  cached &&
+                  (Date.now() - new Date(cached.validatedAt).getTime()) / (1000 * 60 * 60) > 24;
+
+                if (isValidating) {
+                  return (
+                    <Button variant="default" size="sm" disabled>
+                      <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                      Validating...
+                    </Button>
+                  );
+                }
+
+                if (cached && !isStale) {
+                  return (
+                    <>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleViewCachedValidation(selectedIssue)}
+                      >
+                        <CheckCircle className="h-4 w-4 mr-1 text-green-500" />
+                        View Result
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleValidateIssue(selectedIssue)}
+                        title="Re-validate"
+                      >
+                        <RefreshCw className="h-4 w-4" />
+                      </Button>
+                    </>
+                  );
+                }
+
+                if (cached && isStale) {
+                  return (
+                    <>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleViewCachedValidation(selectedIssue)}
+                      >
+                        <Clock className="h-4 w-4 mr-1 text-yellow-500" />
+                        View (stale)
+                      </Button>
+                      <Button
+                        variant="default"
+                        size="sm"
+                        onClick={() => handleValidateIssue(selectedIssue)}
+                      >
+                        <Wand2 className="h-4 w-4 mr-1" />
+                        Re-validate
+                      </Button>
+                    </>
+                  );
+                }
+
+                return (
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={() => handleValidateIssue(selectedIssue)}
+                  >
+                    <Wand2 className="h-4 w-4 mr-1" />
+                    Validate with AI
+                  </Button>
+                );
+              })()}
               <Button
                 variant="outline"
                 size="sm"
@@ -484,7 +713,7 @@ export function GitHubIssuesView() {
         onOpenChange={setShowValidationDialog}
         issue={selectedIssue}
         validationResult={validationResult}
-        isValidating={validating}
+        isValidating={selectedIssue ? validatingIssues.has(selectedIssue.number) : false}
         onConvertToTask={handleConvertToTask}
       />
     </div>

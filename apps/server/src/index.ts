@@ -147,7 +147,7 @@ app.use('/api/templates', createTemplatesRoutes());
 app.use('/api/terminal', createTerminalRoutes());
 app.use('/api/settings', createSettingsRoutes(settingsService));
 app.use('/api/claude', createClaudeRoutes(claudeUsageService));
-app.use('/api/github', createGitHubRoutes());
+app.use('/api/github', createGitHubRoutes(events));
 app.use('/api/context', createContextRoutes());
 
 // Create HTTP server

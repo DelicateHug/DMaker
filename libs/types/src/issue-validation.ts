@@ -4,6 +4,8 @@
  * Types for validating GitHub issues against the codebase using Claude SDK.
  */
 
+import type { AgentModel } from './model.js';
+
 /**
  * Verdict from issue validation
  */
@@ -75,4 +77,50 @@ export interface IssueValidationResponse {
 export interface IssueValidationErrorResponse {
   success: false;
   error: string;
+}
+
+/**
+ * Events emitted during async issue validation
+ */
+export type IssueValidationEvent =
+  | {
+      type: 'issue_validation_start';
+      issueNumber: number;
+      issueTitle: string;
+      projectPath: string;
+    }
+  | {
+      type: 'issue_validation_progress';
+      issueNumber: number;
+      content: string;
+      projectPath: string;
+    }
+  | {
+      type: 'issue_validation_complete';
+      issueNumber: number;
+      issueTitle: string;
+      result: IssueValidationResult;
+      projectPath: string;
+    }
+  | {
+      type: 'issue_validation_error';
+      issueNumber: number;
+      error: string;
+      projectPath: string;
+    };
+
+/**
+ * Stored validation data with metadata for cache
+ */
+export interface StoredValidation {
+  /** GitHub issue number */
+  issueNumber: number;
+  /** Issue title at time of validation */
+  issueTitle: string;
+  /** ISO timestamp when validation was performed */
+  validatedAt: string;
+  /** Model used for validation (opus, sonnet, haiku) */
+  model: AgentModel;
+  /** The validation result */
+  result: IssueValidationResult;
 }

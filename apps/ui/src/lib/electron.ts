@@ -8,6 +8,9 @@ import type {
   IssueValidationInput,
   IssueValidationResult,
   IssueValidationResponse,
+  IssueValidationEvent,
+  StoredValidation,
+  AgentModel,
 } from '@automaker/types';
 import { getJSON, setJSON, removeItem } from './storage';
 
@@ -19,6 +22,8 @@ export type {
   IssueValidationInput,
   IssueValidationResult,
   IssueValidationResponse,
+  IssueValidationEvent,
+  StoredValidation,
 };
 
 export interface FileEntry {
@@ -189,10 +194,41 @@ export interface GitHubAPI {
     mergedPRs?: GitHubPR[];
     error?: string;
   }>;
+  /** Start async validation of a GitHub issue */
   validateIssue: (
     projectPath: string,
-    issue: IssueValidationInput
-  ) => Promise<IssueValidationResponse | { success: false; error: string }>;
+    issue: IssueValidationInput,
+    model?: AgentModel
+  ) => Promise<{ success: boolean; message?: string; issueNumber?: number; error?: string }>;
+  /** Check validation status for an issue or all issues */
+  getValidationStatus: (
+    projectPath: string,
+    issueNumber?: number
+  ) => Promise<{
+    success: boolean;
+    isRunning?: boolean;
+    startedAt?: string;
+    runningIssues?: number[];
+    error?: string;
+  }>;
+  /** Stop a running validation */
+  stopValidation: (
+    projectPath: string,
+    issueNumber: number
+  ) => Promise<{ success: boolean; message?: string; error?: string }>;
+  /** Get stored validations for a project */
+  getValidations: (
+    projectPath: string,
+    issueNumber?: number
+  ) => Promise<{
+    success: boolean;
+    validation?: StoredValidation | null;
+    validations?: StoredValidation[];
+    isStale?: boolean;
+    error?: string;
+  }>;
+  /** Subscribe to validation events */
+  onValidationEvent: (callback: (event: IssueValidationEvent) => void) => () => void;
 }
 
 // Feature Suggestions types
@@ -2640,6 +2676,8 @@ function createMockRunningAgentsAPI(): RunningAgentsAPI {
 }
 
 // Mock GitHub API implementation
+let mockValidationCallbacks: ((event: IssueValidationEvent) => void)[] = [];
+
 function createMockGitHubAPI(): GitHubAPI {
   return {
     checkRemote: async (projectPath: string) => {
@@ -2668,20 +2706,71 @@ function createMockGitHubAPI(): GitHubAPI {
         mergedPRs: [],
       };
     },
-    validateIssue: async (projectPath: string, issue: IssueValidationInput) => {
-      console.log('[Mock] Validating GitHub issue:', { projectPath, issue });
-      // Return a mock validation result
+    validateIssue: async (projectPath: string, issue: IssueValidationInput, model?: AgentModel) => {
+      console.log('[Mock] Starting async validation:', { projectPath, issue, model });
+
+      // Simulate async validation in background
+      setTimeout(() => {
+        mockValidationCallbacks.forEach((cb) =>
+          cb({
+            type: 'issue_validation_start',
+            issueNumber: issue.issueNumber,
+            issueTitle: issue.issueTitle,
+            projectPath,
+          })
+        );
+
+        setTimeout(() => {
+          mockValidationCallbacks.forEach((cb) =>
+            cb({
+              type: 'issue_validation_complete',
+              issueNumber: issue.issueNumber,
+              result: {
+                verdict: 'valid' as const,
+                confidence: 'medium' as const,
+                reasoning:
+                  'This is a mock validation. In production, Claude SDK would analyze the codebase to validate this issue.',
+                relatedFiles: ['src/components/example.tsx'],
+                estimatedComplexity: 'moderate' as const,
+              },
+              projectPath,
+            })
+          );
+        }, 2000);
+      }, 100);
+
       return {
-        success: true as const,
+        success: true,
+        message: `Validation started for issue #${issue.issueNumber}`,
         issueNumber: issue.issueNumber,
-        validation: {
-          verdict: 'valid' as const,
-          confidence: 'medium' as const,
-          reasoning:
-            'This is a mock validation. In production, Claude SDK would analyze the codebase to validate this issue.',
-          relatedFiles: ['src/components/example.tsx'],
-          estimatedComplexity: 'moderate' as const,
-        },
+      };
+    },
+    getValidationStatus: async (projectPath: string, issueNumber?: number) => {
+      console.log('[Mock] Getting validation status:', { projectPath, issueNumber });
+      return {
+        success: true,
+        isRunning: false,
+        runningIssues: [],
+      };
+    },
+    stopValidation: async (projectPath: string, issueNumber: number) => {
+      console.log('[Mock] Stopping validation:', { projectPath, issueNumber });
+      return {
+        success: true,
+        message: `Validation for issue #${issueNumber} stopped`,
+      };
+    },
+    getValidations: async (projectPath: string, issueNumber?: number) => {
+      console.log('[Mock] Getting validations:', { projectPath, issueNumber });
+      return {
+        success: true,
+        validations: [],
+      };
+    },
+    onValidationEvent: (callback: (event: IssueValidationEvent) => void) => {
+      mockValidationCallbacks.push(callback);
+      return () => {
+        mockValidationCallbacks = mockValidationCallbacks.filter((cb) => cb !== callback);
       };
     },
   };
