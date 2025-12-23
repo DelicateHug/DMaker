@@ -1,4 +1,3 @@
-import { useCallback } from 'react';
 import {
   Folder,
   ChevronDown,
@@ -75,14 +74,6 @@ export function ProjectSelectorWithOptions({
   });
 
   const { sensors, handleDragEnd } = useDragAndDrop({ projects, reorderProjects });
-
-  const handleProjectSelect = useCallback(
-    (project: (typeof projects)[number]) => {
-      setCurrentProject(project);
-      setIsProjectPickerOpen(false);
-    },
-    [setCurrentProject, setIsProjectPickerOpen]
-  );
 
   const {
     globalTheme,
@@ -187,7 +178,10 @@ export function ProjectSelectorWithOptions({
                       project={project}
                       currentProjectId={currentProject?.id}
                       isHighlighted={index === selectedProjectIndex}
-                      onSelect={handleProjectSelect}
+                      onSelect={(p) => {
+                        setCurrentProject(p);
+                        setIsProjectPickerOpen(false);
+                      }}
                     />
                   ))}
                 </div>
