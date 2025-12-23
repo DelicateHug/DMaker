@@ -14,6 +14,10 @@ const logger = createLogger('Suggestions');
 
 /**
  * Extract implemented features from app_spec.txt XML content
+ *
+ * Note: This uses regex-based parsing which is sufficient for our controlled
+ * XML structure. If more complex XML parsing is needed in the future, consider
+ * using a library like 'fast-xml-parser' or 'xml2js'.
  */
 function extractImplementedFeatures(specContent: string): string[] {
   const features: string[] = [];
@@ -26,11 +30,11 @@ function extractImplementedFeatures(specContent: string): string[] {
   if (implementedMatch) {
     const implementedSection = implementedMatch[1];
 
-    // Extract feature names from <name>...</name> tags
+    // Extract feature names from <name>...</name> tags using matchAll
     const nameRegex = /<name>(.*?)<\/name>/g;
-    let match;
+    const matches = implementedSection.matchAll(nameRegex);
 
-    while ((match = nameRegex.exec(implementedSection)) !== null) {
+    for (const match of matches) {
       features.push(match[1].trim());
     }
   }
@@ -55,9 +59,7 @@ async function loadExistingContext(projectPath: string): Promise<string> {
       if (implementedFeatures.length > 0) {
         context += '\n\n=== ALREADY IMPLEMENTED FEATURES ===\n';
         context += 'These features are already implemented in the codebase:\n';
-        implementedFeatures.forEach((feature) => {
-          context += `- ${feature}\n`;
-        });
+        context += implementedFeatures.map((feature) => `- ${feature}`).join('\n') + '\n';
       }
     }
   } catch (error) {
@@ -73,11 +75,14 @@ async function loadExistingContext(projectPath: string): Promise<string> {
     if (features.length > 0) {
       context += '\n\n=== EXISTING FEATURES IN BACKLOG ===\n';
       context += 'These features are already planned or in progress:\n';
-      features.forEach((feature) => {
-        const status = feature.status || 'pending';
-        const title = feature.title || feature.description.substring(0, 50);
-        context += `- ${title} (${status})\n`;
-      });
+      context +=
+        features
+          .map((feature) => {
+            const status = feature.status || 'pending';
+            const title = feature.title || feature.description?.substring(0, 50) || 'Untitled';
+            return `- ${title} (${status})`;
+          })
+          .join('\n') + '\n';
     }
   } catch (error) {
     // Features directory doesn't exist or can't be read - that's okay
