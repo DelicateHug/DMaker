@@ -14,6 +14,7 @@ import {
   createValidationStopHandler,
   createGetValidationsHandler,
   createDeleteValidationHandler,
+  createMarkViewedHandler,
 } from './routes/validation-endpoints.js';
 
 export function createGitHubRoutes(events: EventEmitter): Router {
@@ -40,6 +41,11 @@ export function createGitHubRoutes(events: EventEmitter): Router {
     '/validation-delete',
     validatePathParams('projectPath'),
     createDeleteValidationHandler()
+  );
+  router.post(
+    '/validation-mark-viewed',
+    validatePathParams('projectPath'),
+    createMarkViewedHandler()
   );
 
   return router;

@@ -17,6 +17,7 @@ import {
   getAllValidations,
   getValidationWithFreshness,
   deleteValidation,
+  markValidationViewed,
 } from '../../../lib/validation-storage.js';
 
 /**
@@ -184,6 +185,39 @@ export function createDeleteValidationHandler() {
       });
     } catch (error) {
       logError(error, 'Delete validation failed');
+      res.status(500).json({ success: false, error: getErrorMessage(error) });
+    }
+  };
+}
+
+/**
+ * POST /validation-mark-viewed - Mark a validation as viewed by the user
+ */
+export function createMarkViewedHandler() {
+  return async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { projectPath, issueNumber } = req.body as {
+        projectPath: string;
+        issueNumber: number;
+      };
+
+      if (!projectPath) {
+        res.status(400).json({ success: false, error: 'projectPath is required' });
+        return;
+      }
+
+      if (!issueNumber || typeof issueNumber !== 'number') {
+        res
+          .status(400)
+          .json({ success: false, error: 'issueNumber is required and must be a number' });
+        return;
+      }
+
+      const success = await markValidationViewed(projectPath, issueNumber);
+
+      res.json({ success });
+    } catch (error) {
+      logError(error, 'Mark validation viewed failed');
       res.status(500).json({ success: false, error: getErrorMessage(error) });
     }
   };

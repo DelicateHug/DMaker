@@ -12,6 +12,7 @@ import {
   User,
   CheckCircle,
   Clock,
+  Sparkles,
 } from 'lucide-react';
 import {
   getElectronAPI,
@@ -117,6 +118,27 @@ export function GitHubIssuesView() {
     };
 
     loadCachedValidations();
+  }, [currentProject?.path]);
+
+  // Load running validations on mount (restore validatingIssues state)
+  useEffect(() => {
+    const loadRunningValidations = async () => {
+      if (!currentProject?.path) return;
+
+      try {
+        const api = getElectronAPI();
+        if (api.github?.getValidationStatus) {
+          const result = await api.github.getValidationStatus(currentProject.path);
+          if (result.success && result.runningIssues) {
+            setValidatingIssues(new Set(result.runningIssues));
+          }
+        }
+      } catch (err) {
+        console.error('[GitHubIssuesView] Failed to load running validations:', err);
+      }
+    };
+
+    loadRunningValidations();
   }, [currentProject?.path]);
 
   // Subscribe to validation events
@@ -293,14 +315,38 @@ export function GitHubIssuesView() {
 
   // View cached validation result
   const handleViewCachedValidation = useCallback(
-    (issue: GitHubIssue) => {
+    async (issue: GitHubIssue) => {
       const cached = cachedValidations.get(issue.number);
       if (cached) {
         setValidationResult(cached.result);
         setShowValidationDialog(true);
+
+        // Mark as viewed if not already viewed
+        if (!cached.viewedAt && currentProject?.path) {
+          try {
+            const api = getElectronAPI();
+            if (api.github?.markValidationViewed) {
+              await api.github.markValidationViewed(currentProject.path, issue.number);
+              // Update local state
+              setCachedValidations((prev) => {
+                const next = new Map(prev);
+                const updated = prev.get(issue.number);
+                if (updated) {
+                  next.set(issue.number, {
+                    ...updated,
+                    viewedAt: new Date().toISOString(),
+                  });
+                }
+                return next;
+              });
+            }
+          } catch (err) {
+            console.error('[GitHubIssuesView] Failed to mark validation as viewed:', err);
+          }
+        }
       }
     },
-    [cachedValidations]
+    [cachedValidations, currentProject?.path]
   );
 
   const handleConvertToTask = useCallback(
@@ -446,6 +492,7 @@ export function GitHubIssuesView() {
                   onClick={() => setSelectedIssue(issue)}
                   onOpenExternal={() => handleOpenInGitHub(issue.url)}
                   formatDate={formatDate}
+                  cachedValidation={cachedValidations.get(issue.number)}
                 />
               ))}
 
@@ -463,6 +510,7 @@ export function GitHubIssuesView() {
                       onClick={() => setSelectedIssue(issue)}
                       onOpenExternal={() => handleOpenInGitHub(issue.url)}
                       formatDate={formatDate}
+                      cachedValidation={cachedValidations.get(issue.number)}
                     />
                   ))}
                 </>
@@ -726,9 +774,27 @@ interface IssueRowProps {
   onClick: () => void;
   onOpenExternal: () => void;
   formatDate: (date: string) => string;
+  /** Cached validation for this issue (if any) */
+  cachedValidation?: StoredValidation | null;
 }
 
-function IssueRow({ issue, isSelected, onClick, onOpenExternal, formatDate }: IssueRowProps) {
+function IssueRow({
+  issue,
+  isSelected,
+  onClick,
+  onOpenExternal,
+  formatDate,
+  cachedValidation,
+}: IssueRowProps) {
+  // Check if validation is unviewed (exists, not stale, not viewed)
+  const hasUnviewedValidation =
+    cachedValidation &&
+    !cachedValidation.viewedAt &&
+    (() => {
+      const hoursSince =
+        (Date.now() - new Date(cachedValidation.validatedAt).getTime()) / (1000 * 60 * 60);
+      return hoursSince <= 24;
+    })();
   return (
     <div
       className={cn(
@@ -783,6 +849,14 @@ function IssueRow({ issue, isSelected, onClick, onOpenExternal, formatDate }: Is
             <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-blue-500/10 text-blue-500 border border-blue-500/20">
               <User className="h-3 w-3" />
               {issue.assignees.map((a) => a.login).join(', ')}
+            </span>
+          )}
+
+          {/* Unviewed validation indicator */}
+          {hasUnviewedValidation && (
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-amber-500/10 text-amber-500 border border-amber-500/20 animate-in fade-in duration-200">
+              <Sparkles className="h-3 w-3" />
+              Analysis Ready
             </span>
           )}
         </div>
