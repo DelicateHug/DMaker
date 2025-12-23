@@ -813,6 +813,7 @@ export interface WorktreeAPI {
       behindCount: number;
     };
     error?: string;
+    code?: 'NOT_GIT_REPO'; // Error code for non-git directories
   }>;
 
   // Switch to an existing branch

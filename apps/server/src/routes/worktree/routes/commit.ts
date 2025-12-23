@@ -5,7 +5,7 @@
 import type { Request, Response } from 'express';
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import { getErrorMessage, logError } from '../common.js';
+import { getErrorMessage, logError, isGitRepo } from '../common.js';
 
 const execAsync = promisify(exec);
 
@@ -21,6 +21,16 @@ export function createCommitHandler() {
         res.status(400).json({
           success: false,
           error: 'worktreePath and message required',
+        });
+        return;
+      }
+
+      // Check if path is a git repository
+      if (!(await isGitRepo(worktreePath))) {
+        res.status(400).json({
+          success: false,
+          error: 'Not a git repository',
+          code: 'NOT_GIT_REPO',
         });
         return;
       }

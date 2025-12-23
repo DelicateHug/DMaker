@@ -5,7 +5,7 @@
 import type { Request, Response } from 'express';
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import { getErrorMessage, logWorktreeError } from '../common.js';
+import { getErrorMessage, logWorktreeError, isGitRepo, hasCommits } from '../common.js';
 
 const execAsync = promisify(exec);
 
@@ -26,6 +26,26 @@ export function createListBranchesHandler() {
         res.status(400).json({
           success: false,
           error: 'worktreePath required',
+        });
+        return;
+      }
+
+      // Check if the path is a git repository before running git commands
+      if (!(await isGitRepo(worktreePath))) {
+        res.status(400).json({
+          success: false,
+          error: 'Not a git repository',
+          code: 'NOT_GIT_REPO',
+        });
+        return;
+      }
+
+      // Check if the repository has any commits (freshly init'd repos have no HEAD)
+      if (!(await hasCommits(worktreePath))) {
+        res.status(400).json({
+          success: false,
+          error: 'Repository has no commits yet',
+          code: 'NO_COMMITS',
         });
         return;
       }
