@@ -43,7 +43,6 @@ interface GraphFilterControlsProps {
   filterState: GraphFilterState;
   availableCategories: string[];
   hasActiveFilter: boolean;
-  onSearchQueryChange: (query: string) => void;
   onCategoriesChange: (categories: string[]) => void;
   onStatusesChange: (statuses: string[]) => void;
   onNegativeFilterChange: (isNegative: boolean) => void;
@@ -54,16 +53,12 @@ export function GraphFilterControls({
   filterState,
   availableCategories,
   hasActiveFilter,
-  onSearchQueryChange,
   onCategoriesChange,
   onStatusesChange,
   onNegativeFilterChange,
   onClearFilters,
 }: GraphFilterControlsProps) {
   const { selectedCategories, selectedStatuses, isNegativeFilter } = filterState;
-
-  // Suppress unused variable warning - onSearchQueryChange is used by parent for search input
-  void onSearchQueryChange;
 
   const handleCategoryToggle = (category: string) => {
     if (selectedCategories.includes(category)) {
@@ -267,6 +262,12 @@ export function GraphFilterControls({
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => onNegativeFilterChange(!isNegativeFilter)}
+                  aria-label={
+                    isNegativeFilter
+                      ? 'Switch to show matching nodes'
+                      : 'Switch to hide matching nodes'
+                  }
+                  aria-pressed={isNegativeFilter}
                   className={cn(
                     'flex items-center gap-1.5 px-2 py-1 rounded text-xs transition-colors',
                     isNegativeFilter
@@ -289,6 +290,7 @@ export function GraphFilterControls({
                 <Switch
                   checked={isNegativeFilter}
                   onCheckedChange={onNegativeFilterChange}
+                  aria-label="Toggle between show and hide filter modes"
                   className="h-5 w-9 data-[state=checked]:bg-orange-500"
                 />
               </div>
@@ -311,6 +313,7 @@ export function GraphFilterControls({
                     size="sm"
                     className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
                     onClick={onClearFilters}
+                    aria-label="Clear all filters"
                   >
                     <X className="w-4 h-4" />
                   </Button>

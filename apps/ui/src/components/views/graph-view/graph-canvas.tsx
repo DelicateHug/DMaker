@@ -4,6 +4,7 @@ import {
   Background,
   BackgroundVariant,
   MiniMap,
+  Panel,
   useNodesState,
   useEdgesState,
   ReactFlowProvider,
@@ -30,6 +31,9 @@ import {
   type NodeActionCallbacks,
 } from './hooks';
 import { cn } from '@/lib/utils';
+import { useDebounceValue } from 'usehooks-ts';
+import { SearchX } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 // Define custom node and edge types - using any to avoid React Flow's strict typing
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -71,9 +75,12 @@ function GraphCanvasInner({
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
   const [isNegativeFilter, setIsNegativeFilter] = useState(false);
 
+  // Debounce search query for performance with large graphs
+  const [debouncedSearchQuery] = useDebounceValue(searchQuery, 200);
+
   // Combined filter state
   const filterState: GraphFilterState = {
-    searchQuery,
+    searchQuery: debouncedSearchQuery,
     selectedCategories,
     selectedStatuses,
     isNegativeFilter,
@@ -196,7 +203,6 @@ function GraphCanvasInner({
           filterState={filterState}
           availableCategories={filterResult.availableCategories}
           hasActiveFilter={filterResult.hasActiveFilter}
-          onSearchQueryChange={onSearchQueryChange}
           onCategoriesChange={setSelectedCategories}
           onStatusesChange={setSelectedStatuses}
           onNegativeFilterChange={setIsNegativeFilter}
@@ -204,6 +210,24 @@ function GraphCanvasInner({
         />
 
         <GraphLegend />
+
+        {/* Empty state when all nodes are filtered out */}
+        {filterResult.hasActiveFilter && filterResult.matchedNodeIds.size === 0 && (
+          <Panel position="top-center" className="mt-20">
+            <div className="flex flex-col items-center gap-3 p-6 rounded-lg bg-popover/95 backdrop-blur-sm border border-border shadow-lg text-popover-foreground">
+              <SearchX className="w-10 h-10 text-muted-foreground" />
+              <div className="text-center">
+                <p className="text-sm font-medium">No matching tasks</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Try adjusting your filters or search query
+                </p>
+              </div>
+              <Button variant="outline" size="sm" onClick={handleClearFilters} className="mt-1">
+                Clear Filters
+              </Button>
+            </div>
+          </Panel>
+        )}
       </ReactFlow>
     </div>
   );
