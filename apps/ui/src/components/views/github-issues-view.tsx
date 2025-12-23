@@ -223,7 +223,7 @@ export function GitHubIssuesView() {
 
     const unsubscribe = api.github.onValidationEvent(handleValidationEvent);
     return () => unsubscribe();
-  }, [currentProject?.path, selectedIssue, showValidationDialog, validationModel, muteDoneSound]);
+  }, [currentProject?.path, selectedIssue, showValidationDialog, muteDoneSound]);
 
   // Cleanup audio element on unmount to prevent memory leaks
   useEffect(() => {
@@ -803,7 +803,7 @@ function IssueRow({
   return (
     <div
       className={cn(
-        'flex items-start gap-3 p-3 cursor-pointer hover:bg-accent/50 transition-colors',
+        'group flex items-start gap-3 p-3 cursor-pointer hover:bg-accent/50 transition-colors',
         isSelected && 'bg-accent'
       )}
       onClick={onClick}
