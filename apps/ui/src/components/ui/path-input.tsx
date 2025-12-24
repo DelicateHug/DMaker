@@ -22,6 +22,11 @@ interface BreadcrumbSegment {
 function parseBreadcrumbs(path: string): BreadcrumbSegment[] {
   if (!path) return [];
 
+  // Handle root path on Unix-like systems
+  if (path === '/') {
+    return [{ name: '/', path: '/', isLast: true }];
+  }
+
   const segments = path.split(/[/\\]/).filter(Boolean);
   const isWindows = segments[0]?.includes(':');
 
