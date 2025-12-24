@@ -1,6 +1,6 @@
 import { useEffect, Fragment, FocusEvent, KeyboardEvent, MouseEvent } from 'react';
 import { useState, useRef, useCallback } from 'react';
-import { Home, ArrowLeft, Pencil } from 'lucide-react';
+import { Home, ArrowLeft, Pencil, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -253,20 +253,32 @@ function PathInput({
             </Button>
           </>
         ) : (
-          <Input
-            ref={inputRef}
-            type="text"
-            placeholder={placeholder}
-            value={pathInput}
-            onChange={(e) => setPathInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            onBlur={handleInputBlur}
-            className="flex-1 font-mono text-xs h-7 px-0 border-0 shadow-none focus-visible:ring-0 bg-transparent"
-            data-testid="path-input"
-            disabled={loading}
-            aria-label="Path input"
-            aria-invalid={error}
-          />
+          <>
+            <Input
+              ref={inputRef}
+              type="text"
+              placeholder={placeholder}
+              value={pathInput}
+              onChange={(e) => setPathInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              onBlur={handleInputBlur}
+              className="flex-1 font-mono text-xs h-7 px-0 border-0 shadow-none focus-visible:ring-0 bg-transparent"
+              data-testid="path-input"
+              disabled={loading}
+              aria-label="Path input"
+              aria-invalid={error}
+            />
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleGoToPath}
+              disabled={!pathInput.trim() || loading}
+              className="h-6 w-6 shrink-0"
+              aria-label="Go to path"
+            >
+              <ArrowRight className="w-3.5 h-3.5" />
+            </Button>
+          </>
         )}
       </div>
     </div>

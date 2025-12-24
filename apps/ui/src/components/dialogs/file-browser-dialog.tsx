@@ -349,8 +349,8 @@ export function FileBrowserDialog({
           </div>
 
           <div className="text-[10px] text-muted-foreground">
-            Paste a full path above, or click on folders to navigate. Press Enter or click Go to
-            jump to a path.
+            Paste a full path above, or click on folders to navigate. Press Enter or click → to jump
+            to a path.
           </div>
         </div>
 
