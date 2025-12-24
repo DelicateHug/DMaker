@@ -42,6 +42,7 @@ function getFeaturePriority(complexity: IssueComplexity | undefined): number {
 import { useAppStore } from '@/store/app-store';
 import { Button } from '@/components/ui/button';
 import { Markdown } from '@/components/ui/markdown';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { ValidationDialog } from './github-issues-view/validation-dialog';
@@ -60,6 +61,8 @@ export function GitHubIssuesView() {
   const [cachedValidations, setCachedValidations] = useState<Map<number, StoredValidation>>(
     new Map()
   );
+  // Track revalidation confirmation dialog
+  const [showRevalidateConfirm, setShowRevalidateConfirm] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const { currentProject, validationModel, muteDoneSound } = useAppStore();
 
@@ -246,7 +249,12 @@ export function GitHubIssuesView() {
   }, []);
 
   const handleValidateIssue = useCallback(
-    async (issue: GitHubIssue, showDialog = true) => {
+    async (
+      issue: GitHubIssue,
+      options: { showDialog?: boolean; forceRevalidate?: boolean } = {}
+    ) => {
+      const { showDialog = true, forceRevalidate = false } = options;
+
       if (!currentProject?.path) {
         toast.error('No project selected');
         return;
@@ -258,9 +266,9 @@ export function GitHubIssuesView() {
         return;
       }
 
-      // Check for cached result - if fresh, show it directly
+      // Check for cached result - if fresh, show it directly (unless force revalidate)
       const cached = cachedValidations.get(issue.number);
-      if (cached && showDialog) {
+      if (cached && showDialog && !forceRevalidate) {
         // Check if validation is stale (older than 24 hours)
         const validatedAt = new Date(cached.validatedAt);
         const hoursSinceValidation = (Date.now() - validatedAt.getTime()) / (1000 * 60 * 60);
@@ -568,7 +576,7 @@ export function GitHubIssuesView() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => handleValidateIssue(selectedIssue)}
+                        onClick={() => setShowRevalidateConfirm(true)}
                         title="Re-validate"
                       >
                         <RefreshCw className="h-4 w-4" />
@@ -591,7 +599,9 @@ export function GitHubIssuesView() {
                       <Button
                         variant="default"
                         size="sm"
-                        onClick={() => handleValidateIssue(selectedIssue)}
+                        onClick={() =>
+                          handleValidateIssue(selectedIssue, { forceRevalidate: true })
+                        }
                       >
                         <Wand2 className="h-4 w-4 mr-1" />
                         Re-validate
@@ -765,6 +775,22 @@ export function GitHubIssuesView() {
         validationResult={validationResult}
         isValidating={selectedIssue ? validatingIssues.has(selectedIssue.number) : false}
         onConvertToTask={handleConvertToTask}
+      />
+
+      {/* Revalidate Confirmation Dialog */}
+      <ConfirmDialog
+        open={showRevalidateConfirm}
+        onOpenChange={setShowRevalidateConfirm}
+        title="Re-validate Issue"
+        description={`Are you sure you want to re-validate issue #${selectedIssue?.number}? This will run a new AI analysis and replace the existing validation result.`}
+        icon={RefreshCw}
+        iconClassName="text-primary"
+        confirmText="Re-validate"
+        onConfirm={() => {
+          if (selectedIssue) {
+            handleValidateIssue(selectedIssue, { forceRevalidate: true });
+          }
+        }}
       />
     </div>
   );
