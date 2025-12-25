@@ -70,8 +70,9 @@ Binary file ${relativePath} added
       return createNewFileDiff(relativePath, '040000', ['[Directory]']);
     }
 
-    if (stats.size > MAX_SYNTHETIC_DIFF_SIZE) {
-      const sizeKB = Math.round(stats.size / 1024);
+    const fileSize = Number(stats.size);
+    if (fileSize > MAX_SYNTHETIC_DIFF_SIZE) {
+      const sizeKB = Math.round(fileSize / 1024);
       return createNewFileDiff(relativePath, '100644', [
         `[File too large to display: ${sizeKB}KB]`,
       ]);
