@@ -13,6 +13,7 @@ import { PathInput } from '@/components/ui/path-input';
 import { Kbd, KbdGroup } from '@/components/ui/kbd';
 import { getJSON, setJSON } from '@/lib/storage';
 import { getDefaultWorkspaceDirectory, saveLastProjectDirectory } from '@/lib/workspace-config';
+import { useOSDetection } from '@/hooks';
 
 interface DirectoryEntry {
   name: string;
@@ -68,6 +69,7 @@ export function FileBrowserDialog({
   description = 'Navigate to your project folder or paste a path directly',
   initialPath,
 }: FileBrowserDialogProps) {
+  const { isMac } = useOSDetection();
   const [currentPath, setCurrentPath] = useState<string>('');
   const [parentPath, setParentPath] = useState<string | null>(null);
   const [directories, setDirectories] = useState<DirectoryEntry[]>([]);
@@ -374,11 +376,7 @@ export function FileBrowserDialog({
             <FolderOpen className="w-3.5 h-3.5 mr-1.5" />
             Select Current Folder
             <KbdGroup className="ml-1">
-              <Kbd>
-                {typeof navigator !== 'undefined' && navigator.platform?.includes('Mac')
-                  ? '⌘'
-                  : 'Ctrl'}
-              </Kbd>
+              <Kbd>{isMac ? '⌘' : 'Ctrl'}</Kbd>
               <Kbd>↵</Kbd>
             </KbdGroup>
           </Button>
