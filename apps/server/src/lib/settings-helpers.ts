@@ -64,7 +64,7 @@ export async function getEnableSandboxModeSetting(
 
   try {
     const globalSettings = await settingsService.getGlobalSettings();
-    const result = globalSettings.enableSandboxMode ?? false;
+    const result = globalSettings.enableSandboxMode ?? true;
     console.log(`${logPrefix} enableSandboxMode from global settings: ${result}`);
     return result;
   } catch (error) {
