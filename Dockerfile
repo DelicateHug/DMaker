@@ -53,13 +53,19 @@ RUN npm run build:packages && npm run build --workspace=apps/server
 # =============================================================================
 FROM node:20-alpine AS server
 
-# Install git, curl, and GitHub CLI (pinned version for reproducible builds)
-RUN apk add --no-cache git curl && \
+# Install git, curl, bash (for terminal), and GitHub CLI (pinned version, multi-arch)
+RUN apk add --no-cache git curl bash && \
     GH_VERSION="2.63.2" && \
-    curl -L "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_amd64.tar.gz" -o gh.tar.gz && \
+    ARCH=$(uname -m) && \
+    case "$ARCH" in \
+        x86_64) GH_ARCH="amd64" ;; \
+        aarch64|arm64) GH_ARCH="arm64" ;; \
+        *) echo "Unsupported architecture: $ARCH" && exit 1 ;; \
+    esac && \
+    curl -L "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_${GH_ARCH}.tar.gz" -o gh.tar.gz && \
     tar -xzf gh.tar.gz && \
-    mv "gh_${GH_VERSION}_linux_amd64/bin/gh" /usr/local/bin/gh && \
-    rm -rf gh.tar.gz "gh_${GH_VERSION}_linux_amd64"
+    mv gh_${GH_VERSION}_linux_${GH_ARCH}/bin/gh /usr/local/bin/gh && \
+    rm -rf gh.tar.gz gh_${GH_VERSION}_linux_${GH_ARCH}
 
 # Install Claude CLI globally
 RUN npm install -g @anthropic-ai/claude-code
