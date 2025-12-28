@@ -316,6 +316,8 @@ interface RunningFeature {
   abortController: AbortController;
   isAutoMode: boolean;
   startTime: number;
+  model?: string;
+  provider?: 'claude' | 'cursor';
 }
 
 interface AutoLoopState {
@@ -604,9 +606,16 @@ export class AutoModeService {
         typeof img === 'string' ? img : img.path
       );
 
-      // Get model from feature
+      // Get model from feature and determine provider
       const model = resolveModelString(feature.model, DEFAULT_MODELS.claude);
-      console.log(`[AutoMode] Executing feature ${featureId} with model: ${model} in ${workDir}`);
+      const provider = ProviderFactory.getProviderNameForModel(model);
+      console.log(
+        `[AutoMode] Executing feature ${featureId} with model: ${model}, provider: ${provider} in ${workDir}`
+      );
+
+      // Store model and provider in running feature for tracking
+      tempRunningFeature.model = model;
+      tempRunningFeature.provider = provider;
 
       // Run the agent with the feature's model and images
       // Context files are passed as system prompt for higher priority
@@ -640,6 +649,8 @@ export class AutoModeService {
           (Date.now() - tempRunningFeature.startTime) / 1000
         )}s${finalStatus === 'verified' ? ' - auto-verified' : ''}`,
         projectPath,
+        model: tempRunningFeature.model,
+        provider: tempRunningFeature.provider,
       });
     } catch (error) {
       const errorInfo = classifyError(error);
@@ -805,6 +816,13 @@ ${prompt}
 ## Task
 Address the follow-up instructions above. Review the previous work and make the requested changes or fixes.`;
 
+    // Get model from feature and determine provider early for tracking
+    const model = resolveModelString(feature?.model, DEFAULT_MODELS.claude);
+    const provider = ProviderFactory.getProviderNameForModel(model);
+    console.log(
+      `[AutoMode] Follow-up for feature ${featureId} using model: ${model}, provider: ${provider}`
+    );
+
     this.runningFeatures.set(featureId, {
       featureId,
       projectPath,
@@ -813,6 +831,8 @@ Address the follow-up instructions above. Review the previous work and make the 
       abortController,
       isAutoMode: false,
       startTime: Date.now(),
+      model,
+      provider,
     });
 
     this.emitAutoModeEvent('auto_mode_feature_start', {
@@ -823,13 +843,11 @@ Address the follow-up instructions above. Review the previous work and make the 
         title: 'Follow-up',
         description: prompt.substring(0, 100),
       },
+      model,
+      provider,
     });
 
     try {
-      // Get model from feature (already loaded above)
-      const model = resolveModelString(feature?.model, DEFAULT_MODELS.claude);
-      console.log(`[AutoMode] Follow-up for feature ${featureId} using model: ${model}`);
-
       // Update feature status to in_progress
       await this.updateFeatureStatus(projectPath, featureId, 'in_progress');
 
@@ -925,6 +943,8 @@ Address the follow-up instructions above. Review the previous work and make the 
         passes: true,
         message: `Follow-up completed successfully${finalStatus === 'verified' ? ' - auto-verified' : ''}`,
         projectPath,
+        model,
+        provider,
       });
     } catch (error) {
       const errorInfo = classifyError(error);
@@ -1217,12 +1237,16 @@ Format your response as a structured markdown document.`;
     projectPath: string;
     projectName: string;
     isAutoMode: boolean;
+    model?: string;
+    provider?: 'claude' | 'cursor';
   }> {
     return Array.from(this.runningFeatures.values()).map((rf) => ({
       featureId: rf.featureId,
       projectPath: rf.projectPath,
       projectName: path.basename(rf.projectPath),
       isAutoMode: rf.isAutoMode,
+      model: rf.model,
+      provider: rf.provider,
     }));
   }
 

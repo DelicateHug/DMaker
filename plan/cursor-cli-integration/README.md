@@ -15,7 +15,7 @@
 | 6     | [UI Setup Wizard](phases/phase-6-setup-wizard.md)            | `completed` | ✅          |
 | 7     | [Settings View Provider Tabs](phases/phase-7-settings.md)    | `completed` | ✅          |
 | 8     | [AI Profiles Integration](phases/phase-8-profiles.md)        | `completed` | ✅          |
-| 9     | [Task Execution Integration](phases/phase-9-execution.md)    | `pending`   | -           |
+| 9     | [Task Execution Integration](phases/phase-9-execution.md)    | `completed` | ✅          |
 | 10    | [Testing & Validation](phases/phase-10-testing.md)           | `pending`   | -           |
 
 **Status Legend:** `pending` | `in_progress` | `completed` | `blocked`
@@ -393,3 +393,4 @@ Cursor models use their own `CURSOR_MODEL_MAP` in `@automaker/types`.
 | 2025-12-27 | 1     | Added tasks 1.5-1.7: ModelOption, DEFAULT_MODELS, reuse InstallationStatus         |
 | 2025-12-27 | 2     | Refactored to use `spawnJSONLProcess` and `isAbortError` from @automaker packages  |
 | 2025-12-27 | -     | Added design decisions 4-5: @automaker packages usage, model-resolver note         |
+| 2025-12-28 | 9     | Completed: ModelSelector with Cursor models, provider tracking in execution events |

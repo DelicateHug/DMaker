@@ -312,11 +312,18 @@ export function AddFeatureDialog({
     }
   };
 
-  const handleModelSelect = (model: AgentModel) => {
+  const handleModelSelect = (model: string) => {
+    // For Cursor models, thinking is handled by the model itself
+    // For Claude models, check if it supports extended thinking
+    const isCursorModel = model.startsWith('cursor-');
     setNewFeature({
       ...newFeature,
-      model,
-      thinkingLevel: modelSupportsThinking(model) ? newFeature.thinkingLevel : 'none',
+      model: model as AgentModel,
+      thinkingLevel: isCursorModel
+        ? 'none'
+        : modelSupportsThinking(model)
+          ? newFeature.thinkingLevel
+          : 'none',
     });
   };
 
@@ -328,7 +335,9 @@ export function AddFeatureDialog({
     });
   };
 
-  const newModelAllowsThinking = modelSupportsThinking(newFeature.model);
+  // Cursor models handle thinking internally, so only show thinking selector for Claude models
+  const isCursorModel = newFeature.model.startsWith('cursor-');
+  const newModelAllowsThinking = !isCursorModel && modelSupportsThinking(newFeature.model);
 
   return (
     <Dialog open={open} onOpenChange={handleDialogClose}>
