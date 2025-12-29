@@ -17,6 +17,7 @@ import type {
   CursorModelId,
 } from '@automaker/types';
 import { CURSOR_MODEL_MAP, cursorModelHasThinking } from '@automaker/types';
+import { useAppStore } from '@/store/app-store';
 import { CLAUDE_MODELS, THINKING_LEVELS, ICON_OPTIONS } from '../constants';
 
 interface ProfileFormProps {
@@ -34,6 +35,8 @@ export function ProfileForm({
   isEditing,
   hotkeyActive,
 }: ProfileFormProps) {
+  const { enabledCursorModels } = useAppStore();
+
   const [formData, setFormData] = useState({
     name: profile.name || '',
     description: profile.description || '',
@@ -223,46 +226,54 @@ export function ProfileForm({
               Cursor Model
             </Label>
             <div className="flex flex-col gap-2">
-              {Object.entries(CURSOR_MODEL_MAP).map(([id, config]) => (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() => handleCursorModelChange(id as CursorModelId)}
-                  className={cn(
-                    'w-full px-3 py-2 rounded-md border text-sm font-medium transition-colors flex items-center justify-between',
-                    formData.cursorModel === id
-                      ? 'bg-primary text-primary-foreground border-primary'
-                      : 'bg-background hover:bg-accent border-border'
-                  )}
-                  data-testid={`cursor-model-select-${id}`}
-                >
-                  <span>{config.label}</span>
-                  <div className="flex gap-1">
-                    {config.hasThinking && (
-                      <Badge
-                        variant="outline"
-                        className={cn(
-                          'text-xs',
-                          formData.cursorModel === id
-                            ? 'border-primary-foreground/50 text-primary-foreground'
-                            : 'border-amber-500/50 text-amber-600 dark:text-amber-400'
-                        )}
-                      >
-                        Thinking
-                      </Badge>
-                    )}
-                    <Badge
-                      variant={config.tier === 'free' ? 'default' : 'secondary'}
+              {enabledCursorModels.length === 0 ? (
+                <div className="text-sm text-muted-foreground p-3 border border-dashed rounded-md text-center">
+                  No Cursor models enabled. Enable models in Settings → AI Providers.
+                </div>
+              ) : (
+                Object.entries(CURSOR_MODEL_MAP)
+                  .filter(([id]) => enabledCursorModels.includes(id as CursorModelId))
+                  .map(([id, config]) => (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => handleCursorModelChange(id as CursorModelId)}
                       className={cn(
-                        'text-xs',
-                        formData.cursorModel === id && 'bg-primary-foreground/20'
+                        'w-full px-3 py-2 rounded-md border text-sm font-medium transition-colors flex items-center justify-between',
+                        formData.cursorModel === id
+                          ? 'bg-primary text-primary-foreground border-primary'
+                          : 'bg-background hover:bg-accent border-border'
                       )}
+                      data-testid={`cursor-model-select-${id}`}
                     >
-                      {config.tier}
-                    </Badge>
-                  </div>
-                </button>
-              ))}
+                      <span>{config.label}</span>
+                      <div className="flex gap-1">
+                        {config.hasThinking && (
+                          <Badge
+                            variant="outline"
+                            className={cn(
+                              'text-xs',
+                              formData.cursorModel === id
+                                ? 'border-primary-foreground/50 text-primary-foreground'
+                                : 'border-amber-500/50 text-amber-600 dark:text-amber-400'
+                            )}
+                          >
+                            Thinking
+                          </Badge>
+                        )}
+                        <Badge
+                          variant={config.tier === 'free' ? 'default' : 'secondary'}
+                          className={cn(
+                            'text-xs',
+                            formData.cursorModel === id && 'bg-primary-foreground/20'
+                          )}
+                        >
+                          {config.tier}
+                        </Badge>
+                      </div>
+                    </button>
+                  ))
+              )}
             </div>
             {formData.cursorModel && cursorModelHasThinking(formData.cursorModel) && (
               <p className="text-xs text-muted-foreground">
