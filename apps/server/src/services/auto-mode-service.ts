@@ -1613,7 +1613,7 @@ Format your response as a structured markdown document.`;
 
     // Load prompts from settings (no caching - allows hot reload of custom prompts)
     const prompts = await getPromptCustomization(this.settingsService, '[AutoMode]');
-    const planningPrompts = {
+    const planningPrompts: Record<string, string> = {
       lite: prompts.autoMode.planningLite,
       lite_with_approval: prompts.autoMode.planningLiteWithApproval,
       spec: prompts.autoMode.planningSpec,
