@@ -4,7 +4,13 @@
 
 import type { SettingsService } from '../services/settings-service.js';
 import type { ContextFilesResult, ContextFileInfo } from '@automaker/utils';
-import type { MCPServerConfig, McpServerConfig } from '@automaker/types';
+import type { MCPServerConfig, McpServerConfig, PromptCustomization } from '@automaker/types';
+import {
+  mergeAutoModePrompts,
+  mergeAgentPrompts,
+  mergeBacklogPlanPrompts,
+  mergeEnhancementPrompts,
+} from '@automaker/prompts';
 
 /**
  * Get the autoLoadClaudeMd setting, with project settings taking precedence over global.
@@ -253,5 +259,45 @@ function convertToSdkFormat(server: MCPServerConfig): McpServerConfig {
     command: server.command,
     args: server.args,
     env: server.env,
+  };
+}
+
+/**
+ * Get prompt customization from global settings and merge with defaults.
+ * Returns prompts merged with built-in defaults - custom prompts override defaults.
+ *
+ * @param settingsService - Optional settings service instance
+ * @param logPrefix - Prefix for log messages
+ * @returns Promise resolving to merged prompts for all categories
+ */
+export async function getPromptCustomization(
+  settingsService?: SettingsService | null,
+  logPrefix = '[PromptHelper]'
+): Promise<{
+  autoMode: ReturnType<typeof mergeAutoModePrompts>;
+  agent: ReturnType<typeof mergeAgentPrompts>;
+  backlogPlan: ReturnType<typeof mergeBacklogPlanPrompts>;
+  enhancement: ReturnType<typeof mergeEnhancementPrompts>;
+}> {
+  let customization: PromptCustomization = {};
+
+  if (settingsService) {
+    try {
+      const globalSettings = await settingsService.getGlobalSettings();
+      customization = globalSettings.promptCustomization || {};
+      console.log(`${logPrefix} Loaded prompt customization from settings`);
+    } catch (error) {
+      console.error(`${logPrefix} Failed to load prompt customization:`, error);
+      // Fall through to use empty customization (all defaults)
+    }
+  } else {
+    console.log(`${logPrefix} SettingsService not available, using default prompts`);
+  }
+
+  return {
+    autoMode: mergeAutoModePrompts(customization.autoMode),
+    agent: mergeAgentPrompts(customization.agent),
+    backlogPlan: mergeBacklogPlanPrompts(customization.backlogPlan),
+    enhancement: mergeEnhancementPrompts(customization.enhancement),
   };
 }

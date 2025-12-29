@@ -10,8 +10,9 @@ import { query } from '@anthropic-ai/claude-agent-sdk';
 import { createLogger } from '@automaker/utils';
 import { resolveModelString } from '@automaker/model-resolver';
 import { CLAUDE_MODEL_MAP } from '@automaker/types';
+import type { SettingsService } from '../../../services/settings-service.js';
+import { getPromptCustomization } from '../../../lib/settings-helpers.js';
 import {
-  getSystemPrompt,
   buildUserPrompt,
   isValidEnhancementMode,
   type EnhancementMode,
@@ -83,9 +84,12 @@ async function extractTextFromStream(
 /**
  * Create the enhance request handler
  *
+ * @param settingsService - Optional settings service for loading custom prompts
  * @returns Express request handler for text enhancement
  */
-export function createEnhanceHandler(): (req: Request, res: Response) => Promise<void> {
+export function createEnhanceHandler(
+  settingsService?: SettingsService
+): (req: Request, res: Response) => Promise<void> {
   return async (req: Request, res: Response): Promise<void> => {
     try {
       const { originalText, enhancementMode, model } = req.body as EnhanceRequestBody;
@@ -128,8 +132,20 @@ export function createEnhanceHandler(): (req: Request, res: Response) => Promise
 
       logger.info(`Enhancing text with mode: ${validMode}, length: ${trimmedText.length} chars`);
 
-      // Get the system prompt for this mode
-      const systemPrompt = getSystemPrompt(validMode);
+      // Load enhancement prompts from settings (merges custom + defaults)
+      const prompts = await getPromptCustomization(settingsService, '[EnhancePrompt]');
+
+      // Get the system prompt for this mode from merged prompts
+      const systemPrompt =
+        validMode === 'improve'
+          ? prompts.enhancement.improveSystemPrompt
+          : validMode === 'technical'
+            ? prompts.enhancement.technicalSystemPrompt
+            : validMode === 'simplify'
+              ? prompts.enhancement.simplifySystemPrompt
+              : prompts.enhancement.acceptanceSystemPrompt;
+
+      logger.debug(`Using ${validMode} system prompt (length: ${systemPrompt.length} chars)`);
 
       // Build the user prompt with few-shot examples
       // This helps the model understand this is text transformation, not a coding task

@@ -19,6 +19,7 @@ import { KeyboardShortcutsSection } from './settings-view/keyboard-shortcuts/key
 import { FeatureDefaultsSection } from './settings-view/feature-defaults/feature-defaults-section';
 import { DangerZoneSection } from './settings-view/danger-zone/danger-zone-section';
 import { MCPServersSection } from './settings-view/mcp-servers';
+import { PromptCustomizationSection } from './settings-view/prompts';
 import type { Project as SettingsProject, Theme } from './settings-view/shared/types';
 import type { Project as ElectronProject } from '@/lib/electron';
 
@@ -53,6 +54,8 @@ export function SettingsView() {
     setAutoLoadClaudeMd,
     enableSandboxMode,
     setEnableSandboxMode,
+    promptCustomization,
+    setPromptCustomization,
   } = useAppStore();
 
   // Hide usage tracking when using API key (only show for Claude Code CLI users)
@@ -119,6 +122,13 @@ export function SettingsView() {
         );
       case 'mcp-servers':
         return <MCPServersSection />;
+      case 'prompts':
+        return (
+          <PromptCustomizationSection
+            promptCustomization={promptCustomization}
+            onPromptCustomizationChange={setPromptCustomization}
+          />
+        );
       case 'ai-enhancement':
         return <AIEnhancementSection />;
       case 'appearance':
