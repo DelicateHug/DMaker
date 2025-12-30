@@ -37,7 +37,8 @@ export async function navigateToContext(page: Page): Promise<void> {
   }
 
   // Wait for the context view to be visible
-  await waitForElement(page, 'context-view', { timeout: 10000 });
+  // Increase timeout to handle slower server startup
+  await waitForElement(page, 'context-view', { timeout: 15000 });
 }
 
 /**

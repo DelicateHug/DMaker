@@ -39,6 +39,8 @@ export default defineConfig({
               PORT: String(serverPort),
               // Enable mock agent in CI to avoid real API calls
               AUTOMAKER_MOCK_AGENT: mockAgent ? 'true' : 'false',
+              // Set a test API key for web mode authentication
+              AUTOMAKER_API_KEY: process.env.AUTOMAKER_API_KEY || 'test-api-key-for-e2e-tests',
               // No ALLOWED_ROOT_DIRECTORY restriction - allow all paths for testing
             },
           },

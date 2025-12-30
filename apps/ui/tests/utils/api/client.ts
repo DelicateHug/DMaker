@@ -4,7 +4,7 @@
  */
 
 import { Page, APIResponse } from '@playwright/test';
-import { API_ENDPOINTS } from '../core/constants';
+import { API_BASE_URL, API_ENDPOINTS } from '../core/constants';
 
 // ============================================================================
 // Types
@@ -269,4 +269,34 @@ export async function apiListBranches(
   worktreePath: string
 ): Promise<{ response: APIResponse; data: ListBranchesResponse }> {
   return new WorktreeApiClient(page).listBranches(worktreePath);
+}
+
+// ============================================================================
+// Authentication Utilities
+// ============================================================================
+
+/**
+ * Authenticate with the server using an API key
+ * This sets a session cookie that will be used for subsequent requests
+ */
+export async function authenticateWithApiKey(page: Page, apiKey: string): Promise<boolean> {
+  try {
+    const response = await page.request.post(`${API_BASE_URL}/api/auth/login`, {
+      data: { apiKey },
+    });
+    const data = await response.json();
+    return data.success === true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Authenticate using the API key from environment variable
+ * Falls back to a test default if AUTOMAKER_API_KEY is not set
+ */
+export async function authenticateForTests(page: Page): Promise<boolean> {
+  // Use the API key from environment, or a test default
+  const apiKey = process.env.AUTOMAKER_API_KEY || 'test-api-key-for-e2e-tests';
+  return authenticateWithApiKey(page, apiKey);
 }
