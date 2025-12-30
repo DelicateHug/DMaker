@@ -136,14 +136,13 @@ export function createEnhanceHandler(
       const prompts = await getPromptCustomization(settingsService, '[EnhancePrompt]');
 
       // Get the system prompt for this mode from merged prompts
-      const systemPrompt =
-        validMode === 'improve'
-          ? prompts.enhancement.improveSystemPrompt
-          : validMode === 'technical'
-            ? prompts.enhancement.technicalSystemPrompt
-            : validMode === 'simplify'
-              ? prompts.enhancement.simplifySystemPrompt
-              : prompts.enhancement.acceptanceSystemPrompt;
+      const systemPromptMap: Record<EnhancementMode, string> = {
+        improve: prompts.enhancement.improveSystemPrompt,
+        technical: prompts.enhancement.technicalSystemPrompt,
+        simplify: prompts.enhancement.simplifySystemPrompt,
+        acceptance: prompts.enhancement.acceptanceSystemPrompt,
+      };
+      const systemPrompt = systemPromptMap[validMode];
 
       logger.debug(`Using ${validMode} system prompt (length: ${systemPrompt.length} chars)`);
 

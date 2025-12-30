@@ -72,15 +72,10 @@ function PromptField({
   const minHeight = calculateMinHeight(displayValue);
 
   const handleToggle = (enabled: boolean) => {
-    if (enabled) {
-      // Enable custom mode - preserve existing custom value or initialize with default
-      const value = customValue?.value ?? defaultValue;
-      onCustomValueChange({ value, enabled: true });
-    } else {
-      // Disable custom mode - preserve custom value but mark as disabled
-      const value = customValue?.value ?? defaultValue;
-      onCustomValueChange({ value, enabled: false });
-    }
+    // When toggling, preserve the existing custom value if it exists,
+    // otherwise initialize with the default value.
+    const value = customValue?.value ?? defaultValue;
+    onCustomValueChange({ value, enabled });
   };
 
   const handleTextChange = (newValue: string) => {
@@ -148,9 +143,9 @@ export function PromptCustomizationSection({
 }: PromptCustomizationSectionProps) {
   const [activeTab, setActiveTab] = useState('auto-mode');
 
-  const updatePrompt = (
-    category: keyof PromptCustomization,
-    field: string,
+  const updatePrompt = <T extends keyof PromptCustomization>(
+    category: T,
+    field: keyof NonNullable<PromptCustomization[T]>,
     value: CustomPrompt | undefined
   ) => {
     const updated = {
