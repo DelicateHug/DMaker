@@ -114,24 +114,30 @@ export class CursorProvider extends CliProvider {
     };
   }
 
-  buildCliArgs(options: ExecuteOptions): string[] {
-    // Extract model (strip 'cursor-' prefix if present)
-    const model = stripProviderPrefix(options.model || 'auto');
-
-    // Build prompt content
-    let promptText: string;
+  /**
+   * Extract prompt text from ExecuteOptions
+   * Used to pass prompt via stdin instead of CLI args to avoid shell escaping issues
+   */
+  private extractPromptText(options: ExecuteOptions): string {
     if (typeof options.prompt === 'string') {
-      promptText = options.prompt;
+      return options.prompt;
     } else if (Array.isArray(options.prompt)) {
-      promptText = options.prompt
+      return options.prompt
         .filter((p) => p.type === 'text' && p.text)
         .map((p) => p.text)
         .join('\n');
     } else {
       throw new Error('Invalid prompt format');
     }
+  }
+
+  buildCliArgs(options: ExecuteOptions): string[] {
+    // Extract model (strip 'cursor-' prefix if present)
+    const model = stripProviderPrefix(options.model || 'auto');
 
     // Build CLI arguments for cursor-agent
+    // NOTE: Prompt is NOT included here - it's passed via stdin to avoid
+    // shell escaping issues when content contains $(), backticks, etc.
     const cliArgs: string[] = [
       '-p', // Print mode (non-interactive)
       '--force', // Allow file modifications
@@ -145,8 +151,8 @@ export class CursorProvider extends CliProvider {
       cliArgs.push('--model', model);
     }
 
-    // Add the prompt
-    cliArgs.push(promptText);
+    // Use '-' to indicate reading prompt from stdin
+    cliArgs.push('-');
 
     return cliArgs;
   }
@@ -439,8 +445,15 @@ export class CursorProvider extends CliProvider {
       );
     }
 
+    // Extract prompt text to pass via stdin (avoids shell escaping issues)
+    const promptText = this.extractPromptText(options);
+
     const cliArgs = this.buildCliArgs(options);
     const subprocessOptions = this.buildSubprocessOptions(options, cliArgs);
+
+    // Pass prompt via stdin to avoid shell interpretation of special characters
+    // like $(), backticks, etc. that may appear in file content
+    subprocessOptions.stdinData = promptText;
 
     let sessionId: string | undefined;
 

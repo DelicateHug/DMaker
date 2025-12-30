@@ -12,6 +12,12 @@ export interface SubprocessOptions {
   env?: Record<string, string>;
   abortController?: AbortController;
   timeout?: number; // Milliseconds of no output before timeout
+  /**
+   * Data to write to stdin after process spawns.
+   * Use this for passing prompts/content that may contain shell metacharacters.
+   * Avoids shell interpretation issues when passing data as CLI arguments.
+   */
+  stdinData?: string;
 }
 
 export interface SubprocessResult {
@@ -24,21 +30,32 @@ export interface SubprocessResult {
  * Spawns a subprocess and streams JSONL output line-by-line
  */
 export async function* spawnJSONLProcess(options: SubprocessOptions): AsyncGenerator<unknown> {
-  const { command, args, cwd, env, abortController, timeout = 30000 } = options;
+  const { command, args, cwd, env, abortController, timeout = 30000, stdinData } = options;
 
   const processEnv = {
     ...process.env,
     ...env,
   };
 
-  console.log(`[SubprocessManager] Spawning: ${command} ${args.slice(0, -1).join(' ')}`);
+  // Log command without stdin data (which may be large/sensitive)
+  console.log(`[SubprocessManager] Spawning: ${command} ${args.join(' ')}`);
   console.log(`[SubprocessManager] Working directory: ${cwd}`);
+  if (stdinData) {
+    console.log(`[SubprocessManager] Passing ${stdinData.length} bytes via stdin`);
+  }
 
   const childProcess: ChildProcess = spawn(command, args, {
     cwd,
     env: processEnv,
-    stdio: ['ignore', 'pipe', 'pipe'],
+    // Use 'pipe' for stdin when we need to write data, otherwise 'ignore'
+    stdio: [stdinData ? 'pipe' : 'ignore', 'pipe', 'pipe'],
   });
+
+  // Write stdin data if provided
+  if (stdinData && childProcess.stdin) {
+    childProcess.stdin.write(stdinData);
+    childProcess.stdin.end();
+  }
 
   let stderrOutput = '';
   let lastOutputTime = Date.now();
