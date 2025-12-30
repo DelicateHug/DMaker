@@ -2780,6 +2780,7 @@ export const useAppStore = create<AppState & AppActions>()(
           muteDoneSound: state.muteDoneSound,
           enhancementModel: state.enhancementModel,
           validationModel: state.validationModel,
+          phaseModels: state.phaseModels,
           enabledCursorModels: state.enabledCursorModels,
           cursorDefaultModel: state.cursorDefaultModel,
           autoLoadClaudeMd: state.autoLoadClaudeMd,
