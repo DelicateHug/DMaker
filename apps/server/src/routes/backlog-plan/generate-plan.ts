@@ -10,6 +10,7 @@ import type { Feature, BacklogPlanResult, BacklogChange, DependencyUpdate } from
 import { DEFAULT_PHASE_MODELS } from '@automaker/types';
 import { FeatureLoader } from '../../services/feature-loader.js';
 import { ProviderFactory } from '../../providers/provider-factory.js';
+import { extractJson } from '../../lib/json-extractor.js';
 import { logger, setRunningState, getErrorMessage } from './common.js';
 import type { SettingsService } from '../../services/settings-service.js';
 import { getAutoLoadClaudeMdSetting } from '../../lib/settings-helpers.js';
@@ -43,24 +44,23 @@ function formatFeaturesForPrompt(features: Feature[]): string {
  * Parse the AI response into a BacklogPlanResult
  */
 function parsePlanResponse(response: string): BacklogPlanResult {
-  try {
-    // Try to extract JSON from the response
-    const jsonMatch = response.match(/```json\n?([\s\S]*?)\n?```/);
-    if (jsonMatch) {
-      return JSON.parse(jsonMatch[1]);
-    }
+  // Use shared JSON extraction utility for robust parsing
+  const parsed = extractJson<BacklogPlanResult>(response, {
+    logger,
+    requiredKey: 'changes',
+  });
 
-    // Try to parse the whole response as JSON
-    return JSON.parse(response);
-  } catch {
-    // If parsing fails, return an empty result
-    logger.warn('[BacklogPlan] Failed to parse AI response as JSON');
-    return {
-      changes: [],
-      summary: 'Failed to parse AI response',
-      dependencyUpdates: [],
-    };
+  if (parsed) {
+    return parsed;
   }
+
+  // If parsing fails, return an empty result
+  logger.warn('[BacklogPlan] Failed to parse AI response as JSON');
+  return {
+    changes: [],
+    summary: 'Failed to parse AI response',
+    dependencyUpdates: [],
+  };
 }
 
 /**
