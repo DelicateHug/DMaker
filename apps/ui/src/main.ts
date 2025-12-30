@@ -595,9 +595,15 @@ app.on('window-all-closed', () => {
 });
 
 app.on('before-quit', () => {
-  if (serverProcess) {
+  if (serverProcess && serverProcess.pid) {
     console.log('[Electron] Stopping server...');
-    serverProcess.kill();
+    if (process.platform === 'win32') {
+      // Windows: use taskkill with /t to kill entire process tree
+      // This prevents orphaned node processes when closing the app
+      spawn('taskkill', ['/f', '/t', '/pid', serverProcess.pid.toString()]);
+    } else {
+      serverProcess.kill('SIGTERM');
+    }
     serverProcess = null;
   }
 
