@@ -1,6 +1,5 @@
 import React, { memo, useLayoutEffect, useState } from 'react';
-import { useSortable } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
+import { useDraggable } from '@dnd-kit/core';
 import { cn } from '@/lib/utils';
 import { Card, CardContent } from '@/components/ui/card';
 import { Feature, useAppStore } from '@/store/app-store';
@@ -100,14 +99,12 @@ export const KanbanCard = memo(function KanbanCard({
     feature.status === 'waiting_approval' ||
     feature.status === 'verified' ||
     (feature.status === 'in_progress' && !isCurrentAutoTask);
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: feature.id,
     disabled: !isDraggable || isOverlay,
   });
 
   const dndStyle = {
-    transform: CSS.Transform.toString(transform),
-    transition,
     opacity: isDragging ? 0.5 : undefined,
   };
 
