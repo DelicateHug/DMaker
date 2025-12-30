@@ -1,15 +1,25 @@
 /**
  * Cursor Provider - Executes queries using cursor-agent CLI
  *
+ * Extends CliProvider with Cursor-specific:
+ * - Event normalization for Cursor's JSONL format
+ * - Text block deduplication (Cursor sends duplicates)
+ * - Session ID tracking
+ * - Versions directory detection
+ *
  * Spawns the cursor-agent CLI with --output-format stream-json for streaming responses.
- * Normalizes Cursor events to the AutoMaker ProviderMessage format.
  */
 
 import { execSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { BaseProvider } from './base-provider.js';
+import {
+  CliProvider,
+  type CliSpawnConfig,
+  type CliDetectionResult,
+  type CliErrorInfo,
+} from './cli-provider.js';
 import type {
   ProviderConfig,
   ExecuteOptions,
@@ -28,15 +38,7 @@ import {
   CURSOR_MODEL_MAP,
 } from '@automaker/types';
 import { createLogger, isAbortError } from '@automaker/utils';
-import {
-  spawnJSONLProcess,
-  type SubprocessOptions,
-  isWslAvailable,
-  findCliInWsl,
-  createWslCommand,
-  execInWsl,
-  windowsToWslPath,
-} from '@automaker/platform';
+import { spawnJSONLProcess, execInWsl } from '@automaker/platform';
 
 // Create logger for this module
 const logger = createLogger('CursorProvider');
@@ -64,117 +66,251 @@ export interface CursorError extends Error {
 /**
  * CursorProvider - Integrates cursor-agent CLI as an AI provider
  *
- * Uses the cursor-agent CLI with --output-format stream-json for streaming responses.
- * Normalizes Cursor events to the AutoMaker ProviderMessage format.
+ * Extends CliProvider with Cursor-specific behavior:
+ * - WSL required on Windows (cursor-agent has no native Windows build)
+ * - Versions directory detection for cursor-agent installations
+ * - Session ID tracking for conversation continuity
+ * - Text block deduplication (Cursor sends duplicate chunks)
  */
-export class CursorProvider extends BaseProvider {
+export class CursorProvider extends CliProvider {
   /**
-   * Installation paths based on official cursor-agent install script:
-   *
-   * Linux/macOS:
-   * - Binary: ~/.local/share/cursor-agent/versions/<version>/cursor-agent
-   * - Symlink: ~/.local/bin/cursor-agent -> versions/<version>/cursor-agent
-   *
+   * Version data directory where cursor-agent stores versions
    * The install script creates versioned folders like:
    *   ~/.local/share/cursor-agent/versions/2025.12.17-996666f/cursor-agent
-   * And symlinks to ~/.local/bin/cursor-agent
-   *
-   * Windows:
-   * - cursor-agent CLI only supports Linux/macOS, NOT native Windows
-   * - On Windows, users must install in WSL and we invoke via wsl.exe
    */
-  private static COMMON_PATHS: Record<string, string[]> = {
-    linux: [
-      path.join(os.homedir(), '.local/bin/cursor-agent'), // Primary symlink location
-      '/usr/local/bin/cursor-agent',
-    ],
-    darwin: [
-      path.join(os.homedir(), '.local/bin/cursor-agent'), // Primary symlink location
-      '/usr/local/bin/cursor-agent',
-    ],
-    // Windows paths are not used - we check for WSL installation instead
-    win32: [],
-  };
-
-  // Version data directory where cursor-agent stores versions
   private static VERSIONS_DIR = path.join(os.homedir(), '.local/share/cursor-agent/versions');
-
-  private cliPath: string | null = null;
-
-  // WSL execution mode for Windows
-  private useWsl: boolean = false;
-  private wslCliPath: string | null = null;
-  private wslDistribution: string | undefined = undefined;
 
   constructor(config: ProviderConfig = {}) {
     super(config);
-    this.findCliPath();
+    // Trigger CLI detection on construction (eager for Cursor)
+    this.ensureCliDetected();
   }
+
+  // ==========================================================================
+  // CliProvider Abstract Method Implementations
+  // ==========================================================================
 
   getName(): string {
     return 'cursor';
   }
 
+  getCliName(): string {
+    return 'cursor-agent';
+  }
+
+  getSpawnConfig(): CliSpawnConfig {
+    return {
+      windowsStrategy: 'wsl', // cursor-agent requires WSL on Windows
+      commonPaths: {
+        linux: [
+          path.join(os.homedir(), '.local/bin/cursor-agent'), // Primary symlink location
+          '/usr/local/bin/cursor-agent',
+        ],
+        darwin: [path.join(os.homedir(), '.local/bin/cursor-agent'), '/usr/local/bin/cursor-agent'],
+        // Windows paths are not used - we check for WSL installation instead
+        win32: [],
+      },
+    };
+  }
+
+  buildCliArgs(options: ExecuteOptions): string[] {
+    // Extract model (strip 'cursor-' prefix if present)
+    let model = options.model || 'auto';
+    if (model.startsWith('cursor-')) {
+      model = model.substring(7);
+    }
+
+    // Build prompt content
+    let promptText: string;
+    if (typeof options.prompt === 'string') {
+      promptText = options.prompt;
+    } else if (Array.isArray(options.prompt)) {
+      promptText = options.prompt
+        .filter((p) => p.type === 'text' && p.text)
+        .map((p) => p.text)
+        .join('\n');
+    } else {
+      throw new Error('Invalid prompt format');
+    }
+
+    // Build CLI arguments for cursor-agent
+    const cliArgs: string[] = [
+      '-p', // Print mode (non-interactive)
+      '--force', // Allow file modifications
+      '--output-format',
+      'stream-json',
+      '--stream-partial-output', // Real-time streaming
+    ];
+
+    // Add model if not auto
+    if (model !== 'auto') {
+      cliArgs.push('--model', model);
+    }
+
+    // Add the prompt
+    cliArgs.push(promptText);
+
+    return cliArgs;
+  }
+
   /**
-   * Find cursor-agent CLI in PATH or common installation locations
-   *
-   * On Windows, uses WSL utilities from @automaker/platform since
-   * cursor-agent CLI only supports Linux/macOS natively.
+   * Convert Cursor event to AutoMaker ProviderMessage format
+   * Made public as required by CliProvider abstract method
    */
-  private findCliPath(): void {
-    const wslLogger = (msg: string) => logger.debug(msg);
+  normalizeEvent(event: unknown): ProviderMessage | null {
+    const cursorEvent = event as CursorStreamEvent;
 
-    // On Windows, we need to use WSL (cursor-agent has no native Windows build)
-    if (process.platform === 'win32') {
-      if (isWslAvailable({ logger: wslLogger })) {
-        const wslResult = findCliInWsl('cursor-agent', { logger: wslLogger });
-        if (wslResult) {
-          this.useWsl = true;
-          this.wslCliPath = wslResult.wslPath;
-          this.wslDistribution = wslResult.distribution;
-          this.cliPath = 'wsl.exe'; // We'll use wsl.exe to invoke
-          logger.debug(
-            `Using cursor-agent via WSL (${wslResult.distribution || 'default'}): ${wslResult.wslPath}`
-          );
-          return;
+    switch (cursorEvent.type) {
+      case 'system':
+        // System init - we capture session_id but don't yield a message
+        return null;
+
+      case 'user':
+        // User message - already handled by caller
+        return null;
+
+      case 'assistant': {
+        const assistantEvent = cursorEvent as CursorAssistantEvent;
+        return {
+          type: 'assistant',
+          session_id: assistantEvent.session_id,
+          message: {
+            role: 'assistant',
+            content: assistantEvent.message.content.map((c) => ({
+              type: 'text' as const,
+              text: c.text,
+            })),
+          },
+        };
+      }
+
+      case 'tool_call': {
+        const toolEvent = cursorEvent as CursorToolCallEvent;
+        const toolCall = toolEvent.tool_call;
+
+        // Determine tool name and input
+        let toolName: string;
+        let toolInput: unknown;
+
+        if (toolCall.readToolCall) {
+          // Skip if args not yet populated (partial streaming event)
+          if (!toolCall.readToolCall.args) return null;
+          toolName = 'Read';
+          toolInput = { file_path: toolCall.readToolCall.args.path };
+        } else if (toolCall.writeToolCall) {
+          // Skip if args not yet populated (partial streaming event)
+          if (!toolCall.writeToolCall.args) return null;
+          toolName = 'Write';
+          toolInput = {
+            file_path: toolCall.writeToolCall.args.path,
+            content: toolCall.writeToolCall.args.fileText,
+          };
+        } else if (toolCall.function) {
+          toolName = toolCall.function.name;
+          try {
+            toolInput = JSON.parse(toolCall.function.arguments || '{}');
+          } catch {
+            toolInput = { raw: toolCall.function.arguments };
+          }
+        } else {
+          return null;
         }
+
+        // For started events, emit tool_use
+        if (toolEvent.subtype === 'started') {
+          return {
+            type: 'assistant',
+            session_id: toolEvent.session_id,
+            message: {
+              role: 'assistant',
+              content: [
+                {
+                  type: 'tool_use',
+                  name: toolName,
+                  tool_use_id: toolEvent.call_id,
+                  input: toolInput,
+                },
+              ],
+            },
+          };
+        }
+
+        // For completed events, emit both tool_use and tool_result
+        if (toolEvent.subtype === 'completed') {
+          let resultContent = '';
+
+          if (toolCall.readToolCall?.result?.success) {
+            resultContent = toolCall.readToolCall.result.success.content;
+          } else if (toolCall.writeToolCall?.result?.success) {
+            resultContent = `Wrote ${toolCall.writeToolCall.result.success.linesCreated} lines to ${toolCall.writeToolCall.result.success.path}`;
+          }
+
+          return {
+            type: 'assistant',
+            session_id: toolEvent.session_id,
+            message: {
+              role: 'assistant',
+              content: [
+                {
+                  type: 'tool_use',
+                  name: toolName,
+                  tool_use_id: toolEvent.call_id,
+                  input: toolInput,
+                },
+                {
+                  type: 'tool_result',
+                  tool_use_id: toolEvent.call_id,
+                  content: resultContent,
+                },
+              ],
+            },
+          };
+        }
+
+        return null;
       }
-      logger.debug(
-        'cursor-agent CLI not found (WSL not available or cursor-agent not installed in WSL)'
-      );
-      this.cliPath = null;
-      return;
+
+      case 'result': {
+        const resultEvent = cursorEvent as CursorResultEvent;
+
+        if (resultEvent.is_error) {
+          return {
+            type: 'error',
+            session_id: resultEvent.session_id,
+            error: resultEvent.error || resultEvent.result || 'Unknown error',
+          };
+        }
+
+        return {
+          type: 'result',
+          subtype: 'success',
+          session_id: resultEvent.session_id,
+          result: resultEvent.result,
+        };
+      }
+
+      default:
+        return null;
+    }
+  }
+
+  // ==========================================================================
+  // CliProvider Overrides
+  // ==========================================================================
+
+  /**
+   * Override CLI detection to add Cursor-specific versions directory check
+   */
+  protected detectCli(): CliDetectionResult {
+    // First try standard detection (PATH, common paths, WSL)
+    const result = super.detectCli();
+    if (result.cliPath) {
+      return result;
     }
 
-    // Linux/macOS - direct execution
-    // Try 'which' first
-    try {
-      const result = execSync('which cursor-agent', { encoding: 'utf8', timeout: 5000 })
-        .trim()
-        .split('\n')[0];
-      if (result && fs.existsSync(result)) {
-        logger.debug(`Found cursor-agent in PATH: ${result}`);
-        this.cliPath = result;
-        return;
-      }
-    } catch {
-      // Not in PATH
-    }
-
-    // Check common installation paths for current platform
-    const platform = process.platform as 'linux' | 'darwin' | 'win32';
-    const platformPaths = CursorProvider.COMMON_PATHS[platform] || [];
-
-    for (const p of platformPaths) {
-      if (fs.existsSync(p)) {
-        logger.debug(`Found cursor-agent at: ${p}`);
-        this.cliPath = p;
-        return;
-      }
-    }
-
-    // Also check versions directory for any installed version
-    if (fs.existsSync(CursorProvider.VERSIONS_DIR)) {
+    // Cursor-specific: Check versions directory for any installed version
+    // This handles cases where cursor-agent is installed but not in PATH
+    if (process.platform !== 'win32' && fs.existsSync(CursorProvider.VERSIONS_DIR)) {
       try {
         const versions = fs
           .readdirSync(CursorProvider.VERSIONS_DIR)
@@ -186,8 +322,11 @@ export class CursorProvider extends BaseProvider {
           const versionPath = path.join(CursorProvider.VERSIONS_DIR, version, 'cursor-agent');
           if (fs.existsSync(versionPath)) {
             logger.debug(`Found cursor-agent version ${version} at: ${versionPath}`);
-            this.cliPath = versionPath;
-            return;
+            return {
+              cliPath: versionPath,
+              useWsl: false,
+              strategy: 'native',
+            };
           }
         }
       } catch {
@@ -195,170 +334,192 @@ export class CursorProvider extends BaseProvider {
       }
     }
 
-    logger.debug('cursor-agent CLI not found');
-    this.cliPath = null;
+    return result;
   }
 
   /**
-   * Check if Cursor CLI is installed
+   * Override error mapping for Cursor-specific error codes
    */
-  async isInstalled(): Promise<boolean> {
-    return this.cliPath !== null;
-  }
+  protected mapError(stderr: string, exitCode: number | null): CliErrorInfo {
+    const lower = stderr.toLowerCase();
 
-  /**
-   * Get Cursor CLI version
-   */
-  async getVersion(): Promise<string | null> {
-    if (!this.cliPath) return null;
-
-    try {
-      if (this.useWsl && this.wslCliPath) {
-        // Execute via WSL using utility from @automaker/platform
-        const result = execInWsl(`${this.wslCliPath} --version`, {
-          timeout: 5000,
-          distribution: this.wslDistribution,
-        });
-        return result;
-      }
-      const result = execSync(`"${this.cliPath}" --version`, {
-        encoding: 'utf8',
-        timeout: 5000,
-      }).trim();
-      return result;
-    } catch {
-      return null;
-    }
-  }
-
-  /**
-   * Check authentication status
-   */
-  async checkAuth(): Promise<CursorAuthStatus> {
-    if (!this.cliPath) {
-      return { authenticated: false, method: 'none' };
+    if (
+      lower.includes('not authenticated') ||
+      lower.includes('please log in') ||
+      lower.includes('unauthorized')
+    ) {
+      return {
+        code: CursorErrorCode.NOT_AUTHENTICATED,
+        message: 'Cursor CLI is not authenticated',
+        recoverable: true,
+        suggestion: 'Run "cursor-agent login" to authenticate with your browser',
+      };
     }
 
-    // Check for API key in environment
-    if (process.env.CURSOR_API_KEY) {
-      return { authenticated: true, method: 'api_key' };
+    if (
+      lower.includes('rate limit') ||
+      lower.includes('too many requests') ||
+      lower.includes('429')
+    ) {
+      return {
+        code: CursorErrorCode.RATE_LIMITED,
+        message: 'Cursor API rate limit exceeded',
+        recoverable: true,
+        suggestion: 'Wait a few minutes and try again, or upgrade to Cursor Pro',
+      };
     }
 
-    // For WSL mode, check credentials inside WSL
-    if (this.useWsl && this.wslCliPath) {
-      const wslOpts = { timeout: 5000, distribution: this.wslDistribution };
-
-      // Check for credentials file inside WSL (use $HOME for proper expansion)
-      const wslCredPaths = [
-        '$HOME/.cursor/credentials.json',
-        '$HOME/.config/cursor/credentials.json',
-      ];
-
-      for (const credPath of wslCredPaths) {
-        const content = execInWsl(`sh -c "cat ${credPath} 2>/dev/null || echo ''"`, wslOpts);
-        if (content && content.trim()) {
-          try {
-            const creds = JSON.parse(content);
-            if (creds.accessToken || creds.token) {
-              return { authenticated: true, method: 'login', hasCredentialsFile: true };
-            }
-          } catch {
-            // Invalid credentials file
-          }
-        }
-      }
-
-      // Try running --version to check if CLI works
-      const versionResult = execInWsl(`${this.wslCliPath} --version`, {
-        timeout: 10000,
-        distribution: this.wslDistribution,
-      });
-      if (versionResult) {
-        return { authenticated: true, method: 'login' };
-      }
-
-      return { authenticated: false, method: 'none' };
+    if (
+      lower.includes('model not available') ||
+      lower.includes('invalid model') ||
+      lower.includes('unknown model')
+    ) {
+      return {
+        code: CursorErrorCode.MODEL_UNAVAILABLE,
+        message: 'Requested model is not available',
+        recoverable: true,
+        suggestion: 'Try using "auto" mode or select a different model',
+      };
     }
 
-    // Native mode (Linux/macOS) - check local credentials
-    const credentialPaths = [
-      path.join(os.homedir(), '.cursor', 'credentials.json'),
-      path.join(os.homedir(), '.config', 'cursor', 'credentials.json'),
-    ];
-
-    for (const credPath of credentialPaths) {
-      if (fs.existsSync(credPath)) {
-        try {
-          const content = fs.readFileSync(credPath, 'utf8');
-          const creds = JSON.parse(content);
-          if (creds.accessToken || creds.token) {
-            return { authenticated: true, method: 'login', hasCredentialsFile: true };
-          }
-        } catch {
-          // Invalid credentials file
-        }
-      }
+    if (
+      lower.includes('network') ||
+      lower.includes('connection') ||
+      lower.includes('econnrefused') ||
+      lower.includes('timeout')
+    ) {
+      return {
+        code: CursorErrorCode.NETWORK_ERROR,
+        message: 'Network connection error',
+        recoverable: true,
+        suggestion: 'Check your internet connection and try again',
+      };
     }
 
-    // Try running a simple command to check auth
-    try {
-      execSync(`"${this.cliPath}" --version`, {
-        encoding: 'utf8',
-        timeout: 10000,
-        env: { ...process.env },
-      });
-      // If we get here without error, assume authenticated
-      // (actual auth check would need a real API call)
-      return { authenticated: true, method: 'login' };
-    } catch (error: unknown) {
-      const execError = error as { stderr?: string };
-      if (execError.stderr?.includes('not authenticated') || execError.stderr?.includes('log in')) {
-        return { authenticated: false, method: 'none' };
-      }
+    if (exitCode === 137 || lower.includes('killed') || lower.includes('sigterm')) {
+      return {
+        code: CursorErrorCode.PROCESS_CRASHED,
+        message: 'Cursor agent process was terminated',
+        recoverable: true,
+        suggestion: 'The process may have run out of memory. Try a simpler task.',
+      };
     }
-
-    return { authenticated: false, method: 'none' };
-  }
-
-  /**
-   * Detect installation status (required by BaseProvider)
-   */
-  async detectInstallation(): Promise<InstallationStatus> {
-    const installed = await this.isInstalled();
-    const version = installed ? await this.getVersion() : undefined;
-    const auth = await this.checkAuth();
-
-    // Determine the display path - for WSL, show the WSL path with distribution
-    const displayPath =
-      this.useWsl && this.wslCliPath
-        ? `(WSL${this.wslDistribution ? `:${this.wslDistribution}` : ''}) ${this.wslCliPath}`
-        : this.cliPath || undefined;
 
     return {
-      installed,
-      version: version || undefined,
-      path: displayPath,
-      method: this.useWsl ? 'wsl' : 'cli',
-      hasApiKey: !!process.env.CURSOR_API_KEY,
-      authenticated: auth.authenticated,
+      code: CursorErrorCode.UNKNOWN,
+      message: stderr || `Cursor agent exited with code ${exitCode}`,
+      recoverable: false,
     };
   }
 
   /**
-   * Get available Cursor models
+   * Override install instructions for Cursor-specific guidance
    */
-  getAvailableModels(): ModelDefinition[] {
-    return Object.entries(CURSOR_MODEL_MAP).map(([id, config]) => ({
-      id: `cursor-${id}`,
-      name: config.label,
-      modelString: id,
-      provider: 'cursor',
-      description: config.description,
-      tier: config.tier === 'pro' ? ('premium' as const) : ('basic' as const),
-      supportsTools: true,
-      supportsVision: false, // Cursor CLI may not support vision
-    }));
+  protected getInstallInstructions(): string {
+    if (process.platform === 'win32') {
+      return 'cursor-agent requires WSL on Windows. Install WSL, then run in WSL: curl https://cursor.com/install -fsS | bash';
+    }
+    return 'Install with: curl https://cursor.com/install -fsS | bash';
   }
+
+  /**
+   * Execute a prompt using Cursor CLI with streaming
+   *
+   * Overrides base class to add:
+   * - Session ID tracking from system init events
+   * - Text block deduplication (Cursor sends duplicate chunks)
+   */
+  async *executeQuery(options: ExecuteOptions): AsyncGenerator<ProviderMessage> {
+    this.ensureCliDetected();
+
+    if (!this.cliPath) {
+      throw this.createError(
+        CursorErrorCode.NOT_INSTALLED,
+        'Cursor CLI is not installed',
+        true,
+        this.getInstallInstructions()
+      );
+    }
+
+    const cliArgs = this.buildCliArgs(options);
+    const subprocessOptions = this.buildSubprocessOptions(options, cliArgs);
+
+    let sessionId: string | undefined;
+
+    // Dedup state for Cursor-specific text block handling
+    let lastTextBlock = '';
+    let accumulatedText = '';
+
+    logger.debug(`CursorProvider.executeQuery called with model: "${options.model}"`);
+
+    try {
+      for await (const rawEvent of spawnJSONLProcess(subprocessOptions)) {
+        const event = rawEvent as CursorStreamEvent;
+
+        // Capture session ID from system init
+        if (event.type === 'system' && (event as CursorSystemEvent).subtype === 'init') {
+          sessionId = event.session_id;
+          logger.debug(`Session started: ${sessionId}`);
+        }
+
+        // Normalize and yield the event
+        const normalized = this.normalizeEvent(event);
+        if (normalized) {
+          // Ensure session_id is always set
+          if (!normalized.session_id && sessionId) {
+            normalized.session_id = sessionId;
+          }
+
+          // Apply Cursor-specific dedup for assistant text messages
+          if (normalized.type === 'assistant' && normalized.message?.content) {
+            const dedupedContent = this.deduplicateTextBlocks(
+              normalized.message.content,
+              lastTextBlock,
+              accumulatedText
+            );
+
+            if (dedupedContent.content.length === 0) {
+              // All blocks were duplicates, skip this message
+              continue;
+            }
+
+            // Update state
+            lastTextBlock = dedupedContent.lastBlock;
+            accumulatedText = dedupedContent.accumulated;
+
+            // Update the message with deduped content
+            normalized.message.content = dedupedContent.content;
+          }
+
+          yield normalized;
+        }
+      }
+    } catch (error) {
+      if (isAbortError(error)) {
+        logger.debug('Query aborted');
+        return;
+      }
+
+      // Map CLI errors to CursorError
+      if (error instanceof Error && 'stderr' in error) {
+        const errorInfo = this.mapError(
+          (error as { stderr?: string }).stderr || error.message,
+          (error as { exitCode?: number | null }).exitCode ?? null
+        );
+        throw this.createError(
+          errorInfo.code as CursorErrorCode,
+          errorInfo.message,
+          errorInfo.recoverable,
+          errorInfo.suggestion
+        );
+      }
+      throw error;
+    }
+  }
+
+  // ==========================================================================
+  // Cursor-Specific Methods
+  // ==========================================================================
 
   /**
    * Create a CursorError with details
@@ -375,81 +536,6 @@ export class CursorProvider extends BaseProvider {
     error.suggestion = suggestion;
     error.name = 'CursorError';
     return error;
-  }
-
-  /**
-   * Map stderr/exit codes to detailed CursorError
-   */
-  private mapError(stderr: string, exitCode: number | null): CursorError {
-    const lower = stderr.toLowerCase();
-
-    if (
-      lower.includes('not authenticated') ||
-      lower.includes('please log in') ||
-      lower.includes('unauthorized')
-    ) {
-      return this.createError(
-        CursorErrorCode.NOT_AUTHENTICATED,
-        'Cursor CLI is not authenticated',
-        true,
-        'Run "cursor-agent login" to authenticate with your browser'
-      );
-    }
-
-    if (
-      lower.includes('rate limit') ||
-      lower.includes('too many requests') ||
-      lower.includes('429')
-    ) {
-      return this.createError(
-        CursorErrorCode.RATE_LIMITED,
-        'Cursor API rate limit exceeded',
-        true,
-        'Wait a few minutes and try again, or upgrade to Cursor Pro'
-      );
-    }
-
-    if (
-      lower.includes('model not available') ||
-      lower.includes('invalid model') ||
-      lower.includes('unknown model')
-    ) {
-      return this.createError(
-        CursorErrorCode.MODEL_UNAVAILABLE,
-        'Requested model is not available',
-        true,
-        'Try using "auto" mode or select a different model'
-      );
-    }
-
-    if (
-      lower.includes('network') ||
-      lower.includes('connection') ||
-      lower.includes('econnrefused') ||
-      lower.includes('timeout')
-    ) {
-      return this.createError(
-        CursorErrorCode.NETWORK_ERROR,
-        'Network connection error',
-        true,
-        'Check your internet connection and try again'
-      );
-    }
-
-    if (exitCode === 137 || lower.includes('killed') || lower.includes('sigterm')) {
-      return this.createError(
-        CursorErrorCode.PROCESS_CRASHED,
-        'Cursor agent process was terminated',
-        true,
-        'The process may have run out of memory. Try a simpler task.'
-      );
-    }
-
-    return this.createError(
-      CursorErrorCode.UNKNOWN,
-      stderr || `Cursor agent exited with code ${exitCode}`,
-      false
-    );
   }
 
   /**
@@ -511,323 +597,156 @@ export class CursorProvider extends BaseProvider {
   }
 
   /**
-   * Convert Cursor event to AutoMaker ProviderMessage format
+   * Get Cursor CLI version
    */
-  private normalizeEvent(event: CursorStreamEvent): ProviderMessage | null {
-    switch (event.type) {
-      case 'system':
-        // System init - we capture session_id but don't yield a message
-        return null;
+  async getVersion(): Promise<string | null> {
+    this.ensureCliDetected();
+    if (!this.cliPath) return null;
 
-      case 'user':
-        // User message - already handled by caller
-        return null;
-
-      case 'assistant': {
-        const assistantEvent = event as CursorAssistantEvent;
-        return {
-          type: 'assistant',
-          session_id: assistantEvent.session_id,
-          message: {
-            role: 'assistant',
-            content: assistantEvent.message.content.map((c) => ({
-              type: 'text' as const,
-              text: c.text,
-            })),
-          },
-        };
+    try {
+      if (this.useWsl && this.wslCliPath) {
+        const result = execInWsl(`${this.wslCliPath} --version`, {
+          timeout: 5000,
+          distribution: this.wslDistribution,
+        });
+        return result;
       }
-
-      case 'tool_call': {
-        const toolEvent = event as CursorToolCallEvent;
-        const toolCall = toolEvent.tool_call;
-
-        // Determine tool name and input
-        let toolName: string;
-        let toolInput: unknown;
-
-        if (toolCall.readToolCall) {
-          // Skip if args not yet populated (partial streaming event)
-          if (!toolCall.readToolCall.args) return null;
-          toolName = 'Read';
-          toolInput = { file_path: toolCall.readToolCall.args.path };
-        } else if (toolCall.writeToolCall) {
-          // Skip if args not yet populated (partial streaming event)
-          if (!toolCall.writeToolCall.args) return null;
-          toolName = 'Write';
-          toolInput = {
-            file_path: toolCall.writeToolCall.args.path,
-            content: toolCall.writeToolCall.args.fileText,
-          };
-        } else if (toolCall.function) {
-          toolName = toolCall.function.name;
-          try {
-            toolInput = JSON.parse(toolCall.function.arguments || '{}');
-          } catch {
-            toolInput = { raw: toolCall.function.arguments };
-          }
-        } else {
-          return null;
-        }
-
-        // For started events, emit tool_use
-        if (toolEvent.subtype === 'started') {
-          return {
-            type: 'assistant',
-            session_id: toolEvent.session_id,
-            message: {
-              role: 'assistant',
-              content: [
-                {
-                  type: 'tool_use',
-                  name: toolName,
-                  tool_use_id: toolEvent.call_id,
-                  input: toolInput,
-                },
-              ],
-            },
-          };
-        }
-
-        // For completed events, emit both tool_use and tool_result
-        // This ensures the UI shows the tool call even if 'started' was skipped
-        if (toolEvent.subtype === 'completed') {
-          let resultContent = '';
-
-          if (toolCall.readToolCall?.result?.success) {
-            resultContent = toolCall.readToolCall.result.success.content;
-          } else if (toolCall.writeToolCall?.result?.success) {
-            resultContent = `Wrote ${toolCall.writeToolCall.result.success.linesCreated} lines to ${toolCall.writeToolCall.result.success.path}`;
-          }
-
-          return {
-            type: 'assistant',
-            session_id: toolEvent.session_id,
-            message: {
-              role: 'assistant',
-              content: [
-                {
-                  type: 'tool_use',
-                  name: toolName,
-                  tool_use_id: toolEvent.call_id,
-                  input: toolInput,
-                },
-                {
-                  type: 'tool_result',
-                  tool_use_id: toolEvent.call_id,
-                  content: resultContent,
-                },
-              ],
-            },
-          };
-        }
-
-        return null;
-      }
-
-      case 'result': {
-        const resultEvent = event as CursorResultEvent;
-
-        if (resultEvent.is_error) {
-          return {
-            type: 'error',
-            session_id: resultEvent.session_id,
-            error: resultEvent.error || resultEvent.result || 'Unknown error',
-          };
-        }
-
-        return {
-          type: 'result',
-          subtype: 'success',
-          session_id: resultEvent.session_id,
-          result: resultEvent.result,
-        };
-      }
-
-      default:
-        return null;
+      const result = execSync(`"${this.cliPath}" --version`, {
+        encoding: 'utf8',
+        timeout: 5000,
+      }).trim();
+      return result;
+    } catch {
+      return null;
     }
   }
 
   /**
-   * Execute a prompt using Cursor CLI with streaming
+   * Check authentication status
    */
-  async *executeQuery(options: ExecuteOptions): AsyncGenerator<ProviderMessage> {
+  async checkAuth(): Promise<CursorAuthStatus> {
+    this.ensureCliDetected();
     if (!this.cliPath) {
-      // Provide platform-specific installation instructions
-      const installSuggestion =
-        process.platform === 'win32'
-          ? 'cursor-agent requires WSL on Windows. Install WSL, then run in WSL: curl https://cursor.com/install -fsS | bash'
-          : 'Install with: curl https://cursor.com/install -fsS | bash';
-
-      throw this.createError(
-        CursorErrorCode.NOT_INSTALLED,
-        'Cursor CLI is not installed',
-        true,
-        installSuggestion
-      );
+      return { authenticated: false, method: 'none' };
     }
 
-    // Extract model from options (strip 'cursor-' prefix if present)
-    let model = options.model || 'auto';
-    logger.debug(`CursorProvider.executeQuery called with model: "${model}"`);
-    if (model.startsWith('cursor-')) {
-      const originalModel = model;
-      model = model.substring(7);
-      logger.debug(`Stripped cursor- prefix: "${originalModel}" -> "${model}"`);
+    // Check for API key in environment
+    if (process.env.CURSOR_API_KEY) {
+      return { authenticated: true, method: 'api_key' };
     }
 
-    const cwd = options.cwd || process.cwd();
-
-    // Build prompt content
-    let promptText: string;
-    if (typeof options.prompt === 'string') {
-      promptText = options.prompt;
-    } else if (Array.isArray(options.prompt)) {
-      promptText = options.prompt
-        .filter((p) => p.type === 'text' && p.text)
-        .map((p) => p.text)
-        .join('\n');
-    } else {
-      throw new Error('Invalid prompt format');
-    }
-
-    // Build CLI arguments for cursor-agent
-    const cliArgs: string[] = [
-      '-p', // Print mode (non-interactive)
-      '--force', // Allow file modifications
-      '--output-format',
-      'stream-json',
-      '--stream-partial-output', // Real-time streaming
-    ];
-
-    // Add model if not auto
-    if (model !== 'auto') {
-      cliArgs.push('--model', model);
-    }
-
-    // Add the prompt
-    cliArgs.push(promptText);
-
-    // Determine command and args based on WSL mode
-    let command: string;
-    let args: string[];
-    let workingDir: string;
-
+    // For WSL mode, check credentials inside WSL
     if (this.useWsl && this.wslCliPath) {
-      // Build WSL command with --cd flag to change directory inside WSL
-      const wslCmd = createWslCommand(this.wslCliPath, cliArgs, {
+      const wslOpts = { timeout: 5000, distribution: this.wslDistribution };
+
+      // Check for credentials file inside WSL
+      const wslCredPaths = [
+        '$HOME/.cursor/credentials.json',
+        '$HOME/.config/cursor/credentials.json',
+      ];
+
+      for (const credPath of wslCredPaths) {
+        const content = execInWsl(`sh -c "cat ${credPath} 2>/dev/null || echo ''"`, wslOpts);
+        if (content && content.trim()) {
+          try {
+            const creds = JSON.parse(content);
+            if (creds.accessToken || creds.token) {
+              return { authenticated: true, method: 'login', hasCredentialsFile: true };
+            }
+          } catch {
+            // Invalid credentials file
+          }
+        }
+      }
+
+      // Try running --version to check if CLI works
+      const versionResult = execInWsl(`${this.wslCliPath} --version`, {
+        timeout: 10000,
         distribution: this.wslDistribution,
       });
-      command = wslCmd.command;
-      const wslCwd = windowsToWslPath(cwd);
-
-      // Construct args with --cd flag inserted before the CLI path
-      // createWslCommand returns: ['-d', distro, cliPath, ...cliArgs] or [cliPath, ...cliArgs]
-      if (this.wslDistribution) {
-        // With distribution: wsl.exe -d <distro> --cd <path> <cli> <args>
-        args = ['-d', this.wslDistribution, '--cd', wslCwd, this.wslCliPath, ...cliArgs];
-      } else {
-        // Without distribution: wsl.exe --cd <path> <cli> <args>
-        args = ['--cd', wslCwd, this.wslCliPath, ...cliArgs];
+      if (versionResult) {
+        return { authenticated: true, method: 'login' };
       }
 
-      // Keep Windows path for spawn's cwd (spawn runs on Windows)
-      workingDir = cwd;
-      logger.debug(
-        `Executing via WSL (${this.wslDistribution || 'default'}): ${command} ${args.slice(0, 6).join(' ')}...`
-      );
-    } else {
-      command = this.cliPath;
-      args = cliArgs;
-      workingDir = cwd;
-      logger.debug(`Executing: ${command} ${args.slice(0, 6).join(' ')}...`);
+      return { authenticated: false, method: 'none' };
     }
 
-    // Use spawnJSONLProcess from @automaker/platform for JSONL streaming
-    // This handles line buffering, timeouts, and abort signals automatically
-    // Filter out undefined values from process.env to satisfy TypeScript
-    const filteredEnv: Record<string, string> = {};
-    for (const [key, value] of Object.entries(process.env)) {
-      if (value !== undefined) {
-        filteredEnv[key] = value;
+    // Native mode (Linux/macOS) - check local credentials
+    const credentialPaths = [
+      path.join(os.homedir(), '.cursor', 'credentials.json'),
+      path.join(os.homedir(), '.config', 'cursor', 'credentials.json'),
+    ];
+
+    for (const credPath of credentialPaths) {
+      if (fs.existsSync(credPath)) {
+        try {
+          const content = fs.readFileSync(credPath, 'utf8');
+          const creds = JSON.parse(content);
+          if (creds.accessToken || creds.token) {
+            return { authenticated: true, method: 'login', hasCredentialsFile: true };
+          }
+        } catch {
+          // Invalid credentials file
+        }
       }
     }
 
-    const subprocessOptions: SubprocessOptions = {
-      command,
-      args,
-      cwd: workingDir,
-      env: filteredEnv,
-      abortController: options.abortController,
-      timeout: 120000, // 2 min timeout for CLI operations (may take longer than default 30s)
-    };
-
-    let sessionId: string | undefined;
-
-    // Dedup state for Cursor-specific text block handling
-    let lastTextBlock = '';
-    let accumulatedText = '';
-
+    // Try running a simple command to check auth
     try {
-      // spawnJSONLProcess yields parsed JSON objects, handles errors
-      for await (const rawEvent of spawnJSONLProcess(subprocessOptions)) {
-        const event = rawEvent as CursorStreamEvent;
-
-        // Capture session ID from system init
-        if (event.type === 'system' && (event as CursorSystemEvent).subtype === 'init') {
-          sessionId = event.session_id;
-          logger.debug(`Session started: ${sessionId}`);
-        }
-
-        // Normalize and yield the event
-        const normalized = this.normalizeEvent(event);
-        if (normalized) {
-          // Ensure session_id is always set
-          if (!normalized.session_id && sessionId) {
-            normalized.session_id = sessionId;
-          }
-
-          // Apply Cursor-specific dedup for assistant text messages
-          if (normalized.type === 'assistant' && normalized.message?.content) {
-            const dedupedContent = this.deduplicateTextBlocks(
-              normalized.message.content,
-              lastTextBlock,
-              accumulatedText
-            );
-
-            if (dedupedContent.content.length === 0) {
-              // All blocks were duplicates, skip this message
-              continue;
-            }
-
-            // Update state
-            lastTextBlock = dedupedContent.lastBlock;
-            accumulatedText = dedupedContent.accumulated;
-
-            // Update the message with deduped content
-            normalized.message.content = dedupedContent.content;
-          }
-
-          yield normalized;
-        }
+      execSync(`"${this.cliPath}" --version`, {
+        encoding: 'utf8',
+        timeout: 10000,
+        env: { ...process.env },
+      });
+      return { authenticated: true, method: 'login' };
+    } catch (error: unknown) {
+      const execError = error as { stderr?: string };
+      if (execError.stderr?.includes('not authenticated') || execError.stderr?.includes('log in')) {
+        return { authenticated: false, method: 'none' };
       }
-    } catch (error) {
-      // Use isAbortError from @automaker/utils for abort detection
-      if (isAbortError(error)) {
-        logger.debug('Query aborted');
-        return; // Clean abort, don't throw
-      }
-
-      // Map CLI errors to CursorError
-      if (error instanceof Error && 'stderr' in error) {
-        throw this.mapError(
-          (error as { stderr?: string }).stderr || error.message,
-          (error as { exitCode?: number | null }).exitCode ?? null
-        );
-      }
-      throw error;
     }
+
+    return { authenticated: false, method: 'none' };
+  }
+
+  /**
+   * Detect installation status (required by BaseProvider)
+   */
+  async detectInstallation(): Promise<InstallationStatus> {
+    const installed = await this.isInstalled();
+    const version = installed ? await this.getVersion() : undefined;
+    const auth = await this.checkAuth();
+
+    // Determine the display path - for WSL, show the WSL path with distribution
+    const displayPath =
+      this.useWsl && this.wslCliPath
+        ? `(WSL${this.wslDistribution ? `:${this.wslDistribution}` : ''}) ${this.wslCliPath}`
+        : this.cliPath || undefined;
+
+    return {
+      installed,
+      version: version || undefined,
+      path: displayPath,
+      method: this.useWsl ? 'wsl' : 'cli',
+      hasApiKey: !!process.env.CURSOR_API_KEY,
+      authenticated: auth.authenticated,
+    };
+  }
+
+  /**
+   * Get available Cursor models
+   */
+  getAvailableModels(): ModelDefinition[] {
+    return Object.entries(CURSOR_MODEL_MAP).map(([id, config]) => ({
+      id: `cursor-${id}`,
+      name: config.label,
+      modelString: id,
+      provider: 'cursor',
+      description: config.description,
+      tier: config.tier === 'pro' ? ('premium' as const) : ('basic' as const),
+      supportsTools: true,
+      supportsVision: false,
+    }));
   }
 
   /**
