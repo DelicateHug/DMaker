@@ -189,11 +189,17 @@ The response will be automatically formatted as structured JSON.`;
 
     const provider = ProviderFactory.getProviderForModel(model);
 
-    // For Cursor, include the JSON schema in the prompt
+    // For Cursor, include the JSON schema in the prompt with clear instructions
     const cursorPrompt = `${prompt}
 
-IMPORTANT: You must respond with a valid JSON object matching this schema:
-${JSON.stringify(suggestionsSchema, null, 2)}`;
+CRITICAL INSTRUCTIONS:
+1. DO NOT write any files. Return the JSON in your response only.
+2. After analyzing the project, respond with ONLY a JSON object - no explanations, no markdown, just raw JSON.
+3. The JSON must match this exact schema:
+
+${JSON.stringify(suggestionsSchema, null, 2)}
+
+Your entire response should be valid JSON starting with { and ending with }. No text before or after.`;
 
     for await (const msg of provider.executeQuery({
       prompt: cursorPrompt,

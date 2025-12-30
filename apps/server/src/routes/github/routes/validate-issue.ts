@@ -102,8 +102,14 @@ async function runValidation(
       // For Cursor, include the system prompt and schema in the user prompt
       const cursorPrompt = `${ISSUE_VALIDATION_SYSTEM_PROMPT}
 
-You MUST respond with a valid JSON object matching this schema:
+CRITICAL INSTRUCTIONS:
+1. DO NOT write any files. Return the JSON in your response only.
+2. Respond with ONLY a JSON object - no explanations, no markdown, just raw JSON.
+3. The JSON must match this exact schema:
+
 ${JSON.stringify(issueValidationSchema, null, 2)}
+
+Your entire response should be valid JSON starting with { and ending with }. No text before or after.
 
 ${prompt}`;
 

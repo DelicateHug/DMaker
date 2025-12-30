@@ -125,8 +125,16 @@ IMPORTANT: Do not ask for clarification. The specification is provided above. Ge
 
     const provider = ProviderFactory.getProviderForModel(model);
 
+    // Add explicit instructions for Cursor to return JSON in response
+    const cursorPrompt = `${prompt}
+
+CRITICAL INSTRUCTIONS:
+1. DO NOT write any files. Return the JSON in your response only.
+2. Respond with ONLY a JSON object - no explanations, no markdown, just raw JSON.
+3. Your entire response should be valid JSON starting with { and ending with }. No text before or after.`;
+
     for await (const msg of provider.executeQuery({
-      prompt,
+      prompt: cursorPrompt,
       model,
       cwd: projectPath,
       maxTurns: 250,

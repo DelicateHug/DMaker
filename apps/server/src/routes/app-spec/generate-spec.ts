@@ -119,11 +119,18 @@ ${getStructuredSpecPromptInstruction()}`;
 
     const provider = ProviderFactory.getProviderForModel(model);
 
-    // For Cursor, include the JSON schema in the prompt
+    // For Cursor, include the JSON schema in the prompt with clear instructions
+    // to return JSON in the response (not write to a file)
     const cursorPrompt = `${prompt}
 
-IMPORTANT: You must respond with a valid JSON object matching this schema:
-${JSON.stringify(specOutputSchema, null, 2)}`;
+CRITICAL INSTRUCTIONS:
+1. DO NOT write any files. DO NOT create any files like "project_specification.json".
+2. After analyzing the project, respond with ONLY a JSON object - no explanations, no markdown, just raw JSON.
+3. The JSON must match this exact schema:
+
+${JSON.stringify(specOutputSchema, null, 2)}
+
+Your entire response should be valid JSON starting with { and ending with }. No text before or after.`;
 
     for await (const msg of provider.executeQuery({
       prompt: cursorPrompt,
