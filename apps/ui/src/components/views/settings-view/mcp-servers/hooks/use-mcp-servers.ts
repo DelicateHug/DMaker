@@ -278,9 +278,12 @@ export function useMCPServers() {
 
     // If editing an existing server, save directly (user already approved it)
     if (editingServer) {
+      const previousData = { ...editingServer };
       updateMCPServer(editingServer.id, serverData);
       const syncSuccess = await syncSettingsToServer();
       if (!syncSuccess) {
+        // Rollback local state on sync failure
+        updateMCPServer(editingServer.id, previousData);
         toast.error('Failed to save MCP server to disk');
         return;
       }
@@ -309,27 +312,24 @@ export function useMCPServers() {
     if (!pendingServerData) return;
 
     if (pendingServerData.type === 'add' && pendingServerData.serverData) {
-      // Get current server count to find the newly added one
-      const currentCount = mcpServers.length;
+      // Capture existing IDs before adding to find the new server reliably
+      const existingIds = new Set(mcpServers.map((s) => s.id));
       addMCPServer(pendingServerData.serverData);
 
-      // Get the newly added server ID and mark it as pending sync
+      // Find the newly added server by comparing IDs
       const newServers = useAppStore.getState().mcpServers;
-      const newServerId = newServers[currentCount]?.id;
-      if (newServerId) {
-        pendingSyncServerIdsRef.current.add(newServerId);
+      const newServer = newServers.find((s) => !existingIds.has(s.id));
+      if (newServer) {
+        pendingSyncServerIdsRef.current.add(newServer.id);
       }
 
       const syncSuccess = await syncSettingsToServer();
 
       // Clear pending sync and trigger auto-test after sync
-      if (newServerId) {
-        pendingSyncServerIdsRef.current.delete(newServerId);
-        if (syncSuccess) {
-          const newServer = useAppStore.getState().mcpServers.find((s) => s.id === newServerId);
-          if (newServer && newServer.enabled !== false) {
-            testServer(newServer, true);
-          }
+      if (newServer) {
+        pendingSyncServerIdsRef.current.delete(newServer.id);
+        if (syncSuccess && newServer.enabled !== false) {
+          testServer(newServer, true);
         }
       }
 
@@ -342,27 +342,24 @@ export function useMCPServers() {
       toast.success('MCP server added');
       handleCloseDialog();
     } else if (pendingServerData.type === 'import' && pendingServerData.importServers) {
-      // Get current server count to find the newly added ones
-      const currentCount = mcpServers.length;
+      // Capture existing IDs before adding to find the new servers reliably
+      const existingIds = new Set(mcpServers.map((s) => s.id));
 
       for (const serverData of pendingServerData.importServers) {
         addMCPServer(serverData);
       }
 
-      // Get all newly added server IDs and mark them as pending sync
-      const newServers = useAppStore.getState().mcpServers.slice(currentCount);
-      const newServerIds = newServers.map((s) => s.id);
-      newServerIds.forEach((id) => pendingSyncServerIdsRef.current.add(id));
+      // Find all newly added servers by comparing IDs
+      const newServers = useAppStore.getState().mcpServers.filter((s) => !existingIds.has(s.id));
+      newServers.forEach((s) => pendingSyncServerIdsRef.current.add(s.id));
 
       const syncSuccess = await syncSettingsToServer();
 
       // Clear pending sync and trigger auto-test after sync
-      newServerIds.forEach((id) => pendingSyncServerIdsRef.current.delete(id));
+      newServers.forEach((s) => pendingSyncServerIdsRef.current.delete(s.id));
       if (syncSuccess) {
-        const latestServers = useAppStore.getState().mcpServers;
-        for (const id of newServerIds) {
-          const server = latestServers.find((s) => s.id === id);
-          if (server && server.enabled !== false) {
+        for (const server of newServers) {
+          if (server.enabled !== false) {
             testServer(server, true);
           }
         }
@@ -386,16 +383,19 @@ export function useMCPServers() {
 
   const handleToggleEnabled = async (server: MCPServerConfig) => {
     const wasDisabled = server.enabled === false;
+    const previousEnabled = server.enabled;
     updateMCPServer(server.id, { enabled: !server.enabled });
     const syncSuccess = await syncSettingsToServer();
     if (!syncSuccess) {
+      // Rollback local state on sync failure
+      updateMCPServer(server.id, { enabled: previousEnabled });
       toast.error('Failed to save settings to disk');
       return;
     }
     toast.success(wasDisabled ? 'Server enabled' : 'Server disabled');
 
     // Auto-test if server was just enabled
-    if (wasDisabled && syncSuccess) {
+    if (wasDisabled) {
       const updatedServer = useAppStore.getState().mcpServers.find((s) => s.id === server.id);
       if (updatedServer) {
         testServer(updatedServer, true);
@@ -736,12 +736,18 @@ export function useMCPServers() {
     serversArray: Array<Record<string, unknown>>
   ): Promise<boolean> => {
     // Validate all servers first
+    const names = new Set<string>();
     for (const serverConfig of serversArray) {
       const name = serverConfig.name as string;
       if (!name || typeof name !== 'string') {
         toast.error('Each server must have a name');
         return false;
       }
+      if (names.has(name)) {
+        toast.error(`Duplicate server name found: "${name}"`);
+        return false;
+      }
+      names.add(name);
 
       const serverType = (serverConfig.type as string) || 'stdio';
       if (serverType === 'stdio') {
