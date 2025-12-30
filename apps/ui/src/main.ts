@@ -6,7 +6,7 @@
  */
 
 import path from 'path';
-import { spawn, ChildProcess } from 'child_process';
+import { spawn, execSync, ChildProcess } from 'child_process';
 import fs from 'fs';
 import crypto from 'crypto';
 import http, { Server } from 'http';
@@ -598,9 +598,14 @@ app.on('before-quit', () => {
   if (serverProcess && serverProcess.pid) {
     console.log('[Electron] Stopping server...');
     if (process.platform === 'win32') {
-      // Windows: use taskkill with /t to kill entire process tree
-      // This prevents orphaned node processes when closing the app
-      spawn('taskkill', ['/f', '/t', '/pid', serverProcess.pid.toString()]);
+      try {
+        // Windows: use taskkill with /t to kill entire process tree
+        // This prevents orphaned node processes when closing the app
+        // Using execSync to ensure process is killed before app exits
+        execSync(`taskkill /f /t /pid ${serverProcess.pid}`, { stdio: 'ignore' });
+      } catch (error) {
+        console.error('[Electron] Failed to kill server process:', (error as Error).message);
+      }
     } else {
       serverProcess.kill('SIGTERM');
     }
