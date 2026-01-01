@@ -226,6 +226,16 @@ Your entire response should be valid JSON starting with { and ending with }. No 
             });
           }
         }
+      } else if (msg.type === 'result' && msg.subtype === 'success' && msg.result) {
+        // Use result if it's a final accumulated message (from Cursor provider)
+        logger.info('[Suggestions] Received result from Cursor, length:', msg.result.length);
+        logger.info('[Suggestions] Previous responseText length:', responseText.length);
+        if (msg.result.length > responseText.length) {
+          logger.info('[Suggestions] Using Cursor result (longer than accumulated text)');
+          responseText = msg.result;
+        } else {
+          logger.info('[Suggestions] Keeping accumulated text (longer than Cursor result)');
+        }
       }
     }
   } else {
