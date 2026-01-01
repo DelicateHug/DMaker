@@ -99,9 +99,14 @@ const HOME_ANCHORED_CLOUD_FOLDERS = [
  */
 export function isCloudStoragePath(cwd: string): boolean {
   const resolvedPath = path.resolve(cwd);
+  // Normalize to forward slashes for consistent pattern matching across platforms
+  let normalizedPath = resolvedPath.split(path.sep).join('/');
+  // Remove Windows drive letter if present (e.g., "C:/Users" -> "/Users")
+  // This ensures Unix paths in tests work the same on Windows
+  normalizedPath = normalizedPath.replace(/^[A-Za-z]:/, '');
 
   // Check macOS-specific patterns (these are specific enough to use includes)
-  if (MACOS_CLOUD_STORAGE_PATTERNS.some((pattern) => resolvedPath.includes(pattern))) {
+  if (MACOS_CLOUD_STORAGE_PATTERNS.some((pattern) => normalizedPath.includes(pattern))) {
     return true;
   }
 
@@ -110,9 +115,15 @@ export function isCloudStoragePath(cwd: string): boolean {
   const home = os.homedir();
   for (const folder of HOME_ANCHORED_CLOUD_FOLDERS) {
     const cloudPath = path.join(home, folder);
+    let normalizedCloudPath = cloudPath.split(path.sep).join('/');
+    // Remove Windows drive letter if present
+    normalizedCloudPath = normalizedCloudPath.replace(/^[A-Za-z]:/, '');
     // Check if resolved path starts with the cloud storage path followed by a separator
     // This ensures we match ~/Dropbox/project but not ~/Dropbox-archive or ~/my-dropbox-tool
-    if (resolvedPath === cloudPath || resolvedPath.startsWith(cloudPath + path.sep)) {
+    if (
+      normalizedPath === normalizedCloudPath ||
+      normalizedPath.startsWith(normalizedCloudPath + '/')
+    ) {
       return true;
     }
   }
