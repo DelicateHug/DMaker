@@ -574,11 +574,11 @@ export function removeEnvKeySync(envPath: string, key: string): void {
  */
 function updateEnvContent(content: string, key: string, value: string): string {
   const lines = content.split('\n');
-  const keyRegex = new RegExp(`^${escapeRegex(key)}=`);
+  const keyPrefix = `${key}=`;
   let found = false;
 
   const newLines = lines.map((line) => {
-    if (keyRegex.test(line.trim())) {
+    if (line.trim().startsWith(keyPrefix)) {
       found = true;
       return `${key}=${value}`;
     }
@@ -612,8 +612,8 @@ function updateEnvContent(content: string, key: string, value: string): string {
  */
 function removeEnvKeyFromContent(content: string, key: string): string {
   const lines = content.split('\n');
-  const keyRegex = new RegExp(`^${escapeRegex(key)}=`);
-  const newLines = lines.filter((line) => !keyRegex.test(line.trim()));
+  const keyPrefix = `${key}=`;
+  const newLines = lines.filter((line) => !line.trim().startsWith(keyPrefix));
 
   // Remove trailing empty lines
   while (newLines.length > 0 && newLines[newLines.length - 1].trim() === '') {
@@ -626,11 +626,4 @@ function removeEnvKeyFromContent(content: string, key: string): string {
     result += '\n';
   }
   return result;
-}
-
-/**
- * Escape special regex characters in a string
- */
-function escapeRegex(str: string): string {
-  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }

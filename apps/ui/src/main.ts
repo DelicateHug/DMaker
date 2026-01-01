@@ -349,17 +349,17 @@ async function startServer(): Promise<void> {
   // Validate that the found Node executable actually exists
   // systemPathExists is used because node-finder returns system paths
   if (command !== 'node') {
+    let exists: boolean;
     try {
-      if (!systemPathExists(command)) {
-        throw new Error(
-          `Node.js executable not found at: ${command} (source: ${nodeResult.source})`
-        );
-      }
+      exists = systemPathExists(command);
     } catch (error) {
       const originalError = error instanceof Error ? error.message : String(error);
       throw new Error(
         `Failed to verify Node.js executable at: ${command} (source: ${nodeResult.source}). Reason: ${originalError}`
       );
+    }
+    if (!exists) {
+      throw new Error(`Node.js executable not found at: ${command} (source: ${nodeResult.source})`);
     }
   }
 

@@ -15,22 +15,30 @@ import type {
   ModelDefinition,
 } from './types.js';
 
-// Automaker-specific environment variables that should not pollute agent processes
-// These are internal to Automaker and would interfere with user projects
-// (e.g., PORT=3008 would cause Next.js/Vite to use the wrong port)
-const AUTOMAKER_ENV_VARS = ['PORT', 'DATA_DIR', 'AUTOMAKER_API_KEY', 'NODE_PATH'];
+// Explicit allowlist of environment variables to pass to the SDK.
+// Only these vars are passed - nothing else from process.env leaks through.
+const ALLOWED_ENV_VARS = [
+  'ANTHROPIC_API_KEY',
+  'PATH',
+  'HOME',
+  'SHELL',
+  'TERM',
+  'USER',
+  'LANG',
+  'LC_ALL',
+];
 
 /**
- * Build a clean environment for the SDK, excluding Automaker-specific variables
+ * Build environment for the SDK with only explicitly allowed variables
  */
-function buildCleanEnv(): Record<string, string | undefined> {
-  const cleanEnv: Record<string, string | undefined> = {};
-  for (const [key, value] of Object.entries(process.env)) {
-    if (!AUTOMAKER_ENV_VARS.includes(key)) {
-      cleanEnv[key] = value;
+function buildEnv(): Record<string, string | undefined> {
+  const env: Record<string, string | undefined> = {};
+  for (const key of ALLOWED_ENV_VARS) {
+    if (process.env[key]) {
+      env[key] = process.env[key];
     }
   }
-  return cleanEnv;
+  return env;
 }
 
 export class ClaudeProvider extends BaseProvider {
@@ -75,9 +83,8 @@ export class ClaudeProvider extends BaseProvider {
       systemPrompt,
       maxTurns,
       cwd,
-      // Pass clean environment to SDK, excluding Automaker-specific variables
-      // This prevents PORT, DATA_DIR, etc. from polluting agent-spawned processes
-      env: buildCleanEnv(),
+      // Pass only explicitly allowed environment variables to SDK
+      env: buildEnv(),
       // Only restrict tools if explicitly set OR (no MCP / unrestricted disabled)
       ...(allowedTools && shouldRestrictTools && { allowedTools }),
       ...(!allowedTools && shouldRestrictTools && { allowedTools: defaultTools }),

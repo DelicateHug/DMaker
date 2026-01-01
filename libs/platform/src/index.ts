@@ -115,3 +115,6 @@ export {
   electronAppStat,
   electronAppReadFile,
 } from './system-paths.js';
+
+// Port configuration
+export { STATIC_PORT, SERVER_PORT, RESERVED_PORTS } from './config/ports.js';
