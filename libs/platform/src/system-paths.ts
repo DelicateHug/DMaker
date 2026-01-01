@@ -109,21 +109,45 @@ export function getClaudeProjectsDir(): string {
 
 /**
  * Get common shell paths for shell detection
+ * Includes both full paths and short names to match $SHELL or PATH entries
  */
 export function getShellPaths(): string[] {
   if (process.platform === 'win32') {
     return [
-      process.env.COMSPEC || 'cmd.exe',
-      'cmd.exe',
-      'powershell.exe',
-      'pwsh.exe', // PowerShell Core short form
-      'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
+      // Full paths (most specific first)
       'C:\\Program Files\\PowerShell\\7\\pwsh.exe',
-      'C:\\Program Files\\PowerShell\\7-preview\\pwsh.exe', // Preview versions
+      'C:\\Program Files\\PowerShell\\7-preview\\pwsh.exe',
+      'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
+      // COMSPEC environment variable (typically cmd.exe)
+      process.env.COMSPEC || 'C:\\Windows\\System32\\cmd.exe',
+      // Short names (for PATH resolution)
+      'pwsh.exe',
+      'pwsh',
+      'powershell.exe',
+      'powershell',
+      'cmd.exe',
+      'cmd',
     ];
   }
 
-  return ['/bin/zsh', '/bin/bash', '/bin/sh', '/usr/bin/zsh', '/usr/bin/bash'];
+  // POSIX (macOS, Linux)
+  return [
+    // Full paths
+    '/bin/zsh',
+    '/bin/bash',
+    '/bin/sh',
+    '/usr/bin/zsh',
+    '/usr/bin/bash',
+    '/usr/bin/sh',
+    '/usr/local/bin/zsh',
+    '/usr/local/bin/bash',
+    '/opt/homebrew/bin/zsh',
+    '/opt/homebrew/bin/bash',
+    // Short names (for PATH resolution or $SHELL matching)
+    'zsh',
+    'bash',
+    'sh',
+  ];
 }
 
 // =============================================================================

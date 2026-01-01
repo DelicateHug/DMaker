@@ -14,6 +14,7 @@ vi.mock('@automaker/platform', async () => {
     systemPathExists: vi.fn(),
     systemPathReadFileSync: vi.fn(),
     getWslVersionPath: vi.fn(),
+    getShellPaths: vi.fn(), // Mock shell paths for cross-platform testing
     isAllowedSystemPath: vi.fn(() => true), // Allow all paths in tests
   };
 });
@@ -22,6 +23,36 @@ vi.mock('@/lib/secure-fs.js');
 describe('terminal-service.ts', () => {
   let service: TerminalService;
   let mockPtyProcess: any;
+
+  // Shell paths for each platform (matching system-paths.ts)
+  const linuxShellPaths = [
+    '/bin/zsh',
+    '/bin/bash',
+    '/bin/sh',
+    '/usr/bin/zsh',
+    '/usr/bin/bash',
+    '/usr/bin/sh',
+    '/usr/local/bin/zsh',
+    '/usr/local/bin/bash',
+    '/opt/homebrew/bin/zsh',
+    '/opt/homebrew/bin/bash',
+    'zsh',
+    'bash',
+    'sh',
+  ];
+
+  const windowsShellPaths = [
+    'C:\\Program Files\\PowerShell\\7\\pwsh.exe',
+    'C:\\Program Files\\PowerShell\\7-preview\\pwsh.exe',
+    'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
+    'C:\\Windows\\System32\\cmd.exe',
+    'pwsh.exe',
+    'pwsh',
+    'powershell.exe',
+    'powershell',
+    'cmd.exe',
+    'cmd',
+  ];
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -45,6 +76,7 @@ describe('terminal-service.ts', () => {
     vi.mocked(platform.systemPathExists).mockReturnValue(true);
     vi.mocked(platform.systemPathReadFileSync).mockReturnValue('');
     vi.mocked(platform.getWslVersionPath).mockReturnValue('/proc/version');
+    vi.mocked(platform.getShellPaths).mockReturnValue(linuxShellPaths); // Default to Linux paths
     vi.mocked(secureFs.stat).mockResolvedValue({ isDirectory: () => true } as any);
   });
 
@@ -55,6 +87,7 @@ describe('terminal-service.ts', () => {
   describe('detectShell', () => {
     it('should detect PowerShell Core on Windows when available', () => {
       vi.mocked(os.platform).mockReturnValue('win32');
+      vi.mocked(platform.getShellPaths).mockReturnValue(windowsShellPaths);
       vi.mocked(platform.systemPathExists).mockImplementation((path: string) => {
         return path === 'C:\\Program Files\\PowerShell\\7\\pwsh.exe';
       });
@@ -67,6 +100,7 @@ describe('terminal-service.ts', () => {
 
     it('should fall back to PowerShell on Windows if Core not available', () => {
       vi.mocked(os.platform).mockReturnValue('win32');
+      vi.mocked(platform.getShellPaths).mockReturnValue(windowsShellPaths);
       vi.mocked(platform.systemPathExists).mockImplementation((path: string) => {
         return path === 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe';
       });
@@ -79,6 +113,7 @@ describe('terminal-service.ts', () => {
 
     it('should fall back to cmd.exe on Windows if no PowerShell', () => {
       vi.mocked(os.platform).mockReturnValue('win32');
+      vi.mocked(platform.getShellPaths).mockReturnValue(windowsShellPaths);
       vi.mocked(platform.systemPathExists).mockReturnValue(false);
 
       const result = service.detectShell();
@@ -114,7 +149,10 @@ describe('terminal-service.ts', () => {
     it('should fall back to bash on macOS if zsh not available', () => {
       vi.mocked(os.platform).mockReturnValue('darwin');
       vi.spyOn(process, 'env', 'get').mockReturnValue({});
-      vi.mocked(platform.systemPathExists).mockReturnValue(false);
+      // zsh not available, but bash is
+      vi.mocked(platform.systemPathExists).mockImplementation((path: string) => {
+        return path === '/bin/bash';
+      });
 
       const result = service.detectShell();
 

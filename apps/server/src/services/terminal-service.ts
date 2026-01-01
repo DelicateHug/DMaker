@@ -14,7 +14,12 @@ import * as path from 'path';
 import * as secureFs from '../lib/secure-fs.js';
 // System paths module handles shell binary checks and WSL detection
 // These are system paths outside ALLOWED_ROOT_DIRECTORY, centralized for security auditing
-import { systemPathExists, systemPathReadFileSync, getWslVersionPath } from '@automaker/platform';
+import {
+  systemPathExists,
+  systemPathReadFileSync,
+  getWslVersionPath,
+  getShellPaths,
+} from '@automaker/platform';
 
 // Maximum scrollback buffer size (characters)
 const MAX_SCROLLBACK_SIZE = 50000; // ~50KB per terminal
@@ -65,60 +70,96 @@ export class TerminalService extends EventEmitter {
 
   /**
    * Detect the best shell for the current platform
+   * Uses getShellPaths() to iterate through allowed shell paths
    */
   detectShell(): { shell: string; args: string[] } {
     const platform = os.platform();
+    const shellPaths = getShellPaths();
 
-    // Check if running in WSL
+    // Helper to get basename handling both path separators
+    const getBasename = (shellPath: string): string => {
+      const lastSep = Math.max(shellPath.lastIndexOf('/'), shellPath.lastIndexOf('\\'));
+      return lastSep >= 0 ? shellPath.slice(lastSep + 1) : shellPath;
+    };
+
+    // Helper to get shell args based on shell name
+    const getShellArgs = (shell: string): string[] => {
+      const shellName = getBasename(shell).toLowerCase().replace('.exe', '');
+      // PowerShell and cmd don't need --login
+      if (shellName === 'powershell' || shellName === 'pwsh' || shellName === 'cmd') {
+        return [];
+      }
+      // sh doesn't support --login in all implementations
+      if (shellName === 'sh') {
+        return [];
+      }
+      // bash, zsh, and other POSIX shells support --login
+      return ['--login'];
+    };
+
+    // Check if running in WSL - prefer user's shell or bash with --login
     if (platform === 'linux' && this.isWSL()) {
-      // In WSL, prefer the user's configured shell or bash
-      const userShell = process.env.SHELL || '/bin/bash';
-      if (systemPathExists(userShell)) {
-        return { shell: userShell, args: ['--login'] };
+      const userShell = process.env.SHELL;
+      if (userShell) {
+        // Try to find userShell in allowed paths
+        for (const allowedShell of shellPaths) {
+          if (allowedShell === userShell || getBasename(allowedShell) === getBasename(userShell)) {
+            try {
+              if (systemPathExists(allowedShell)) {
+                return { shell: allowedShell, args: getShellArgs(allowedShell) };
+              }
+            } catch {
+              // Path not allowed, continue searching
+            }
+          }
+        }
+      }
+      // Fall back to first available POSIX shell
+      for (const shell of shellPaths) {
+        try {
+          if (systemPathExists(shell)) {
+            return { shell, args: getShellArgs(shell) };
+          }
+        } catch {
+          // Path not allowed, continue
+        }
       }
       return { shell: '/bin/bash', args: ['--login'] };
     }
 
-    switch (platform) {
-      case 'win32': {
-        // Windows: prefer PowerShell, fall back to cmd
-        const pwsh = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe';
-        const pwshCore = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe';
-
-        if (systemPathExists(pwshCore)) {
-          return { shell: pwshCore, args: [] };
+    // For all platforms: first try user's shell if set
+    const userShell = process.env.SHELL;
+    if (userShell && platform !== 'win32') {
+      // Try to find userShell in allowed paths
+      for (const allowedShell of shellPaths) {
+        if (allowedShell === userShell || getBasename(allowedShell) === getBasename(userShell)) {
+          try {
+            if (systemPathExists(allowedShell)) {
+              return { shell: allowedShell, args: getShellArgs(allowedShell) };
+            }
+          } catch {
+            // Path not allowed, continue searching
+          }
         }
-        if (systemPathExists(pwsh)) {
-          return { shell: pwsh, args: [] };
-        }
-        return { shell: 'cmd.exe', args: [] };
-      }
-
-      case 'darwin': {
-        // macOS: prefer user's shell, then zsh, then bash
-        const userShell = process.env.SHELL;
-        if (userShell && systemPathExists(userShell)) {
-          return { shell: userShell, args: ['--login'] };
-        }
-        if (systemPathExists('/bin/zsh')) {
-          return { shell: '/bin/zsh', args: ['--login'] };
-        }
-        return { shell: '/bin/bash', args: ['--login'] };
-      }
-
-      case 'linux':
-      default: {
-        // Linux: prefer user's shell, then bash, then sh
-        const userShell = process.env.SHELL;
-        if (userShell && systemPathExists(userShell)) {
-          return { shell: userShell, args: ['--login'] };
-        }
-        if (systemPathExists('/bin/bash')) {
-          return { shell: '/bin/bash', args: ['--login'] };
-        }
-        return { shell: '/bin/sh', args: [] };
       }
     }
+
+    // Iterate through allowed shell paths and return first existing one
+    for (const shell of shellPaths) {
+      try {
+        if (systemPathExists(shell)) {
+          return { shell, args: getShellArgs(shell) };
+        }
+      } catch {
+        // Path not allowed or doesn't exist, continue to next
+      }
+    }
+
+    // Ultimate fallbacks based on platform
+    if (platform === 'win32') {
+      return { shell: 'cmd.exe', args: [] };
+    }
+    return { shell: '/bin/sh', args: [] };
   }
 
   /**
