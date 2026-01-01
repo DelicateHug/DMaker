@@ -1,15 +1,20 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import os from 'os';
 
 describe('sdk-options.ts', () => {
   let originalEnv: NodeJS.ProcessEnv;
+  let homedirSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     originalEnv = { ...process.env };
     vi.resetModules();
+    // Spy on os.homedir and set default return value
+    homedirSpy = vi.spyOn(os, 'homedir').mockReturnValue('/Users/test');
   });
 
   afterEach(() => {
     process.env = originalEnv;
+    homedirSpy.mockRestore();
   });
 
   describe('isCloudStoragePath', () => {
@@ -42,6 +47,25 @@ describe('sdk-options.ts', () => {
       ).toBe(true);
     });
 
+    it('should detect home-anchored Dropbox paths', async () => {
+      const { isCloudStoragePath } = await import('@/lib/sdk-options.js');
+      expect(isCloudStoragePath('/Users/test/Dropbox')).toBe(true);
+      expect(isCloudStoragePath('/Users/test/Dropbox/project')).toBe(true);
+      expect(isCloudStoragePath('/Users/test/Dropbox/nested/deep/project')).toBe(true);
+    });
+
+    it('should detect home-anchored Google Drive paths', async () => {
+      const { isCloudStoragePath } = await import('@/lib/sdk-options.js');
+      expect(isCloudStoragePath('/Users/test/Google Drive')).toBe(true);
+      expect(isCloudStoragePath('/Users/test/Google Drive/project')).toBe(true);
+    });
+
+    it('should detect home-anchored OneDrive paths', async () => {
+      const { isCloudStoragePath } = await import('@/lib/sdk-options.js');
+      expect(isCloudStoragePath('/Users/test/OneDrive')).toBe(true);
+      expect(isCloudStoragePath('/Users/test/OneDrive/project')).toBe(true);
+    });
+
     it('should return false for local paths', async () => {
       const { isCloudStoragePath } = await import('@/lib/sdk-options.js');
       expect(isCloudStoragePath('/Users/test/projects/myapp')).toBe(false);
@@ -53,6 +77,40 @@ describe('sdk-options.ts', () => {
       const { isCloudStoragePath } = await import('@/lib/sdk-options.js');
       expect(isCloudStoragePath('./project')).toBe(false);
       expect(isCloudStoragePath('../other-project')).toBe(false);
+    });
+
+    // Tests for false positive prevention - paths that contain cloud storage names but aren't cloud storage
+    it('should NOT flag paths that merely contain "dropbox" in the name', async () => {
+      const { isCloudStoragePath } = await import('@/lib/sdk-options.js');
+      // Projects with dropbox-like names
+      expect(isCloudStoragePath('/home/user/my-project-about-dropbox')).toBe(false);
+      expect(isCloudStoragePath('/Users/test/projects/dropbox-clone')).toBe(false);
+      expect(isCloudStoragePath('/Users/test/projects/Dropbox-backup-tool')).toBe(false);
+      // Dropbox folder that's NOT in the home directory
+      expect(isCloudStoragePath('/var/shared/Dropbox/project')).toBe(false);
+    });
+
+    it('should NOT flag paths that merely contain "Google Drive" in the name', async () => {
+      const { isCloudStoragePath } = await import('@/lib/sdk-options.js');
+      expect(isCloudStoragePath('/Users/test/projects/google-drive-api-client')).toBe(false);
+      expect(isCloudStoragePath('/home/user/Google Drive API Tests')).toBe(false);
+    });
+
+    it('should NOT flag paths that merely contain "OneDrive" in the name', async () => {
+      const { isCloudStoragePath } = await import('@/lib/sdk-options.js');
+      expect(isCloudStoragePath('/Users/test/projects/onedrive-sync-tool')).toBe(false);
+      expect(isCloudStoragePath('/home/user/OneDrive-migration-scripts')).toBe(false);
+    });
+
+    it('should handle different home directories correctly', async () => {
+      // Change the mocked home directory
+      homedirSpy.mockReturnValue('/home/linuxuser');
+      const { isCloudStoragePath } = await import('@/lib/sdk-options.js');
+
+      // Should detect Dropbox under the Linux home directory
+      expect(isCloudStoragePath('/home/linuxuser/Dropbox/project')).toBe(true);
+      // Should NOT detect Dropbox under the old home directory (since home changed)
+      expect(isCloudStoragePath('/Users/test/Dropbox/project')).toBe(false);
     });
   });
 

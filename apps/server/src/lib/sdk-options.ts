@@ -16,6 +16,7 @@
  */
 
 import type { Options } from '@anthropic-ai/claude-agent-sdk';
+import os from 'os';
 import path from 'path';
 import { resolveModelString } from '@automaker/model-resolver';
 import { DEFAULT_MODELS, CLAUDE_MODEL_MAP, type McpServerConfig } from '@automaker/types';
@@ -63,12 +64,24 @@ export function validateWorkingDirectory(cwd: string): void {
  *
  * @see https://github.com/anthropics/claude-code/issues/XXX (TODO: file upstream issue)
  */
-const CLOUD_STORAGE_PATH_PATTERNS = [
+
+/**
+ * macOS-specific cloud storage patterns that appear under ~/Library/
+ * These are specific enough to use with includes() safely.
+ */
+const MACOS_CLOUD_STORAGE_PATTERNS = [
   '/Library/CloudStorage/', // Dropbox, Google Drive, OneDrive, Box on macOS
   '/Library/Mobile Documents/', // iCloud Drive on macOS
-  '/Google Drive/', // Google Drive on some systems
-  '/Dropbox/', // Dropbox on Linux/alternative installs
-  '/OneDrive/', // OneDrive on Linux/alternative installs
+] as const;
+
+/**
+ * Generic cloud storage folder names that need to be anchored to the home directory
+ * to avoid false positives (e.g., /home/user/my-project-about-dropbox/).
+ */
+const HOME_ANCHORED_CLOUD_FOLDERS = [
+  'Google Drive', // Google Drive on some systems
+  'Dropbox', // Dropbox on Linux/alternative installs
+  'OneDrive', // OneDrive on Linux/alternative installs
 ] as const;
 
 /**
@@ -77,12 +90,34 @@ const CLOUD_STORAGE_PATH_PATTERNS = [
  * Cloud storage providers use virtual filesystem implementations that are
  * incompatible with the Claude CLI sandbox feature, causing process crashes.
  *
+ * Uses two detection strategies:
+ * 1. macOS-specific patterns (under ~/Library/) - checked via includes()
+ * 2. Generic folder names - anchored to home directory to avoid false positives
+ *
  * @param cwd - The working directory path to check
  * @returns true if the path is in a cloud storage location
  */
 export function isCloudStoragePath(cwd: string): boolean {
   const resolvedPath = path.resolve(cwd);
-  return CLOUD_STORAGE_PATH_PATTERNS.some((pattern) => resolvedPath.includes(pattern));
+
+  // Check macOS-specific patterns (these are specific enough to use includes)
+  if (MACOS_CLOUD_STORAGE_PATTERNS.some((pattern) => resolvedPath.includes(pattern))) {
+    return true;
+  }
+
+  // Check home-anchored patterns to avoid false positives
+  // e.g., /home/user/my-project-about-dropbox/ should NOT match
+  const home = os.homedir();
+  for (const folder of HOME_ANCHORED_CLOUD_FOLDERS) {
+    const cloudPath = path.join(home, folder);
+    // Check if resolved path starts with the cloud storage path followed by a separator
+    // This ensures we match ~/Dropbox/project but not ~/Dropbox-archive or ~/my-dropbox-tool
+    if (resolvedPath === cloudPath || resolvedPath.startsWith(cloudPath + path.sep)) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 /**
@@ -122,17 +157,10 @@ export function checkSandboxCompatibility(
 
   // Check for cloud storage incompatibility
   if (isCloudStoragePath(cwd)) {
-    const message =
-      `Sandbox mode auto-disabled: Project is in a cloud storage location (${cwd}). ` +
-      `The Claude CLI sandbox feature is incompatible with cloud storage filesystems. ` +
-      `To use sandbox mode, move your project to a local directory.`;
-
-    console.warn(`[SdkOptions] ${message}`);
-
     return {
       enabled: false,
       disabledReason: 'cloud_storage',
-      message,
+      message: `Sandbox mode auto-disabled: Project is in a cloud storage location (${cwd}). The Claude CLI sandbox feature is incompatible with cloud storage filesystems. To use sandbox mode, move your project to a local directory.`,
     };
   }
 
