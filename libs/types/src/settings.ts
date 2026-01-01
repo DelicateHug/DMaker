@@ -351,7 +351,7 @@ export interface GlobalSettings {
   // Claude Agent SDK Settings
   /** Auto-load CLAUDE.md files using SDK's settingSources option */
   autoLoadClaudeMd?: boolean;
-  /** Enable sandbox mode for bash commands (default: true, disable if issues occur) */
+  /** Enable sandbox mode for bash commands (default: false, enable for additional security) */
   enableSandboxMode?: boolean;
 
   // MCP Server Configuration
@@ -523,7 +523,7 @@ export const DEFAULT_GLOBAL_SETTINGS: GlobalSettings = {
   worktreePanelCollapsed: false,
   lastSelectedSessionByProject: {},
   autoLoadClaudeMd: false,
-  enableSandboxMode: true,
+  enableSandboxMode: false,
   mcpServers: [],
   // Default to true for autonomous workflow. Security is enforced when adding servers
   // via the security warning dialog that explains the risks.
