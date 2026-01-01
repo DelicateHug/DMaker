@@ -146,6 +146,11 @@ export async function generateBacklogPlan(
             }
           }
         }
+      } else if (msg.type === 'result' && msg.subtype === 'success' && msg.result) {
+        // Use result if it's a final accumulated message (from Cursor provider)
+        if (msg.result.length > responseText.length) {
+          responseText = msg.result;
+        }
       }
     }
 
