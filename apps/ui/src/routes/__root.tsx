@@ -25,7 +25,13 @@ import { SandboxRejectionScreen } from '@/components/dialogs/sandbox-rejection-s
 
 function RootLayoutContent() {
   const location = useLocation();
-  const { setIpcConnected, currentProject, getEffectiveTheme } = useAppStore();
+  const {
+    setIpcConnected,
+    currentProject,
+    getEffectiveTheme,
+    skipSandboxWarning,
+    setSkipSandboxWarning,
+  } = useAppStore();
   const { setupComplete } = useSetupStore();
   const navigate = useNavigate();
   const [isMounted, setIsMounted] = useState(false);
@@ -106,6 +112,9 @@ function RootLayoutContent() {
         if (result.isContainerized) {
           // Running in a container, no warning needed
           setSandboxStatus('containerized');
+        } else if (skipSandboxWarning) {
+          // User opted to skip the warning, auto-confirm
+          setSandboxStatus('confirmed');
         } else {
           // Not containerized, show warning dialog
           setSandboxStatus('needs-confirmation');
@@ -113,17 +122,27 @@ function RootLayoutContent() {
       } catch (error) {
         console.error('[Sandbox] Failed to check environment:', error);
         // On error, assume not containerized and show warning
-        setSandboxStatus('needs-confirmation');
+        if (skipSandboxWarning) {
+          setSandboxStatus('confirmed');
+        } else {
+          setSandboxStatus('needs-confirmation');
+        }
       }
     };
 
     checkSandbox();
-  }, [sandboxStatus]);
+  }, [sandboxStatus, skipSandboxWarning]);
 
   // Handle sandbox risk confirmation
-  const handleSandboxConfirm = useCallback(() => {
-    setSandboxStatus('confirmed');
-  }, []);
+  const handleSandboxConfirm = useCallback(
+    (skipInFuture: boolean) => {
+      if (skipInFuture) {
+        setSkipSandboxWarning(true);
+      }
+      setSandboxStatus('confirmed');
+    },
+    [setSkipSandboxWarning]
+  );
 
   // Handle sandbox risk denial
   const handleSandboxDeny = useCallback(async () => {
