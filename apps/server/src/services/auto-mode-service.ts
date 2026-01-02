@@ -10,7 +10,13 @@
  */
 
 import { ProviderFactory } from '../providers/provider-factory.js';
-import type { ExecuteOptions, Feature, PipelineConfig, PipelineStep } from '@automaker/types';
+import type {
+  ExecuteOptions,
+  Feature,
+  FeatureStatusWithPipeline,
+  PipelineConfig,
+  PipelineStep,
+} from '@automaker/types';
 import {
   buildPromptWithImages,
   isAbortError,
@@ -710,12 +716,12 @@ Complete the pipeline step instructions above. Review the previous work and appl
     const pipelineInfo = await this.detectPipelineStatus(
       projectPath,
       featureId,
-      feature.status || ''
+      (feature.status || '') as FeatureStatusWithPipeline
     );
 
     if (pipelineInfo.isPipeline) {
       // Feature stuck in pipeline - use pipeline resume
-      return this.resumePipelineFeature(projectPath, featureId, useWorktrees, pipelineInfo);
+      return this.resumePipelineFeature(projectPath, feature, useWorktrees, pipelineInfo);
     }
 
     // Normal resume flow for non-pipeline features
@@ -746,11 +752,12 @@ Complete the pipeline step instructions above. Review the previous work and appl
   /**
    * Resume a feature that crashed during pipeline execution
    * Handles edge cases: no context, missing step, deleted pipeline step
+   * @param feature - The feature object (already loaded to avoid redundant reads)
    * @param pipelineInfo - Information about the pipeline status from detectPipelineStatus()
    */
   private async resumePipelineFeature(
     projectPath: string,
-    featureId: string,
+    feature: Feature,
     useWorktrees: boolean,
     pipelineInfo: {
       isPipeline: boolean;
@@ -761,6 +768,7 @@ Complete the pipeline step instructions above. Review the previous work and appl
       config: PipelineConfig | null;
     }
   ): Promise<void> {
+    const featureId = feature.id;
     console.log(
       `[AutoMode] Resuming feature ${featureId} from pipeline step ${pipelineInfo.stepId}`
     );
@@ -798,8 +806,7 @@ Complete the pipeline step instructions above. Review the previous work and appl
         `[AutoMode] Step ${pipelineInfo.stepId} no longer exists in pipeline, completing feature without pipeline`
       );
 
-      const feature = await this.loadFeature(projectPath, featureId);
-      const finalStatus = feature?.skipTests ? 'waiting_approval' : 'verified';
+      const finalStatus = feature.skipTests ? 'waiting_approval' : 'verified';
 
       await this.updateFeatureStatus(projectPath, featureId, finalStatus);
 
@@ -824,7 +831,7 @@ Complete the pipeline step instructions above. Review the previous work and appl
 
     return this.resumeFromPipelineStep(
       projectPath,
-      featureId,
+      feature,
       useWorktrees,
       pipelineInfo.stepIndex,
       pipelineInfo.config
@@ -834,20 +841,17 @@ Complete the pipeline step instructions above. Review the previous work and appl
   /**
    * Resume pipeline execution from a specific step index
    * Re-executes the step that crashed, then continues with remaining steps
+   * @param feature - The feature object (already loaded to avoid redundant reads)
    * @param pipelineConfig - Pipeline config passed from detectPipelineStatus to avoid re-reading
    */
   private async resumeFromPipelineStep(
     projectPath: string,
-    featureId: string,
+    feature: Feature,
     useWorktrees: boolean,
     startFromStepIndex: number,
     pipelineConfig: PipelineConfig
   ): Promise<void> {
-    // Load feature and validate
-    const feature = await this.loadFeature(projectPath, featureId);
-    if (!feature) {
-      throw new Error(`Feature ${featureId} not found`);
-    }
+    const featureId = feature.id;
 
     const sortedSteps = [...pipelineConfig.steps].sort((a, b) => a.order - b.order);
 
@@ -2763,7 +2767,7 @@ Review the previous work and continue the implementation. If the feature appears
   private async detectPipelineStatus(
     projectPath: string,
     featureId: string,
-    currentStatus: string
+    currentStatus: FeatureStatusWithPipeline
   ): Promise<{
     isPipeline: boolean;
     stepId: string | null;
