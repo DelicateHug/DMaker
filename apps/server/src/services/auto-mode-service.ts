@@ -75,7 +75,15 @@ interface PlanSpec {
 }
 
 /**
- * Information about pipeline status when resuming a feature
+ * Information about pipeline status when resuming a feature.
+ * Used to determine how to handle features stuck in pipeline execution.
+ *
+ * @property {boolean} isPipeline - Whether the feature is in a pipeline step
+ * @property {string | null} stepId - ID of the current pipeline step (e.g., 'step_123')
+ * @property {number} stepIndex - Index of the step in the sorted pipeline steps (-1 if not found)
+ * @property {number} totalSteps - Total number of steps in the pipeline
+ * @property {PipelineStep | null} step - The pipeline step configuration, or null if step not found
+ * @property {PipelineConfig | null} config - The full pipeline configuration, or null if no pipeline
  */
 interface PipelineStatusInfo {
   isPipeline: boolean;
@@ -867,10 +875,19 @@ Complete the pipeline step instructions above. Review the previous work and appl
   }
 
   /**
-   * Resume a feature that crashed during pipeline execution
-   * Handles edge cases: no context, missing step, deleted pipeline step
-   * @param feature - The feature object (already loaded to avoid redundant reads)
-   * @param pipelineInfo - Information about the pipeline status from detectPipelineStatus()
+   * Resume a feature that crashed during pipeline execution.
+   * Handles multiple edge cases to ensure robust recovery:
+   * - No context file: Restart entire pipeline from beginning
+   * - Step deleted from config: Complete feature without remaining pipeline steps
+   * - Valid step exists: Resume from the crashed step and continue
+   *
+   * @param {string} projectPath - Absolute path to the project directory
+   * @param {Feature} feature - The feature object (already loaded to avoid redundant reads)
+   * @param {boolean} useWorktrees - Whether to use git worktrees for isolation
+   * @param {PipelineStatusInfo} pipelineInfo - Information about the pipeline status from detectPipelineStatus()
+   * @returns {Promise<void>} Resolves when resume operation completes or throws on error
+   * @throws {Error} If pipeline config is null but stepIndex is valid (should never happen)
+   * @private
    */
   private async resumePipelineFeature(
     projectPath: string,
@@ -944,10 +961,25 @@ Complete the pipeline step instructions above. Review the previous work and appl
   }
 
   /**
-   * Resume pipeline execution from a specific step index
-   * Re-executes the step that crashed, then continues with remaining steps
-   * @param feature - The feature object (already loaded to avoid redundant reads)
-   * @param pipelineConfig - Pipeline config passed from detectPipelineStatus to avoid re-reading
+   * Resume pipeline execution from a specific step index.
+   * Re-executes the step that crashed (to handle partial completion),
+   * then continues executing all remaining pipeline steps in order.
+   *
+   * This method handles the complete pipeline resume workflow:
+   * - Validates feature and step index
+   * - Locates or creates git worktree if needed
+   * - Executes remaining steps starting from the crashed step
+   * - Updates feature status to verified/waiting_approval when complete
+   * - Emits progress events throughout execution
+   *
+   * @param {string} projectPath - Absolute path to the project directory
+   * @param {Feature} feature - The feature object (already loaded to avoid redundant reads)
+   * @param {boolean} useWorktrees - Whether to use git worktrees for isolation
+   * @param {number} startFromStepIndex - Zero-based index of the step to resume from
+   * @param {PipelineConfig} pipelineConfig - Pipeline config passed from detectPipelineStatus to avoid re-reading
+   * @returns {Promise<void>} Resolves when pipeline execution completes successfully
+   * @throws {Error} If feature not found, step index invalid, or pipeline execution fails
+   * @private
    */
   private async resumeFromPipelineStep(
     projectPath: string,
@@ -2888,8 +2920,21 @@ Review the previous work and continue the implementation. If the feature appears
   }
 
   /**
-   * Detect if a feature is stuck in a pipeline step and extract step info
-   * @returns Pipeline information including step details and config
+   * Detect if a feature is stuck in a pipeline step and extract step information.
+   * Parses the feature status to determine if it's a pipeline status (e.g., 'pipeline_step_xyz'),
+   * loads the pipeline configuration, and validates that the step still exists.
+   *
+   * This method handles several scenarios:
+   * - Non-pipeline status: Returns default PipelineStatusInfo with isPipeline=false
+   * - Invalid pipeline status format: Returns isPipeline=true but null step info
+   * - Step deleted from config: Returns stepIndex=-1 to signal missing step
+   * - Valid pipeline step: Returns full step information and config
+   *
+   * @param {string} projectPath - Absolute path to the project directory
+   * @param {string} featureId - Unique identifier of the feature
+   * @param {FeatureStatusWithPipeline} currentStatus - Current feature status (may include pipeline step info)
+   * @returns {Promise<PipelineStatusInfo>} Information about the pipeline status and step
+   * @private
    */
   private async detectPipelineStatus(
     projectPath: string,
