@@ -6,7 +6,7 @@ export type SettingsViewId =
   | 'providers'
   | 'mcp-servers'
   | 'prompts'
-  | 'phase-models'
+  | 'model-defaults'
   | 'appearance'
   | 'terminal'
   | 'keyboard'

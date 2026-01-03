@@ -26,7 +26,7 @@ export const NAV_ITEMS: NavigationItem[] = [
   { id: 'providers', label: 'AI Providers', icon: Bot },
   { id: 'mcp-servers', label: 'MCP Servers', icon: Plug },
   { id: 'prompts', label: 'Prompt Customization', icon: MessageSquareText },
-  { id: 'phase-models', label: 'Phase Models', icon: Workflow },
+  { id: 'model-defaults', label: 'Model Defaults', icon: Workflow },
   { id: 'appearance', label: 'Appearance', icon: Palette },
   { id: 'terminal', label: 'Terminal', icon: SquareTerminal },
   { id: 'keyboard', label: 'Keyboard Shortcuts', icon: Settings2 },

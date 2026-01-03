@@ -3,7 +3,7 @@
  * This ensures we have a single source of truth for model selection logic.
  */
 
-import { PhaseModelSelector } from '@/components/views/settings-view/phase-models/phase-model-selector';
+import { PhaseModelSelector } from '@/components/views/settings-view/model-defaults/phase-model-selector';
 import type { PhaseModelEntry } from '@automaker/types';
 
 // Re-export types for convenience

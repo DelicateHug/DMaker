@@ -98,7 +98,7 @@ function PhaseGroup({
   );
 }
 
-export function PhaseModelsSection() {
+export function ModelDefaultsSection() {
   const { resetPhaseModels } = useAppStore();
 
   return (
@@ -118,7 +118,9 @@ export function PhaseModelsSection() {
               <Workflow className="w-5 h-5 text-brand-500" />
             </div>
             <div>
-              <h2 className="text-lg font-semibold text-foreground tracking-tight">Phase Models</h2>
+              <h2 className="text-lg font-semibold text-foreground tracking-tight">
+                Model Defaults
+              </h2>
               <p className="text-sm text-muted-foreground/80">
                 Configure which AI model to use for each application task
               </p>
