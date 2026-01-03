@@ -564,10 +564,18 @@ export function PhaseModelSelector({
 
   // The popover content (shared between both modes)
   const popoverContent = (
-    <PopoverContent className="w-[320px] p-0" align={align}>
+    <PopoverContent
+      className="w-[320px] p-0"
+      align={align}
+      onWheel={(e) => e.stopPropagation()}
+      onPointerDownOutside={(e) => e.preventDefault()}
+    >
       <Command>
         <CommandInput placeholder="Search models..." />
-        <CommandList ref={commandListRef} className="max-h-[300px]">
+        <CommandList
+          ref={commandListRef}
+          className="max-h-[300px] overflow-y-auto overscroll-contain"
+        >
           <CommandEmpty>No model found.</CommandEmpty>
 
           {favorites.length > 0 && (
@@ -626,7 +634,7 @@ export function PhaseModelSelector({
   // Compact mode - just the popover with compact trigger
   if (compact) {
     return (
-      <Popover open={open} onOpenChange={setOpen}>
+      <Popover open={open} onOpenChange={setOpen} modal={false}>
         <PopoverTrigger asChild>{compactTrigger}</PopoverTrigger>
         {popoverContent}
       </Popover>
@@ -649,7 +657,7 @@ export function PhaseModelSelector({
       </div>
 
       {/* Model Selection Popover */}
-      <Popover open={open} onOpenChange={setOpen}>
+      <Popover open={open} onOpenChange={setOpen} modal={false}>
         <PopoverTrigger asChild>{fullTrigger}</PopoverTrigger>
         {popoverContent}
       </Popover>
