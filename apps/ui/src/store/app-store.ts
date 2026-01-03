@@ -29,7 +29,8 @@ export type ViewMode =
   | 'profiles'
   | 'running-agents'
   | 'terminal'
-  | 'wiki';
+  | 'wiki'
+  | 'ideation';
 
 export type ThemeMode =
   | 'light'
@@ -154,6 +155,9 @@ export interface KeyboardShortcuts {
   settings: string;
   profiles: string;
   terminal: string;
+  ideation: string;
+  githubIssues: string;
+  githubPrs: string;
 
   // UI shortcuts
   toggleSidebar: string;
@@ -186,6 +190,9 @@ export const DEFAULT_KEYBOARD_SHORTCUTS: KeyboardShortcuts = {
   settings: 'S',
   profiles: 'M',
   terminal: 'T',
+  ideation: 'I',
+  githubIssues: 'G',
+  githubPrs: 'R',
 
   // UI
   toggleSidebar: '`',

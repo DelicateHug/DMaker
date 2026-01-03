@@ -89,7 +89,7 @@ export class ClaudeProvider extends BaseProvider {
       ...(allowedTools && shouldRestrictTools && { allowedTools }),
       ...(!allowedTools && shouldRestrictTools && { allowedTools: defaultTools }),
       // When MCP servers are configured and auto-approve is enabled, use bypassPermissions
-      permissionMode: shouldBypassPermissions ? 'bypassPermissions' : 'default',
+      permissionMode: shouldBypassPermissions ? 'bypassPermissions' : 'acceptEdits',
       // Required when using bypassPermissions mode
       ...(shouldBypassPermissions && { allowDangerouslySkipPermissions: true }),
       abortController,
