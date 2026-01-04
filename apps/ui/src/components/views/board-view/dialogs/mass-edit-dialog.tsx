@@ -10,18 +10,12 @@ import {
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
-import { Settings2, AlertCircle } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
 import { modelSupportsThinking } from '@/lib/utils';
 import { Feature, ModelAlias, ThinkingLevel, AIProfile, PlanningMode } from '@/store/app-store';
-import {
-  ModelSelector,
-  ThinkingLevelSelector,
-  ProfileQuickSelect,
-  TestingTabContent,
-  PrioritySelector,
-  PlanningModeSelector,
-} from '../shared';
-import { isCursorModel, PROVIDER_PREFIXES } from '@automaker/types';
+import { ProfileSelect, TestingTabContent, PrioritySelect, PlanningModeSelect } from '../shared';
+import { PhaseModelSelector } from '@/components/views/settings-view/model-defaults/phase-model-selector';
+import { isCursorModel, PROVIDER_PREFIXES, type PhaseModelEntry } from '@automaker/types';
 import { cn } from '@/lib/utils';
 
 interface MassEditDialogProps {
@@ -113,7 +107,6 @@ export function MassEditDialog({
   aiProfiles,
 }: MassEditDialogProps) {
   const [isApplying, setIsApplying] = useState(false);
-  const [showAdvancedOptions, setShowAdvancedOptions] = useState(false);
 
   // Track which fields to apply
   const [applyState, setApplyState] = useState<ApplyState>({
@@ -153,7 +146,6 @@ export function MassEditDialog({
       setRequirePlanApproval(getInitialValue(selectedFeatures, 'requirePlanApproval', false));
       setPriority(getInitialValue(selectedFeatures, 'priority', 2));
       setSkipTests(getInitialValue(selectedFeatures, 'skipTests', false));
-      setShowAdvancedOptions(false);
     }
   }, [open, selectedFeatures]);
 
@@ -216,27 +208,6 @@ export function MassEditDialog({
         </DialogHeader>
 
         <div className="py-4 pr-4 space-y-4 max-h-[60vh] overflow-y-auto">
-          {/* Show Advanced Options Toggle */}
-          {showProfilesOnly && (
-            <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg border border-border">
-              <div className="space-y-1">
-                <p className="text-sm font-medium text-foreground">Simple Mode Active</p>
-                <p className="text-xs text-muted-foreground">
-                  Only showing AI profiles. Advanced model tweaking is hidden.
-                </p>
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowAdvancedOptions(!showAdvancedOptions)}
-                data-testid="mass-edit-show-advanced-toggle"
-              >
-                <Settings2 className="w-4 h-4 mr-2" />
-                {showAdvancedOptions ? 'Hide' : 'Show'} Advanced
-              </Button>
-            </div>
-          )}
-
           {/* Quick Select Profile Section */}
           {aiProfiles.length > 0 && (
             <div className="space-y-2">
@@ -244,7 +215,7 @@ export function MassEditDialog({
               <p className="text-xs text-muted-foreground mb-2">
                 Selecting a profile will automatically enable model settings
               </p>
-              <ProfileQuickSelect
+              <ProfileSelect
                 profiles={aiProfiles}
                 selectedModel={model}
                 selectedThinkingLevel={thinkingLevel}
@@ -255,48 +226,30 @@ export function MassEditDialog({
             </div>
           )}
 
+          {/* Model Selector */}
+          <div className="space-y-2">
+            <Label className="text-sm font-medium">AI Model</Label>
+            <p className="text-xs text-muted-foreground mb-2">
+              Or select a specific model configuration
+            </p>
+            <PhaseModelSelector
+              value={{ model, thinkingLevel }}
+              onChange={(entry: PhaseModelEntry) => {
+                setModel(entry.model as ModelAlias);
+                setThinkingLevel(entry.thinkingLevel || 'none');
+                // Auto-enable model and thinking level for apply state
+                setApplyState((prev) => ({
+                  ...prev,
+                  model: true,
+                  thinkingLevel: true,
+                }));
+              }}
+              compact
+            />
+          </div>
+
           {/* Separator */}
-          {aiProfiles.length > 0 && (!showProfilesOnly || showAdvancedOptions) && (
-            <div className="border-t border-border" />
-          )}
-
-          {/* Model Selection */}
-          {(!showProfilesOnly || showAdvancedOptions) && (
-            <>
-              <FieldWrapper
-                label="AI Model"
-                isMixed={mixedValues.model}
-                willApply={applyState.model}
-                onApplyChange={(apply) => setApplyState((prev) => ({ ...prev, model: apply }))}
-              >
-                <ModelSelector
-                  selectedModel={model}
-                  onModelSelect={handleModelSelect}
-                  testIdPrefix="mass-edit-model"
-                />
-              </FieldWrapper>
-
-              {modelAllowsThinking && (
-                <FieldWrapper
-                  label="Thinking Level"
-                  isMixed={mixedValues.thinkingLevel}
-                  willApply={applyState.thinkingLevel}
-                  onApplyChange={(apply) =>
-                    setApplyState((prev) => ({ ...prev, thinkingLevel: apply }))
-                  }
-                >
-                  <ThinkingLevelSelector
-                    selectedLevel={thinkingLevel}
-                    onLevelSelect={setThinkingLevel}
-                    testIdPrefix="mass-edit-thinking"
-                  />
-                </FieldWrapper>
-              )}
-            </>
-          )}
-
-          {/* Separator before options */}
-          {(!showProfilesOnly || showAdvancedOptions) && <div className="border-t border-border" />}
+          <div className="border-t border-border" />
 
           {/* Planning Mode */}
           <FieldWrapper
@@ -311,14 +264,16 @@ export function MassEditDialog({
               }))
             }
           >
-            <PlanningModeSelector
+            <PlanningModeSelect
               mode={planningMode}
-              onModeChange={setPlanningMode}
+              onModeChange={(newMode) => {
+                setPlanningMode(newMode);
+                // Auto-suggest approval based on mode, but user can override
+                setRequirePlanApproval(newMode === 'spec' || newMode === 'full');
+              }}
               requireApproval={requirePlanApproval}
               onRequireApprovalChange={setRequirePlanApproval}
-              featureDescription=""
-              testIdPrefix="mass-edit"
-              compact
+              testIdPrefix="mass-edit-planning"
             />
           </FieldWrapper>
 
@@ -329,7 +284,7 @@ export function MassEditDialog({
             willApply={applyState.priority}
             onApplyChange={(apply) => setApplyState((prev) => ({ ...prev, priority: apply }))}
           >
-            <PrioritySelector
+            <PrioritySelect
               selectedPriority={priority}
               onPrioritySelect={setPriority}
               testIdPrefix="mass-edit-priority"
