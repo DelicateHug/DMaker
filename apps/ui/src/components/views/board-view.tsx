@@ -34,7 +34,6 @@ import {
   ArchiveAllVerifiedDialog,
   DeleteCompletedFeatureDialog,
   EditFeatureDialog,
-  FeatureSuggestionsDialog,
   FollowUpDialog,
   PlanApprovalDialog,
 } from './board-view/dialogs';
@@ -57,7 +56,6 @@ import {
   useBoardBackground,
   useBoardPersistence,
   useFollowUpState,
-  useSuggestionsState,
 } from './board-view/hooks';
 
 // Stable empty array to avoid infinite loop in selector
@@ -156,19 +154,6 @@ export function BoardView() {
     handleFollowUpDialogChange,
   } = useFollowUpState();
 
-  // Suggestions state hook
-  const {
-    showSuggestionsDialog,
-    suggestionsCount,
-    featureSuggestions,
-    isGeneratingSuggestions,
-    setShowSuggestionsDialog,
-    setSuggestionsCount,
-    setFeatureSuggestions,
-    setIsGeneratingSuggestions,
-    updateSuggestions,
-    closeSuggestionsDialog,
-  } = useSuggestionsState();
   // Search filter for Kanban cards
   const [searchQuery, setSearchQuery] = useState('');
   // Plan approval loading state
@@ -203,9 +188,6 @@ export function BoardView() {
     currentProject,
     specCreatingForProject,
     setSpecCreatingForProject,
-    setSuggestionsCount,
-    setFeatureSuggestions,
-    setIsGeneratingSuggestions,
     checkContextExists,
     features: hookFeatures,
     isLoading,
@@ -1122,8 +1104,6 @@ export function BoardView() {
             runningAutoTasks={runningAutoTasks}
             shortcuts={shortcuts}
             onStartNextFeatures={handleStartNextFeatures}
-            onShowSuggestions={() => setShowSuggestionsDialog(true)}
-            suggestionsCount={suggestionsCount}
             onArchiveAllVerified={() => setShowArchiveAllVerifiedDialog(true)}
             pipelineConfig={
               currentProject?.path ? pipelineConfigByProject[currentProject.path] || null : null
@@ -1270,17 +1250,6 @@ export function BoardView() {
         onPreviewMapChange={setFollowUpPreviewMap}
         onSend={handleSendFollowUp}
         isMaximized={isMaximized}
-      />
-
-      {/* Feature Suggestions Dialog */}
-      <FeatureSuggestionsDialog
-        open={showSuggestionsDialog}
-        onClose={closeSuggestionsDialog}
-        projectPath={currentProject.path}
-        suggestions={featureSuggestions}
-        setSuggestions={updateSuggestions}
-        isGenerating={isGeneratingSuggestions}
-        setIsGenerating={setIsGeneratingSuggestions}
       />
 
       {/* Backlog Plan Dialog */}

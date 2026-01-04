@@ -234,8 +234,6 @@ export async function syncSettingsToServer(): Promise<boolean> {
       keyboardShortcuts: state.keyboardShortcuts,
       aiProfiles: state.aiProfiles,
       mcpServers: state.mcpServers,
-      mcpAutoApproveTools: state.mcpAutoApproveTools,
-      mcpUnrestrictedTools: state.mcpUnrestrictedTools,
       promptCustomization: state.promptCustomization,
       projects: state.projects,
       trashedProjects: state.trashedProjects,
@@ -340,12 +338,10 @@ export async function loadMCPServersFromServer(): Promise<boolean> {
     }
 
     const mcpServers = result.settings.mcpServers || [];
-    const mcpAutoApproveTools = result.settings.mcpAutoApproveTools ?? true;
-    const mcpUnrestrictedTools = result.settings.mcpUnrestrictedTools ?? true;
 
     // Clear existing and add all from server
     // We need to update the store directly since we can't use hooks here
-    useAppStore.setState({ mcpServers, mcpAutoApproveTools, mcpUnrestrictedTools });
+    useAppStore.setState({ mcpServers });
 
     logger.info(`Loaded ${mcpServers.length} MCP servers from server`);
     return true;
