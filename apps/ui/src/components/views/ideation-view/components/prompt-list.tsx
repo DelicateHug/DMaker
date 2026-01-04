@@ -2,7 +2,7 @@
  * PromptList - List of prompts for a specific category
  */
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { ArrowLeft, Lightbulb, Loader2, CheckCircle2 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { useGuidedPrompts } from '@/hooks/use-guided-prompts';
@@ -20,7 +20,10 @@ interface PromptListProps {
 
 export function PromptList({ category, onBack }: PromptListProps) {
   const currentProject = useAppStore((s) => s.currentProject);
-  const { setMode, addGenerationJob, updateJobStatus, getJobsForProject } = useIdeationStore();
+  const generationJobs = useIdeationStore((s) => s.generationJobs);
+  const setMode = useIdeationStore((s) => s.setMode);
+  const addGenerationJob = useIdeationStore((s) => s.addGenerationJob);
+  const updateJobStatus = useIdeationStore((s) => s.updateJobStatus);
   const [loadingPromptId, setLoadingPromptId] = useState<string | null>(null);
   const [startedPrompts, setStartedPrompts] = useState<Set<string>>(new Set());
   const navigate = useNavigate();
@@ -32,10 +35,19 @@ export function PromptList({ category, onBack }: PromptListProps) {
 
   const prompts = getPromptsByCategory(category);
 
-  // Get jobs for current project only and check which prompts are already generating
-  const projectJobs = currentProject?.path ? getJobsForProject(currentProject.path) : [];
-  const generatingPromptIds = new Set(
-    projectJobs.filter((j) => j.status === 'generating').map((j) => j.prompt.id)
+  // Get jobs for current project only (memoized to prevent unnecessary re-renders)
+  const projectJobs = useMemo(
+    () =>
+      currentProject?.path
+        ? generationJobs.filter((job) => job.projectPath === currentProject.path)
+        : [],
+    [generationJobs, currentProject?.path]
+  );
+
+  // Check which prompts are already generating
+  const generatingPromptIds = useMemo(
+    () => new Set(projectJobs.filter((j) => j.status === 'generating').map((j) => j.prompt.id)),
+    [projectJobs]
   );
 
   const handleSelectPrompt = async (prompt: IdeationPrompt) => {

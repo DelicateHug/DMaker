@@ -168,16 +168,39 @@ function TagFilter({
 
 export function IdeationDashboard({ onGenerateIdeas }: IdeationDashboardProps) {
   const currentProject = useAppStore((s) => s.currentProject);
-  const { getJobsForProject, removeSuggestionFromJob } = useIdeationStore();
+  const generationJobs = useIdeationStore((s) => s.generationJobs);
+  const removeSuggestionFromJob = useIdeationStore((s) => s.removeSuggestionFromJob);
   const [addingId, setAddingId] = useState<string | null>(null);
   const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
 
-  // Get jobs for current project only
-  const projectJobs = currentProject?.path ? getJobsForProject(currentProject.path) : [];
+  // Get jobs for current project only (memoized to prevent unnecessary re-renders)
+  const projectJobs = useMemo(
+    () =>
+      currentProject?.path
+        ? generationJobs.filter((job) => job.projectPath === currentProject.path)
+        : [],
+    [generationJobs, currentProject?.path]
+  );
 
-  // Separate generating/error jobs from ready jobs with suggestions
-  const activeJobs = projectJobs.filter((j) => j.status === 'generating' || j.status === 'error');
-  const readyJobs = projectJobs.filter((j) => j.status === 'ready' && j.suggestions.length > 0);
+  // Separate jobs by status and compute counts in a single pass
+  const { activeJobs, readyJobs, generatingCount } = useMemo(() => {
+    const active: GenerationJob[] = [];
+    const ready: GenerationJob[] = [];
+    let generating = 0;
+
+    for (const job of projectJobs) {
+      if (job.status === 'generating') {
+        active.push(job);
+        generating++;
+      } else if (job.status === 'error') {
+        active.push(job);
+      } else if (job.status === 'ready' && job.suggestions.length > 0) {
+        ready.push(job);
+      }
+    }
+
+    return { activeJobs: active, readyJobs: ready, generatingCount: generating };
+  }, [projectJobs]);
 
   // Flatten all suggestions with their parent job
   const allSuggestions = useMemo(
@@ -203,8 +226,6 @@ export function IdeationDashboard({ onGenerateIdeas }: IdeationDashboardProps) {
     if (selectedTags.size === 0) return allSuggestions;
     return allSuggestions.filter(({ job }) => selectedTags.has(job.prompt.title));
   }, [allSuggestions, selectedTags]);
-
-  const generatingCount = projectJobs.filter((j) => j.status === 'generating').length;
 
   const handleToggleTag = (tag: string) => {
     setSelectedTags((prev) => {

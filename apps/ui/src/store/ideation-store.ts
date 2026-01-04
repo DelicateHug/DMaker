@@ -78,7 +78,6 @@ interface IdeationActions {
 
   // Generation Jobs
   addGenerationJob: (projectPath: string, prompt: IdeationPrompt) => string;
-  getJobsForProject: (projectPath: string) => GenerationJob[];
   updateJobStatus: (
     jobId: string,
     status: GenerationJobStatus,
@@ -175,7 +174,7 @@ export const useIdeationStore = create<IdeationState & IdeationActions>()(
 
       // Generation Jobs
       addGenerationJob: (projectPath, prompt) => {
-        const jobId = `job-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        const jobId = `job-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
         const job: GenerationJob = {
           id: jobId,
           projectPath,
@@ -190,11 +189,6 @@ export const useIdeationStore = create<IdeationState & IdeationActions>()(
           generationJobs: [job, ...state.generationJobs],
         }));
         return jobId;
-      },
-
-      getJobsForProject: (projectPath) => {
-        const state = get();
-        return state.generationJobs.filter((job) => job.projectPath === projectPath);
       },
 
       updateJobStatus: (jobId, status, suggestions, error) =>
@@ -319,7 +313,7 @@ export const useIdeationStore = create<IdeationState & IdeationActions>()(
     }),
     {
       name: 'automaker-ideation-store',
-      version: 3,
+      version: 4,
       partialize: (state) => ({
         // Only persist these fields
         ideas: state.ideas,
@@ -327,6 +321,18 @@ export const useIdeationStore = create<IdeationState & IdeationActions>()(
         analysisResult: state.analysisResult,
         filterStatus: state.filterStatus,
       }),
+      migrate: (persistedState: unknown, version: number) => {
+        const state = persistedState as Record<string, unknown>;
+        if (version < 4) {
+          // Remove legacy jobs that don't have projectPath (from before project-scoping was added)
+          const jobs = (state.generationJobs as GenerationJob[]) || [];
+          return {
+            ...state,
+            generationJobs: jobs.filter((job) => job.projectPath !== undefined),
+          };
+        }
+        return state;
+      },
     }
   )
 );
