@@ -95,7 +95,7 @@ export function useCliStatus() {
     checkCliStatus();
   }, [setClaudeAuthStatus]);
 
-  // Refresh Claude CLI status
+  // Refresh Claude CLI status and auth status
   const handleRefreshClaudeCli = useCallback(async () => {
     setIsCheckingClaudeCli(true);
     try {
@@ -104,12 +104,52 @@ export function useCliStatus() {
         const status = await api.checkClaudeCli();
         setClaudeCliStatus(status);
       }
+      // Also refresh auth status
+      if (api?.setup?.getClaudeStatus) {
+        try {
+          const result = await api.setup.getClaudeStatus();
+          if (result.success && result.auth) {
+            const auth = result.auth as typeof result.auth & {
+              oauthTokenValid?: boolean;
+              apiKeyValid?: boolean;
+            };
+            const validMethods = [
+              'oauth_token_env',
+              'oauth_token',
+              'api_key',
+              'api_key_env',
+              'credentials_file',
+              'cli_authenticated',
+              'none',
+            ] as const;
+            type AuthMethod = (typeof validMethods)[number];
+            const method: AuthMethod = validMethods.includes(auth.method as AuthMethod)
+              ? (auth.method as AuthMethod)
+              : auth.authenticated
+                ? 'api_key'
+                : 'none';
+            const authStatus = {
+              authenticated: auth.authenticated,
+              method,
+              hasCredentialsFile: auth.hasCredentialsFile ?? false,
+              oauthTokenValid:
+                auth.oauthTokenValid || auth.hasStoredOAuthToken || auth.hasEnvOAuthToken,
+              apiKeyValid: auth.apiKeyValid || auth.hasStoredApiKey || auth.hasEnvApiKey,
+              hasEnvOAuthToken: auth.hasEnvOAuthToken,
+              hasEnvApiKey: auth.hasEnvApiKey,
+            };
+            setClaudeAuthStatus(authStatus);
+          }
+        } catch (error) {
+          logger.error('Failed to refresh Claude auth status:', error);
+        }
+      }
     } catch (error) {
       logger.error('Failed to refresh Claude CLI status:', error);
     } finally {
       setIsCheckingClaudeCli(false);
     }
-  }, []);
+  }, [setClaudeAuthStatus]);
 
   return {
     claudeCliStatus,

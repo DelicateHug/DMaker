@@ -19,6 +19,8 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 import { createRequire } from 'module';
+import { statSync } from 'fs';
+import { execSync } from 'child_process';
 import {
   createRestrictedFs,
   log,
@@ -53,6 +55,89 @@ const processes = {
   electron: null,
   docker: null,
 };
+
+/**
+ * Check if Docker images need to be rebuilt based on Dockerfile or package.json changes
+ */
+function shouldRebuildDockerImages() {
+  try {
+    const dockerfilePath = path.join(__dirname, 'Dockerfile');
+    const packageJsonPath = path.join(__dirname, 'package.json');
+
+    // Get modification times of source files
+    const dockerfileMtime = statSync(dockerfilePath).mtimeMs;
+    const packageJsonMtime = statSync(packageJsonPath).mtimeMs;
+    const latestSourceMtime = Math.max(dockerfileMtime, packageJsonMtime);
+
+    // Get image names from docker-compose config
+    let serverImageName, uiImageName;
+    try {
+      const composeConfig = execSync('docker compose config --format json', {
+        encoding: 'utf-8',
+        cwd: __dirname,
+      });
+      const config = JSON.parse(composeConfig);
+
+      // Docker Compose generates image names as <project>_<service>
+      // Get project name from config or default to directory name
+      const projectName =
+        config.name ||
+        path
+          .basename(__dirname)
+          .toLowerCase()
+          .replace(/[^a-z0-9]/g, '');
+      serverImageName = `${projectName}_server`;
+      uiImageName = `${projectName}_ui`;
+    } catch (error) {
+      // Fallback to default naming convention
+      const projectName = path
+        .basename(__dirname)
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, '');
+      serverImageName = `${projectName}_server`;
+      uiImageName = `${projectName}_ui`;
+    }
+
+    // Check if images exist and get their creation times
+    let needsRebuild = false;
+
+    try {
+      // Check server image
+      const serverImageInfo = execSync(
+        `docker image inspect ${serverImageName} --format "{{.Created}}" 2>/dev/null || echo ""`,
+        { encoding: 'utf-8', cwd: __dirname }
+      ).trim();
+
+      // Check UI image
+      const uiImageInfo = execSync(
+        `docker image inspect ${uiImageName} --format "{{.Created}}" 2>/dev/null || echo ""`,
+        { encoding: 'utf-8', cwd: __dirname }
+      ).trim();
+
+      // If either image doesn't exist, we need to rebuild
+      if (!serverImageInfo || !uiImageInfo) {
+        return true;
+      }
+
+      // Parse image creation times (ISO 8601 format)
+      const serverCreated = new Date(serverImageInfo).getTime();
+      const uiCreated = new Date(uiImageInfo).getTime();
+      const oldestImageTime = Math.min(serverCreated, uiCreated);
+
+      // If source files are newer than images, rebuild
+      needsRebuild = latestSourceMtime > oldestImageTime;
+    } catch (error) {
+      // If images don't exist or inspect fails, rebuild
+      needsRebuild = true;
+    }
+
+    return needsRebuild;
+  } catch (error) {
+    // If we can't check, err on the side of rebuilding
+    log('Could not check Docker image status, will rebuild to be safe', 'yellow');
+    return true;
+  }
+}
 
 /**
  * Build all production artifacts
@@ -231,9 +316,16 @@ async function main() {
     } else if (choice === '3') {
       console.log('');
       log('Launching Docker Container (Isolated Mode)...', 'blue');
-      log('Starting Docker containers...', 'yellow');
-      log('Note: Containers will only rebuild if images are missing.', 'yellow');
-      log('To force a rebuild, run: docker compose up --build', 'yellow');
+
+      // Check if Dockerfile or package.json changed and rebuild if needed
+      const needsRebuild = shouldRebuildDockerImages();
+      const buildFlag = needsRebuild ? ['--build'] : [];
+
+      if (needsRebuild) {
+        log('Dockerfile or package.json changed - rebuilding images...', 'yellow');
+      } else {
+        log('Starting Docker containers...', 'yellow');
+      }
       console.log('');
 
       // Check if ANTHROPIC_API_KEY is set
@@ -244,9 +336,9 @@ async function main() {
         console.log('');
       }
 
-      // Start containers with docker-compose (without --build to preserve volumes)
-      // Images will only be built if they don't exist
-      processes.docker = crossSpawn('docker', ['compose', 'up'], {
+      // Start containers with docker-compose
+      // Will rebuild if Dockerfile or package.json changed
+      processes.docker = crossSpawn('docker', ['compose', 'up', ...buildFlag], {
         stdio: 'inherit',
         cwd: __dirname,
         env: {
