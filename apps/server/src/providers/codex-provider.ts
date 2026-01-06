@@ -765,7 +765,7 @@ export class CodexProvider extends BaseProvider {
         ...(outputSchemaPath ? [CODEX_OUTPUT_SCHEMA_FLAG, outputSchemaPath] : []),
         ...(imagePaths.length > 0 ? [CODEX_IMAGE_FLAG, imagePaths.join(',')] : []),
         ...configOverrides,
-        promptText,
+        '-', // Read prompt from stdin to avoid shell escaping issues
       ];
 
       const stream = spawnJSONLProcess({
@@ -775,6 +775,7 @@ export class CodexProvider extends BaseProvider {
         env: buildEnv(),
         abortController: options.abortController,
         timeout: DEFAULT_TIMEOUT_MS,
+        stdinData: promptText, // Pass prompt via stdin
       });
 
       for await (const rawEvent of stream) {

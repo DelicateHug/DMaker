@@ -329,6 +329,17 @@ export function useElectronAgent({
           if (event.message) {
             const errorMessage = event.message;
             setMessages((prev) => [...prev, errorMessage]);
+          } else {
+            // Some providers stream an error without a message payload. Ensure the
+            // user still sees a clear error bubble in the chat.
+            const fallbackMessage: Message = {
+              id: `err_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+              role: 'assistant',
+              content: `Error: ${event.error}`,
+              timestamp: new Date().toISOString(),
+              isError: true,
+            };
+            setMessages((prev) => [...prev, fallbackMessage]);
           }
           break;
 

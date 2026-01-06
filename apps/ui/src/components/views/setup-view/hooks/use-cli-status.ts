@@ -40,8 +40,13 @@ export function useCliStatus({
       logger.info(`Raw status result for ${cliType}:`, result);
 
       if (result.success) {
+        // Handle both response formats:
+        // - Claude API returns {status: 'installed' | 'not_installed'}
+        // - Codex API returns {installed: boolean}
+        const isInstalled =
+          typeof result.installed === 'boolean' ? result.installed : result.status === 'installed';
         const cliStatus = {
-          installed: result.status === 'installed',
+          installed: isInstalled,
           path: result.path || null,
           version: result.version || null,
           method: result.method || 'none',
