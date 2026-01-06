@@ -947,7 +947,10 @@ export async function launchDockerContainers({ baseDir, processes }) {
       },
     });
   } else {
-    log(`Images are up to date (commit: ${rebuildCheck.currentSha?.substring(0, 8) || 'unknown'})`, 'green');
+    log(
+      `Images are up to date (commit: ${rebuildCheck.currentSha?.substring(0, 8) || 'unknown'})`,
+      'green'
+    );
     log('Starting Docker containers...', 'yellow');
     console.log('');
 
