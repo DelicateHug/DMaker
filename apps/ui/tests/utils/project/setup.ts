@@ -84,6 +84,28 @@ export async function setupWelcomeView(
 
       // Disable splash screen in tests
       sessionStorage.setItem('automaker-splash-shown', 'true');
+
+      // Set up a mechanism to keep currentProject null even after settings hydration
+      // Settings API might restore a project, so we override it after hydration
+      // Use a flag to indicate we want welcome view
+      sessionStorage.setItem('automaker-test-welcome-view', 'true');
+
+      // Override currentProject after a short delay to ensure it happens after settings hydration
+      setTimeout(() => {
+        const storage = localStorage.getItem('automaker-storage');
+        if (storage) {
+          try {
+            const state = JSON.parse(storage);
+            if (state.state && sessionStorage.getItem('automaker-test-welcome-view') === 'true') {
+              state.state.currentProject = null;
+              state.state.currentView = 'welcome';
+              localStorage.setItem('automaker-storage', JSON.stringify(state));
+            }
+          } catch {
+            // Ignore parse errors
+          }
+        }
+      }, 2000); // Wait 2 seconds for settings hydration to complete
     },
     { opts: options, versions: STORE_VERSIONS }
   );
@@ -828,6 +850,7 @@ export async function setupMockProjectWithProfiles(
     };
 
     // Default built-in profiles (same as DEFAULT_AI_PROFILES from app-store.ts)
+    // Include all 4 default profiles to match the actual store initialization
     const builtInProfiles = [
       {
         id: 'profile-heavy-task',
@@ -859,6 +882,15 @@ export async function setupMockProjectWithProfiles(
         provider: 'claude' as const,
         isBuiltIn: true,
         icon: 'Zap',
+      },
+      {
+        id: 'profile-cursor-refactoring',
+        name: 'Cursor Refactoring',
+        description: 'Cursor Composer 1 for refactoring tasks.',
+        provider: 'cursor' as const,
+        cursorModel: 'composer-1' as const,
+        isBuiltIn: true,
+        icon: 'Sparkles',
       },
     ];
 
