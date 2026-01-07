@@ -12,6 +12,8 @@ export type SettingsViewId =
   | 'keyboard'
   | 'audio'
   | 'defaults'
+  | 'account'
+  | 'security'
   | 'danger';
 
 interface UseSettingsViewOptions {

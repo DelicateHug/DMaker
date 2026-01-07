@@ -2,6 +2,7 @@ import { create } from 'zustand';
 // Note: persist middleware removed - settings now sync via API (use-settings-sync.ts)
 import type { Project, TrashedProject } from '@/lib/electron';
 import { createLogger } from '@automaker/utils/logger';
+import { setItem, getItem } from '@/lib/storage';
 import type {
   Feature as BaseFeature,
   FeatureImagePath,
@@ -59,6 +60,29 @@ export type ThemeMode =
   | 'cream'
   | 'sunset'
   | 'gray';
+
+// LocalStorage key for theme persistence (fallback when server settings aren't available)
+export const THEME_STORAGE_KEY = 'automaker:theme';
+
+/**
+ * Get the theme from localStorage as a fallback
+ * Used before server settings are loaded (e.g., on login/setup pages)
+ */
+export function getStoredTheme(): ThemeMode | null {
+  const stored = getItem(THEME_STORAGE_KEY);
+  if (stored) {
+    return stored as ThemeMode;
+  }
+  return null;
+}
+
+/**
+ * Save theme to localStorage for immediate persistence
+ * This is used as a fallback when server settings can't be loaded
+ */
+function saveThemeToStorage(theme: ThemeMode): void {
+  setItem(THEME_STORAGE_KEY, theme);
+}
 
 export type KanbanCardDetailLevel = 'minimal' | 'standard' | 'detailed';
 
@@ -1005,7 +1029,7 @@ const initialState: AppState = {
   currentView: 'welcome',
   sidebarOpen: true,
   lastSelectedSessionByProject: {},
-  theme: 'dark',
+  theme: getStoredTheme() || 'dark', // Use localStorage theme as initial value, fallback to 'dark'
   features: [],
   appSpec: '',
   ipcConnected: false,
@@ -1321,7 +1345,11 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
   setSidebarOpen: (open) => set({ sidebarOpen: open }),
 
   // Theme actions
-  setTheme: (theme) => set({ theme }),
+  setTheme: (theme) => {
+    // Save to localStorage for fallback when server settings aren't available
+    saveThemeToStorage(theme);
+    set({ theme });
+  },
 
   setProjectTheme: (projectId, theme) => {
     // Update the project's theme property

@@ -20,8 +20,8 @@
 import { useEffect, useState, useRef } from 'react';
 import { createLogger } from '@automaker/utils/logger';
 import { getHttpApiClient, waitForApiKeyInit } from '@/lib/http-api-client';
-import { getItem, removeItem } from '@/lib/storage';
-import { useAppStore } from '@/store/app-store';
+import { getItem, removeItem, setItem } from '@/lib/storage';
+import { useAppStore, THEME_STORAGE_KEY } from '@/store/app-store';
 import { useSetupStore } from '@/store/setup-store';
 import type { GlobalSettings } from '@automaker/types';
 
@@ -69,7 +69,12 @@ let migrationCompleteResolve: (() => void) | null = null;
 let migrationCompletePromise: Promise<void> | null = null;
 let migrationCompleted = false;
 
-function signalMigrationComplete(): void {
+/**
+ * Signal that migration/hydration is complete.
+ * Call this after hydrating the store from server settings.
+ * This unblocks useSettingsSync so it can start syncing changes.
+ */
+export function signalMigrationComplete(): void {
   migrationCompleted = true;
   if (migrationCompleteResolve) {
     migrationCompleteResolve();
@@ -436,7 +441,7 @@ export function useSettingsMigration(): MigrationState {
 /**
  * Hydrate the Zustand store from settings object
  */
-function hydrateStoreFromSettings(settings: GlobalSettings): void {
+export function hydrateStoreFromSettings(settings: GlobalSettings): void {
   const current = useAppStore.getState();
 
   // Convert ProjectRef[] to Project[] (minimal data, features will be loaded separately)
@@ -456,6 +461,11 @@ function hydrateStoreFromSettings(settings: GlobalSettings): void {
     if (currentProject) {
       logger.info(`Restoring current project: ${currentProject.name} (${currentProject.id})`);
     }
+  }
+
+  // Save theme to localStorage for fallback when server settings aren't available
+  if (settings.theme) {
+    setItem(THEME_STORAGE_KEY, settings.theme);
   }
 
   useAppStore.setState({

@@ -16,6 +16,8 @@ import { AudioSection } from './settings-view/audio/audio-section';
 import { KeyboardShortcutsSection } from './settings-view/keyboard-shortcuts/keyboard-shortcuts-section';
 import { FeatureDefaultsSection } from './settings-view/feature-defaults/feature-defaults-section';
 import { DangerZoneSection } from './settings-view/danger-zone/danger-zone-section';
+import { AccountSection } from './settings-view/account';
+import { SecuritySection } from './settings-view/security';
 import { ProviderTabs } from './settings-view/providers';
 import { MCPServersSection } from './settings-view/mcp-servers';
 import { PromptCustomizationSection } from './settings-view/prompts';
@@ -146,13 +148,20 @@ export function SettingsView() {
             onDefaultAIProfileIdChange={setDefaultAIProfileId}
           />
         );
+      case 'account':
+        return <AccountSection />;
+      case 'security':
+        return (
+          <SecuritySection
+            skipSandboxWarning={skipSandboxWarning}
+            onSkipSandboxWarningChange={setSkipSandboxWarning}
+          />
+        );
       case 'danger':
         return (
           <DangerZoneSection
             project={settingsProject}
             onDeleteClick={() => setShowDeleteDialog(true)}
-            skipSandboxWarning={skipSandboxWarning}
-            onResetSandboxWarning={() => setSkipSandboxWarning(false)}
           />
         );
       default:

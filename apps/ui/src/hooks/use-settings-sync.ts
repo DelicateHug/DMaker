@@ -14,7 +14,8 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { createLogger } from '@automaker/utils/logger';
 import { getHttpApiClient, waitForApiKeyInit } from '@/lib/http-api-client';
-import { useAppStore, type ThemeMode } from '@/store/app-store';
+import { setItem } from '@/lib/storage';
+import { useAppStore, type ThemeMode, THEME_STORAGE_KEY } from '@/store/app-store';
 import { useSetupStore } from '@/store/setup-store';
 import { waitForMigrationComplete } from './use-settings-migration';
 import type { GlobalSettings } from '@automaker/types';
@@ -338,6 +339,11 @@ export async function refreshSettingsFromServer(): Promise<boolean> {
 
     const serverSettings = result.settings as unknown as GlobalSettings;
     const currentAppState = useAppStore.getState();
+
+    // Save theme to localStorage for fallback when server settings aren't available
+    if (serverSettings.theme) {
+      setItem(THEME_STORAGE_KEY, serverSettings.theme);
+    }
 
     useAppStore.setState({
       theme: serverSettings.theme as unknown as ThemeMode,
