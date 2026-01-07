@@ -187,15 +187,19 @@ describe('codex-provider.ts', () => {
       );
 
       const call = vi.mocked(spawnJSONLProcess).mock.calls[0][0];
-      const approvalIndex = call.args.indexOf('--ask-for-approval');
+      const approvalConfigIndex = call.args.indexOf('--config');
       const execIndex = call.args.indexOf(EXEC_SUBCOMMAND);
-      const searchIndex = call.args.indexOf('--search');
-      expect(call.args[approvalIndex + 1]).toBe('never');
-      expect(approvalIndex).toBeGreaterThan(-1);
+      const searchConfigIndex = call.args.indexOf('--config');
+      expect(call.args[approvalConfigIndex + 1]).toBe('approval_policy=never');
+      expect(approvalConfigIndex).toBeGreaterThan(-1);
       expect(execIndex).toBeGreaterThan(-1);
-      expect(approvalIndex).toBeGreaterThan(execIndex);
-      expect(searchIndex).toBeGreaterThan(-1);
-      expect(searchIndex).toBeGreaterThan(execIndex);
+      expect(approvalConfigIndex).toBeGreaterThan(execIndex);
+      // Search should be in config, not as direct flag
+      const hasSearchConfig = call.args.some(
+        (arg, index) =>
+          arg === '--config' && call.args[index + 1] === 'features.web_search_request=true'
+      );
+      expect(hasSearchConfig).toBe(true);
     });
 
     it('injects user and project instructions when auto-load is enabled', async () => {

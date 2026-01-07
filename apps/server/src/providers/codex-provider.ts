@@ -743,12 +743,16 @@ export class CodexProvider extends BaseProvider {
         overrides.push({ key: CODEX_REASONING_EFFORT_KEY, value: options.reasoningEffort });
       }
 
+      // Add approval policy
+      overrides.push({ key: 'approval_policy', value: approvalPolicy });
+
+      // Add web search if enabled
+      if (searchEnabled) {
+        overrides.push({ key: 'features.web_search_request', value: true });
+      }
+
       const configOverrides = buildConfigOverrides(overrides);
       const preExecArgs: string[] = [];
-
-      if (searchEnabled) {
-        preExecArgs.push(CODEX_SEARCH_FLAG);
-      }
 
       // Add additional directories with write access
       if (codexSettings.additionalDirs && codexSettings.additionalDirs.length > 0) {
@@ -760,8 +764,6 @@ export class CodexProvider extends BaseProvider {
       const args = [
         CODEX_EXEC_SUBCOMMAND,
         CODEX_SKIP_GIT_REPO_CHECK_FLAG,
-        CODEX_APPROVAL_FLAG,
-        approvalPolicy,
         ...preExecArgs,
         CODEX_MODEL_FLAG,
         options.model,
