@@ -11,7 +11,7 @@
  *   checking_setup → redirecting
  */
 
-import { useReducer, useEffect, useRef } from 'react';
+import { useReducer, useEffect } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { login, getHttpApiClient, getServerUrlSync } from '@/lib/http-api-client';
 import { Button } from '@/components/ui/button';
@@ -232,13 +232,12 @@ export function LoginView() {
   const navigate = useNavigate();
   const setAuthState = useAuthStore((s) => s.setAuthState);
   const [state, dispatch] = useReducer(reducer, initialState);
-  const initialCheckDone = useRef(false);
 
-  // Run initial server/session check once on mount
+  // Run initial server/session check on mount.
+  // IMPORTANT: Do not "run once" via a ref guard here.
+  // In React StrictMode (dev), effects mount -> cleanup -> mount.
+  // If we abort in cleanup and also skip the second run, we'll get stuck forever on "Connecting...".
   useEffect(() => {
-    if (initialCheckDone.current) return;
-    initialCheckDone.current = true;
-
     const controller = new AbortController();
     checkServerAndSession(dispatch, setAuthState, controller.signal);
 
@@ -272,7 +271,6 @@ export function LoginView() {
 
   // Handle retry button for server errors
   const handleRetry = () => {
-    initialCheckDone.current = false;
     dispatch({ type: 'RETRY_SERVER_CHECK' });
     const controller = new AbortController();
     checkServerAndSession(dispatch, setAuthState, controller.signal);

@@ -60,14 +60,21 @@ export function checkSandboxCompatibility(
 
   // Check for cloud storage paths that may not be compatible with sandbox
   const cloudStoragePatterns = [
+    // macOS mounted volumes
     /^\/Volumes\/GoogleDrive/i,
     /^\/Volumes\/Dropbox/i,
     /^\/Volumes\/OneDrive/i,
     /^\/Volumes\/iCloud/i,
+    // macOS home directory
     /^\/Users\/[^/]+\/Google Drive/i,
     /^\/Users\/[^/]+\/Dropbox/i,
     /^\/Users\/[^/]+\/OneDrive/i,
     /^\/Users\/[^/]+\/Library\/Mobile Documents/i, // iCloud
+    // Linux home directory
+    /^\/home\/[^/]+\/Google Drive/i,
+    /^\/home\/[^/]+\/Dropbox/i,
+    /^\/home\/[^/]+\/OneDrive/i,
+    // Windows
     /^C:\\Users\\[^\\]+\\Google Drive/i,
     /^C:\\Users\\[^\\]+\\Dropbox/i,
     /^C:\\Users\\[^\\]+\\OneDrive/i,
