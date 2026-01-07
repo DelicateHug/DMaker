@@ -4,7 +4,6 @@ import { createLogger } from '@automaker/utils/logger';
 import { router } from './utils/router';
 import { SplashScreen } from './components/splash-screen';
 import { LoadingState } from './components/ui/loading-state';
-import { useSettingsMigration } from './hooks/use-settings-migration';
 import { useSettingsSync } from './hooks/use-settings-sync';
 import { useCursorStatusInit } from './hooks/use-cursor-status-init';
 import './styles/global.css';
@@ -34,13 +33,9 @@ export default function App() {
     }
   }, []);
 
-  // Run settings migration on startup (localStorage -> file storage)
-  // IMPORTANT: Wait for this to complete before rendering the router
-  // so that currentProject and other settings are available
-  const migrationState = useSettingsMigration();
-  if (migrationState.migrated) {
-    logger.info('Settings migrated to file storage');
-  }
+  // Settings are now loaded in __root.tsx after successful session verification
+  // This ensures a unified flow: verify session → load settings → redirect
+  // We no longer block router rendering here - settings loading happens in __root.tsx
 
   // Sync settings changes back to server (API-first persistence)
   const settingsSyncState = useSettingsSync();
@@ -55,16 +50,6 @@ export default function App() {
     sessionStorage.setItem('automaker-splash-shown', 'true');
     setShowSplash(false);
   }, []);
-
-  // Wait for settings migration to complete before rendering the router
-  // This ensures currentProject and other settings are available
-  if (!migrationState.checked) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-background">
-        <LoadingState message="Loading settings..." />
-      </div>
-    );
-  }
 
   return (
     <>

@@ -1,109 +1,321 @@
 /**
  * Login View - Web mode authentication
  *
- * Prompts user to enter the API key shown in server console.
- * On successful login, sets an HTTP-only session cookie.
+ * Uses a state machine for clear, maintainable flow:
  *
- * On mount, verifies if an existing session is valid using exponential backoff.
- * This handles cases where server live reloads kick users back to login
- * even though their session is still valid.
+ * States:
+ *   checking_server → server_error (after 5 retries)
+ *   checking_server → awaiting_login (401/unauthenticated)
+ *   checking_server → checking_setup (authenticated)
+ *   awaiting_login → logging_in → login_error | checking_setup
+ *   checking_setup → redirecting
  */
 
-import { useState, useEffect, useRef } from 'react';
+import { useReducer, useEffect, useRef } from 'react';
 import { useNavigate } from '@tanstack/react-router';
-import { login, verifySession } from '@/lib/http-api-client';
+import { login, getHttpApiClient, getServerUrlSync } from '@/lib/http-api-client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { KeyRound, AlertCircle, Loader2 } from 'lucide-react';
+import { KeyRound, AlertCircle, Loader2, RefreshCw, ServerCrash } from 'lucide-react';
 import { useAuthStore } from '@/store/auth-store';
 import { useSetupStore } from '@/store/setup-store';
 
+// =============================================================================
+// State Machine Types
+// =============================================================================
+
+type State =
+  | { phase: 'checking_server'; attempt: number }
+  | { phase: 'server_error'; message: string }
+  | { phase: 'awaiting_login'; apiKey: string; error: string | null }
+  | { phase: 'logging_in'; apiKey: string }
+  | { phase: 'checking_setup' }
+  | { phase: 'redirecting'; to: string };
+
+type Action =
+  | { type: 'SERVER_CHECK_RETRY'; attempt: number }
+  | { type: 'SERVER_ERROR'; message: string }
+  | { type: 'AUTH_REQUIRED' }
+  | { type: 'AUTH_VALID' }
+  | { type: 'UPDATE_API_KEY'; value: string }
+  | { type: 'SUBMIT_LOGIN' }
+  | { type: 'LOGIN_ERROR'; message: string }
+  | { type: 'REDIRECT'; to: string }
+  | { type: 'RETRY_SERVER_CHECK' };
+
+const initialState: State = { phase: 'checking_server', attempt: 1 };
+
+// =============================================================================
+// State Machine Reducer
+// =============================================================================
+
+function reducer(state: State, action: Action): State {
+  switch (action.type) {
+    case 'SERVER_CHECK_RETRY':
+      return { phase: 'checking_server', attempt: action.attempt };
+
+    case 'SERVER_ERROR':
+      return { phase: 'server_error', message: action.message };
+
+    case 'AUTH_REQUIRED':
+      return { phase: 'awaiting_login', apiKey: '', error: null };
+
+    case 'AUTH_VALID':
+      return { phase: 'checking_setup' };
+
+    case 'UPDATE_API_KEY':
+      if (state.phase !== 'awaiting_login') return state;
+      return { ...state, apiKey: action.value };
+
+    case 'SUBMIT_LOGIN':
+      if (state.phase !== 'awaiting_login') return state;
+      return { phase: 'logging_in', apiKey: state.apiKey };
+
+    case 'LOGIN_ERROR':
+      if (state.phase !== 'logging_in') return state;
+      return { phase: 'awaiting_login', apiKey: state.apiKey, error: action.message };
+
+    case 'REDIRECT':
+      return { phase: 'redirecting', to: action.to };
+
+    case 'RETRY_SERVER_CHECK':
+      return { phase: 'checking_server', attempt: 1 };
+
+    default:
+      return state;
+  }
+}
+
+// =============================================================================
+// Constants
+// =============================================================================
+
+const MAX_RETRIES = 5;
+const BACKOFF_BASE_MS = 400;
+
+// =============================================================================
+// Imperative Flow Logic (runs once on mount)
+// =============================================================================
+
 /**
- * Delay helper for exponential backoff
+ * Check auth status without triggering side effects.
+ * Unlike the httpClient methods, this does NOT call handleUnauthorized()
+ * which would navigate us away to /logged-out.
+ *
+ * Relies on HTTP-only session cookie being sent via credentials: 'include'.
+ *
+ * Returns: { authenticated: true } or { authenticated: false }
+ * Throws: on network errors (for retry logic)
  */
-const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+async function checkAuthStatusSafe(): Promise<{ authenticated: boolean }> {
+  const serverUrl = getServerUrlSync();
+
+  const response = await fetch(`${serverUrl}/api/auth/status`, {
+    credentials: 'include', // Send HTTP-only session cookie
+    signal: AbortSignal.timeout(5000),
+  });
+
+  // Any response means server is reachable
+  const data = await response.json();
+  return { authenticated: data.authenticated === true };
+}
+
+/**
+ * Check if server is reachable and if we have a valid session.
+ */
+async function checkServerAndSession(
+  dispatch: React.Dispatch<Action>,
+  setAuthState: (state: { isAuthenticated: boolean; authChecked: boolean }) => void
+): Promise<void> {
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    dispatch({ type: 'SERVER_CHECK_RETRY', attempt });
+
+    try {
+      const result = await checkAuthStatusSafe();
+
+      if (result.authenticated) {
+        // Server is reachable and we're authenticated
+        setAuthState({ isAuthenticated: true, authChecked: true });
+        dispatch({ type: 'AUTH_VALID' });
+        return;
+      }
+
+      // Server is reachable but we need to login
+      dispatch({ type: 'AUTH_REQUIRED' });
+      return;
+    } catch (error: unknown) {
+      // Network error - server is not reachable
+      console.debug(`Server check attempt ${attempt}/${MAX_RETRIES} failed:`, error);
+
+      if (attempt === MAX_RETRIES) {
+        dispatch({
+          type: 'SERVER_ERROR',
+          message: 'Unable to connect to server. Please check that the server is running.',
+        });
+        return;
+      }
+
+      // Exponential backoff before retry
+      const backoffMs = BACKOFF_BASE_MS * Math.pow(2, attempt - 1);
+      await new Promise((resolve) => setTimeout(resolve, backoffMs));
+    }
+  }
+}
+
+async function checkSetupStatus(dispatch: React.Dispatch<Action>): Promise<void> {
+  const httpClient = getHttpApiClient();
+
+  try {
+    const result = await httpClient.settings.getGlobal();
+
+    if (result.success && result.settings) {
+      // Check the setupComplete field from settings
+      // This is set to true when user completes the setup wizard
+      const setupComplete = (result.settings as { setupComplete?: boolean }).setupComplete === true;
+
+      // IMPORTANT: Update the Zustand store BEFORE redirecting
+      // Otherwise __root.tsx routing effect will override our redirect
+      // because it reads setupComplete from the store (which defaults to false)
+      useSetupStore.getState().setSetupComplete(setupComplete);
+
+      dispatch({ type: 'REDIRECT', to: setupComplete ? '/' : '/setup' });
+    } else {
+      // No settings yet = first run = need setup
+      useSetupStore.getState().setSetupComplete(false);
+      dispatch({ type: 'REDIRECT', to: '/setup' });
+    }
+  } catch {
+    // If we can't get settings, go to setup to be safe
+    useSetupStore.getState().setSetupComplete(false);
+    dispatch({ type: 'REDIRECT', to: '/setup' });
+  }
+}
+
+async function performLogin(
+  apiKey: string,
+  dispatch: React.Dispatch<Action>,
+  setAuthState: (state: { isAuthenticated: boolean; authChecked: boolean }) => void
+): Promise<void> {
+  try {
+    const result = await login(apiKey.trim());
+
+    if (result.success) {
+      setAuthState({ isAuthenticated: true, authChecked: true });
+      dispatch({ type: 'AUTH_VALID' });
+    } else {
+      dispatch({ type: 'LOGIN_ERROR', message: result.error || 'Invalid API key' });
+    }
+  } catch {
+    dispatch({ type: 'LOGIN_ERROR', message: 'Failed to connect to server' });
+  }
+}
+
+// =============================================================================
+// Component
+// =============================================================================
 
 export function LoginView() {
   const navigate = useNavigate();
   const setAuthState = useAuthStore((s) => s.setAuthState);
-  const setupComplete = useSetupStore((s) => s.setupComplete);
-  const [apiKey, setApiKey] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [isCheckingSession, setIsCheckingSession] = useState(true);
-  const sessionCheckRef = useRef(false);
+  const [state, dispatch] = useReducer(reducer, initialState);
+  const initialCheckDone = useRef(false);
 
-  // Check for existing valid session on mount with exponential backoff
+  // Run initial server/session check once on mount
   useEffect(() => {
-    // Prevent duplicate checks in strict mode
-    if (sessionCheckRef.current) return;
-    sessionCheckRef.current = true;
+    if (initialCheckDone.current) return;
+    initialCheckDone.current = true;
 
-    const checkExistingSession = async () => {
-      const maxRetries = 5;
-      const baseDelay = 500; // Start with 500ms
+    checkServerAndSession(dispatch, setAuthState);
+  }, [setAuthState]);
 
-      for (let attempt = 0; attempt < maxRetries; attempt++) {
-        try {
-          const isValid = await verifySession();
-          if (isValid) {
-            // Session is valid, redirect to the main app
-            setAuthState({ isAuthenticated: true, authChecked: true });
-            navigate({ to: setupComplete ? '/' : '/setup' });
-            return;
-          }
-          // Session is invalid, no need to retry - show login form
-          break;
-        } catch {
-          // Network error or server not ready, retry with exponential backoff
-          if (attempt < maxRetries - 1) {
-            const waitTime = baseDelay * Math.pow(2, attempt); // 500, 1000, 2000, 4000, 8000ms
-            await delay(waitTime);
-          }
-        }
-      }
-
-      // Session check complete (either invalid or all retries exhausted)
-      setIsCheckingSession(false);
-    };
-
-    checkExistingSession();
-  }, [navigate, setAuthState, setupComplete]);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    setIsLoading(true);
-
-    try {
-      const result = await login(apiKey.trim());
-      if (result.success) {
-        // Mark as authenticated for this session (cookie-based auth)
-        setAuthState({ isAuthenticated: true, authChecked: true });
-
-        // After auth, determine if setup is needed or go to app
-        navigate({ to: setupComplete ? '/' : '/setup' });
-      } else {
-        setError(result.error || 'Invalid API key');
-      }
-    } catch (err) {
-      setError('Failed to connect to server');
-    } finally {
-      setIsLoading(false);
+  // When we enter checking_setup phase, check setup status
+  useEffect(() => {
+    if (state.phase === 'checking_setup') {
+      checkSetupStatus(dispatch);
     }
+  }, [state.phase]);
+
+  // When we enter redirecting phase, navigate
+  useEffect(() => {
+    if (state.phase === 'redirecting') {
+      navigate({ to: state.to });
+    }
+  }, [state.phase, state.phase === 'redirecting' ? state.to : null, navigate]);
+
+  // Handle login form submission
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (state.phase !== 'awaiting_login' || !state.apiKey.trim()) return;
+
+    dispatch({ type: 'SUBMIT_LOGIN' });
+    performLogin(state.apiKey, dispatch, setAuthState);
   };
 
-  // Show loading state while checking existing session
-  if (isCheckingSession) {
+  // Handle retry button for server errors
+  const handleRetry = () => {
+    initialCheckDone.current = false;
+    dispatch({ type: 'RETRY_SERVER_CHECK' });
+    checkServerAndSession(dispatch, setAuthState);
+  };
+
+  // =============================================================================
+  // Render based on current state
+  // =============================================================================
+
+  // Checking server connectivity
+  if (state.phase === 'checking_server') {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background p-4">
         <div className="text-center space-y-4">
           <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
-          <p className="text-sm text-muted-foreground">Checking session...</p>
+          <p className="text-sm text-muted-foreground">
+            Connecting to server
+            {state.attempt > 1 ? ` (attempt ${state.attempt}/${MAX_RETRIES})` : '...'}
+          </p>
         </div>
       </div>
     );
   }
+
+  // Server unreachable after retries
+  if (state.phase === 'server_error') {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background p-4">
+        <div className="w-full max-w-md space-y-6 text-center">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-destructive/10">
+            <ServerCrash className="h-8 w-8 text-destructive" />
+          </div>
+          <div className="space-y-2">
+            <h1 className="text-2xl font-bold tracking-tight">Server Unavailable</h1>
+            <p className="text-sm text-muted-foreground">{state.message}</p>
+          </div>
+          <Button onClick={handleRetry} variant="outline" className="gap-2">
+            <RefreshCw className="h-4 w-4" />
+            Retry Connection
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // Checking setup status after auth
+  if (state.phase === 'checking_setup' || state.phase === 'redirecting') {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background p-4">
+        <div className="text-center space-y-4">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
+          <p className="text-sm text-muted-foreground">
+            {state.phase === 'checking_setup' ? 'Loading settings...' : 'Redirecting...'}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Login form (awaiting_login or logging_in)
+  const isLoggingIn = state.phase === 'logging_in';
+  const apiKey = state.phase === 'awaiting_login' ? state.apiKey : state.apiKey;
+  const error = state.phase === 'awaiting_login' ? state.error : null;
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
@@ -130,8 +342,8 @@ export function LoginView() {
               type="password"
               placeholder="Enter API key..."
               value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
-              disabled={isLoading}
+              onChange={(e) => dispatch({ type: 'UPDATE_API_KEY', value: e.target.value })}
+              disabled={isLoggingIn}
               autoFocus
               className="font-mono"
               data-testid="login-api-key-input"
@@ -148,10 +360,10 @@ export function LoginView() {
           <Button
             type="submit"
             className="w-full"
-            disabled={isLoading || !apiKey.trim()}
+            disabled={isLoggingIn || !apiKey.trim()}
             data-testid="login-submit-button"
           >
-            {isLoading ? (
+            {isLoggingIn ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 Authenticating...

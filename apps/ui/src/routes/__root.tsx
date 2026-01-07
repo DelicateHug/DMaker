@@ -7,20 +7,19 @@ import {
   useFileBrowser,
   setGlobalFileBrowser,
 } from '@/contexts/file-browser-context';
-import { useAppStore } from '@/store/app-store';
+import { useAppStore, getStoredTheme } from '@/store/app-store';
 import { useSetupStore } from '@/store/setup-store';
 import { useAuthStore } from '@/store/auth-store';
 import { getElectronAPI, isElectron } from '@/lib/electron';
 import { isMac } from '@/lib/utils';
 import {
   initApiKey,
-  isElectronMode,
   verifySession,
   checkSandboxEnvironment,
   getServerUrlSync,
-  checkExternalServerMode,
-  isExternalServerMode,
+  getHttpApiClient,
 } from '@/lib/http-api-client';
+import { hydrateStoreFromSettings, signalMigrationComplete } from '@/hooks/use-settings-migration';
 import { Toaster } from 'sonner';
 import { ThemeOption, themeOptions } from '@/config/theme-options';
 import { SandboxRiskDialog } from '@/components/dialogs/sandbox-risk-dialog';
@@ -28,6 +27,33 @@ import { SandboxRejectionScreen } from '@/components/dialogs/sandbox-rejection-s
 import { LoadingState } from '@/components/ui/loading-state';
 
 const logger = createLogger('RootLayout');
+
+// Apply stored theme immediately on page load (before React hydration)
+// This prevents flash of default theme on login/setup pages
+function applyStoredTheme(): void {
+  const storedTheme = getStoredTheme();
+  if (storedTheme) {
+    const root = document.documentElement;
+    // Remove all theme classes (themeOptions doesn't include 'system' which is only in ThemeMode)
+    const themeClasses = themeOptions.map((option) => option.value);
+    root.classList.remove(...themeClasses);
+
+    // Apply the stored theme
+    if (storedTheme === 'dark') {
+      root.classList.add('dark');
+    } else if (storedTheme === 'system') {
+      const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      root.classList.add(isDark ? 'dark' : 'light');
+    } else if (storedTheme !== 'light') {
+      root.classList.add(storedTheme);
+    } else {
+      root.classList.add('light');
+    }
+  }
+}
+
+// Apply stored theme immediately (runs synchronously before render)
+applyStoredTheme();
 
 function RootLayoutContent() {
   const location = useLocation();
@@ -42,16 +68,13 @@ function RootLayoutContent() {
   const navigate = useNavigate();
   const [isMounted, setIsMounted] = useState(false);
   const [streamerPanelOpen, setStreamerPanelOpen] = useState(false);
-  // Since we removed persist middleware (settings now sync via API),
-  // we consider the store "hydrated" immediately - the useSettingsMigration
-  // hook in App.tsx handles loading settings from the API
-  const [setupHydrated, setSetupHydrated] = useState(true);
   const authChecked = useAuthStore((s) => s.authChecked);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const { openFileBrowser } = useFileBrowser();
 
   const isSetupRoute = location.pathname === '/setup';
   const isLoginRoute = location.pathname === '/login';
+  const isLoggedOutRoute = location.pathname === '/logged-out';
 
   // Sandbox environment check state
   type SandboxStatus = 'pending' | 'containerized' | 'needs-confirmation' | 'denied' | 'confirmed';
@@ -105,10 +128,15 @@ function RootLayoutContent() {
     setIsMounted(true);
   }, []);
 
-  // Check sandbox environment on mount
+  // Check sandbox environment only after user is authenticated and setup is complete
   useEffect(() => {
     // Skip if already decided
     if (sandboxStatus !== 'pending') {
+      return;
+    }
+
+    // Don't check sandbox until user is authenticated and has completed setup
+    if (!authChecked || !isAuthenticated || !setupComplete) {
       return;
     }
 
@@ -138,7 +166,7 @@ function RootLayoutContent() {
     };
 
     checkSandbox();
-  }, [sandboxStatus, skipSandboxWarning]);
+  }, [sandboxStatus, skipSandboxWarning, authChecked, isAuthenticated, setupComplete]);
 
   // Handle sandbox risk confirmation
   const handleSandboxConfirm = useCallback(
@@ -175,6 +203,24 @@ function RootLayoutContent() {
   // Ref to prevent concurrent auth checks from running
   const authCheckRunning = useRef(false);
 
+  // Global listener for 401/403 responses during normal app usage.
+  // This is triggered by the HTTP client whenever an authenticated request returns 401/403.
+  // Works for ALL modes (unified flow)
+  useEffect(() => {
+    const handleLoggedOut = () => {
+      useAuthStore.getState().setAuthState({ isAuthenticated: false, authChecked: true });
+
+      if (location.pathname !== '/logged-out') {
+        navigate({ to: '/logged-out' });
+      }
+    };
+
+    window.addEventListener('automaker:logged-out', handleLoggedOut);
+    return () => {
+      window.removeEventListener('automaker:logged-out', handleLoggedOut);
+    };
+  }, [location.pathname, navigate]);
+
   // Initialize authentication
   // - Electron mode: Uses API key from IPC (header-based auth)
   // - Web mode: Uses HTTP-only session cookie
@@ -191,30 +237,67 @@ function RootLayoutContent() {
         // Initialize API key for Electron mode
         await initApiKey();
 
-        // Check if running in external server mode (Docker API)
-        const externalMode = await checkExternalServerMode();
-
-        // In Electron mode (but NOT external server mode), we're always authenticated via header
-        if (isElectronMode() && !externalMode) {
-          useAuthStore.getState().setAuthState({ isAuthenticated: true, authChecked: true });
-          return;
+        // 1. Verify session (Single Request, ALL modes)
+        let isValid = false;
+        try {
+          isValid = await verifySession();
+        } catch (error) {
+          logger.warn('Session verification failed (likely network/server issue):', error);
+          isValid = false;
         }
-
-        // In web mode OR external server mode, verify the session cookie is still valid
-        // by making a request to an authenticated endpoint
-        const isValid = await verifySession();
 
         if (isValid) {
-          useAuthStore.getState().setAuthState({ isAuthenticated: true, authChecked: true });
-          return;
-        }
+          // 2. Check Settings if valid
+          const api = getHttpApiClient();
+          try {
+            const settingsResult = await api.settings.getGlobal();
+            if (settingsResult.success && settingsResult.settings) {
+              // Hydrate store (including setupComplete)
+              // This function handles updating the store with all settings
+              // Cast through unknown first to handle type differences between API response and GlobalSettings
+              hydrateStoreFromSettings(
+                settingsResult.settings as unknown as Parameters<typeof hydrateStoreFromSettings>[0]
+              );
 
-        // Session is invalid or expired - treat as not authenticated
-        useAuthStore.getState().setAuthState({ isAuthenticated: false, authChecked: true });
+              // Signal that settings hydration is complete so useSettingsSync can start
+              signalMigrationComplete();
+
+              // Redirect based on setup status happens in the routing effect below
+              // but we can also hint navigation here if needed.
+              // The routing effect (lines 273+) is robust enough.
+            }
+          } catch (error) {
+            logger.error('Failed to fetch settings after valid session:', error);
+            // If settings fail, we might still be authenticated but can't determine setup status.
+            // We should probably treat as authenticated but setup unknown?
+            // Or fail safe to logged-out/error?
+            // Existing logic relies on setupComplete which defaults to false/true based on env.
+            // Let's assume we proceed as authenticated.
+            // Still signal migration complete so sync can start (will sync current store state)
+            signalMigrationComplete();
+          }
+
+          useAuthStore.getState().setAuthState({ isAuthenticated: true, authChecked: true });
+        } else {
+          // Session is invalid or expired - treat as not authenticated
+          useAuthStore.getState().setAuthState({ isAuthenticated: false, authChecked: true });
+          // Signal migration complete so sync hook doesn't hang (nothing to sync when not authenticated)
+          signalMigrationComplete();
+
+          // Redirect to logged-out if not already there or login
+          if (location.pathname !== '/logged-out' && location.pathname !== '/login') {
+            navigate({ to: '/logged-out' });
+          }
+        }
       } catch (error) {
         logger.error('Failed to initialize auth:', error);
         // On error, treat as not authenticated
         useAuthStore.getState().setAuthState({ isAuthenticated: false, authChecked: true });
+        // Signal migration complete so sync hook doesn't hang
+        signalMigrationComplete();
+        if (location.pathname !== '/logged-out' && location.pathname !== '/login') {
+          navigate({ to: '/logged-out' });
+        }
       } finally {
         authCheckRunning.current = false;
       }
@@ -223,25 +306,21 @@ function RootLayoutContent() {
     initAuth();
   }, []); // Runs once per load; auth state drives routing rules
 
-  // Note: Setup store hydration is handled by useSettingsMigration in App.tsx
-  // No need to wait for persist middleware hydration since we removed it
+  // Note: Settings are now loaded in __root.tsx after successful session verification
+  // This ensures a unified flow across all modes (Electron, web, external server)
 
-  // Routing rules (web mode and external server mode):
-  // - If not authenticated: force /login (even /setup is protected)
+  // Routing rules (ALL modes - unified flow):
+  // - If not authenticated: force /logged-out (even /setup is protected)
   // - If authenticated but setup incomplete: force /setup
+  // - If authenticated and setup complete: allow access to app
   useEffect(() => {
-    if (!setupHydrated) return;
-
-    // Check if we need session-based auth (web mode OR external server mode)
-    const needsSessionAuth = !isElectronMode() || isExternalServerMode() === true;
-
     // Wait for auth check to complete before enforcing any redirects
-    if (needsSessionAuth && !authChecked) return;
+    if (!authChecked) return;
 
-    // Unauthenticated -> force /login
-    if (needsSessionAuth && !isAuthenticated) {
-      if (location.pathname !== '/login') {
-        navigate({ to: '/login' });
+    // Unauthenticated -> force /logged-out (but allow /login so user can authenticate)
+    if (!isAuthenticated) {
+      if (location.pathname !== '/logged-out' && location.pathname !== '/login') {
+        navigate({ to: '/logged-out' });
       }
       return;
     }
@@ -256,7 +335,7 @@ function RootLayoutContent() {
     if (setupComplete && location.pathname === '/setup') {
       navigate({ to: '/' });
     }
-  }, [authChecked, isAuthenticated, setupComplete, setupHydrated, location.pathname, navigate]);
+  }, [authChecked, isAuthenticated, setupComplete, location.pathname, navigate]);
 
   useEffect(() => {
     setGlobalFileBrowser(openFileBrowser);
@@ -326,26 +405,17 @@ function RootLayoutContent() {
   const showSandboxDialog = sandboxStatus === 'needs-confirmation';
 
   // Show login page (full screen, no sidebar)
-  if (isLoginRoute) {
+  // Note: No sandbox dialog here - it only shows after login and setup complete
+  if (isLoginRoute || isLoggedOutRoute) {
     return (
-      <>
-        <main className="h-screen overflow-hidden" data-testid="app-container">
-          <Outlet />
-        </main>
-        <SandboxRiskDialog
-          open={showSandboxDialog}
-          onConfirm={handleSandboxConfirm}
-          onDeny={handleSandboxDeny}
-        />
-      </>
+      <main className="h-screen overflow-hidden" data-testid="app-container">
+        <Outlet />
+      </main>
     );
   }
 
-  // Check if we need session-based auth (web mode OR external server mode)
-  const needsSessionAuth = !isElectronMode() || isExternalServerMode() === true;
-
-  // Wait for auth check before rendering protected routes (web mode and external server mode)
-  if (needsSessionAuth && !authChecked) {
+  // Wait for auth check before rendering protected routes (ALL modes - unified flow)
+  if (!authChecked) {
     return (
       <main className="flex h-screen items-center justify-center" data-testid="app-container">
         <LoadingState message="Loading..." />
@@ -353,12 +423,12 @@ function RootLayoutContent() {
     );
   }
 
-  // Redirect to login if not authenticated (web mode and external server mode)
-  // Show loading state while navigation to login is in progress
-  if (needsSessionAuth && !isAuthenticated) {
+  // Redirect to logged-out if not authenticated (ALL modes - unified flow)
+  // Show loading state while navigation is in progress
+  if (!isAuthenticated) {
     return (
       <main className="flex h-screen items-center justify-center" data-testid="app-container">
-        <LoadingState message="Redirecting to login..." />
+        <LoadingState message="Redirecting..." />
       </main>
     );
   }

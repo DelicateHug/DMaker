@@ -262,7 +262,7 @@ export function getSessionCookieOptions(): {
   return {
     httpOnly: true, // JavaScript cannot access this cookie
     secure: process.env.NODE_ENV === 'production', // HTTPS only in production
-    sameSite: 'strict', // Only sent for same-site requests (CSRF protection)
+    sameSite: 'lax', // Sent on same-site requests including cross-origin fetches
     maxAge: SESSION_MAX_AGE_MS,
     path: '/',
   };
