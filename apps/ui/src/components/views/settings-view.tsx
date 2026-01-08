@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useAppStore } from '@/store/app-store';
 import { useSetupStore } from '@/store/setup-store';
 
-import { useSettingsView } from './settings-view/hooks';
+import { useSettingsView, type SettingsViewId } from './settings-view/hooks';
 import { NAV_ITEMS } from './settings-view/config/navigation';
 import { SettingsHeader } from './settings-view/components/settings-header';
 import { KeyboardMapDialog } from './settings-view/components/keyboard-map-dialog';
@@ -18,7 +18,7 @@ import { FeatureDefaultsSection } from './settings-view/feature-defaults/feature
 import { DangerZoneSection } from './settings-view/danger-zone/danger-zone-section';
 import { AccountSection } from './settings-view/account';
 import { SecuritySection } from './settings-view/security';
-import { ProviderTabs } from './settings-view/providers';
+import { ClaudeSettingsTab, CursorSettingsTab, CodexSettingsTab } from './settings-view/providers';
 import { MCPServersSection } from './settings-view/mcp-servers';
 import { PromptCustomizationSection } from './settings-view/prompts';
 import type { Project as SettingsProject, Theme } from './settings-view/shared/types';
@@ -88,15 +88,30 @@ export function SettingsView() {
   // Use settings view navigation hook
   const { activeView, navigateTo } = useSettingsView();
 
+  // Handle navigation - if navigating to 'providers', default to 'claude-provider'
+  const handleNavigate = (viewId: SettingsViewId) => {
+    if (viewId === 'providers') {
+      navigateTo('claude-provider');
+    } else {
+      navigateTo(viewId);
+    }
+  };
+
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showKeyboardMapDialog, setShowKeyboardMapDialog] = useState(false);
 
   // Render the active section based on current view
   const renderActiveSection = () => {
     switch (activeView) {
+      case 'claude-provider':
+        return <ClaudeSettingsTab />;
+      case 'cursor-provider':
+        return <CursorSettingsTab />;
+      case 'codex-provider':
+        return <CodexSettingsTab />;
       case 'providers':
-      case 'claude': // Backwards compatibility
-        return <ProviderTabs defaultTab={activeView === 'claude' ? 'claude' : undefined} />;
+      case 'claude': // Backwards compatibility - redirect to claude-provider
+        return <ClaudeSettingsTab />;
       case 'mcp-servers':
         return <MCPServersSection />;
       case 'prompts':
@@ -181,7 +196,7 @@ export function SettingsView() {
           navItems={NAV_ITEMS}
           activeSection={activeView}
           currentProject={currentProject}
-          onNavigate={navigateTo}
+          onNavigate={handleNavigate}
         />
 
         {/* Content Panel - Shows only the active section */}

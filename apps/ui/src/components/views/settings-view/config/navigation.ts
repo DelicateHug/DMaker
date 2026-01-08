@@ -1,3 +1,4 @@
+import React from 'react';
 import type { LucideIcon } from 'lucide-react';
 import {
   Key,
@@ -14,12 +15,14 @@ import {
   User,
   Shield,
 } from 'lucide-react';
+import { AnthropicIcon, CursorIcon, OpenAIIcon } from '@/components/ui/provider-icon';
 import type { SettingsViewId } from '../hooks/use-settings-view';
 
 export interface NavigationItem {
   id: SettingsViewId;
   label: string;
-  icon: LucideIcon;
+  icon: LucideIcon | React.ComponentType<{ className?: string }>;
+  subItems?: NavigationItem[];
 }
 
 export interface NavigationGroup {
@@ -30,7 +33,16 @@ export interface NavigationGroup {
 // Global settings - always visible
 export const GLOBAL_NAV_ITEMS: NavigationItem[] = [
   { id: 'api-keys', label: 'API Keys', icon: Key },
-  { id: 'providers', label: 'AI Providers', icon: Bot },
+  {
+    id: 'providers',
+    label: 'AI Providers',
+    icon: Bot,
+    subItems: [
+      { id: 'claude-provider', label: 'Claude', icon: AnthropicIcon },
+      { id: 'cursor-provider', label: 'Cursor', icon: CursorIcon },
+      { id: 'codex-provider', label: 'Codex', icon: OpenAIIcon },
+    ],
+  },
   { id: 'mcp-servers', label: 'MCP Servers', icon: Plug },
   { id: 'prompts', label: 'Prompt Customization', icon: MessageSquareText },
   { id: 'model-defaults', label: 'Model Defaults', icon: Workflow },

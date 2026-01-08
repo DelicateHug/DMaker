@@ -17,6 +17,7 @@ import { getHttpApiClient, waitForApiKeyInit } from '@/lib/http-api-client';
 import { setItem } from '@/lib/storage';
 import { useAppStore, type ThemeMode, THEME_STORAGE_KEY } from '@/store/app-store';
 import { useSetupStore } from '@/store/setup-store';
+import { useAuthStore } from '@/store/auth-store';
 import { waitForMigrationComplete } from './use-settings-migration';
 import type { GlobalSettings } from '@automaker/types';
 
@@ -90,6 +91,9 @@ export function useSettingsSync(): SettingsSyncState {
     syncing: false,
   });
 
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const authChecked = useAuthStore((s) => s.authChecked);
+
   const syncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSyncedRef = useRef<string>('');
   const isInitializedRef = useRef(false);
@@ -160,6 +164,9 @@ export function useSettingsSync(): SettingsSyncState {
 
   // Initialize sync - WAIT for migration to complete first
   useEffect(() => {
+    // Don't initialize syncing until we know auth status and are authenticated.
+    // Prevents accidental overwrites when the app boots before settings are hydrated.
+    if (!authChecked || !isAuthenticated) return;
     if (isInitializedRef.current) return;
     isInitializedRef.current = true;
 
@@ -204,7 +211,7 @@ export function useSettingsSync(): SettingsSyncState {
     }
 
     initializeSync();
-  }, []);
+  }, [authChecked, isAuthenticated]);
 
   // Subscribe to store changes and sync to server
   useEffect(() => {

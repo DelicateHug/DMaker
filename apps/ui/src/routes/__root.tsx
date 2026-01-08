@@ -251,44 +251,67 @@ function RootLayoutContent() {
         }
 
         if (isValid) {
-          // 2. Check Settings if valid
+          // 2. Load settings (and hydrate stores) before marking auth as checked.
+          // This prevents useSettingsSync from pushing default/empty state to the server
+          // when the backend is still starting up or temporarily unavailable.
           const api = getHttpApiClient();
           try {
-            const settingsResult = await api.settings.getGlobal();
-            if (settingsResult.success && settingsResult.settings) {
-              // Perform migration from localStorage if needed (first-time migration)
-              // This checks if localStorage has projects/data that server doesn't have
-              // and merges them before hydrating the store
-              const { settings: finalSettings, migrated } = await performSettingsMigration(
-                settingsResult.settings as unknown as Parameters<typeof performSettingsMigration>[0]
-              );
+            const maxAttempts = 8;
+            const baseDelayMs = 250;
+            let lastError: unknown = null;
 
-              if (migrated) {
-                logger.info('Settings migration from localStorage completed');
+            for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+              try {
+                const settingsResult = await api.settings.getGlobal();
+                if (settingsResult.success && settingsResult.settings) {
+                  const { settings: finalSettings, migrated } = await performSettingsMigration(
+                    settingsResult.settings as unknown as Parameters<
+                      typeof performSettingsMigration
+                    >[0]
+                  );
+
+                  if (migrated) {
+                    logger.info('Settings migration from localStorage completed');
+                  }
+
+                  // Hydrate store with the final settings (merged if migration occurred)
+                  hydrateStoreFromSettings(finalSettings);
+
+                  // Signal that settings hydration is complete so useSettingsSync can start
+                  signalMigrationComplete();
+
+                  // Mark auth as checked only after settings hydration succeeded.
+                  useAuthStore
+                    .getState()
+                    .setAuthState({ isAuthenticated: true, authChecked: true });
+                  return;
+                }
+
+                lastError = settingsResult;
+              } catch (error) {
+                lastError = error;
               }
 
-              // Hydrate store with the final settings (merged if migration occurred)
-              hydrateStoreFromSettings(finalSettings);
-
-              // Signal that settings hydration is complete so useSettingsSync can start
-              signalMigrationComplete();
-
-              // Redirect based on setup status happens in the routing effect below
-              // but we can also hint navigation here if needed.
-              // The routing effect (lines 273+) is robust enough.
+              const delayMs = Math.min(1500, baseDelayMs * attempt);
+              logger.warn(
+                `Settings not ready (attempt ${attempt}/${maxAttempts}); retrying in ${delayMs}ms...`,
+                lastError
+              );
+              await new Promise((resolve) => setTimeout(resolve, delayMs));
             }
+
+            throw lastError ?? new Error('Failed to load settings');
           } catch (error) {
             logger.error('Failed to fetch settings after valid session:', error);
-            // If settings fail, we might still be authenticated but can't determine setup status.
-            // We should probably treat as authenticated but setup unknown?
-            // Or fail safe to logged-out/error?
-            // Existing logic relies on setupComplete which defaults to false/true based on env.
-            // Let's assume we proceed as authenticated.
-            // Still signal migration complete so sync can start (will sync current store state)
+            // If we can't load settings, we must NOT start syncing defaults to the server.
+            // Treat as not authenticated for now (backend likely unavailable) and unblock sync hook.
+            useAuthStore.getState().setAuthState({ isAuthenticated: false, authChecked: true });
             signalMigrationComplete();
+            if (location.pathname !== '/logged-out' && location.pathname !== '/login') {
+              navigate({ to: '/logged-out' });
+            }
+            return;
           }
-
-          useAuthStore.getState().setAuthState({ isAuthenticated: true, authChecked: true });
         } else {
           // Session is invalid or expired - treat as not authenticated
           useAuthStore.getState().setAuthState({ isAuthenticated: false, authChecked: true });
