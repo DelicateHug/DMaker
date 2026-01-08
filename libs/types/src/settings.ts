@@ -281,7 +281,7 @@ export function profileHasThinking(profile: AIProfile): boolean {
 
   if (profile.provider === 'codex') {
     // Codex models handle thinking internally (o-series models)
-    const model = profile.codexModel || 'gpt-5.2';
+    const model = profile.codexModel || 'codex-gpt-5.2';
     return model.startsWith('o');
   }
 
@@ -297,7 +297,7 @@ export function getProfileModelString(profile: AIProfile): string {
   }
 
   if (profile.provider === 'codex') {
-    return `codex:${profile.codexModel || 'gpt-5.2'}`;
+    return `codex:${profile.codexModel || 'codex-gpt-5.2'}`;
   }
 
   // Claude

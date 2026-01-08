@@ -11,21 +11,23 @@ export const CLAUDE_MODEL_MAP: Record<string, string> = {
  * Codex/OpenAI model identifiers
  * Based on OpenAI Codex CLI official models
  * See: https://developers.openai.com/codex/models/
+ *
+ * IMPORTANT: All Codex models use 'codex-' prefix to distinguish from Cursor CLI models
  */
 export const CODEX_MODEL_MAP = {
   // Recommended Codex-specific models
   /** Most advanced agentic coding model for complex software engineering (default for ChatGPT users) */
-  gpt52Codex: 'gpt-5.2-codex',
+  gpt52Codex: 'codex-gpt-5.2-codex',
   /** Optimized for long-horizon, agentic coding tasks in Codex */
-  gpt51CodexMax: 'gpt-5.1-codex-max',
+  gpt51CodexMax: 'codex-gpt-5.1-codex-max',
   /** Smaller, more cost-effective version for faster workflows */
-  gpt51CodexMini: 'gpt-5.1-codex-mini',
+  gpt51CodexMini: 'codex-gpt-5.1-codex-mini',
 
   // General-purpose GPT models (also available in Codex)
   /** Best general agentic model for tasks across industries and domains */
-  gpt52: 'gpt-5.2',
+  gpt52: 'codex-gpt-5.2',
   /** Great for coding and agentic tasks across domains */
-  gpt51: 'gpt-5.1',
+  gpt51: 'codex-gpt-5.1',
 } as const;
 
 export const CODEX_MODEL_IDS = Object.values(CODEX_MODEL_MAP);

@@ -39,11 +39,11 @@ export function formatModelName(model: string): string {
   if (model.includes('haiku')) return 'Haiku 4.5';
 
   // Codex/GPT models - specific formatting
-  if (model === 'gpt-5.2-codex') return 'GPT-5.2 Codex';
-  if (model === 'gpt-5.2') return 'GPT-5.2';
-  if (model === 'gpt-5.1-codex-max') return 'GPT-5.1 Max';
-  if (model === 'gpt-5.1-codex-mini') return 'GPT-5.1 Mini';
-  if (model === 'gpt-5.1') return 'GPT-5.1';
+  if (model === 'codex-gpt-5.2-codex') return 'GPT-5.2 Codex';
+  if (model === 'codex-gpt-5.2') return 'GPT-5.2';
+  if (model === 'codex-gpt-5.1-codex-max') return 'GPT-5.1 Max';
+  if (model === 'codex-gpt-5.1-codex-mini') return 'GPT-5.1 Mini';
+  if (model === 'codex-gpt-5.1') return 'GPT-5.1';
   // Generic fallbacks for other GPT models
   if (model.startsWith('gpt-')) return model.toUpperCase();
   if (model.match(/^o\d/)) return model.toUpperCase(); // o1, o3, etc.

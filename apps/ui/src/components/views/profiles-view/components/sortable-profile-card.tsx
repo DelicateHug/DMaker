@@ -99,7 +99,7 @@ export function SortableProfileCard({ profile, onEdit, onDelete }: SortableProfi
                 profile.cursorModel ||
                 'auto'
               : profile.provider === 'codex'
-                ? getCodexModelLabel(profile.codexModel || 'gpt-5.2-codex')
+                ? getCodexModelLabel(profile.codexModel || 'codex-gpt-5.2-codex')
                 : profile.model || 'sonnet'}
           </span>
 

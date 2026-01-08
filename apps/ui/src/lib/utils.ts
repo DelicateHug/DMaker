@@ -59,14 +59,16 @@ export function getModelDisplayName(model: ModelAlias | string): string {
     sonnet: 'Claude Sonnet',
     opus: 'Claude Opus',
     // Codex models
-    'gpt-5.2': 'GPT-5.2',
-    'gpt-5.1-codex-max': 'GPT-5.1 Codex Max',
-    'gpt-5.1-codex': 'GPT-5.1 Codex',
-    'gpt-5.1-codex-mini': 'GPT-5.1 Codex Mini',
-    'gpt-5.1': 'GPT-5.1',
+    'codex-gpt-5.2': 'GPT-5.2',
+    'codex-gpt-5.1-codex-max': 'GPT-5.1 Codex Max',
+    'codex-gpt-5.1-codex': 'GPT-5.1 Codex',
+    'codex-gpt-5.1-codex-mini': 'GPT-5.1 Codex Mini',
+    'codex-gpt-5.1': 'GPT-5.1',
     // Cursor models (common ones)
     'cursor-auto': 'Cursor Auto',
     'cursor-composer-1': 'Composer 1',
+    'cursor-gpt-5.2': 'GPT-5.2',
+    'cursor-gpt-5.1': 'GPT-5.1',
   };
   return displayNames[model] || model;
 }

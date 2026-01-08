@@ -15,7 +15,6 @@ import { CODEX_MODEL_CONFIG_MAP, type CodexModelId } from './codex-models.js';
 export const PROVIDER_PREFIXES = {
   cursor: 'cursor-',
   codex: 'codex-',
-  // Add new provider prefixes here
 } as const;
 
 /**
@@ -35,20 +34,6 @@ export function isCursorModel(model: string | undefined | null): boolean {
   // Check if it's a bare Cursor model ID (excluding Codex-specific models)
   // Codex-specific models should always route to Codex provider, not Cursor
   if (model in CURSOR_MODEL_MAP) {
-    // Exclude Codex-specific model IDs that are in Cursor's model map
-    // These models should be routed to Codex provider instead
-    // This includes all Codex model variants (standard, high, max, mini, etc.)
-    if (
-      model.startsWith('gpt-5.1-codex-') ||
-      model.startsWith('gpt-5.2-codex-') ||
-      // Also exclude bare Codex models that overlap with Cursor's OpenAI models
-      model === 'gpt-5.2' ||
-      model === 'gpt-5.1' ||
-      // Exclude all Codex models from CODEX_MODEL_CONFIG_MAP
-      model in CODEX_MODEL_CONFIG_MAP
-    ) {
-      return false;
-    }
     return true;
   }
 
@@ -87,7 +72,7 @@ export function isCodexModel(model: string | undefined | null): boolean {
     return true;
   }
 
-  // Check if it's a gpt- model
+  // Check if it's a gpt- model (bare gpt models go to Codex, not Cursor)
   if (model.startsWith('gpt-')) {
     return true;
   }
@@ -98,8 +83,7 @@ export function isCodexModel(model: string | undefined | null): boolean {
   }
 
   // Check if it's in the CODEX_MODEL_MAP
-  const modelValues = Object.values(CODEX_MODEL_MAP);
-  return modelValues.includes(model as CodexModelId);
+  return model in CODEX_MODEL_MAP;
 }
 
 /**
@@ -198,9 +182,8 @@ export function normalizeModelString(model: string | undefined | null): string {
   }
 
   // For Codex, bare gpt-* and o-series models are valid canonical forms
-  // Only add prefix if it's in CODEX_MODEL_MAP but doesn't have gpt-/o prefix
-  const codexModelValues = Object.values(CODEX_MODEL_MAP);
-  if (codexModelValues.includes(model as CodexModelId)) {
+  // Check if it's in the CODEX_MODEL_MAP
+  if (model in CODEX_MODEL_MAP) {
     // If it already starts with gpt- or o, it's canonical
     if (model.startsWith('gpt-') || /^o\d/.test(model)) {
       return model;

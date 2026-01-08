@@ -26,7 +26,7 @@ function getProfileModelDisplay(profile: AIProfile): string {
     return modelConfig?.label || cursorModel;
   }
   if (profile.provider === 'codex') {
-    return getCodexModelLabel(profile.codexModel || 'gpt-5.2-codex');
+    return getCodexModelLabel(profile.codexModel || 'codex-gpt-5.2-codex');
   }
   // Claude
   return profile.model || 'sonnet';
