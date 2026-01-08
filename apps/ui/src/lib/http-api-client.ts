@@ -131,6 +131,39 @@ export const isElectronMode = (): boolean => {
   return api?.isElectron === true || !!api?.getApiKey;
 };
 
+// Cached external server mode flag
+let cachedExternalServerMode: boolean | null = null;
+
+/**
+ * Check if running in external server mode (Docker API)
+ * In this mode, Electron uses session-based auth like web mode
+ */
+export const checkExternalServerMode = async (): Promise<boolean> => {
+  if (cachedExternalServerMode !== null) {
+    return cachedExternalServerMode;
+  }
+
+  if (typeof window !== 'undefined') {
+    const api = window.electronAPI as any;
+    if (api?.isExternalServerMode) {
+      try {
+        cachedExternalServerMode = Boolean(await api.isExternalServerMode());
+        return cachedExternalServerMode;
+      } catch (error) {
+        logger.warn('Failed to check external server mode:', error);
+      }
+    }
+  }
+
+  cachedExternalServerMode = false;
+  return false;
+};
+
+/**
+ * Get cached external server mode (synchronous, returns null if not yet checked)
+ */
+export const isExternalServerMode = (): boolean | null => cachedExternalServerMode;
+
 /**
  * Initialize API key and server URL for Electron mode authentication.
  * In web mode, authentication uses HTTP-only cookies instead.
@@ -463,19 +496,29 @@ export class HttpApiClient implements ElectronAPI {
 
     this.isConnecting = true;
 
-    // Electron mode must authenticate with the injected API key.
-    // If the key isn't ready yet, do NOT fall back to /api/auth/token (web-mode flow).
+    // Electron mode typically authenticates with the injected API key.
+    // However, in external-server/cookie-auth flows, the API key may be unavailable.
+    // In that case, fall back to the same wsToken/cookie authentication used in web mode
+    // so the UI still receives real-time events (running tasks, logs, etc.).
     if (isElectronMode()) {
       const apiKey = getApiKey();
       if (!apiKey) {
-        logger.warn('Electron mode: API key not ready, delaying WebSocket connect');
-        this.isConnecting = false;
-        if (!this.reconnectTimer) {
-          this.reconnectTimer = setTimeout(() => {
-            this.reconnectTimer = null;
-            this.connectWebSocket();
-          }, 250);
-        }
+        logger.warn('Electron mode: API key missing, attempting wsToken/cookie auth for WebSocket');
+        this.fetchWsToken()
+          .then((wsToken) => {
+            const wsUrl = this.serverUrl.replace(/^http/, 'ws') + '/api/events';
+            if (wsToken) {
+              this.establishWebSocket(`${wsUrl}?wsToken=${encodeURIComponent(wsToken)}`);
+            } else {
+              // Fallback: try connecting without token (will fail if not authenticated)
+              logger.warn('No wsToken available, attempting WebSocket connection anyway');
+              this.establishWebSocket(wsUrl);
+            }
+          })
+          .catch((error) => {
+            logger.error('Failed to prepare WebSocket connection (electron fallback):', error);
+            this.isConnecting = false;
+          });
         return;
       }
 
@@ -1147,7 +1190,20 @@ export class HttpApiClient implements ElectronAPI {
   };
 
   // Features API
-  features: FeaturesAPI = {
+  features: FeaturesAPI & {
+    bulkUpdate: (
+      projectPath: string,
+      featureIds: string[],
+      updates: Partial<Feature>
+    ) => Promise<{
+      success: boolean;
+      updatedCount?: number;
+      failedCount?: number;
+      results?: Array<{ featureId: string; success: boolean; error?: string }>;
+      features?: Feature[];
+      error?: string;
+    }>;
+  } = {
     getAll: (projectPath: string) => this.post('/api/features/list', { projectPath }),
     get: (projectPath: string, featureId: string) =>
       this.post('/api/features/get', { projectPath, featureId }),
@@ -1161,6 +1217,8 @@ export class HttpApiClient implements ElectronAPI {
       this.post('/api/features/agent-output', { projectPath, featureId }),
     generateTitle: (description: string) =>
       this.post('/api/features/generate-title', { description }),
+    bulkUpdate: (projectPath: string, featureIds: string[], updates: Partial<Feature>) =>
+      this.post('/api/features/bulk-update', { projectPath, featureIds, updates }),
   };
 
   // Auto Mode API
