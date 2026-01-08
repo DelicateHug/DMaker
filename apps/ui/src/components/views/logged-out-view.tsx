@@ -1,6 +1,6 @@
 import { useNavigate } from '@tanstack/react-router';
 import { Button } from '@/components/ui/button';
-import { LogOut, RefreshCcw } from 'lucide-react';
+import { LogOut } from 'lucide-react';
 
 export function LoggedOutView() {
   const navigate = useNavigate();
@@ -21,10 +21,6 @@ export function LoggedOutView() {
         <div className="space-y-3">
           <Button className="w-full" onClick={() => navigate({ to: '/login' })}>
             Go to login
-          </Button>
-          <Button className="w-full" variant="secondary" onClick={() => window.location.reload()}>
-            <RefreshCcw className="mr-2 h-4 w-4" />
-            Retry
           </Button>
         </div>
       </div>
