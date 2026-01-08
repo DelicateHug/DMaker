@@ -26,7 +26,8 @@ import {
   startServerAndWait,
   ensureDependencies,
   prompt,
-  launchDockerContainers,
+  launchDockerDevContainers,
+  launchDockerDevServerContainer,
 } from './scripts/launcher-utils.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -88,7 +89,7 @@ async function main() {
   const { webPort, serverPort, corsOriginEnv } = await resolvePortConfiguration();
 
   // Show mode selection menu
-  printModeMenu();
+  printModeMenu({ isDev: true });
 
   // Setup cleanup handlers
   const cleanup = createCleanupHandler(processes);
@@ -96,7 +97,7 @@ async function main() {
 
   // Prompt for choice
   while (true) {
-    const choice = await prompt('Enter your choice (1, 2, or 3): ');
+    const choice = await prompt('Enter your choice (1, 2, 3, or 4): ');
 
     if (choice === '1') {
       console.log('');
@@ -170,10 +171,14 @@ async function main() {
       break;
     } else if (choice === '3') {
       console.log('');
-      await launchDockerContainers({ baseDir: __dirname, processes });
+      await launchDockerDevContainers({ baseDir: __dirname, processes });
+      break;
+    } else if (choice === '4') {
+      console.log('');
+      await launchDockerDevServerContainer({ baseDir: __dirname, processes });
       break;
     } else {
-      log('Invalid choice. Please enter 1, 2, or 3.', 'red');
+      log('Invalid choice. Please enter 1, 2, 3, or 4.', 'red');
     }
   }
 }
