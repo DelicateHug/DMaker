@@ -1,6 +1,7 @@
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import type { ModelAlias, ModelProvider } from '@/store/app-store';
+import { CODEX_MODEL_CONFIG_MAP, codexModelHasThinking } from '@automaker/types';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -10,6 +11,13 @@ export function cn(...inputs: ClassValue[]) {
  * Determine if the current model supports extended thinking controls
  */
 export function modelSupportsThinking(_model?: ModelAlias | string): boolean {
+  if (!_model) return true;
+
+  // Check if it's a Codex model with thinking support
+  if (_model.startsWith('gpt-') && _model in CODEX_MODEL_CONFIG_MAP) {
+    return codexModelHasThinking(_model as any);
+  }
+
   // All Claude models support thinking
   return true;
 }

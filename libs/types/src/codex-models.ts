@@ -4,12 +4,11 @@
  * Reference: https://developers.openai.com/codex/models/
  */
 export type CodexModelId =
-  | 'gpt-5.2-codex' // Most advanced agentic coding model for complex software engineering
-  | 'gpt-5-codex' // Purpose-built for Codex CLI with versatile tool use
-  | 'gpt-5-codex-mini' // Faster workflows optimized for low-latency code Q&A and editing
-  | 'codex-1' // Version of o3 optimized for software engineering
-  | 'codex-mini-latest' // Version of o4-mini for Codex, optimized for faster workflows
-  | 'gpt-5'; // GPT-5 base flagship model
+  | 'gpt-5.2-codex'
+  | 'gpt-5.1-codex-max'
+  | 'gpt-5.1-codex-mini'
+  | 'gpt-5.2'
+  | 'gpt-5.1';
 
 /**
  * Codex model metadata
@@ -32,40 +31,33 @@ export const CODEX_MODEL_CONFIG_MAP: Record<CodexModelId, CodexModelConfig> = {
     label: 'GPT-5.2-Codex',
     description: 'Most advanced agentic coding model for complex software engineering',
     hasThinking: true,
-    supportsVision: true, // GPT-5 supports vision
+    supportsVision: true,
   },
-  'gpt-5-codex': {
-    id: 'gpt-5-codex',
-    label: 'GPT-5-Codex',
-    description: 'Purpose-built for Codex CLI with versatile tool use',
+  'gpt-5.1-codex-max': {
+    id: 'gpt-5.1-codex-max',
+    label: 'GPT-5.1-Codex-Max',
+    description: 'Optimized for long-horizon, agentic coding tasks in Codex',
     hasThinking: true,
     supportsVision: true,
   },
-  'gpt-5-codex-mini': {
-    id: 'gpt-5-codex-mini',
-    label: 'GPT-5-Codex-Mini',
-    description: 'Faster workflows optimized for low-latency code Q&A and editing',
+  'gpt-5.1-codex-mini': {
+    id: 'gpt-5.1-codex-mini',
+    label: 'GPT-5.1-Codex-Mini',
+    description: 'Smaller, more cost-effective version for faster workflows',
     hasThinking: false,
     supportsVision: true,
   },
-  'codex-1': {
-    id: 'codex-1',
-    label: 'Codex-1',
-    description: 'Version of o3 optimized for software engineering',
+  'gpt-5.2': {
+    id: 'gpt-5.2',
+    label: 'GPT-5.2',
+    description: 'Best general agentic model for tasks across industries and domains',
     hasThinking: true,
     supportsVision: true,
   },
-  'codex-mini-latest': {
-    id: 'codex-mini-latest',
-    label: 'Codex-Mini-Latest',
-    description: 'Version of o4-mini for Codex, optimized for faster workflows',
-    hasThinking: false,
-    supportsVision: true,
-  },
-  'gpt-5': {
-    id: 'gpt-5',
-    label: 'GPT-5',
-    description: 'GPT-5 base flagship model',
+  'gpt-5.1': {
+    id: 'gpt-5.1',
+    label: 'GPT-5.1',
+    description: 'Great for coding and agentic tasks across domains',
     hasThinking: true,
     supportsVision: true,
   },
