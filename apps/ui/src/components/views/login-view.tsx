@@ -11,7 +11,7 @@
  *   checking_setup → redirecting
  */
 
-import { useReducer, useEffect } from 'react';
+import { useReducer, useEffect, useRef } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { login, getHttpApiClient, getServerUrlSync } from '@/lib/http-api-client';
 import { Button } from '@/components/ui/button';
@@ -176,11 +176,19 @@ async function checkServerAndSession(
   }
 }
 
-async function checkSetupStatus(dispatch: React.Dispatch<Action>): Promise<void> {
+async function checkSetupStatus(
+  dispatch: React.Dispatch<Action>,
+  signal?: AbortSignal
+): Promise<void> {
   const httpClient = getHttpApiClient();
 
   try {
     const result = await httpClient.settings.getGlobal();
+
+    // Return early if aborted
+    if (signal?.aborted) {
+      return;
+    }
 
     if (result.success && result.settings) {
       // Check the setupComplete field from settings
@@ -199,6 +207,10 @@ async function checkSetupStatus(dispatch: React.Dispatch<Action>): Promise<void>
       dispatch({ type: 'REDIRECT', to: '/setup' });
     }
   } catch {
+    // Return early if aborted
+    if (signal?.aborted) {
+      return;
+    }
     // If we can't get settings, go to setup to be safe
     useSetupStore.getState().setSetupComplete(false);
     dispatch({ type: 'REDIRECT', to: '/setup' });
@@ -232,6 +244,7 @@ export function LoginView() {
   const navigate = useNavigate();
   const setAuthState = useAuthStore((s) => s.setAuthState);
   const [state, dispatch] = useReducer(reducer, initialState);
+  const retryControllerRef = useRef<AbortController | null>(null);
 
   // Run initial server/session check on mount.
   // IMPORTANT: Do not "run once" via a ref guard here.
@@ -243,13 +256,19 @@ export function LoginView() {
 
     return () => {
       controller.abort();
+      retryControllerRef.current?.abort();
     };
   }, [setAuthState]);
 
   // When we enter checking_setup phase, check setup status
   useEffect(() => {
     if (state.phase === 'checking_setup') {
-      checkSetupStatus(dispatch);
+      const controller = new AbortController();
+      checkSetupStatus(dispatch, controller.signal);
+
+      return () => {
+        controller.abort();
+      };
     }
   }, [state.phase]);
 
@@ -271,8 +290,12 @@ export function LoginView() {
 
   // Handle retry button for server errors
   const handleRetry = () => {
+    // Abort any previous retry request
+    retryControllerRef.current?.abort();
+
     dispatch({ type: 'RETRY_SERVER_CHECK' });
     const controller = new AbortController();
+    retryControllerRef.current = controller;
     checkServerAndSession(dispatch, setAuthState, controller.signal);
   };
 
