@@ -20,11 +20,14 @@ export async function pressModifierEnter(page: Page): Promise<void> {
 
 /**
  * Click an element by its data-testid attribute
+ * Waits for the element to be visible before clicking to avoid flaky tests
  */
 export async function clickElement(page: Page, testId: string): Promise<void> {
   // Wait for splash screen to disappear first (safety net)
-  await waitForSplashScreenToDisappear(page, 2000);
-  const element = await getByTestId(page, testId);
+  await waitForSplashScreenToDisappear(page, 5000);
+  const element = page.locator(`[data-testid="${testId}"]`);
+  // Wait for element to be visible and stable before clicking
+  await element.waitFor({ state: 'visible', timeout: 10000 });
   await element.click();
 }
 

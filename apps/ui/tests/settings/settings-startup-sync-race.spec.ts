@@ -120,13 +120,21 @@ test.describe('Settings startup sync race', () => {
     };
     expect(beforeLogout.projects?.length).toBeGreaterThan(0);
 
-    // Navigate to settings and click logout.
+    // Navigate to settings, then to Account section (logout button is only visible there)
     await page.goto('/settings');
+    // Wait for settings view to load, then click on Account section
+    await page.locator('button:has-text("Account")').first().click();
+    // Wait for account section to be visible before clicking logout
+    await page
+      .locator('[data-testid="logout-button"]')
+      .waitFor({ state: 'visible', timeout: 10000 });
     await page.locator('[data-testid="logout-button"]').click();
 
     // Ensure we landed on logged-out or login (either is acceptable).
+    // Note: The page uses curly apostrophe (') so we match the heading role instead
     await page
-      .locator('text=You’ve been logged out, text=Authentication Required')
+      .getByRole('heading', { name: /logged out/i })
+      .or(page.locator('text=Authentication Required'))
       .first()
       .waitFor({ state: 'visible', timeout: 30000 });
 
