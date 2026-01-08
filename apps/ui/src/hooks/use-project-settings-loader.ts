@@ -19,8 +19,11 @@ export function useProjectSettingsLoader() {
   const setHideScrollbar = useAppStore((state) => state.setHideScrollbar);
 
   const loadingRef = useRef<string | null>(null);
+  const currentProjectRef = useRef<string | null>(null);
 
   useEffect(() => {
+    currentProjectRef.current = currentProject?.path ?? null;
+
     if (!currentProject?.path) {
       return;
     }
@@ -31,44 +34,43 @@ export function useProjectSettingsLoader() {
     }
 
     loadingRef.current = currentProject.path;
+    const requestedProjectPath = currentProject.path;
 
     const loadProjectSettings = async () => {
       try {
         const httpClient = getHttpApiClient();
-        const result = await httpClient.settings.getProject(currentProject.path);
+        const result = await httpClient.settings.getProject(requestedProjectPath);
 
-        if (result.success && result.settings?.boardBackground) {
+        // Race condition protection: ignore stale results if project changed
+        if (currentProjectRef.current !== requestedProjectPath) {
+          return;
+        }
+
+        if (result.success && result.settings) {
           const bg = result.settings.boardBackground;
 
-          // Update store with loaded settings (without triggering server save)
-          setBoardBackground(currentProject.path, bg.imagePath);
-
-          if (bg.cardOpacity !== undefined) {
-            setCardOpacity(currentProject.path, bg.cardOpacity);
+          // Apply boardBackground if present
+          if (bg?.imagePath) {
+            setBoardBackground(requestedProjectPath, bg.imagePath);
           }
 
-          if (bg.columnOpacity !== undefined) {
-            setColumnOpacity(currentProject.path, bg.columnOpacity);
-          }
+          // Settings map for cleaner iteration
+          const settingsMap = {
+            cardOpacity: setCardOpacity,
+            columnOpacity: setColumnOpacity,
+            columnBorderEnabled: setColumnBorderEnabled,
+            cardGlassmorphism: setCardGlassmorphism,
+            cardBorderEnabled: setCardBorderEnabled,
+            cardBorderOpacity: setCardBorderOpacity,
+            hideScrollbar: setHideScrollbar,
+          } as const;
 
-          if (bg.columnBorderEnabled !== undefined) {
-            setColumnBorderEnabled(currentProject.path, bg.columnBorderEnabled);
-          }
-
-          if (bg.cardGlassmorphism !== undefined) {
-            setCardGlassmorphism(currentProject.path, bg.cardGlassmorphism);
-          }
-
-          if (bg.cardBorderEnabled !== undefined) {
-            setCardBorderEnabled(currentProject.path, bg.cardBorderEnabled);
-          }
-
-          if (bg.cardBorderOpacity !== undefined) {
-            setCardBorderOpacity(currentProject.path, bg.cardBorderOpacity);
-          }
-
-          if (bg.hideScrollbar !== undefined) {
-            setHideScrollbar(currentProject.path, bg.hideScrollbar);
+          // Apply all settings that are defined
+          for (const [key, setter] of Object.entries(settingsMap)) {
+            const value = bg?.[key as keyof typeof bg];
+            if (value !== undefined) {
+              (setter as (path: string, val: typeof value) => void)(requestedProjectPath, value);
+            }
           }
         }
       } catch (error) {
@@ -78,15 +80,5 @@ export function useProjectSettingsLoader() {
     };
 
     loadProjectSettings();
-  }, [
-    currentProject?.path,
-    setBoardBackground,
-    setCardOpacity,
-    setColumnOpacity,
-    setColumnBorderEnabled,
-    setCardGlassmorphism,
-    setCardBorderEnabled,
-    setCardBorderOpacity,
-    setHideScrollbar,
-  ]);
+  }, [currentProject?.path]);
 }
