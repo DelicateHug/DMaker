@@ -543,6 +543,11 @@ function getAllAllowedSystemPaths(): string[] {
     // Codex config directory and files
     getCodexConfigDir(),
     getCodexAuthPath(),
+    // OpenCode CLI paths
+    ...getOpenCodeCliPaths(),
+    // OpenCode config directory and files
+    getOpenCodeConfigDir(),
+    getOpenCodeAuthPath(),
     // Shell paths
     ...getShellPaths(),
     // Node.js system paths
@@ -564,6 +569,8 @@ function getAllAllowedSystemDirs(): string[] {
     getClaudeProjectsDir(),
     // Codex config
     getCodexConfigDir(),
+    // OpenCode config
+    getOpenCodeConfigDir(),
     // Version managers (need recursive access for version directories)
     ...getNvmPaths(),
     ...getFnmPaths(),
@@ -997,6 +1004,151 @@ export async function getCodexAuthIndicators(): Promise<CodexAuthIndicators> {
           result.hasOAuthToken || hasNonEmptyStringField(nestedTokens, CODEX_OAUTH_KEYS);
         result.hasApiKey =
           result.hasApiKey || hasNonEmptyStringField(nestedTokens, CODEX_API_KEY_KEYS);
+      }
+    } catch {
+      // Ignore parse errors; file exists but contents are unreadable
+    }
+  } catch {
+    // Auth file not found or inaccessible
+  }
+
+  return result;
+}
+
+// =============================================================================
+// OpenCode CLI Detection
+// =============================================================================
+
+const OPENCODE_CONFIG_DIR_NAME = '.opencode';
+const OPENCODE_AUTH_FILENAME = 'auth.json';
+const OPENCODE_TOKENS_KEY = 'tokens';
+
+/**
+ * Get common paths where OpenCode CLI might be installed
+ */
+export function getOpenCodeCliPaths(): string[] {
+  const isWindows = process.platform === 'win32';
+  const homeDir = os.homedir();
+
+  if (isWindows) {
+    const appData = process.env.APPDATA || path.join(homeDir, 'AppData', 'Roaming');
+    const localAppData = process.env.LOCALAPPDATA || path.join(homeDir, 'AppData', 'Local');
+    return [
+      path.join(homeDir, '.local', 'bin', 'opencode.exe'),
+      path.join(appData, 'npm', 'opencode.cmd'),
+      path.join(appData, 'npm', 'opencode'),
+      path.join(appData, '.npm-global', 'bin', 'opencode.cmd'),
+      path.join(appData, '.npm-global', 'bin', 'opencode'),
+      // Volta on Windows
+      path.join(homeDir, '.volta', 'bin', 'opencode.exe'),
+      // pnpm on Windows
+      path.join(localAppData, 'pnpm', 'opencode.cmd'),
+      path.join(localAppData, 'pnpm', 'opencode'),
+      // Go installation (if OpenCode is a Go binary)
+      path.join(homeDir, 'go', 'bin', 'opencode.exe'),
+      path.join(process.env.GOPATH || path.join(homeDir, 'go'), 'bin', 'opencode.exe'),
+    ];
+  }
+
+  // Include NVM bin paths for opencode installed via npm global under NVM
+  const nvmBinPaths = getNvmBinPaths().map((binPath) => path.join(binPath, 'opencode'));
+
+  // Include fnm bin paths
+  const fnmBinPaths = getFnmBinPaths().map((binPath) => path.join(binPath, 'opencode'));
+
+  // pnpm global bin path
+  const pnpmHome = process.env.PNPM_HOME || path.join(homeDir, '.local', 'share', 'pnpm');
+
+  return [
+    // Standard locations
+    path.join(homeDir, '.local', 'bin', 'opencode'),
+    '/opt/homebrew/bin/opencode',
+    '/usr/local/bin/opencode',
+    '/usr/bin/opencode',
+    path.join(homeDir, '.npm-global', 'bin', 'opencode'),
+    // Linuxbrew
+    '/home/linuxbrew/.linuxbrew/bin/opencode',
+    // Volta
+    path.join(homeDir, '.volta', 'bin', 'opencode'),
+    // pnpm global
+    path.join(pnpmHome, 'opencode'),
+    // Yarn global
+    path.join(homeDir, '.yarn', 'bin', 'opencode'),
+    path.join(homeDir, '.config', 'yarn', 'global', 'node_modules', '.bin', 'opencode'),
+    // Go installation (if OpenCode is a Go binary)
+    path.join(homeDir, 'go', 'bin', 'opencode'),
+    path.join(process.env.GOPATH || path.join(homeDir, 'go'), 'bin', 'opencode'),
+    // Snap packages
+    '/snap/bin/opencode',
+    // NVM paths
+    ...nvmBinPaths,
+    // fnm paths
+    ...fnmBinPaths,
+  ];
+}
+
+/**
+ * Get the OpenCode configuration directory path
+ */
+export function getOpenCodeConfigDir(): string {
+  return path.join(os.homedir(), OPENCODE_CONFIG_DIR_NAME);
+}
+
+/**
+ * Get path to OpenCode auth file
+ */
+export function getOpenCodeAuthPath(): string {
+  return path.join(getOpenCodeConfigDir(), OPENCODE_AUTH_FILENAME);
+}
+
+/**
+ * Check if OpenCode CLI is installed and return its path
+ */
+export async function findOpenCodeCliPath(): Promise<string | null> {
+  return findFirstExistingPath(getOpenCodeCliPaths());
+}
+
+export interface OpenCodeAuthIndicators {
+  hasAuthFile: boolean;
+  hasOAuthToken: boolean;
+  hasApiKey: boolean;
+}
+
+const OPENCODE_OAUTH_KEYS = ['access_token', 'oauth_token'] as const;
+const OPENCODE_API_KEY_KEYS = ['api_key', 'OPENAI_API_KEY', 'ANTHROPIC_API_KEY'] as const;
+
+function getOpenCodeNestedTokens(record: Record<string, unknown>): Record<string, unknown> | null {
+  const tokens = record[OPENCODE_TOKENS_KEY];
+  if (tokens && typeof tokens === 'object' && !Array.isArray(tokens)) {
+    return tokens as Record<string, unknown>;
+  }
+  return null;
+}
+
+/**
+ * Get OpenCode authentication status by checking auth file indicators
+ */
+export async function getOpenCodeAuthIndicators(): Promise<OpenCodeAuthIndicators> {
+  const result: OpenCodeAuthIndicators = {
+    hasAuthFile: false,
+    hasOAuthToken: false,
+    hasApiKey: false,
+  };
+
+  try {
+    const authContent = await systemPathReadFile(getOpenCodeAuthPath());
+    result.hasAuthFile = true;
+
+    try {
+      const authJson = JSON.parse(authContent) as Record<string, unknown>;
+      result.hasOAuthToken = hasNonEmptyStringField(authJson, OPENCODE_OAUTH_KEYS);
+      result.hasApiKey = hasNonEmptyStringField(authJson, OPENCODE_API_KEY_KEYS);
+      const nestedTokens = getOpenCodeNestedTokens(authJson);
+      if (nestedTokens) {
+        result.hasOAuthToken =
+          result.hasOAuthToken || hasNonEmptyStringField(nestedTokens, OPENCODE_OAUTH_KEYS);
+        result.hasApiKey =
+          result.hasApiKey || hasNonEmptyStringField(nestedTokens, OPENCODE_API_KEY_KEYS);
       }
     } catch {
       // Ignore parse errors; file exists but contents are unreadable

@@ -8,6 +8,7 @@ import {
   ClaudeSetupStep,
   CursorSetupStep,
   CodexSetupStep,
+  OpencodeSetupStep,
   GitHubSetupStep,
 } from './setup-view/steps';
 import { useNavigate } from '@tanstack/react-router';
@@ -19,7 +20,16 @@ export function SetupView() {
   const { currentStep, setCurrentStep, completeSetup, setSkipClaudeSetup } = useSetupStore();
   const navigate = useNavigate();
 
-  const steps = ['welcome', 'theme', 'claude', 'cursor', 'codex', 'github', 'complete'] as const;
+  const steps = [
+    'welcome',
+    'theme',
+    'claude',
+    'cursor',
+    'codex',
+    'opencode',
+    'github',
+    'complete',
+  ] as const;
   type StepName = (typeof steps)[number];
   const getStepName = (): StepName => {
     if (currentStep === 'claude_detect' || currentStep === 'claude_auth') return 'claude';
@@ -27,6 +37,7 @@ export function SetupView() {
     if (currentStep === 'theme') return 'theme';
     if (currentStep === 'cursor') return 'cursor';
     if (currentStep === 'codex') return 'codex';
+    if (currentStep === 'opencode') return 'opencode';
     if (currentStep === 'github') return 'github';
     return 'complete';
   };
@@ -52,6 +63,10 @@ export function SetupView() {
         setCurrentStep('codex');
         break;
       case 'codex':
+        logger.debug('[Setup Flow] Moving to opencode step');
+        setCurrentStep('opencode');
+        break;
+      case 'opencode':
         logger.debug('[Setup Flow] Moving to github step');
         setCurrentStep('github');
         break;
@@ -77,8 +92,11 @@ export function SetupView() {
       case 'codex':
         setCurrentStep('cursor');
         break;
-      case 'github':
+      case 'opencode':
         setCurrentStep('codex');
+        break;
+      case 'github':
+        setCurrentStep('opencode');
         break;
     }
   };
@@ -96,6 +114,11 @@ export function SetupView() {
 
   const handleSkipCodex = () => {
     logger.debug('[Setup Flow] Skipping Codex setup');
+    setCurrentStep('opencode');
+  };
+
+  const handleSkipOpencode = () => {
+    logger.debug('[Setup Flow] Skipping OpenCode setup');
     setCurrentStep('github');
   };
 
@@ -158,6 +181,14 @@ export function SetupView() {
                 onNext={() => handleNext('codex')}
                 onBack={() => handleBack('codex')}
                 onSkip={handleSkipCodex}
+              />
+            )}
+
+            {currentStep === 'opencode' && (
+              <OpencodeSetupStep
+                onNext={() => handleNext('opencode')}
+                onBack={() => handleBack('opencode')}
+                onSkip={handleSkipOpencode}
               />
             )}
 
