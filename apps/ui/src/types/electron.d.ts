@@ -466,6 +466,10 @@ export interface AutoModeAPI {
 }
 
 export interface ElectronAPI {
+  // Platform info (exposed from preload)
+  platform?: 'darwin' | 'win32' | 'linux';
+  isElectron?: boolean;
+
   ping: () => Promise<string>;
   getApiKey?: () => Promise<string | null>;
   quit?: () => Promise<void>;

@@ -1,13 +1,30 @@
 import type { NavigateOptions } from '@tanstack/react-router';
 import { cn } from '@/lib/utils';
+import { useOSDetection } from '@/hooks/use-os-detection';
 
 interface AutomakerLogoProps {
   sidebarOpen: boolean;
   navigate: (opts: NavigateOptions) => void;
 }
 
+function getOSAbbreviation(os: string): string {
+  switch (os) {
+    case 'mac':
+      return 'M';
+    case 'windows':
+      return 'W';
+    case 'linux':
+      return 'L';
+    default:
+      return '?';
+  }
+}
+
 export function AutomakerLogo({ sidebarOpen, navigate }: AutomakerLogoProps) {
   const appVersion = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '0.0.0';
+  const { os } = useOSDetection();
+  const appMode = import.meta.env.VITE_APP_MODE || '?';
+  const versionSuffix = `${getOSAbbreviation(os)}${appMode}`;
 
   return (
     <div
@@ -69,7 +86,7 @@ export function AutomakerLogo({ sidebarOpen, navigate }: AutomakerLogoProps) {
           </g>
         </svg>
         <span className="text-[0.625rem] text-muted-foreground leading-none font-medium">
-          v{appVersion}
+          v{appVersion} {versionSuffix}
         </span>
       </div>
 
@@ -125,7 +142,7 @@ export function AutomakerLogo({ sidebarOpen, navigate }: AutomakerLogoProps) {
             </span>
           </div>
           <span className="text-[0.625rem] text-muted-foreground leading-none font-medium ml-[38.8px]">
-            v{appVersion}
+            v{appVersion} {versionSuffix}
           </span>
         </div>
       )}
