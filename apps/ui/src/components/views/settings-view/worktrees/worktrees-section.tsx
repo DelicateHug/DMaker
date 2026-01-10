@@ -35,6 +35,8 @@ export function WorktreesSection({ useWorktrees, onUseWorktreesChange }: Worktre
   const currentProject = useAppStore((s) => s.currentProject);
   const getShowInitScriptIndicator = useAppStore((s) => s.getShowInitScriptIndicator);
   const setShowInitScriptIndicator = useAppStore((s) => s.setShowInitScriptIndicator);
+  const getDefaultDeleteBranch = useAppStore((s) => s.getDefaultDeleteBranch);
+  const setDefaultDeleteBranch = useAppStore((s) => s.setDefaultDeleteBranch);
   const [scriptContent, setScriptContent] = useState('');
   const [originalContent, setOriginalContent] = useState('');
   const [scriptExists, setScriptExists] = useState(false);
@@ -46,6 +48,11 @@ export function WorktreesSection({ useWorktrees, onUseWorktreesChange }: Worktre
   const showIndicator = currentProject?.path
     ? getShowInitScriptIndicator(currentProject.path)
     : true;
+
+  // Get the default delete branch setting
+  const defaultDeleteBranch = currentProject?.path
+    ? getDefaultDeleteBranch(currentProject.path)
+    : false;
 
   // Check if there are unsaved changes
   const hasChanges = scriptContent !== originalContent;
@@ -221,6 +228,34 @@ export function WorktreesSection({ useWorktrees, onUseWorktreesChange }: Worktre
               <p className="text-xs text-muted-foreground/80 leading-relaxed">
                 Display a floating panel in the bottom-right corner showing init script execution
                 status and output when a worktree is created.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Default Delete Branch Toggle */}
+        {currentProject && (
+          <div className="group flex items-start space-x-3 p-3 rounded-xl hover:bg-accent/30 transition-colors duration-200 -mx-3">
+            <Checkbox
+              id="default-delete-branch"
+              checked={defaultDeleteBranch}
+              onCheckedChange={(checked) => {
+                if (currentProject?.path) {
+                  setDefaultDeleteBranch(currentProject.path, checked === true);
+                }
+              }}
+              className="mt-1"
+            />
+            <div className="space-y-1.5">
+              <Label
+                htmlFor="default-delete-branch"
+                className="text-foreground cursor-pointer font-medium flex items-center gap-2"
+              >
+                <Trash2 className="w-4 h-4 text-brand-500" />
+                Delete Branch by Default
+              </Label>
+              <p className="text-xs text-muted-foreground/80 leading-relaxed">
+                When deleting a worktree, automatically check the "Also delete the branch" option.
               </p>
             </div>
           </div>

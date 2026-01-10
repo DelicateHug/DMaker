@@ -598,6 +598,10 @@ export interface ProjectSettings {
   /** Whether to show the init script indicator panel (default: true) */
   showInitScriptIndicator?: boolean;
 
+  // Worktree Behavior
+  /** Default value for "delete branch" checkbox when deleting a worktree (default: false) */
+  defaultDeleteBranchWithWorktree?: boolean;
+
   // Session Tracking
   /** Last chat session selected in this project */
   lastSelectedSessionId?: string;

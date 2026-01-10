@@ -119,6 +119,7 @@ export function BoardView() {
     (state) => state.showInitScriptIndicatorByProject
   );
   const getShowInitScriptIndicator = useAppStore((state) => state.getShowInitScriptIndicator);
+  const getDefaultDeleteBranch = useAppStore((state) => state.getDefaultDeleteBranch);
   const shortcuts = useKeyboardShortcutsConfig();
   const {
     features: hookFeatures,
@@ -1513,6 +1514,7 @@ export function BoardView() {
             ? hookFeatures.filter((f) => f.branchName === selectedWorktreeForAction.branch).length
             : 0
         }
+        defaultDeleteBranch={getDefaultDeleteBranch(currentProject.path)}
         onDeleted={(deletedWorktree, _deletedBranch) => {
           // Reset features that were assigned to the deleted worktree (by branch)
           hookFeatures.forEach((feature) => {

@@ -50,7 +50,7 @@ export function useInitScriptEvents(projectPath: string | null) {
       switch (event.type) {
         case 'worktree:init-started': {
           const startPayload = payload as InitScriptStartedPayload;
-          setInitScriptState(projectPath, {
+          setInitScriptState(projectPath, startPayload.branch, {
             status: 'running',
             branch: startPayload.branch,
             output: [],
@@ -60,12 +60,12 @@ export function useInitScriptEvents(projectPath: string | null) {
         }
         case 'worktree:init-output': {
           const outputPayload = payload as InitScriptOutputPayload;
-          appendInitScriptOutput(projectPath, outputPayload.content);
+          appendInitScriptOutput(projectPath, outputPayload.branch, outputPayload.content);
           break;
         }
         case 'worktree:init-completed': {
           const completePayload = payload as InitScriptCompletedPayload;
-          setInitScriptState(projectPath, {
+          setInitScriptState(projectPath, completePayload.branch, {
             status: completePayload.success ? 'success' : 'failed',
             error: completePayload.error,
           });

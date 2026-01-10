@@ -669,6 +669,10 @@ export interface AppState {
   // Whether to show the floating init script indicator panel (default: true)
   showInitScriptIndicatorByProject: Record<string, boolean>;
 
+  // Default Delete Branch With Worktree (per-project, keyed by project path)
+  // Whether to default the "delete branch" checkbox when deleting a worktree (default: false)
+  defaultDeleteBranchByProject: Record<string, boolean>;
+
   // UI State (previously in localStorage, now synced via API)
   /** Whether worktree panel is collapsed in board view */
   worktreePanelCollapsed: boolean;
@@ -677,7 +681,7 @@ export interface AppState {
   /** Recently accessed folders for quick access */
   recentFolders: string[];
 
-  // Init Script State (per-project, keyed by project path)
+  // Init Script State (keyed by "projectPath::branch" to support concurrent scripts)
   initScriptState: Record<string, InitScriptState>;
 }
 
@@ -1086,6 +1090,10 @@ export interface AppActions {
   setShowInitScriptIndicator: (projectPath: string, visible: boolean) => void;
   getShowInitScriptIndicator: (projectPath: string) => boolean;
 
+  // Default Delete Branch actions (per-project)
+  setDefaultDeleteBranch: (projectPath: string, deleteBranch: boolean) => void;
+  getDefaultDeleteBranch: (projectPath: string) => boolean;
+
   // UI State actions (previously in localStorage, now synced via API)
   setWorktreePanelCollapsed: (collapsed: boolean) => void;
   setLastProjectDir: (dir: string) => void;
@@ -1114,11 +1122,18 @@ export interface AppActions {
     }>
   ) => void;
 
-  // Init Script State actions
-  setInitScriptState: (projectPath: string, state: Partial<InitScriptState>) => void;
-  appendInitScriptOutput: (projectPath: string, content: string) => void;
-  clearInitScriptState: (projectPath: string) => void;
-  getInitScriptState: (projectPath: string) => InitScriptState | null;
+  // Init Script State actions (keyed by projectPath::branch to support concurrent scripts)
+  setInitScriptState: (
+    projectPath: string,
+    branch: string,
+    state: Partial<InitScriptState>
+  ) => void;
+  appendInitScriptOutput: (projectPath: string, branch: string, content: string) => void;
+  clearInitScriptState: (projectPath: string, branch: string) => void;
+  getInitScriptState: (projectPath: string, branch: string) => InitScriptState | null;
+  getInitScriptStatesForProject: (
+    projectPath: string
+  ) => Array<{ key: string; state: InitScriptState }>;
 
   // Reset
   reset: () => void;
@@ -1217,6 +1232,7 @@ const initialState: AppState = {
   pipelineConfigByProject: {},
   worktreePanelVisibleByProject: {},
   showInitScriptIndicatorByProject: {},
+  defaultDeleteBranchByProject: {},
   // UI State (previously in localStorage, now synced via API)
   worktreePanelCollapsed: false,
   lastProjectDir: '',
@@ -3148,6 +3164,21 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
     return get().showInitScriptIndicatorByProject[projectPath] ?? true;
   },
 
+  // Default Delete Branch actions (per-project)
+  setDefaultDeleteBranch: (projectPath, deleteBranch) => {
+    set({
+      defaultDeleteBranchByProject: {
+        ...get().defaultDeleteBranchByProject,
+        [projectPath]: deleteBranch,
+      },
+    });
+  },
+
+  getDefaultDeleteBranch: (projectPath) => {
+    // Default to false (don't delete branch) if not set
+    return get().defaultDeleteBranchByProject[projectPath] ?? false;
+  },
+
   // UI State actions (previously in localStorage, now synced via API)
   setWorktreePanelCollapsed: (collapsed) => set({ worktreePanelCollapsed: collapsed }),
   setLastProjectDir: (dir) => set({ lastProjectDir: dir }),
@@ -3161,28 +3192,30 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
     set({ recentFolders: updated });
   },
 
-  // Init Script State actions
-  setInitScriptState: (projectPath, state) => {
-    const current = get().initScriptState[projectPath] || {
+  // Init Script State actions (keyed by "projectPath::branch")
+  setInitScriptState: (projectPath, branch, state) => {
+    const key = `${projectPath}::${branch}`;
+    const current = get().initScriptState[key] || {
       status: 'idle',
-      branch: '',
+      branch,
       output: [],
     };
     set({
       initScriptState: {
         ...get().initScriptState,
-        [projectPath]: { ...current, ...state },
+        [key]: { ...current, ...state },
       },
     });
   },
 
-  appendInitScriptOutput: (projectPath, content) => {
-    const current = get().initScriptState[projectPath];
+  appendInitScriptOutput: (projectPath, branch, content) => {
+    const key = `${projectPath}::${branch}`;
+    const current = get().initScriptState[key];
     if (!current) return;
     set({
       initScriptState: {
         ...get().initScriptState,
-        [projectPath]: {
+        [key]: {
           ...current,
           output: [...current.output, content],
         },
@@ -3190,13 +3223,23 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
     });
   },
 
-  clearInitScriptState: (projectPath) => {
-    const { [projectPath]: _, ...rest } = get().initScriptState;
+  clearInitScriptState: (projectPath, branch) => {
+    const key = `${projectPath}::${branch}`;
+    const { [key]: _, ...rest } = get().initScriptState;
     set({ initScriptState: rest });
   },
 
-  getInitScriptState: (projectPath) => {
-    return get().initScriptState[projectPath] || null;
+  getInitScriptState: (projectPath, branch) => {
+    const key = `${projectPath}::${branch}`;
+    return get().initScriptState[key] || null;
+  },
+
+  getInitScriptStatesForProject: (projectPath) => {
+    const prefix = `${projectPath}::`;
+    const states = get().initScriptState;
+    return Object.entries(states)
+      .filter(([key]) => key.startsWith(prefix))
+      .map(([key, state]) => ({ key, state }));
   },
 
   // Reset

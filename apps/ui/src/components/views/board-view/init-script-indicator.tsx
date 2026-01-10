@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { Terminal, Check, X, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAppStore, type InitScriptState } from '@/store/app-store';
@@ -8,45 +8,38 @@ interface InitScriptIndicatorProps {
   projectPath: string;
 }
 
-export function InitScriptIndicator({ projectPath }: InitScriptIndicatorProps) {
-  const initScriptState = useAppStore((s) => s.initScriptState[projectPath]);
-  const clearInitScriptState = useAppStore((s) => s.clearInitScriptState);
+interface SingleIndicatorProps {
+  stateKey: string;
+  state: InitScriptState;
+  onDismiss: (key: string) => void;
+  isOnlyOne: boolean; // Whether this is the only indicator shown
+}
+
+function SingleIndicator({ stateKey, state, onDismiss, isOnlyOne }: SingleIndicatorProps) {
   const [showLogs, setShowLogs] = useState(false);
-  const [dismissed, setDismissed] = useState(false);
   const logsEndRef = useRef<HTMLDivElement>(null);
+
+  const { status, output, branch, error } = state;
 
   // Auto-scroll to bottom when new output arrives
   useEffect(() => {
     if (showLogs && logsEndRef.current) {
       logsEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [initScriptState?.output, showLogs]);
+  }, [output, showLogs]);
 
-  // Reset dismissed state when a new script starts
+  // Auto-expand logs when script starts (only if it's the only one or running)
   useEffect(() => {
-    if (initScriptState?.status === 'running') {
-      setDismissed(false);
+    if (status === 'running' && isOnlyOne) {
       setShowLogs(true);
     }
-  }, [initScriptState?.status]);
+  }, [status, isOnlyOne]);
 
-  if (!initScriptState || dismissed) return null;
-  if (initScriptState.status === 'idle') return null;
-
-  const { status, output, branch, error } = initScriptState;
-
-  const handleDismiss = () => {
-    setDismissed(true);
-    // Clear state after a delay to allow for future scripts
-    setTimeout(() => {
-      clearInitScriptState(projectPath);
-    }, 100);
-  };
+  if (status === 'idle') return null;
 
   return (
     <div
       className={cn(
-        'fixed bottom-4 right-4 z-50',
         'bg-card border border-border rounded-lg shadow-lg',
         'min-w-[350px] max-w-[500px]',
         'animate-in slide-in-from-right-5 duration-200'
@@ -55,18 +48,12 @@ export function InitScriptIndicator({ projectPath }: InitScriptIndicatorProps) {
       {/* Header */}
       <div className="flex items-center justify-between p-3 border-b border-border/50">
         <div className="flex items-center gap-2">
-          {status === 'running' && (
-            <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
-          )}
+          {status === 'running' && <Loader2 className="w-4 h-4 animate-spin text-blue-500" />}
           {status === 'success' && <Check className="w-4 h-4 text-green-500" />}
           {status === 'failed' && <X className="w-4 h-4 text-red-500" />}
           <span className="font-medium text-sm">
             Init Script{' '}
-            {status === 'running'
-              ? 'Running'
-              : status === 'success'
-                ? 'Completed'
-                : 'Failed'}
+            {status === 'running' ? 'Running' : status === 'success' ? 'Completed' : 'Failed'}
           </span>
         </div>
         <div className="flex items-center gap-1">
@@ -83,7 +70,7 @@ export function InitScriptIndicator({ projectPath }: InitScriptIndicatorProps) {
           </button>
           {status !== 'running' && (
             <button
-              onClick={handleDismiss}
+              onClick={() => onDismiss(stateKey)}
               className="p-1 hover:bg-accent rounded transition-colors"
               title="Dismiss"
             >
@@ -110,11 +97,7 @@ export function InitScriptIndicator({ projectPath }: InitScriptIndicatorProps) {
                 {status === 'running' ? 'Waiting for output...' : 'No output'}
               </div>
             )}
-            {error && (
-              <div className="mt-2 text-red-500 text-xs font-medium">
-                Error: {error}
-              </div>
-            )}
+            {error && <div className="mt-2 text-red-500 text-xs font-medium">Error: {error}</div>}
             <div ref={logsEndRef} />
           </div>
         </div>
@@ -125,9 +108,7 @@ export function InitScriptIndicator({ projectPath }: InitScriptIndicatorProps) {
         <div
           className={cn(
             'px-3 py-2 text-xs',
-            status === 'success'
-              ? 'bg-green-500/10 text-green-600'
-              : 'bg-red-500/10 text-red-600'
+            status === 'success' ? 'bg-green-500/10 text-green-600' : 'bg-red-500/10 text-red-600'
           )}
         >
           {status === 'success'
@@ -135,6 +116,72 @@ export function InitScriptIndicator({ projectPath }: InitScriptIndicatorProps) {
             : 'Initialization failed - worktree is still usable'}
         </div>
       )}
+    </div>
+  );
+}
+
+export function InitScriptIndicator({ projectPath }: InitScriptIndicatorProps) {
+  const getInitScriptStatesForProject = useAppStore((s) => s.getInitScriptStatesForProject);
+  const clearInitScriptState = useAppStore((s) => s.clearInitScriptState);
+  const [dismissedKeys, setDismissedKeys] = useState<Set<string>>(new Set());
+
+  // Get all init script states for this project
+  const allStates = getInitScriptStatesForProject(projectPath);
+
+  // Filter out dismissed and idle states
+  const activeStates = allStates.filter(
+    ({ key, state }) => !dismissedKeys.has(key) && state.status !== 'idle'
+  );
+
+  // Reset dismissed keys when a new script starts for a branch
+  useEffect(() => {
+    const runningKeys = allStates
+      .filter(({ state }) => state.status === 'running')
+      .map(({ key }) => key);
+
+    if (runningKeys.length > 0) {
+      setDismissedKeys((prev) => {
+        const newSet = new Set(prev);
+        runningKeys.forEach((key) => newSet.delete(key));
+        return newSet;
+      });
+    }
+  }, [allStates]);
+
+  const handleDismiss = useCallback(
+    (key: string) => {
+      setDismissedKeys((prev) => new Set(prev).add(key));
+      // Extract branch from key (format: "projectPath::branch")
+      const branch = key.split('::')[1];
+      if (branch) {
+        // Clear state after a delay to allow for future scripts
+        setTimeout(() => {
+          clearInitScriptState(projectPath, branch);
+        }, 100);
+      }
+    },
+    [projectPath, clearInitScriptState]
+  );
+
+  if (activeStates.length === 0) return null;
+
+  return (
+    <div
+      className={cn(
+        'fixed bottom-4 right-4 z-50 flex flex-col gap-2',
+        'max-h-[calc(100vh-120px)] overflow-y-auto',
+        'scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent'
+      )}
+    >
+      {activeStates.map(({ key, state }) => (
+        <SingleIndicator
+          key={key}
+          stateKey={key}
+          state={state}
+          onDismiss={handleDismiss}
+          isOnlyOne={activeStates.length === 1}
+        />
+      ))}
     </div>
   );
 }
