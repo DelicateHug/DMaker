@@ -665,6 +665,10 @@ export interface AppState {
   // Whether the worktree panel row is visible (default: true)
   worktreePanelVisibleByProject: Record<string, boolean>;
 
+  // Init Script Indicator Visibility (per-project, keyed by project path)
+  // Whether to show the floating init script indicator panel (default: true)
+  showInitScriptIndicatorByProject: Record<string, boolean>;
+
   // UI State (previously in localStorage, now synced via API)
   /** Whether worktree panel is collapsed in board view */
   worktreePanelCollapsed: boolean;
@@ -1078,6 +1082,10 @@ export interface AppActions {
   setWorktreePanelVisible: (projectPath: string, visible: boolean) => void;
   getWorktreePanelVisible: (projectPath: string) => boolean;
 
+  // Init Script Indicator Visibility actions (per-project)
+  setShowInitScriptIndicator: (projectPath: string, visible: boolean) => void;
+  getShowInitScriptIndicator: (projectPath: string) => boolean;
+
   // UI State actions (previously in localStorage, now synced via API)
   setWorktreePanelCollapsed: (collapsed: boolean) => void;
   setLastProjectDir: (dir: string) => void;
@@ -1208,6 +1216,7 @@ const initialState: AppState = {
   codexModelsLastFetched: null,
   pipelineConfigByProject: {},
   worktreePanelVisibleByProject: {},
+  showInitScriptIndicatorByProject: {},
   // UI State (previously in localStorage, now synced via API)
   worktreePanelCollapsed: false,
   lastProjectDir: '',
@@ -3122,6 +3131,21 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
   getWorktreePanelVisible: (projectPath) => {
     // Default to true (visible) if not set
     return get().worktreePanelVisibleByProject[projectPath] ?? true;
+  },
+
+  // Init Script Indicator Visibility actions (per-project)
+  setShowInitScriptIndicator: (projectPath, visible) => {
+    set({
+      showInitScriptIndicatorByProject: {
+        ...get().showInitScriptIndicatorByProject,
+        [projectPath]: visible,
+      },
+    });
+  },
+
+  getShowInitScriptIndicator: (projectPath) => {
+    // Default to true (visible) if not set
+    return get().showInitScriptIndicatorByProject[projectPath] ?? true;
   },
 
   // UI State actions (previously in localStorage, now synced via API)

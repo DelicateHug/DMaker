@@ -114,6 +114,11 @@ export function BoardView() {
   const pipelineConfigByProject = useAppStore((state) => state.pipelineConfigByProject);
   // Subscribe to worktreePanelVisibleByProject to trigger re-renders when it changes
   const worktreePanelVisibleByProject = useAppStore((state) => state.worktreePanelVisibleByProject);
+  // Subscribe to showInitScriptIndicatorByProject to trigger re-renders when it changes
+  const showInitScriptIndicatorByProject = useAppStore(
+    (state) => state.showInitScriptIndicatorByProject
+  );
+  const getShowInitScriptIndicator = useAppStore((state) => state.getShowInitScriptIndicator);
   const shortcuts = useKeyboardShortcutsConfig();
   const {
     features: hookFeatures,
@@ -1577,7 +1582,9 @@ export function BoardView() {
       />
 
       {/* Init Script Indicator - floating overlay for worktree init script status */}
-      <InitScriptIndicator projectPath={currentProject.path} />
+      {getShowInitScriptIndicator(currentProject.path) && (
+        <InitScriptIndicator projectPath={currentProject.path} />
+      )}
     </div>
   );
 }

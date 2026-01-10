@@ -3,7 +3,16 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
 import { ShellSyntaxEditor } from '@/components/ui/shell-syntax-editor';
-import { GitBranch, Terminal, FileCode, Save, RotateCcw, Trash2, Loader2 } from 'lucide-react';
+import {
+  GitBranch,
+  Terminal,
+  FileCode,
+  Save,
+  RotateCcw,
+  Trash2,
+  Loader2,
+  PanelBottomClose,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { apiPost, apiPut, apiDelete } from '@/lib/api-fetch';
 import { toast } from 'sonner';
@@ -24,12 +33,19 @@ interface InitScriptResponse {
 
 export function WorktreesSection({ useWorktrees, onUseWorktreesChange }: WorktreesSectionProps) {
   const currentProject = useAppStore((s) => s.currentProject);
+  const getShowInitScriptIndicator = useAppStore((s) => s.getShowInitScriptIndicator);
+  const setShowInitScriptIndicator = useAppStore((s) => s.setShowInitScriptIndicator);
   const [scriptContent, setScriptContent] = useState('');
   const [originalContent, setOriginalContent] = useState('');
   const [scriptExists, setScriptExists] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Get the current show indicator setting
+  const showIndicator = currentProject?.path
+    ? getShowInitScriptIndicator(currentProject.path)
+    : true;
 
   // Check if there are unsaved changes
   const hasChanges = scriptContent !== originalContent;
@@ -180,6 +196,35 @@ export function WorktreesSection({ useWorktrees, onUseWorktreesChange }: Worktre
             </p>
           </div>
         </div>
+
+        {/* Show Init Script Indicator Toggle */}
+        {currentProject && (
+          <div className="group flex items-start space-x-3 p-3 rounded-xl hover:bg-accent/30 transition-colors duration-200 -mx-3 mt-4">
+            <Checkbox
+              id="show-init-script-indicator"
+              checked={showIndicator}
+              onCheckedChange={(checked) => {
+                if (currentProject?.path) {
+                  setShowInitScriptIndicator(currentProject.path, checked === true);
+                }
+              }}
+              className="mt-1"
+            />
+            <div className="space-y-1.5">
+              <Label
+                htmlFor="show-init-script-indicator"
+                className="text-foreground cursor-pointer font-medium flex items-center gap-2"
+              >
+                <PanelBottomClose className="w-4 h-4 text-brand-500" />
+                Show Init Script Indicator
+              </Label>
+              <p className="text-xs text-muted-foreground/80 leading-relaxed">
+                Display a floating panel in the bottom-right corner showing init script execution
+                status and output when a worktree is created.
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Separator */}
         <div className="border-t border-border/30" />

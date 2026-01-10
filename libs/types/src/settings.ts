@@ -595,6 +595,8 @@ export interface ProjectSettings {
   // UI Visibility
   /** Whether the worktree panel row is visible (default: true) */
   worktreePanelVisible?: boolean;
+  /** Whether to show the init script indicator panel (default: true) */
+  showInitScriptIndicator?: boolean;
 
   // Session Tracking
   /** Last chat session selected in this project */
