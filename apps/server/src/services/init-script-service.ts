@@ -150,10 +150,12 @@ export class InitScriptService {
           : 'No shell found (/bin/bash or /bin/sh)';
       logger.error(error);
 
-      // Update metadata with error
+      // Update metadata with error, preserving existing metadata
+      const existingMetadata = await readWorktreeMetadata(projectPath, branch);
       await writeWorktreeMetadata(projectPath, branch, {
         branch,
-        createdAt: new Date().toISOString(),
+        createdAt: existingMetadata?.createdAt || new Date().toISOString(),
+        pr: existingMetadata?.pr,
         initScriptRan: true,
         initScriptStatus: 'failed',
         initScriptError: error,

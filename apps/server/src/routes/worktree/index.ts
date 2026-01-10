@@ -95,7 +95,7 @@ export function createWorktreeRoutes(events: EventEmitter): Router {
   router.post('/list-dev-servers', createListDevServersHandler());
 
   // Init script routes
-  router.post('/init-script', validatePathParams('projectPath'), createGetInitScriptHandler());
+  router.get('/init-script', createGetInitScriptHandler());
   router.put('/init-script', validatePathParams('projectPath'), createPutInitScriptHandler());
   router.delete('/init-script', validatePathParams('projectPath'), createDeleteInitScriptHandler());
   router.post(

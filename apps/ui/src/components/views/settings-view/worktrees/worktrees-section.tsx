@@ -14,7 +14,7 @@ import {
   PanelBottomClose,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { apiPost, apiPut, apiDelete } from '@/lib/api-fetch';
+import { apiGet, apiPut, apiDelete } from '@/lib/api-fetch';
 import { toast } from 'sonner';
 import { useAppStore } from '@/store/app-store';
 
@@ -77,9 +77,9 @@ export function WorktreesSection({ useWorktrees, onUseWorktreesChange }: Worktre
     const loadInitScript = async () => {
       setIsLoading(true);
       try {
-        const response = await apiPost<InitScriptResponse>('/api/worktree/init-script', {
-          projectPath: currentProject.path,
-        });
+        const response = await apiGet<InitScriptResponse>(
+          `/api/worktree/init-script?projectPath=${encodeURIComponent(currentProject.path)}`
+        );
         if (response.success) {
           const content = response.content || '';
           setScriptContent(content);

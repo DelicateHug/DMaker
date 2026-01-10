@@ -33,12 +33,12 @@ function getInitScriptPath(projectPath: string): string {
 export function createGetInitScriptHandler() {
   return async (req: Request, res: Response): Promise<void> => {
     try {
-      const { projectPath } = req.body as { projectPath: string };
+      const projectPath = req.query.projectPath as string;
 
       if (!projectPath) {
         res.status(400).json({
           success: false,
-          error: 'projectPath is required',
+          error: 'projectPath query parameter is required',
         });
         return;
       }
@@ -142,18 +142,11 @@ export function createDeleteInitScriptHandler() {
 
       const scriptPath = getInitScriptPath(projectPath);
 
-      try {
-        await secureFs.rm(scriptPath, { force: true });
-        logger.info(`Deleted init script at ${scriptPath}`);
-        res.json({
-          success: true,
-        });
-      } catch {
-        // File doesn't exist - still success
-        res.json({
-          success: true,
-        });
-      }
+      await secureFs.rm(scriptPath, { force: true });
+      logger.info(`Deleted init script at ${scriptPath}`);
+      res.json({
+        success: true,
+      });
     } catch (error) {
       logError(error, 'Delete init script failed');
       res.status(500).json({

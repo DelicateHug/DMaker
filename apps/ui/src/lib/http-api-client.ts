@@ -1613,7 +1613,8 @@ export class HttpApiClient implements ElectronAPI {
     getPRInfo: (worktreePath: string, branchName: string) =>
       this.post('/api/worktree/pr-info', { worktreePath, branchName }),
     // Init script methods
-    getInitScript: (projectPath: string) => this.post('/api/worktree/init-script', { projectPath }),
+    getInitScript: (projectPath: string) =>
+      this.get(`/api/worktree/init-script?projectPath=${encodeURIComponent(projectPath)}`),
     setInitScript: (projectPath: string, content: string) =>
       this.put('/api/worktree/init-script', { projectPath, content }),
     deleteInitScript: (projectPath: string) =>

@@ -22,8 +22,7 @@ import {
 } from '../common.js';
 import { trackBranch } from './branch-tracking.js';
 import { createLogger } from '@automaker/utils';
-import { runInitScript, getInitScriptPath, hasInitScriptRun } from '../../../services/init-script-service.js';
-import fs from 'fs';
+import { runInitScript } from '../../../services/init-script-service.js';
 
 const logger = createLogger('Worktree');
 
@@ -181,11 +180,6 @@ export function createCreateHandler(events: EventEmitter) {
       // normalizePath converts to forward slashes for API consistency
       const absoluteWorktreePath = path.resolve(worktreePath);
 
-      // Check if init script exists and should be run (only for new worktrees)
-      const initScriptPath = getInitScriptPath(projectPath);
-      const hasInitScript = fs.existsSync(initScriptPath);
-      const alreadyRan = await hasInitScriptRun(projectPath, branchName);
-
       // Respond immediately (non-blocking)
       res.json({
         success: true,
@@ -197,17 +191,15 @@ export function createCreateHandler(events: EventEmitter) {
       });
 
       // Trigger init script asynchronously after response
-      if (hasInitScript && !alreadyRan) {
-        logger.info(`Triggering init script for worktree: ${branchName}`);
-        runInitScript({
-          projectPath,
-          worktreePath: absoluteWorktreePath,
-          branch: branchName,
-          emitter: events,
-        }).catch((err) => {
-          logger.error(`Init script failed for ${branchName}:`, err);
-        });
-      }
+      // runInitScript internally checks if script exists and hasn't already run
+      runInitScript({
+        projectPath,
+        worktreePath: absoluteWorktreePath,
+        branch: branchName,
+        emitter: events,
+      }).catch((err) => {
+        logger.error(`Init script failed for ${branchName}:`, err);
+      });
     } catch (error) {
       logError(error, 'Create worktree failed');
       res.status(500).json({ success: false, error: getErrorMessage(error) });
