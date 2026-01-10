@@ -1,18 +1,20 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { HotkeyButton } from '@/components/ui/hotkey-button';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { Plus, Bot, Wand2, Settings2 } from 'lucide-react';
+import { Plus, Bot, Wand2, Settings2, GitBranch } from 'lucide-react';
 import { KeyboardShortcut } from '@/hooks/use-keyboard-shortcuts';
 import { UsagePopover } from '@/components/usage-popover';
 import { useAppStore } from '@/store/app-store';
 import { useSetupStore } from '@/store/setup-store';
 import { AutoModeSettingsDialog } from './dialogs/auto-mode-settings-dialog';
+import { getHttpApiClient } from '@/lib/http-api-client';
 
 interface BoardHeaderProps {
   projectName: string;
+  projectPath: string;
   maxConcurrency: number;
   runningAgentsCount: number;
   onConcurrencyChange: (value: number) => void;
@@ -30,6 +32,7 @@ const controlContainerClass =
 
 export function BoardHeader({
   projectName,
+  projectPath,
   maxConcurrency,
   runningAgentsCount,
   onConcurrencyChange,
@@ -46,6 +49,29 @@ export function BoardHeader({
   const skipVerificationInAutoMode = useAppStore((state) => state.skipVerificationInAutoMode);
   const setSkipVerificationInAutoMode = useAppStore((state) => state.setSkipVerificationInAutoMode);
   const codexAuthStatus = useSetupStore((state) => state.codexAuthStatus);
+
+  // Worktree panel visibility (per-project)
+  const worktreePanelVisibleByProject = useAppStore((state) => state.worktreePanelVisibleByProject);
+  const setWorktreePanelVisible = useAppStore((state) => state.setWorktreePanelVisible);
+  const isWorktreePanelVisible = worktreePanelVisibleByProject[projectPath] ?? true;
+
+  const handleWorktreePanelToggle = useCallback(
+    async (visible: boolean) => {
+      // Update local store
+      setWorktreePanelVisible(projectPath, visible);
+
+      // Persist to server
+      try {
+        const httpClient = getHttpApiClient();
+        await httpClient.settings.updateProject(projectPath, {
+          worktreePanelVisible: visible,
+        });
+      } catch (error) {
+        console.error('Failed to persist worktree panel visibility:', error);
+      }
+    },
+    [projectPath, setWorktreePanelVisible]
+  );
 
   // Claude usage tracking visibility logic
   // Hide when using API key (only show for Claude Code CLI users)
@@ -70,6 +96,22 @@ export function BoardHeader({
       <div className="flex gap-2 items-center">
         {/* Usage Popover - show if either provider is authenticated */}
         {isMounted && (showClaudeUsage || showCodexUsage) && <UsagePopover />}
+
+        {/* Worktrees Toggle - only show after mount to prevent hydration issues */}
+        {isMounted && (
+          <div className={controlContainerClass} data-testid="worktrees-toggle-container">
+            <GitBranch className="w-4 h-4 text-muted-foreground" />
+            <Label htmlFor="worktrees-toggle" className="text-sm font-medium cursor-pointer">
+              Worktrees
+            </Label>
+            <Switch
+              id="worktrees-toggle"
+              checked={isWorktreePanelVisible}
+              onCheckedChange={handleWorktreePanelToggle}
+              data-testid="worktrees-toggle"
+            />
+          </div>
+        )}
 
         {/* Concurrency Slider - only show after mount to prevent hydration issues */}
         {isMounted && (

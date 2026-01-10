@@ -1951,6 +1951,7 @@ export class HttpApiClient implements ElectronAPI {
           cardBorderOpacity: number;
           hideScrollbar: boolean;
         };
+        worktreePanelVisible?: boolean;
         lastSelectedSessionId?: string;
       };
       error?: string;

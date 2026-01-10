@@ -95,6 +95,8 @@ export function BoardView() {
   } = useAppStore();
   // Subscribe to pipelineConfigByProject to trigger re-renders when it changes
   const pipelineConfigByProject = useAppStore((state) => state.pipelineConfigByProject);
+  // Subscribe to worktreePanelVisibleByProject to trigger re-renders when it changes
+  const worktreePanelVisibleByProject = useAppStore((state) => state.worktreePanelVisibleByProject);
   const shortcuts = useKeyboardShortcutsConfig();
   const {
     features: hookFeatures,
@@ -1139,6 +1141,7 @@ export function BoardView() {
       {/* Header */}
       <BoardHeader
         projectName={currentProject.name}
+        projectPath={currentProject.path}
         maxConcurrency={maxConcurrency}
         runningAgentsCount={runningAutoTasks.length}
         onConcurrencyChange={setMaxConcurrency}
@@ -1160,37 +1163,39 @@ export function BoardView() {
         isMounted={isMounted}
       />
 
-      {/* Worktree Panel */}
-      <WorktreePanel
-        refreshTrigger={worktreeRefreshKey}
-        projectPath={currentProject.path}
-        onCreateWorktree={() => setShowCreateWorktreeDialog(true)}
-        onDeleteWorktree={(worktree) => {
-          setSelectedWorktreeForAction(worktree);
-          setShowDeleteWorktreeDialog(true);
-        }}
-        onCommit={(worktree) => {
-          setSelectedWorktreeForAction(worktree);
-          setShowCommitWorktreeDialog(true);
-        }}
-        onCreatePR={(worktree) => {
-          setSelectedWorktreeForAction(worktree);
-          setShowCreatePRDialog(true);
-        }}
-        onCreateBranch={(worktree) => {
-          setSelectedWorktreeForAction(worktree);
-          setShowCreateBranchDialog(true);
-        }}
-        onAddressPRComments={handleAddressPRComments}
-        onResolveConflicts={handleResolveConflicts}
-        onRemovedWorktrees={handleRemovedWorktrees}
-        runningFeatureIds={runningAutoTasks}
-        branchCardCounts={branchCardCounts}
-        features={hookFeatures.map((f) => ({
-          id: f.id,
-          branchName: f.branchName,
-        }))}
-      />
+      {/* Worktree Panel - conditionally rendered based on visibility setting */}
+      {(worktreePanelVisibleByProject[currentProject.path] ?? true) && (
+        <WorktreePanel
+          refreshTrigger={worktreeRefreshKey}
+          projectPath={currentProject.path}
+          onCreateWorktree={() => setShowCreateWorktreeDialog(true)}
+          onDeleteWorktree={(worktree) => {
+            setSelectedWorktreeForAction(worktree);
+            setShowDeleteWorktreeDialog(true);
+          }}
+          onCommit={(worktree) => {
+            setSelectedWorktreeForAction(worktree);
+            setShowCommitWorktreeDialog(true);
+          }}
+          onCreatePR={(worktree) => {
+            setSelectedWorktreeForAction(worktree);
+            setShowCreatePRDialog(true);
+          }}
+          onCreateBranch={(worktree) => {
+            setSelectedWorktreeForAction(worktree);
+            setShowCreateBranchDialog(true);
+          }}
+          onAddressPRComments={handleAddressPRComments}
+          onResolveConflicts={handleResolveConflicts}
+          onRemovedWorktrees={handleRemovedWorktrees}
+          runningFeatureIds={runningAutoTasks}
+          branchCardCounts={branchCardCounts}
+          features={hookFeatures.map((f) => ({
+            id: f.id,
+            branchName: f.branchName,
+          }))}
+        />
+      )}
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col overflow-hidden">

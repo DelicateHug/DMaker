@@ -504,6 +504,7 @@ export function hydrateStoreFromSettings(settings: GlobalSettings): void {
     path: ref.path,
     lastOpened: ref.lastOpened,
     theme: ref.theme,
+    isFavorite: ref.isFavorite,
     features: [], // Features are loaded separately when project is opened
   }));
 

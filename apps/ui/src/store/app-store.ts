@@ -656,6 +656,10 @@ export interface AppState {
   // Pipeline Configuration (per-project, keyed by project path)
   pipelineConfigByProject: Record<string, PipelineConfig>;
 
+  // Worktree Panel Visibility (per-project, keyed by project path)
+  // Whether the worktree panel row is visible (default: true)
+  worktreePanelVisibleByProject: Record<string, boolean>;
+
   // UI State (previously in localStorage, now synced via API)
   /** Whether worktree panel is collapsed in board view */
   worktreePanelCollapsed: boolean;
@@ -816,6 +820,7 @@ export interface AppActions {
   cyclePrevProject: () => void; // Cycle back through project history (Q)
   cycleNextProject: () => void; // Cycle forward through project history (E)
   clearProjectHistory: () => void; // Clear history, keeping only current project
+  toggleProjectFavorite: (projectId: string) => void; // Toggle project favorite status
 
   // View actions
   setCurrentView: (view: ViewMode) => void;
@@ -1062,6 +1067,10 @@ export interface AppActions {
   deletePipelineStep: (projectPath: string, stepId: string) => void;
   reorderPipelineSteps: (projectPath: string, stepIds: string[]) => void;
 
+  // Worktree Panel Visibility actions (per-project)
+  setWorktreePanelVisible: (projectPath: string, visible: boolean) => void;
+  getWorktreePanelVisible: (projectPath: string) => boolean;
+
   // UI State actions (previously in localStorage, now synced via API)
   setWorktreePanelCollapsed: (collapsed: boolean) => void;
   setLastProjectDir: (dir: string) => void;
@@ -1186,6 +1195,7 @@ const initialState: AppState = {
   codexModelsError: null,
   codexModelsLastFetched: null,
   pipelineConfigByProject: {},
+  worktreePanelVisibleByProject: {},
   // UI State (previously in localStorage, now synced via API)
   worktreePanelCollapsed: false,
   lastProjectDir: '',
@@ -1425,6 +1435,23 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
       set({
         projectHistory: [],
         projectHistoryIndex: -1,
+      });
+    }
+  },
+
+  toggleProjectFavorite: (projectId) => {
+    const { projects, currentProject } = get();
+    const updatedProjects = projects.map((p) =>
+      p.id === projectId ? { ...p, isFavorite: !p.isFavorite } : p
+    );
+    set({ projects: updatedProjects });
+    // Also update currentProject if it matches
+    if (currentProject?.id === projectId) {
+      set({
+        currentProject: {
+          ...currentProject,
+          isFavorite: !currentProject.isFavorite,
+        },
       });
     }
   },
@@ -3068,6 +3095,21 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
         [projectPath]: { ...config, steps: reorderedSteps },
       },
     });
+  },
+
+  // Worktree Panel Visibility actions (per-project)
+  setWorktreePanelVisible: (projectPath, visible) => {
+    set({
+      worktreePanelVisibleByProject: {
+        ...get().worktreePanelVisibleByProject,
+        [projectPath]: visible,
+      },
+    });
+  },
+
+  getWorktreePanelVisible: (projectPath) => {
+    // Default to true (visible) if not set
+    return get().worktreePanelVisibleByProject[projectPath] ?? true;
   },
 
   // UI State actions (previously in localStorage, now synced via API)

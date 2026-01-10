@@ -294,6 +294,8 @@ export interface ProjectRef {
   lastOpened?: string;
   /** Project-specific theme override (or undefined to use global) */
   theme?: string;
+  /** Whether project is pinned to favorites on dashboard */
+  isFavorite?: boolean;
 }
 
 /**
@@ -594,6 +596,10 @@ export interface ProjectSettings {
   // Board Customization
   /** Project-specific board background settings */
   boardBackground?: BoardBackgroundSettings;
+
+  // UI Visibility
+  /** Whether the worktree panel row is visible (default: true) */
+  worktreePanelVisible?: boolean;
 
   // Session Tracking
   /** Last chat session selected in this project */
