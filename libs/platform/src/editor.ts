@@ -13,12 +13,16 @@ import { homedir } from 'os';
 import { join } from 'path';
 import { access } from 'fs/promises';
 import type { EditorInfo } from '@automaker/types';
+import { createLogger } from '@automaker/utils';
 
 const execFileAsync = promisify(execFile);
 
 // Platform detection
 const isWindows = process.platform === 'win32';
 const isMac = process.platform === 'darwin';
+
+// Logger for editor detection
+const logger = createLogger('editor');
 
 // Cache with TTL for editor detection
 let cachedEditors: EditorInfo[] | null = null;
@@ -119,6 +123,43 @@ const SUPPORTED_EDITORS: EditorDefinition[] = [
 ];
 
 /**
+ * Check if Xcode is fully installed (not just Command Line Tools)
+ * xed command requires full Xcode.app, not just CLT
+ */
+async function isXcodeFullyInstalled(): Promise<boolean> {
+  if (!isMac) return false;
+
+  try {
+    // Check if xcode-select points to full Xcode, not just CommandLineTools
+    const { stdout } = await execFileAsync('xcode-select', ['-p']);
+    const devPath = stdout.trim();
+
+    // Full Xcode path: /Applications/Xcode.app/Contents/Developer
+    // Command Line Tools: /Library/Developer/CommandLineTools
+    const isPointingToXcode = devPath.includes('Xcode.app');
+
+    if (!isPointingToXcode && devPath.includes('CommandLineTools')) {
+      // Check if xed command exists (indicates CLT are installed)
+      const xedExists = await commandExists('xed');
+
+      // Check if Xcode.app actually exists
+      const xcodeAppPath = await findMacApp('Xcode');
+
+      if (xedExists && xcodeAppPath) {
+        logger.warn(
+          'Xcode is installed but xcode-select is pointing to Command Line Tools. ' +
+            'To use Xcode as an editor, run: sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer'
+        );
+      }
+    }
+
+    return isPointingToXcode;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Try to find an editor - checks CLI first, then macOS app bundle
  * Returns EditorInfo if found, null otherwise
  */
@@ -126,6 +167,13 @@ async function findEditor(definition: EditorDefinition): Promise<EditorInfo | nu
   // Skip macOS-only editors on other platforms
   if (definition.macOnly && !isMac) {
     return null;
+  }
+
+  // Special handling for Xcode: verify full installation, not just xed command
+  if (definition.name === 'Xcode') {
+    if (!(await isXcodeFullyInstalled())) {
+      return null;
+    }
   }
 
   // Try CLI command first (works on all platforms)
