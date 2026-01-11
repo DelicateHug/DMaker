@@ -251,7 +251,6 @@ export function FeatureDefaultsSection({
             </p>
           </div>
         </div>
-
       </div>
     </div>
   );

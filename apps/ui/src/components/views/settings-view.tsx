@@ -161,10 +161,7 @@ export function SettingsView() {
         );
       case 'worktrees':
         return (
-          <WorktreesSection
-            useWorktrees={useWorktrees}
-            onUseWorktreesChange={setUseWorktrees}
-          />
+          <WorktreesSection useWorktrees={useWorktrees} onUseWorktreesChange={setUseWorktrees} />
         );
       case 'account':
         return <AccountSection />;

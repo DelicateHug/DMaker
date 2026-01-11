@@ -212,8 +212,22 @@ function get256Color(index: number): string {
   // 0-15: Standard colors
   if (index < 16) {
     const standardColors = [
-      '#000000', '#cd0000', '#00cd00', '#cdcd00', '#0000ee', '#cd00cd', '#00cdcd', '#e5e5e5',
-      '#7f7f7f', '#ff0000', '#00ff00', '#ffff00', '#5c5cff', '#ff00ff', '#00ffff', '#ffffff',
+      '#000000',
+      '#cd0000',
+      '#00cd00',
+      '#cdcd00',
+      '#0000ee',
+      '#cd00cd',
+      '#00cdcd',
+      '#e5e5e5',
+      '#7f7f7f',
+      '#ff0000',
+      '#00ff00',
+      '#ffff00',
+      '#5c5cff',
+      '#ff00ff',
+      '#00ffff',
+      '#ffffff',
     ];
     return standardColors[index];
   }
