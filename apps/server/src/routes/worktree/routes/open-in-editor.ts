@@ -17,9 +17,113 @@ interface EditorInfo {
 }
 
 let cachedEditor: EditorInfo | null = null;
+let cachedEditors: EditorInfo[] | null = null;
 
 /**
- * Detect which code editor is available on the system
+ * Check if a CLI command exists in PATH
+ */
+async function commandExists(cmd: string): Promise<boolean> {
+  try {
+    await execAsync(process.platform === 'win32' ? `where ${cmd}` : `which ${cmd}`);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Check if a macOS app bundle exists and return the path if found
+ * Checks both /Applications and ~/Applications
+ */
+async function findMacApp(appName: string): Promise<string | null> {
+  if (process.platform !== 'darwin') return null;
+
+  // Check /Applications first
+  try {
+    await execAsync(`test -d "/Applications/${appName}.app"`);
+    return `/Applications/${appName}.app`;
+  } catch {
+    // Not in /Applications
+  }
+
+  // Check ~/Applications (used by JetBrains Toolbox and others)
+  try {
+    const homeDir = process.env.HOME || '~';
+    await execAsync(`test -d "${homeDir}/Applications/${appName}.app"`);
+    return `${homeDir}/Applications/${appName}.app`;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Try to add an editor - checks CLI first, then macOS app bundle
+ */
+async function tryAddEditor(
+  editors: EditorInfo[],
+  name: string,
+  cliCommand: string,
+  macAppName: string
+): Promise<void> {
+  // Try CLI command first
+  if (await commandExists(cliCommand)) {
+    editors.push({ name, command: cliCommand });
+    return;
+  }
+
+  // Try macOS app bundle (checks /Applications and ~/Applications)
+  if (process.platform === 'darwin') {
+    const appPath = await findMacApp(macAppName);
+    if (appPath) {
+      // Use 'open -a' with full path for apps not in /Applications
+      editors.push({ name, command: `open -a "${appPath}"` });
+    }
+  }
+}
+
+async function detectAllEditors(): Promise<EditorInfo[]> {
+  // Return cached result if available
+  if (cachedEditors) {
+    return cachedEditors;
+  }
+
+  const editors: EditorInfo[] = [];
+  const isMac = process.platform === 'darwin';
+
+  // Try editors (CLI command, then macOS app bundle)
+  await tryAddEditor(editors, 'Cursor', 'cursor', 'Cursor');
+  await tryAddEditor(editors, 'VS Code', 'code', 'Visual Studio Code');
+  await tryAddEditor(editors, 'Zed', 'zed', 'Zed');
+  await tryAddEditor(editors, 'Sublime Text', 'subl', 'Sublime Text');
+  await tryAddEditor(editors, 'Windsurf', 'windsurf', 'Windsurf');
+  await tryAddEditor(editors, 'Trae', 'trae', 'Trae');
+  await tryAddEditor(editors, 'Rider', 'rider', 'Rider');
+  await tryAddEditor(editors, 'WebStorm', 'webstorm', 'WebStorm');
+
+  // Xcode (macOS only)
+  if (isMac) {
+    await tryAddEditor(editors, 'Xcode', 'xed', 'Xcode');
+  }
+
+  await tryAddEditor(editors, 'Android Studio', 'studio', 'Android Studio');
+  await tryAddEditor(editors, 'Antigravity', 'agy', 'Antigravity');
+
+  // Always add file manager as fallback
+  const platform = process.platform;
+  if (platform === 'darwin') {
+    editors.push({ name: 'Finder', command: 'open' });
+  } else if (platform === 'win32') {
+    editors.push({ name: 'Explorer', command: 'explorer' });
+  } else {
+    editors.push({ name: 'File Manager', command: 'xdg-open' });
+  }
+
+  cachedEditors = editors;
+  return editors;
+}
+
+/**
+ * Detect the default (first available) code editor on the system
  */
 async function detectDefaultEditor(): Promise<EditorInfo> {
   // Return cached result if available
@@ -27,52 +131,27 @@ async function detectDefaultEditor(): Promise<EditorInfo> {
     return cachedEditor;
   }
 
-  // Try Cursor first (if user has Cursor, they probably prefer it)
-  try {
-    await execAsync('which cursor || where cursor');
-    cachedEditor = { name: 'Cursor', command: 'cursor' };
-    return cachedEditor;
-  } catch {
-    // Cursor not found
-  }
-
-  // Try VS Code
-  try {
-    await execAsync('which code || where code');
-    cachedEditor = { name: 'VS Code', command: 'code' };
-    return cachedEditor;
-  } catch {
-    // VS Code not found
-  }
-
-  // Try Zed
-  try {
-    await execAsync('which zed || where zed');
-    cachedEditor = { name: 'Zed', command: 'zed' };
-    return cachedEditor;
-  } catch {
-    // Zed not found
-  }
-
-  // Try Sublime Text
-  try {
-    await execAsync('which subl || where subl');
-    cachedEditor = { name: 'Sublime Text', command: 'subl' };
-    return cachedEditor;
-  } catch {
-    // Sublime not found
-  }
-
-  // Fallback to file manager
-  const platform = process.platform;
-  if (platform === 'darwin') {
-    cachedEditor = { name: 'Finder', command: 'open' };
-  } else if (platform === 'win32') {
-    cachedEditor = { name: 'Explorer', command: 'explorer' };
-  } else {
-    cachedEditor = { name: 'File Manager', command: 'xdg-open' };
-  }
+  // Get all editors and return the first one (highest priority)
+  const editors = await detectAllEditors();
+  cachedEditor = editors[0];
   return cachedEditor;
+}
+
+export function createGetAvailableEditorsHandler() {
+  return async (_req: Request, res: Response): Promise<void> => {
+    try {
+      const editors = await detectAllEditors();
+      res.json({
+        success: true,
+        result: {
+          editors,
+        },
+      });
+    } catch (error) {
+      logError(error, 'Get available editors failed');
+      res.status(500).json({ success: false, error: getErrorMessage(error) });
+    }
+  };
 }
 
 export function createGetDefaultEditorHandler() {
@@ -96,8 +175,9 @@ export function createGetDefaultEditorHandler() {
 export function createOpenInEditorHandler() {
   return async (req: Request, res: Response): Promise<void> => {
     try {
-      const { worktreePath } = req.body as {
+      const { worktreePath, editorCommand } = req.body as {
         worktreePath: string;
+        editorCommand?: string;
       };
 
       if (!worktreePath) {
@@ -108,7 +188,16 @@ export function createOpenInEditorHandler() {
         return;
       }
 
-      const editor = await detectDefaultEditor();
+      // Use specified editor command or detect default
+      let editor: EditorInfo;
+      if (editorCommand) {
+        // Find the editor info from the available editors list
+        const allEditors = await detectAllEditors();
+        const specifiedEditor = allEditors.find((e) => e.command === editorCommand);
+        editor = specifiedEditor ?? (await detectDefaultEditor());
+      } else {
+        editor = await detectDefaultEditor();
+      }
 
       try {
         await execAsync(`${editor.command} "${worktreePath}"`);

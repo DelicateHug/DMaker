@@ -6,13 +6,15 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
   DropdownMenuLabel,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
 } from '@/components/ui/dropdown-menu';
 import {
   Trash2,
   MoreHorizontal,
   GitCommit,
   GitPullRequest,
-  ExternalLink,
   Download,
   Upload,
   Play,
@@ -21,10 +23,14 @@ import {
   MessageSquare,
   GitMerge,
   AlertCircle,
+  Copy,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { WorktreeInfo, DevServerInfo, PRInfo, GitRepoStatus } from '../types';
 import { TooltipWrapper } from './tooltip-wrapper';
+import { useAvailableEditors } from '../hooks/use-available-editors';
+import { getEditorIcon } from '@/components/icons/editor-icons';
+import { useAppStore } from '@/store/app-store';
 
 interface WorktreeActionsDropdownProps {
   worktree: WorktreeInfo;
@@ -41,7 +47,7 @@ interface WorktreeActionsDropdownProps {
   onOpenChange: (open: boolean) => void;
   onPull: (worktree: WorktreeInfo) => void;
   onPush: (worktree: WorktreeInfo) => void;
-  onOpenInEditor: (worktree: WorktreeInfo) => void;
+  onOpenInEditor: (worktree: WorktreeInfo, editorCommand?: string) => void;
   onCommit: (worktree: WorktreeInfo) => void;
   onCreatePR: (worktree: WorktreeInfo) => void;
   onAddressPRComments: (worktree: WorktreeInfo, prInfo: PRInfo) => void;
@@ -77,6 +83,31 @@ export function WorktreeActionsDropdown({
   onStopDevServer,
   onOpenDevServerUrl,
 }: WorktreeActionsDropdownProps) {
+  // Get available editors for the "Open In" submenu
+  const { editors, hasMultipleEditors } = useAvailableEditors();
+
+  // Get the user's preferred default editor from settings
+  const defaultEditorCommand = useAppStore((s) => s.defaultEditorCommand);
+
+  // Calculate effective default editor based on user setting or auto-detect (Cursor > VS Code > first)
+  const getEffectiveDefaultEditor = () => {
+    if (defaultEditorCommand) {
+      const found = editors.find((e) => e.command === defaultEditorCommand);
+      if (found) return found;
+    }
+    // Auto-detect: prefer Cursor, then VS Code, then first available
+    const cursor = editors.find((e) => e.command === 'cursor');
+    if (cursor) return cursor;
+    const vscode = editors.find((e) => e.command === 'code');
+    if (vscode) return vscode;
+    return editors[0];
+  };
+
+  const effectiveDefaultEditor = getEffectiveDefaultEditor();
+
+  // Get other editors (excluding the default) for the submenu
+  const otherEditors = editors.filter((e) => e.command !== effectiveDefaultEditor?.command);
+
   // Check if there's a PR associated with this worktree from stored metadata
   const hasPR = !!worktree.pr;
 
@@ -200,10 +231,50 @@ export function WorktreeActionsDropdown({
           </TooltipWrapper>
         )}
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={() => onOpenInEditor(worktree)} className="text-xs">
-          <ExternalLink className="w-3.5 h-3.5 mr-2" />
-          Open in {defaultEditorName}
-        </DropdownMenuItem>
+        {/* Open in editor - split button: click main area for default, chevron for other options */}
+        {effectiveDefaultEditor && (
+          <DropdownMenuSub>
+            <div className="flex items-center">
+              {/* Main clickable area - opens in default editor */}
+              <DropdownMenuItem
+                onClick={() => onOpenInEditor(worktree, effectiveDefaultEditor.command)}
+                className="text-xs flex-1 pr-0 rounded-r-none"
+              >
+                {(() => {
+                  const EditorIcon = getEditorIcon(effectiveDefaultEditor.command);
+                  return <EditorIcon className="w-3.5 h-3.5 mr-2" />;
+                })()}
+                Open in {effectiveDefaultEditor.name}
+              </DropdownMenuItem>
+              {/* Chevron trigger for submenu with other editors and Copy Path */}
+              <DropdownMenuSubTrigger className="text-xs px-1 rounded-l-none border-l border-border/30 h-8" />
+            </div>
+            <DropdownMenuSubContent>
+              {/* Other editors */}
+              {otherEditors.map((editor) => {
+                const EditorIcon = getEditorIcon(editor.command);
+                return (
+                  <DropdownMenuItem
+                    key={editor.command}
+                    onClick={() => onOpenInEditor(worktree, editor.command)}
+                    className="text-xs"
+                  >
+                    <EditorIcon className="w-3.5 h-3.5 mr-2" />
+                    {editor.name}
+                  </DropdownMenuItem>
+                );
+              })}
+              {otherEditors.length > 0 && <DropdownMenuSeparator />}
+              <DropdownMenuItem
+                onClick={() => navigator.clipboard.writeText(worktree.path)}
+                className="text-xs"
+              >
+                <Copy className="w-3.5 h-3.5 mr-2" />
+                Copy Path
+              </DropdownMenuItem>
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+        )}
         <DropdownMenuSeparator />
         {worktree.hasChanges && (
           <TooltipWrapper

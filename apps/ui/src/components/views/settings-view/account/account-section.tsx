@@ -1,14 +1,44 @@
 import { useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { Button } from '@/components/ui/button';
-import { LogOut, User } from 'lucide-react';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { LogOut, User, Code2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { logout } from '@/lib/http-api-client';
 import { useAuthStore } from '@/store/auth-store';
+import { useAppStore } from '@/store/app-store';
+import { useAvailableEditors } from '@/components/views/board-view/worktree-panel/hooks/use-available-editors';
+import { getEditorIcon } from '@/components/icons/editor-icons';
 
 export function AccountSection() {
   const navigate = useNavigate();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  // Editor settings
+  const { editors, isLoading: isLoadingEditors } = useAvailableEditors();
+  const defaultEditorCommand = useAppStore((s) => s.defaultEditorCommand);
+  const setDefaultEditorCommand = useAppStore((s) => s.setDefaultEditorCommand);
+
+  // Get effective default editor (respecting auto-detect order: Cursor > VS Code > first)
+  const getEffectiveDefaultEditor = () => {
+    if (defaultEditorCommand) {
+      return editors.find((e) => e.command === defaultEditorCommand) ?? editors[0];
+    }
+    // Auto-detect: prefer Cursor, then VS Code, then first available
+    const cursor = editors.find((e) => e.command === 'cursor');
+    if (cursor) return cursor;
+    const vscode = editors.find((e) => e.command === 'code');
+    if (vscode) return vscode;
+    return editors[0];
+  };
+
+  const effectiveEditor = getEffectiveDefaultEditor();
 
   const handleLogout = async () => {
     setIsLoggingOut(true);
@@ -43,6 +73,64 @@ export function AccountSection() {
         <p className="text-sm text-muted-foreground/80 ml-12">Manage your session and account.</p>
       </div>
       <div className="p-6 space-y-4">
+        {/* Default IDE */}
+        <div className="flex items-center justify-between gap-4 p-4 rounded-xl bg-muted/30 border border-border/30">
+          <div className="flex items-center gap-3.5 min-w-0">
+            <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-muted/50 to-muted/30 border border-border/30 flex items-center justify-center shrink-0">
+              <Code2 className="w-5 h-5 text-muted-foreground" />
+            </div>
+            <div className="min-w-0">
+              <p className="font-medium text-foreground">Default IDE</p>
+              <p className="text-xs text-muted-foreground/70 mt-0.5">
+                Default IDE to use when opening branches or worktrees
+              </p>
+            </div>
+          </div>
+          <Select
+            value={defaultEditorCommand ?? 'auto'}
+            onValueChange={(value) => setDefaultEditorCommand(value === 'auto' ? null : value)}
+            disabled={isLoadingEditors || editors.length === 0}
+          >
+            <SelectTrigger className="w-[180px] shrink-0">
+              <SelectValue placeholder="Select editor">
+                {effectiveEditor ? (
+                  <span className="flex items-center gap-2">
+                    {(() => {
+                      const Icon = getEditorIcon(effectiveEditor.command);
+                      return <Icon className="w-4 h-4" />;
+                    })()}
+                    {effectiveEditor.name}
+                    {!defaultEditorCommand && (
+                      <span className="text-muted-foreground text-xs">(Auto)</span>
+                    )}
+                  </span>
+                ) : (
+                  'Select editor'
+                )}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="auto">
+                <span className="flex items-center gap-2">
+                  <Code2 className="w-4 h-4" />
+                  Auto-detect
+                </span>
+              </SelectItem>
+              {editors.map((editor) => {
+                const Icon = getEditorIcon(editor.command);
+                return (
+                  <SelectItem key={editor.command} value={editor.command}>
+                    <span className="flex items-center gap-2">
+                      <Icon className="w-4 h-4" />
+                      {editor.name}
+                    </span>
+                  </SelectItem>
+                );
+              })}
+            </SelectContent>
+          </Select>
+        </div>
+
         {/* Logout */}
         <div className="flex items-center justify-between gap-4 p-4 rounded-xl bg-muted/30 border border-border/30">
           <div className="flex items-center gap-3.5 min-w-0">

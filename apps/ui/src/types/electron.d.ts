@@ -872,7 +872,10 @@ export interface WorktreeAPI {
   }>;
 
   // Open a worktree directory in the editor
-  openInEditor: (worktreePath: string) => Promise<{
+  openInEditor: (
+    worktreePath: string,
+    editorCommand?: string
+  ) => Promise<{
     success: boolean;
     result?: {
       message: string;
@@ -887,6 +890,18 @@ export interface WorktreeAPI {
     result?: {
       editorName: string;
       editorCommand: string;
+    };
+    error?: string;
+  }>;
+
+  // Get all available code editors
+  getAvailableEditors: () => Promise<{
+    success: boolean;
+    result?: {
+      editors: Array<{
+        name: string;
+        command: string;
+      }>;
     };
     error?: string;
   }>;

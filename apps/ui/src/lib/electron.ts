@@ -1625,13 +1625,14 @@ function createMockWorktreeAPI(): WorktreeAPI {
       };
     },
 
-    openInEditor: async (worktreePath: string) => {
-      console.log('[Mock] Opening in editor:', worktreePath);
+    openInEditor: async (worktreePath: string, editorCommand?: string) => {
+      const editorName = editorCommand === 'cursor' ? 'Cursor' : 'VS Code';
+      console.log('[Mock] Opening in editor:', worktreePath, 'using:', editorName);
       return {
         success: true,
         result: {
-          message: `Opened ${worktreePath} in VS Code`,
-          editorName: 'VS Code',
+          message: `Opened ${worktreePath} in ${editorName}`,
+          editorName,
         },
       };
     },
@@ -1643,6 +1644,19 @@ function createMockWorktreeAPI(): WorktreeAPI {
         result: {
           editorName: 'VS Code',
           editorCommand: 'code',
+        },
+      };
+    },
+
+    getAvailableEditors: async () => {
+      console.log('[Mock] Getting available editors');
+      return {
+        success: true,
+        result: {
+          editors: [
+            { name: 'VS Code', command: 'code' },
+            { name: 'Finder', command: 'open' },
+          ],
         },
       };
     },
