@@ -380,6 +380,12 @@ export interface GlobalSettings {
   /** Mute completion notification sound */
   muteDoneSound: boolean;
 
+  // Notification Command
+  /** Custom command to execute for all notifications (empty = disabled) */
+  notificationCommand: string;
+  /** How to pass notification data to the command */
+  notificationCommandMode: 'args' | 'stdin' | 'env';
+
   // AI Model Selection (per-phase configuration)
   /** Phase-specific AI model configuration */
   phaseModels: PhaseModelConfig;
@@ -699,6 +705,8 @@ export const DEFAULT_GLOBAL_SETTINGS: GlobalSettings = {
   defaultPlanningMode: 'skip',
   defaultRequirePlanApproval: false,
   muteDoneSound: false,
+  notificationCommand: '',
+  notificationCommandMode: 'args',
   phaseModels: DEFAULT_PHASE_MODELS,
   enhancementModel: 'sonnet',
   validationModel: 'opus',
