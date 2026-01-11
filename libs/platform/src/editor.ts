@@ -21,8 +21,14 @@ const execFileAsync = promisify(execFile);
 const isWindows = process.platform === 'win32';
 const isMac = process.platform === 'darwin';
 
-// Logger for editor detection
-const logger = createLogger('editor');
+// Lazy-initialized logger for editor detection
+let logger: ReturnType<typeof createLogger> | null = null;
+function getLogger() {
+  if (!logger) {
+    logger = createLogger('editor');
+  }
+  return logger;
+}
 
 // Cache with TTL for editor detection
 let cachedEditors: EditorInfo[] | null = null;
@@ -106,6 +112,12 @@ const [PRIMARY_ANTIGRAVITY_COMMAND, ...LEGACY_ANTIGRAVITY_COMMANDS] = ANTIGRAVIT
 const SUPPORTED_EDITORS: EditorDefinition[] = [
   { name: 'Cursor', cliCommand: 'cursor', macAppName: 'Cursor' },
   { name: 'VS Code', cliCommand: 'code', macAppName: 'Visual Studio Code' },
+  {
+    name: 'VS Code Insiders',
+    cliCommand: 'code-insiders',
+    macAppName: 'Visual Studio Code - Insiders',
+  },
+  { name: 'Kiro', cliCommand: 'kido', macAppName: 'Kiro' },
   { name: 'Zed', cliCommand: 'zed', macAppName: 'Zed' },
   { name: 'Sublime Text', cliCommand: 'subl', macAppName: 'Sublime Text' },
   { name: 'Windsurf', cliCommand: 'windsurf', macAppName: 'Windsurf' },
@@ -146,7 +158,7 @@ async function isXcodeFullyInstalled(): Promise<boolean> {
       const xcodeAppPath = await findMacApp('Xcode');
 
       if (xedExists && xcodeAppPath) {
-        logger.warn(
+        getLogger().warn(
           'Xcode is installed but xcode-select is pointing to Command Line Tools. ' +
             'To use Xcode as an editor, run: sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer'
         );
