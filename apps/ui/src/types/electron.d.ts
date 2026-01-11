@@ -918,6 +918,18 @@ export interface WorktreeAPI {
     error?: string;
   }>;
 
+  // Refresh editor cache and re-detect available editors
+  refreshEditors: () => Promise<{
+    success: boolean;
+    result?: {
+      editors: Array<{
+        name: string;
+        command: string;
+      }>;
+      message: string;
+    };
+    error?: string;
+  }>;
   // Initialize git repository in a project
   initGit: (projectPath: string) => Promise<{
     success: boolean;

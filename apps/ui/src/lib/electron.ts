@@ -1697,6 +1697,19 @@ function createMockWorktreeAPI(): WorktreeAPI {
         },
       };
     },
+    refreshEditors: async () => {
+      console.log('[Mock] Refreshing available editors');
+      return {
+        success: true,
+        result: {
+          editors: [
+            { name: 'VS Code', command: 'code' },
+            { name: 'Finder', command: 'open' },
+          ],
+          message: 'Found 2 available editors',
+        },
+      };
+    },
 
     initGit: async (projectPath: string) => {
       console.log('[Mock] Initializing git:', projectPath);
