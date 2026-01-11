@@ -191,22 +191,47 @@ export class InitScriptService {
       branch,
     });
 
-    // Spawn the script
+    // Build safe environment - only pass necessary variables, not all of process.env
+    // This prevents exposure of sensitive credentials like ANTHROPIC_API_KEY
+    const safeEnv: Record<string, string> = {
+      // Automaker-specific variables
+      AUTOMAKER_PROJECT_PATH: projectPath,
+      AUTOMAKER_WORKTREE_PATH: worktreePath,
+      AUTOMAKER_BRANCH: branch,
+
+      // Essential system variables
+      PATH: process.env.PATH || '',
+      HOME: process.env.HOME || '',
+      USER: process.env.USER || '',
+      TMPDIR: process.env.TMPDIR || process.env.TEMP || process.env.TMP || '/tmp',
+
+      // Shell and locale
+      SHELL: process.env.SHELL || '',
+      LANG: process.env.LANG || 'en_US.UTF-8',
+      LC_ALL: process.env.LC_ALL || '',
+
+      // Force color output even though we're not a TTY
+      FORCE_COLOR: '1',
+      npm_config_color: 'always',
+      CLICOLOR_FORCE: '1',
+
+      // Git configuration
+      GIT_TERMINAL_PROMPT: '0',
+    };
+
+    // Platform-specific additions
+    if (process.platform === 'win32') {
+      safeEnv.USERPROFILE = process.env.USERPROFILE || '';
+      safeEnv.APPDATA = process.env.APPDATA || '';
+      safeEnv.LOCALAPPDATA = process.env.LOCALAPPDATA || '';
+      safeEnv.SystemRoot = process.env.SystemRoot || 'C:\\Windows';
+      safeEnv.TEMP = process.env.TEMP || '';
+    }
+
+    // Spawn the script with safe environment
     const child = spawn(shellCmd.shell, [...shellCmd.args, scriptPath], {
       cwd: worktreePath,
-      env: {
-        ...process.env,
-        // Provide useful env vars to the script
-        AUTOMAKER_PROJECT_PATH: projectPath,
-        AUTOMAKER_WORKTREE_PATH: worktreePath,
-        AUTOMAKER_BRANCH: branch,
-        // Force color output even though we're not a TTY
-        FORCE_COLOR: '1',
-        npm_config_color: 'always',
-        CLICOLOR_FORCE: '1',
-        // Git colors
-        GIT_TERMINAL_PROMPT: '0',
-      },
+      env: safeEnv,
       stdio: ['ignore', 'pipe', 'pipe'],
     });
 

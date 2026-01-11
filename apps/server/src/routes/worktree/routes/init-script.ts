@@ -10,7 +10,7 @@
 import type { Request, Response } from 'express';
 import path from 'path';
 import * as secureFs from '../../../lib/secure-fs.js';
-import { getErrorMessage, logError } from '../common.js';
+import { getErrorMessage, logError, isValidBranchName } from '../common.js';
 import { createLogger } from '@automaker/utils';
 import type { EventEmitter } from '../../../lib/events.js';
 import { forceRunInitScript } from '../../../services/init-script-service.js';
@@ -19,6 +19,9 @@ const logger = createLogger('InitScript');
 
 /** Fixed path for init script within .automaker directory */
 const INIT_SCRIPT_FILENAME = 'worktree-init.sh';
+
+/** Maximum allowed size for init scripts (1MB) */
+const MAX_SCRIPT_SIZE_BYTES = 1024 * 1024;
 
 /**
  * Get the full path to the init script for a project
@@ -97,6 +100,31 @@ export function createPutInitScriptHandler() {
           error: 'content must be a string',
         });
         return;
+      }
+
+      // Validate script size to prevent disk exhaustion
+      const sizeBytes = Buffer.byteLength(content, 'utf-8');
+      if (sizeBytes > MAX_SCRIPT_SIZE_BYTES) {
+        res.status(400).json({
+          success: false,
+          error: `Script size (${Math.round(sizeBytes / 1024)}KB) exceeds maximum allowed size (${Math.round(MAX_SCRIPT_SIZE_BYTES / 1024)}KB)`,
+        });
+        return;
+      }
+
+      // Log warning if potentially dangerous patterns are detected (non-blocking)
+      const dangerousPatterns = [
+        /rm\s+-rf\s+\/(?!\s*\$)/i, // rm -rf / (not followed by variable)
+        /curl\s+.*\|\s*(?:bash|sh)/i, // curl | bash
+        /wget\s+.*\|\s*(?:bash|sh)/i, // wget | sh
+      ];
+
+      for (const pattern of dangerousPatterns) {
+        if (pattern.test(content)) {
+          logger.warn(
+            `Init script contains potentially dangerous pattern: ${pattern.source}. User responsibility to verify script safety.`
+          );
+        }
       }
 
       const scriptPath = getInitScriptPath(projectPath);
@@ -189,6 +217,16 @@ export function createRunInitScriptHandler(events: EventEmitter) {
         res.status(400).json({
           success: false,
           error: 'branch is required',
+        });
+        return;
+      }
+
+      // Validate branch name to prevent injection via environment variables
+      if (!isValidBranchName(branch)) {
+        res.status(400).json({
+          success: false,
+          error:
+            'Invalid branch name. Branch names must contain only letters, numbers, dots, hyphens, underscores, and forward slashes.',
         });
         return;
       }
