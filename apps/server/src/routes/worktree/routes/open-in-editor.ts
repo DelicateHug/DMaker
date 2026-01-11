@@ -15,13 +15,13 @@ import { getErrorMessage, logError } from '../common.js';
 const execFileAsync = promisify(execFile);
 
 // Cache with TTL for editor detection
-let cachedEditor: EditorInfo | null = null;
+// cachedEditors is the single source of truth; default editor is derived from it
 let cachedEditors: EditorInfo[] | null = null;
 let cacheTimestamp: number = 0;
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
 function isCacheValid(): boolean {
-  return Date.now() - cacheTimestamp < CACHE_TTL_MS;
+  return cachedEditors !== null && Date.now() - cacheTimestamp < CACHE_TTL_MS;
 }
 
 /**
@@ -137,17 +137,13 @@ async function detectAllEditors(): Promise<EditorInfo[]> {
 
 /**
  * Detect the default (first available) code editor on the system
+ * Derives from detectAllEditors() to ensure cache consistency
  */
 async function detectDefaultEditor(): Promise<EditorInfo> {
-  // Return cached result if available
-  if (cachedEditor) {
-    return cachedEditor;
-  }
-
-  // Get all editors and return the first one (highest priority)
+  // Always go through detectAllEditors() which handles cache TTL
   const editors = await detectAllEditors();
-  cachedEditor = editors[0];
-  return cachedEditor;
+  // Return first editor (highest priority) - always exists due to file manager fallback
+  return editors[0];
 }
 
 export function createGetAvailableEditorsHandler() {
@@ -231,7 +227,17 @@ export function createOpenInEditorHandler() {
         // Find the editor info from the available editors list
         const allEditors = await detectAllEditors();
         const specifiedEditor = allEditors.find((e) => e.command === editorCommand);
-        editor = specifiedEditor ?? (await detectDefaultEditor());
+        if (specifiedEditor) {
+          editor = specifiedEditor;
+        } else {
+          // Log warning when requested editor is not available
+          const availableCommands = allEditors.map((e) => e.command).join(', ');
+          console.warn(
+            `[open-in-editor] Requested editor '${editorCommand}' not found. ` +
+              `Available editors: [${availableCommands}]. Falling back to default editor.`
+          );
+          editor = allEditors[0]; // Fall back to default (first in priority list)
+        }
       } else {
         editor = await detectDefaultEditor();
       }
