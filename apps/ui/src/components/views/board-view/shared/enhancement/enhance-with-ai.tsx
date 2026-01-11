@@ -64,7 +64,8 @@ export function EnhanceWithAI({
       const result = await api.enhancePrompt?.enhance(
         value,
         enhancementMode,
-        enhancementOverride.effectiveModel
+        enhancementOverride.effectiveModel,
+        enhancementOverride.effectiveModelEntry.thinkingLevel
       );
 
       if (result?.success && result.enhancedText) {
@@ -108,21 +109,13 @@ export function EnhanceWithAI({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start">
-              <DropdownMenuItem onClick={() => setEnhancementMode('improve')}>
-                {ENHANCEMENT_MODE_LABELS.improve}
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setEnhancementMode('technical')}>
-                {ENHANCEMENT_MODE_LABELS.technical}
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setEnhancementMode('simplify')}>
-                {ENHANCEMENT_MODE_LABELS.simplify}
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setEnhancementMode('acceptance')}>
-                {ENHANCEMENT_MODE_LABELS.acceptance}
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setEnhancementMode('ux-reviewer')}>
-                {ENHANCEMENT_MODE_LABELS['ux-reviewer']}
-              </DropdownMenuItem>
+              {(Object.entries(ENHANCEMENT_MODE_LABELS) as [EnhancementMode, string][]).map(
+                ([mode, label]) => (
+                  <DropdownMenuItem key={mode} onClick={() => setEnhancementMode(mode)}>
+                    {label}
+                  </DropdownMenuItem>
+                )
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
 

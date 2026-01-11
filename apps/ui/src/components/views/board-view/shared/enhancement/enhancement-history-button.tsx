@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { History } from 'lucide-react';
@@ -69,6 +69,9 @@ export function EnhancementHistoryButton<T extends BaseHistoryEntry>({
     });
   };
 
+  // Memoize reversed history to avoid creating new array on every render
+  const reversedHistory = useMemo(() => [...history].reverse(), [history]);
+
   return (
     <Popover open={showHistory} onOpenChange={setShowHistory}>
       <PopoverTrigger asChild>
@@ -88,7 +91,7 @@ export function EnhancementHistoryButton<T extends BaseHistoryEntry>({
           <p className="text-xs text-muted-foreground mt-1">Click a version to restore it</p>
         </div>
         <div className="max-h-64 overflow-y-auto p-2 space-y-1">
-          {[...history].reverse().map((entry, index) => {
+          {reversedHistory.map((entry, index) => {
             const value = valueAccessor(entry);
             const isCurrentVersion = value === currentValue;
             const sourceLabel = getSourceLabel(entry);

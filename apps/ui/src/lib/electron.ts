@@ -612,7 +612,8 @@ export interface ElectronAPI {
     enhance: (
       originalText: string,
       enhancementMode: string,
-      model?: string
+      model?: string,
+      thinkingLevel?: string
     ) => Promise<{
       success: boolean;
       enhancedText?: string;
