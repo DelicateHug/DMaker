@@ -10,9 +10,10 @@ import { useAppStore } from '@/store/app-store';
 import { useSetupStore } from '@/store/setup-store';
 import { AutoModeSettingsDialog } from './dialogs/auto-mode-settings-dialog';
 import { getHttpApiClient } from '@/lib/http-api-client';
+import { BoardSearchBar } from './board-search-bar';
+import { BoardControls } from './board-controls';
 
 interface BoardHeaderProps {
-  projectName: string;
   projectPath: string;
   maxConcurrency: number;
   runningAgentsCount: number;
@@ -21,6 +22,15 @@ interface BoardHeaderProps {
   onAutoModeToggle: (enabled: boolean) => void;
   onOpenPlanDialog: () => void;
   isMounted: boolean;
+  // Search bar props
+  searchQuery: string;
+  onSearchChange: (query: string) => void;
+  isCreatingSpec: boolean;
+  creatingSpecProjectPath?: string;
+  // Board controls props
+  onShowBoardBackground: () => void;
+  onShowCompletedModal: () => void;
+  completedCount: number;
 }
 
 // Shared styles for header control containers
@@ -28,7 +38,6 @@ const controlContainerClass =
   'flex items-center gap-1.5 px-3 h-8 rounded-md bg-secondary border border-border';
 
 export function BoardHeader({
-  projectName,
   projectPath,
   maxConcurrency,
   runningAgentsCount,
@@ -37,6 +46,13 @@ export function BoardHeader({
   onAutoModeToggle,
   onOpenPlanDialog,
   isMounted,
+  searchQuery,
+  onSearchChange,
+  isCreatingSpec,
+  creatingSpecProjectPath,
+  onShowBoardBackground,
+  onShowCompletedModal,
+  completedCount,
 }: BoardHeaderProps) {
   const [showAutoModeSettings, setShowAutoModeSettings] = useState(false);
   const apiKeys = useAppStore((state) => state.apiKeys);
@@ -84,9 +100,20 @@ export function BoardHeader({
 
   return (
     <div className="flex items-center justify-between p-4 border-b border-border bg-glass backdrop-blur-md">
-      <div>
-        <h1 className="text-xl font-bold">Kanban Board</h1>
-        <p className="text-sm text-muted-foreground">{projectName}</p>
+      <div className="flex items-center gap-4">
+        <BoardSearchBar
+          searchQuery={searchQuery}
+          onSearchChange={onSearchChange}
+          isCreatingSpec={isCreatingSpec}
+          creatingSpecProjectPath={creatingSpecProjectPath}
+          currentProjectPath={projectPath}
+        />
+        <BoardControls
+          isMounted={isMounted}
+          onShowBoardBackground={onShowBoardBackground}
+          onShowCompletedModal={onShowCompletedModal}
+          completedCount={completedCount}
+        />
       </div>
       <div className="flex gap-2 items-center">
         {/* Usage Popover - show if either provider is authenticated */}

@@ -39,6 +39,7 @@ import type { WorktreeAPI, GitAPI, ModelDefinition, ProviderStatus } from '@/typ
 import { getGlobalFileBrowser } from '@/contexts/file-browser-context';
 
 const logger = createLogger('HttpClient');
+const NO_STORE_CACHE_MODE: RequestCache = 'no-store';
 
 // Cached server URL (set during initialization in Electron mode)
 let cachedServerUrl: string | null = null;
@@ -69,6 +70,7 @@ const handleUnauthorized = (): void => {
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
     body: '{}',
+    cache: NO_STORE_CACHE_MODE,
   }).catch(() => {});
   notifyLoggedOut();
 };
@@ -296,6 +298,7 @@ export const checkAuthStatus = async (): Promise<{
     const response = await fetch(`${getServerUrl()}/api/auth/status`, {
       credentials: 'include',
       headers: getApiKey() ? { 'X-API-Key': getApiKey()! } : undefined,
+      cache: NO_STORE_CACHE_MODE,
     });
     const data = await response.json();
     return {
@@ -322,6 +325,7 @@ export const login = async (
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
       body: JSON.stringify({ apiKey }),
+      cache: NO_STORE_CACHE_MODE,
     });
     const data = await response.json();
 
@@ -361,6 +365,7 @@ export const fetchSessionToken = async (): Promise<boolean> => {
   try {
     const response = await fetch(`${getServerUrl()}/api/auth/status`, {
       credentials: 'include', // Send the session cookie
+      cache: NO_STORE_CACHE_MODE,
     });
 
     if (!response.ok) {
@@ -391,6 +396,7 @@ export const logout = async (): Promise<{ success: boolean }> => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
+      cache: NO_STORE_CACHE_MODE,
     });
 
     // Clear the cached session token
@@ -439,6 +445,7 @@ export const verifySession = async (): Promise<boolean> => {
   const response = await fetch(`${getServerUrl()}/api/settings/status`, {
     headers,
     credentials: 'include',
+    cache: NO_STORE_CACHE_MODE,
     // Avoid hanging indefinitely during backend reloads or network issues
     signal: AbortSignal.timeout(2500),
   });
@@ -475,6 +482,7 @@ export const checkSandboxEnvironment = async (): Promise<{
   try {
     const response = await fetch(`${getServerUrl()}/api/health/environment`, {
       method: 'GET',
+      cache: NO_STORE_CACHE_MODE,
       signal: AbortSignal.timeout(5000),
     });
 
@@ -559,6 +567,7 @@ export class HttpApiClient implements ElectronAPI {
       const response = await fetch(`${this.serverUrl}/api/auth/token`, {
         headers,
         credentials: 'include',
+        cache: NO_STORE_CACHE_MODE,
       });
 
       if (response.status === 401 || response.status === 403) {
@@ -590,6 +599,17 @@ export class HttpApiClient implements ElectronAPI {
 
     this.isConnecting = true;
 
+    // Wait for API key initialization to complete before attempting connection
+    // This prevents race conditions during app startup
+    waitForApiKeyInit()
+      .then(() => this.doConnectWebSocketInternal())
+      .catch((error) => {
+        logger.error('Failed to initialize for WebSocket connection:', error);
+        this.isConnecting = false;
+      });
+  }
+
+  private doConnectWebSocketInternal(): void {
     // Electron mode typically authenticates with the injected API key.
     // However, in external-server/cookie-auth flows, the API key may be unavailable.
     // In that case, fall back to the same wsToken/cookie authentication used in web mode
@@ -774,6 +794,7 @@ export class HttpApiClient implements ElectronAPI {
     const response = await fetch(`${this.serverUrl}${endpoint}`, {
       headers: this.getHeaders(),
       credentials: 'include', // Include cookies for session auth
+      cache: NO_STORE_CACHE_MODE,
     });
 
     if (response.status === 401 || response.status === 403) {
@@ -1442,6 +1463,16 @@ export class HttpApiClient implements ElectronAPI {
       features?: Feature[];
       error?: string;
     }>;
+    bulkDelete: (
+      projectPath: string,
+      featureIds: string[]
+    ) => Promise<{
+      success: boolean;
+      deletedCount?: number;
+      failedCount?: number;
+      results?: Array<{ featureId: string; success: boolean; error?: string }>;
+      error?: string;
+    }>;
   } = {
     getAll: (projectPath: string) => this.post('/api/features/list', { projectPath }),
     get: (projectPath: string, featureId: string) =>
@@ -1453,7 +1484,8 @@ export class HttpApiClient implements ElectronAPI {
       featureId: string,
       updates: Partial<Feature>,
       descriptionHistorySource?: 'enhance' | 'edit',
-      enhancementMode?: 'improve' | 'technical' | 'simplify' | 'acceptance'
+      enhancementMode?: 'improve' | 'technical' | 'simplify' | 'acceptance' | 'ux-reviewer',
+      preEnhancementDescription?: string
     ) =>
       this.post('/api/features/update', {
         projectPath,
@@ -1461,6 +1493,7 @@ export class HttpApiClient implements ElectronAPI {
         updates,
         descriptionHistorySource,
         enhancementMode,
+        preEnhancementDescription,
       }),
     delete: (projectPath: string, featureId: string) =>
       this.post('/api/features/delete', { projectPath, featureId }),
@@ -1470,6 +1503,8 @@ export class HttpApiClient implements ElectronAPI {
       this.post('/api/features/generate-title', { description }),
     bulkUpdate: (projectPath: string, featureIds: string[], updates: Partial<Feature>) =>
       this.post('/api/features/bulk-update', { projectPath, featureIds, updates }),
+    bulkDelete: (projectPath: string, featureIds: string[]) =>
+      this.post('/api/features/bulk-delete', { projectPath, featureIds }),
   };
 
   // Auto Mode API
@@ -1537,6 +1572,8 @@ export class HttpApiClient implements ElectronAPI {
         editedPlan,
         feedback,
       }),
+    resumeInterrupted: (projectPath: string) =>
+      this.post('/api/auto-mode/resume-interrupted', { projectPath }),
     onEvent: (callback: (event: AutoModeEvent) => void) => {
       return this.subscribeToEvent('auto-mode:event', callback as EventCallback);
     },
@@ -1602,9 +1639,11 @@ export class HttpApiClient implements ElectronAPI {
       this.post('/api/worktree/list-branches', { worktreePath }),
     switchBranch: (worktreePath: string, branchName: string) =>
       this.post('/api/worktree/switch-branch', { worktreePath, branchName }),
-    openInEditor: (worktreePath: string) =>
-      this.post('/api/worktree/open-in-editor', { worktreePath }),
+    openInEditor: (worktreePath: string, editorCommand?: string) =>
+      this.post('/api/worktree/open-in-editor', { worktreePath, editorCommand }),
     getDefaultEditor: () => this.get('/api/worktree/default-editor'),
+    getAvailableEditors: () => this.get('/api/worktree/available-editors'),
+    refreshEditors: () => this.post('/api/worktree/refresh-editors', {}),
     initGit: (projectPath: string) => this.post('/api/worktree/init-git', { projectPath }),
     startDevServer: (projectPath: string, worktreePath: string) =>
       this.post('/api/worktree/start-dev', { projectPath, worktreePath }),
@@ -1703,8 +1742,13 @@ export class HttpApiClient implements ElectronAPI {
         projectPath,
         maxFeatures,
       }),
-    stop: () => this.post('/api/spec-regeneration/stop'),
-    status: () => this.get('/api/spec-regeneration/status'),
+    stop: (projectPath?: string) => this.post('/api/spec-regeneration/stop', { projectPath }),
+    status: (projectPath?: string) =>
+      this.get(
+        projectPath
+          ? `/api/spec-regeneration/status?projectPath=${encodeURIComponent(projectPath)}`
+          : '/api/spec-regeneration/status'
+      ),
     onEvent: (callback: (event: SpecRegenerationEvent) => void) => {
       return this.subscribeToEvent('spec-regeneration:event', callback as EventCallback);
     },

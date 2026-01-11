@@ -433,11 +433,12 @@ export interface SpecRegenerationAPI {
     success: boolean;
     error?: string;
   }>;
-  stop: () => Promise<{ success: boolean; error?: string }>;
-  status: () => Promise<{
+  stop: (projectPath?: string) => Promise<{ success: boolean; error?: string }>;
+  status: (projectPath?: string) => Promise<{
     success: boolean;
     isRunning?: boolean;
     currentPhase?: string;
+    projectPath?: string;
     error?: string;
   }>;
   onEvent: (callback: (event: SpecRegenerationEvent) => void) => () => void;
@@ -461,7 +462,8 @@ export interface FeaturesAPI {
     featureId: string,
     updates: Partial<Feature>,
     descriptionHistorySource?: 'enhance' | 'edit',
-    enhancementMode?: 'improve' | 'technical' | 'simplify' | 'acceptance'
+    enhancementMode?: 'improve' | 'technical' | 'simplify' | 'acceptance' | 'ux-reviewer',
+    preEnhancementDescription?: string
   ) => Promise<{ success: boolean; feature?: Feature; error?: string }>;
   delete: (projectPath: string, featureId: string) => Promise<{ success: boolean; error?: string }>;
   getAgentOutput: (
@@ -532,6 +534,9 @@ export interface AutoModeAPI {
     editedPlan?: string,
     feedback?: string
   ) => Promise<{ success: boolean; error?: string }>;
+  resumeInterrupted: (
+    projectPath: string
+  ) => Promise<{ success: boolean; message?: string; error?: string }>;
   onEvent: (callback: (event: AutoModeEvent) => void) => () => void;
 }
 
@@ -608,7 +613,8 @@ export interface ElectronAPI {
     enhance: (
       originalText: string,
       enhancementMode: string,
-      model?: string
+      model?: string,
+      thinkingLevel?: string
     ) => Promise<{
       success: boolean;
       enhancedText?: string;
@@ -1639,13 +1645,34 @@ function createMockWorktreeAPI(): WorktreeAPI {
       };
     },
 
-    openInEditor: async (worktreePath: string) => {
-      console.log('[Mock] Opening in editor:', worktreePath);
+    openInEditor: async (worktreePath: string, editorCommand?: string) => {
+      const ANTIGRAVITY_EDITOR_COMMAND = 'antigravity';
+      const ANTIGRAVITY_LEGACY_COMMAND = 'agy';
+      // Map editor commands to display names
+      const editorNameMap: Record<string, string> = {
+        cursor: 'Cursor',
+        code: 'VS Code',
+        zed: 'Zed',
+        subl: 'Sublime Text',
+        windsurf: 'Windsurf',
+        trae: 'Trae',
+        rider: 'Rider',
+        webstorm: 'WebStorm',
+        xed: 'Xcode',
+        studio: 'Android Studio',
+        [ANTIGRAVITY_EDITOR_COMMAND]: 'Antigravity',
+        [ANTIGRAVITY_LEGACY_COMMAND]: 'Antigravity',
+        open: 'Finder',
+        explorer: 'Explorer',
+        'xdg-open': 'File Manager',
+      };
+      const editorName = editorCommand ? (editorNameMap[editorCommand] ?? 'Editor') : 'VS Code';
+      console.log('[Mock] Opening in editor:', worktreePath, 'using:', editorName);
       return {
         success: true,
         result: {
-          message: `Opened ${worktreePath} in VS Code`,
-          editorName: 'VS Code',
+          message: `Opened ${worktreePath} in ${editorName}`,
+          editorName,
         },
       };
     },
@@ -1657,6 +1684,32 @@ function createMockWorktreeAPI(): WorktreeAPI {
         result: {
           editorName: 'VS Code',
           editorCommand: 'code',
+        },
+      };
+    },
+
+    getAvailableEditors: async () => {
+      console.log('[Mock] Getting available editors');
+      return {
+        success: true,
+        result: {
+          editors: [
+            { name: 'VS Code', command: 'code' },
+            { name: 'Finder', command: 'open' },
+          ],
+        },
+      };
+    },
+    refreshEditors: async () => {
+      console.log('[Mock] Refreshing available editors');
+      return {
+        success: true,
+        result: {
+          editors: [
+            { name: 'VS Code', command: 'code' },
+            { name: 'Finder', command: 'open' },
+          ],
+          message: 'Found 2 available editors',
         },
       };
     },
@@ -2110,6 +2163,11 @@ function createMockAutoModeAPI(): AutoModeAPI {
       return { success: true };
     },
 
+    resumeInterrupted: async (projectPath: string) => {
+      console.log('[Mock] Resume interrupted features for:', projectPath);
+      return { success: true, message: 'Mock: no interrupted features' };
+    },
+
     onEvent: (callback: (event: AutoModeEvent) => void) => {
       mockAutoModeCallbacks.push(callback);
       return () => {
@@ -2539,7 +2597,7 @@ function createMockSpecRegenerationAPI(): SpecRegenerationAPI {
       return { success: true };
     },
 
-    stop: async () => {
+    stop: async (_projectPath?: string) => {
       mockSpecRegenerationRunning = false;
       mockSpecRegenerationPhase = '';
       if (mockSpecRegenerationTimeout) {
@@ -2549,7 +2607,7 @@ function createMockSpecRegenerationAPI(): SpecRegenerationAPI {
       return { success: true };
     },
 
-    status: async () => {
+    status: async (_projectPath?: string) => {
       return {
         success: true,
         isRunning: mockSpecRegenerationRunning,

@@ -114,6 +114,12 @@ function saveThemeToStorage(theme: ThemeMode): void {
   setItem(THEME_STORAGE_KEY, theme);
 }
 
+function persistEffectiveThemeForProject(project: Project | null, fallbackTheme: ThemeMode): void {
+  const projectTheme = project?.theme as ThemeMode | undefined;
+  const themeToStore = projectTheme ?? fallbackTheme;
+  saveThemeToStorage(themeToStore);
+}
+
 export type BoardViewMode = 'kanban' | 'graph';
 
 export interface ApiKeys {
@@ -210,9 +216,11 @@ export function formatShortcut(shortcut: string | undefined | null, forDisplay =
 export interface KeyboardShortcuts {
   // Navigation shortcuts
   board: string;
+  graph: string;
   agent: string;
   spec: string;
   context: string;
+  memory: string;
   settings: string;
   terminal: string;
   ideation: string;
@@ -243,9 +251,11 @@ export interface KeyboardShortcuts {
 export const DEFAULT_KEYBOARD_SHORTCUTS: KeyboardShortcuts = {
   // Navigation
   board: 'K',
+  graph: 'H',
   agent: 'A',
   spec: 'D',
   context: 'C',
+  memory: 'Y',
   settings: 'S',
   terminal: 'T',
   ideation: 'I',
@@ -577,6 +587,9 @@ export interface AppState {
 
   // MCP Servers
   mcpServers: MCPServerConfig[]; // List of configured MCP servers for agent use
+
+  // Editor Configuration
+  defaultEditorCommand: string | null; // Default editor for "Open In" action
 
   // Skills Configuration
   enableSkills: boolean; // Enable Skills functionality (loads from .claude/skills/ directories)
@@ -973,6 +986,9 @@ export interface AppActions {
   setAutoLoadClaudeMd: (enabled: boolean) => Promise<void>;
   setSkipSandboxWarning: (skip: boolean) => Promise<void>;
 
+  // Editor Configuration actions
+  setDefaultEditorCommand: (command: string | null) => void;
+
   // Prompt Customization actions
   setPromptCustomization: (customization: PromptCustomization) => Promise<void>;
 
@@ -1198,6 +1214,7 @@ const initialState: AppState = {
   autoLoadClaudeMd: false, // Default to disabled (user must opt-in)
   skipSandboxWarning: false, // Default to disabled (show sandbox warning dialog)
   mcpServers: [], // No MCP servers configured by default
+  defaultEditorCommand: null, // Auto-detect: Cursor > VS Code > first available
   enableSkills: true, // Skills enabled by default
   skillsSources: ['user', 'project'] as Array<'user' | 'project'>, // Load from both sources by default
   enableSubagents: true, // Subagents enabled by default
@@ -1289,13 +1306,16 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
     };
 
     const isCurrent = get().currentProject?.id === projectId;
+    const nextCurrentProject = isCurrent ? null : get().currentProject;
 
     set({
       projects: remainingProjects,
       trashedProjects: [trashedProject, ...existingTrash],
-      currentProject: isCurrent ? null : get().currentProject,
+      currentProject: nextCurrentProject,
       currentView: isCurrent ? 'welcome' : get().currentView,
     });
+
+    persistEffectiveThemeForProject(nextCurrentProject, get().theme);
   },
 
   restoreTrashedProject: (projectId) => {
@@ -1314,6 +1334,7 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
         currentProject: samePathProject,
         currentView: 'board',
       });
+      persistEffectiveThemeForProject(samePathProject, get().theme);
       return;
     }
 
@@ -1331,6 +1352,7 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
       currentProject: restoredProject,
       currentView: 'board',
     });
+    persistEffectiveThemeForProject(restoredProject, get().theme);
   },
 
   deleteTrashedProject: (projectId) => {
@@ -1350,6 +1372,7 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
 
   setCurrentProject: (project) => {
     set({ currentProject: project });
+    persistEffectiveThemeForProject(project, get().theme);
     if (project) {
       set({ currentView: 'board' });
       // Add to project history (MRU order)
@@ -1433,6 +1456,7 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
         projectHistoryIndex: newIndex,
         currentView: 'board',
       });
+      persistEffectiveThemeForProject(targetProject, get().theme);
     }
   },
 
@@ -1466,6 +1490,7 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
         projectHistoryIndex: newIndex,
         currentView: 'board',
       });
+      persistEffectiveThemeForProject(targetProject, get().theme);
     }
   },
 
@@ -1525,12 +1550,14 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
     // Also update currentProject if it's the same project
     const currentProject = get().currentProject;
     if (currentProject?.id === projectId) {
+      const updatedTheme = theme === null ? undefined : theme;
       set({
         currentProject: {
           ...currentProject,
-          theme: theme === null ? undefined : theme,
+          theme: updatedTheme,
         },
       });
+      persistEffectiveThemeForProject({ ...currentProject, theme: updatedTheme }, get().theme);
     }
   },
 
@@ -1981,6 +2008,9 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
       set({ skipSandboxWarning: previous });
     }
   },
+
+  // Editor Configuration actions
+  setDefaultEditorCommand: (command) => set({ defaultEditorCommand: command }),
   // Prompt Customization actions
   setPromptCustomization: async (customization) => {
     set({ promptCustomization: customization });
