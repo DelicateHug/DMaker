@@ -1459,7 +1459,8 @@ export class HttpApiClient implements ElectronAPI {
       featureId: string,
       updates: Partial<Feature>,
       descriptionHistorySource?: 'enhance' | 'edit',
-      enhancementMode?: 'improve' | 'technical' | 'simplify' | 'acceptance' | 'ux-reviewer'
+      enhancementMode?: 'improve' | 'technical' | 'simplify' | 'acceptance' | 'ux-reviewer',
+      preEnhancementDescription?: string
     ) =>
       this.post('/api/features/update', {
         projectPath,
@@ -1467,6 +1468,7 @@ export class HttpApiClient implements ElectronAPI {
         updates,
         descriptionHistorySource,
         enhancementMode,
+        preEnhancementDescription,
       }),
     delete: (projectPath: string, featureId: string) =>
       this.post('/api/features/delete', { projectPath, featureId }),

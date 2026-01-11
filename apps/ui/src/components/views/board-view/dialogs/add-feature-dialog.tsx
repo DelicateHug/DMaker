@@ -396,16 +396,29 @@ export function AddFeatureDialog({
             <EnhanceWithAI
               value={description}
               onChange={setDescription}
-              onHistoryAdd={({ mode, enhancedText }) => {
-                setDescriptionHistory((prev) => [
-                  ...prev,
-                  {
+              onHistoryAdd={({ mode, originalText, enhancedText }) => {
+                const timestamp = new Date().toISOString();
+                setDescriptionHistory((prev) => {
+                  const newHistory = [...prev];
+                  // Add original text first (so user can restore to pre-enhancement state)
+                  // Only add if it's different from the last entry to avoid duplicates
+                  const lastEntry = prev[prev.length - 1];
+                  if (!lastEntry || lastEntry.description !== originalText) {
+                    newHistory.push({
+                      description: originalText,
+                      timestamp,
+                      source: prev.length === 0 ? 'initial' : 'edit',
+                    });
+                  }
+                  // Add enhanced text
+                  newHistory.push({
                     description: enhancedText,
-                    timestamp: new Date().toISOString(),
+                    timestamp,
                     source: 'enhance',
                     enhancementMode: mode,
-                  },
-                ]);
+                  });
+                  return newHistory;
+                });
               }}
             />
           </div>

@@ -45,6 +45,11 @@ export function EnhancementHistoryButton<T extends BaseHistoryEntry>({
 }: EnhancementHistoryButtonProps<T>) {
   const [showHistory, setShowHistory] = useState(false);
 
+  // Memoize reversed history to avoid creating new array on every render
+  // NOTE: This hook MUST be called before any early returns to follow Rules of Hooks
+  const reversedHistory = useMemo(() => [...history].reverse(), [history]);
+
+  // Early return AFTER all hooks are called
   if (history.length === 0) {
     return null;
   }
@@ -70,9 +75,6 @@ export function EnhancementHistoryButton<T extends BaseHistoryEntry>({
       minute: '2-digit',
     });
   };
-
-  // Memoize reversed history to avoid creating new array on every render
-  const reversedHistory = useMemo(() => [...history].reverse(), [history]);
 
   return (
     <Popover open={showHistory} onOpenChange={setShowHistory}>

@@ -22,7 +22,11 @@ interface EnhanceWithAIProps {
   /** Callback when text is enhanced */
   onChange: (enhancedText: string) => void;
   /** Optional callback to track enhancement in history */
-  onHistoryAdd?: (entry: { mode: EnhancementMode; enhancedText: string }) => void;
+  onHistoryAdd?: (entry: {
+    mode: EnhancementMode;
+    originalText: string;
+    enhancedText: string;
+  }) => void;
   /** Disable the enhancement feature */
   disabled?: boolean;
   /** Additional CSS classes */
@@ -69,11 +73,12 @@ export function EnhanceWithAI({
       );
 
       if (result?.success && result.enhancedText) {
+        const originalText = value;
         const enhancedText = result.enhancedText;
         onChange(enhancedText);
 
-        // Track in history if callback provided
-        onHistoryAdd?.({ mode: enhancementMode, enhancedText });
+        // Track in history if callback provided (includes original for restoration)
+        onHistoryAdd?.({ mode: enhancementMode, originalText, enhancedText });
 
         toast.success('Enhanced successfully!');
       } else {

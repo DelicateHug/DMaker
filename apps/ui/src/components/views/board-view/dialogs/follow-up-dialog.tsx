@@ -126,10 +126,22 @@ export function FollowUpDialog({
           <EnhanceWithAI
             value={prompt}
             onChange={onPromptChange}
-            onHistoryAdd={({ mode, enhancedText }) => {
+            onHistoryAdd={({ mode, originalText, enhancedText }) => {
+              const timestamp = new Date().toISOString();
+              // Add original text first (so user can restore to pre-enhancement state)
+              // Only add if it's different from the last history entry
+              const lastEntry = promptHistory[promptHistory.length - 1];
+              if (!lastEntry || lastEntry.prompt !== originalText) {
+                onHistoryAdd?.({
+                  prompt: originalText,
+                  timestamp,
+                  source: promptHistory.length === 0 ? 'initial' : 'edit',
+                });
+              }
+              // Add enhanced text
               onHistoryAdd?.({
                 prompt: enhancedText,
-                timestamp: new Date().toISOString(),
+                timestamp,
                 source: 'enhance',
                 enhancementMode: mode,
               });

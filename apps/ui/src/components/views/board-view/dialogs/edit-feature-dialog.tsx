@@ -64,7 +64,8 @@ interface EditFeatureDialogProps {
       requirePlanApproval: boolean;
     },
     descriptionHistorySource?: 'enhance' | 'edit',
-    enhancementMode?: EnhancementMode
+    enhancementMode?: EnhancementMode,
+    preEnhancementDescription?: string
   ) => void;
   categorySuggestions: string[];
   branchSuggestions: string[];
@@ -117,6 +118,12 @@ export function EditFeatureDialog({
   >(null);
   // Track the original description when the dialog opened for comparison
   const [originalDescription, setOriginalDescription] = useState(feature?.description ?? '');
+  // Track the description before enhancement (so it can be restored)
+  const [preEnhancementDescription, setPreEnhancementDescription] = useState<string | null>(null);
+  // Local history state for real-time display (combines persisted + session history)
+  const [localHistory, setLocalHistory] = useState<DescriptionHistoryEntry[]>(
+    feature?.descriptionHistory ?? []
+  );
 
   useEffect(() => {
     setEditingFeature(feature);
@@ -128,6 +135,8 @@ export function EditFeatureDialog({
       // Reset history tracking state
       setOriginalDescription(feature.description ?? '');
       setDescriptionChangeSource(null);
+      setPreEnhancementDescription(null);
+      setLocalHistory(feature.descriptionHistory ?? []);
       // Reset model entry
       setModelEntry({
         model: (feature.model as ModelAlias) || 'opus',
@@ -137,6 +146,8 @@ export function EditFeatureDialog({
     } else {
       setEditFeaturePreviewMap(new Map());
       setDescriptionChangeSource(null);
+      setPreEnhancementDescription(null);
+      setLocalHistory([]);
     }
   }, [feature]);
 
@@ -198,7 +209,13 @@ export function EditFeatureDialog({
       }
     }
 
-    onUpdate(editingFeature.id, updates, historySource, historyEnhancementMode);
+    onUpdate(
+      editingFeature.id,
+      updates,
+      historySource,
+      historyEnhancementMode,
+      preEnhancementDescription ?? undefined
+    );
     setEditFeaturePreviewMap(new Map());
     onClose();
   };
@@ -246,20 +263,18 @@ export function EditFeatureDialog({
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label htmlFor="edit-description">Description</Label>
-                {/* Version History Button */}
-                {feature?.descriptionHistory && feature.descriptionHistory.length > 0 && (
-                  <EnhancementHistoryButton
-                    history={feature.descriptionHistory}
-                    currentValue={editingFeature.description}
-                    onRestore={(description) => {
-                      setEditingFeature((prev) => (prev ? { ...prev, description } : prev));
-                      setDescriptionChangeSource('edit');
-                    }}
-                    valueAccessor={(entry) => entry.description}
-                    title="Version History"
-                    restoreMessage="Description restored from history"
-                  />
-                )}
+                {/* Version History Button - uses local history for real-time updates */}
+                <EnhancementHistoryButton
+                  history={localHistory}
+                  currentValue={editingFeature.description}
+                  onRestore={(description) => {
+                    setEditingFeature((prev) => (prev ? { ...prev, description } : prev));
+                    setDescriptionChangeSource('edit');
+                  }}
+                  valueAccessor={(entry) => entry.description}
+                  title="Version History"
+                  restoreMessage="Description restored from history"
+                />
               </div>
               <DescriptionImageDropZone
                 value={editingFeature.description}
@@ -316,7 +331,33 @@ export function EditFeatureDialog({
               onChange={(enhanced) =>
                 setEditingFeature((prev) => (prev ? { ...prev, description: enhanced } : prev))
               }
-              onHistoryAdd={({ mode }) => setDescriptionChangeSource({ source: 'enhance', mode })}
+              onHistoryAdd={({ mode, originalText, enhancedText }) => {
+                setDescriptionChangeSource({ source: 'enhance', mode });
+                setPreEnhancementDescription(originalText);
+
+                // Update local history for real-time display
+                const timestamp = new Date().toISOString();
+                setLocalHistory((prev) => {
+                  const newHistory = [...prev];
+                  // Add original text first (so user can restore to pre-enhancement state)
+                  const lastEntry = prev[prev.length - 1];
+                  if (!lastEntry || lastEntry.description !== originalText) {
+                    newHistory.push({
+                      description: originalText,
+                      timestamp,
+                      source: prev.length === 0 ? 'initial' : 'edit',
+                    });
+                  }
+                  // Add enhanced text
+                  newHistory.push({
+                    description: enhancedText,
+                    timestamp,
+                    source: 'enhance',
+                    enhancementMode: mode,
+                  });
+                  return newHistory;
+                });
+              }}
             />
           </div>
 
