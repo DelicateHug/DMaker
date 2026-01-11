@@ -114,6 +114,12 @@ function saveThemeToStorage(theme: ThemeMode): void {
   setItem(THEME_STORAGE_KEY, theme);
 }
 
+function persistEffectiveThemeForProject(project: Project | null, fallbackTheme: ThemeMode): void {
+  const projectTheme = project?.theme as ThemeMode | undefined;
+  const themeToStore = projectTheme ?? fallbackTheme;
+  saveThemeToStorage(themeToStore);
+}
+
 export type BoardViewMode = 'kanban' | 'graph';
 
 export interface ApiKeys {
@@ -1241,13 +1247,16 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
     };
 
     const isCurrent = get().currentProject?.id === projectId;
+    const nextCurrentProject = isCurrent ? null : get().currentProject;
 
     set({
       projects: remainingProjects,
       trashedProjects: [trashedProject, ...existingTrash],
-      currentProject: isCurrent ? null : get().currentProject,
+      currentProject: nextCurrentProject,
       currentView: isCurrent ? 'welcome' : get().currentView,
     });
+
+    persistEffectiveThemeForProject(nextCurrentProject, get().theme);
   },
 
   restoreTrashedProject: (projectId) => {
@@ -1266,6 +1275,7 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
         currentProject: samePathProject,
         currentView: 'board',
       });
+      persistEffectiveThemeForProject(samePathProject, get().theme);
       return;
     }
 
@@ -1283,6 +1293,7 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
       currentProject: restoredProject,
       currentView: 'board',
     });
+    persistEffectiveThemeForProject(restoredProject, get().theme);
   },
 
   deleteTrashedProject: (projectId) => {
@@ -1302,6 +1313,7 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
 
   setCurrentProject: (project) => {
     set({ currentProject: project });
+    persistEffectiveThemeForProject(project, get().theme);
     if (project) {
       set({ currentView: 'board' });
       // Add to project history (MRU order)
@@ -1385,6 +1397,7 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
         projectHistoryIndex: newIndex,
         currentView: 'board',
       });
+      persistEffectiveThemeForProject(targetProject, get().theme);
     }
   },
 
@@ -1418,6 +1431,7 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
         projectHistoryIndex: newIndex,
         currentView: 'board',
       });
+      persistEffectiveThemeForProject(targetProject, get().theme);
     }
   },
 
@@ -1477,12 +1491,14 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
     // Also update currentProject if it's the same project
     const currentProject = get().currentProject;
     if (currentProject?.id === projectId) {
+      const updatedTheme = theme === null ? undefined : theme;
       set({
         currentProject: {
           ...currentProject,
-          theme: theme === null ? undefined : theme,
+          theme: updatedTheme,
         },
       });
+      persistEffectiveThemeForProject({ ...currentProject, theme: updatedTheme }, get().theme);
     }
   },
 

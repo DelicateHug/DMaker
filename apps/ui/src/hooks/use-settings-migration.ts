@@ -517,8 +517,9 @@ export function hydrateStoreFromSettings(settings: GlobalSettings): void {
   }
 
   // Save theme to localStorage for fallback when server settings aren't available
-  if (settings.theme) {
-    setItem(THEME_STORAGE_KEY, settings.theme);
+  const storedTheme = (currentProject?.theme as string | undefined) || settings.theme;
+  if (storedTheme) {
+    setItem(THEME_STORAGE_KEY, storedTheme);
   }
 
   useAppStore.setState({

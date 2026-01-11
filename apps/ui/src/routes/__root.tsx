@@ -43,6 +43,12 @@ const NO_STORE_CACHE_MODE: RequestCache = 'no-store';
 const AUTO_OPEN_HISTORY_INDEX = 0;
 const SINGLE_PROJECT_COUNT = 1;
 const DEFAULT_LAST_OPENED_TIME_MS = 0;
+const AUTO_OPEN_STATUS = {
+  idle: 'idle',
+  opening: 'opening',
+  done: 'done',
+} as const;
+type AutoOpenStatus = (typeof AUTO_OPEN_STATUS)[keyof typeof AUTO_OPEN_STATUS];
 
 // Apply stored theme immediately on page load (before React hydration)
 // This prevents flash of default theme on login/setup pages
@@ -160,6 +166,7 @@ function RootLayoutContent() {
   const [streamerPanelOpen, setStreamerPanelOpen] = useState(false);
   const authChecked = useAuthStore((s) => s.authChecked);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const settingsLoaded = useAuthStore((s) => s.settingsLoaded);
   const { openFileBrowser } = useFileBrowser();
 
   // Load project settings when switching projects
@@ -171,6 +178,20 @@ function RootLayoutContent() {
   const isDashboardRoute = location.pathname === '/dashboard';
   const isBoardRoute = location.pathname === '/board';
   const isRootRoute = location.pathname === '/';
+  const [autoOpenStatus, setAutoOpenStatus] = useState<AutoOpenStatus>(AUTO_OPEN_STATUS.idle);
+  const autoOpenCandidate = selectAutoOpenProject(currentProject, projects, projectHistory);
+  const canAutoOpen =
+    authChecked &&
+    isAuthenticated &&
+    settingsLoaded &&
+    setupComplete &&
+    !isLoginRoute &&
+    !isLoggedOutRoute &&
+    !isSetupRoute &&
+    !!autoOpenCandidate;
+  const shouldAutoOpen = canAutoOpen && autoOpenStatus !== AUTO_OPEN_STATUS.done;
+  const shouldBlockForSettings =
+    authChecked && isAuthenticated && !settingsLoaded && !isLoginRoute && !isLoggedOutRoute;
 
   // Sandbox environment check state
   type SandboxStatus = 'pending' | 'containerized' | 'needs-confirmation' | 'denied' | 'confirmed';
@@ -298,7 +319,6 @@ function RootLayoutContent() {
 
   // Ref to prevent concurrent auth checks from running
   const authCheckRunning = useRef(false);
-  const autoOpenAttemptedRef = useRef(false);
 
   // Global listener for 401/403 responses during normal app usage.
   // This is triggered by the HTTP client whenever an authenticated request returns 401/403.
@@ -479,9 +499,6 @@ function RootLayoutContent() {
   // Note: Settings are now loaded in __root.tsx after successful session verification
   // This ensures a unified flow across all modes (Electron, web, external server)
 
-  // Get settingsLoaded from auth store for routing decisions
-  const settingsLoaded = useAuthStore((s) => s.settingsLoaded);
-
   // Routing rules (ALL modes - unified flow):
   // - If not authenticated: force /logged-out (even /setup is protected)
   // - If authenticated but setup incomplete: force /setup
@@ -603,6 +620,9 @@ function RootLayoutContent() {
   // Redirect from welcome page based on project state
   useEffect(() => {
     if (isMounted && isRootRoute) {
+      if (!settingsLoaded || shouldAutoOpen) {
+        return;
+      }
       if (currentProject) {
         // Project is selected, go to board
         navigate({ to: '/board' });
@@ -611,56 +631,58 @@ function RootLayoutContent() {
         navigate({ to: '/dashboard' });
       }
     }
-  }, [isMounted, currentProject, isRootRoute, navigate]);
+  }, [isMounted, currentProject, isRootRoute, navigate, shouldAutoOpen, settingsLoaded]);
 
   // Auto-open the most recent project on startup
   useEffect(() => {
-    if (autoOpenAttemptedRef.current) return;
-    if (!authChecked || !isAuthenticated || !settingsLoaded) return;
-    if (!setupComplete) return;
-    if (isLoginRoute || isLoggedOutRoute || isSetupRoute) return;
-    if (isBoardRoute) return;
+    if (!canAutoOpen) return;
+    if (autoOpenStatus !== AUTO_OPEN_STATUS.idle) return;
 
-    const projectToOpen = selectAutoOpenProject(currentProject, projects, projectHistory);
-    if (!projectToOpen) return;
+    if (!autoOpenCandidate) return;
 
-    autoOpenAttemptedRef.current = true;
+    setAutoOpenStatus(AUTO_OPEN_STATUS.opening);
 
     const openProject = async () => {
-      const initResult = await initializeProject(projectToOpen.path);
-      if (!initResult.success) {
-        logger.warn('Auto-open project failed:', initResult.error);
+      try {
+        const initResult = await initializeProject(autoOpenCandidate.path);
+        if (!initResult.success) {
+          logger.warn('Auto-open project failed:', initResult.error);
+          if (isRootRoute) {
+            navigate({ to: '/dashboard' });
+          }
+          return;
+        }
+
+        if (!currentProject || currentProject.id !== autoOpenCandidate.id) {
+          upsertAndSetCurrentProject(
+            autoOpenCandidate.path,
+            autoOpenCandidate.name,
+            autoOpenCandidate.theme
+          );
+        }
+
+        if (isRootRoute) {
+          navigate({ to: '/board' });
+        }
+      } catch (error) {
+        logger.error('Auto-open project crashed:', error);
         if (isRootRoute) {
           navigate({ to: '/dashboard' });
         }
-        return;
-      }
-
-      if (!currentProject || currentProject.id !== projectToOpen.id) {
-        upsertAndSetCurrentProject(projectToOpen.path, projectToOpen.name, projectToOpen.theme);
-      }
-
-      if (!isBoardRoute) {
-        navigate({ to: '/board' });
+      } finally {
+        setAutoOpenStatus(AUTO_OPEN_STATUS.done);
       }
     };
 
     void openProject();
   }, [
-    authChecked,
-    isAuthenticated,
-    settingsLoaded,
-    setupComplete,
-    isLoginRoute,
-    isLoggedOutRoute,
-    isSetupRoute,
-    isBoardRoute,
-    isRootRoute,
+    canAutoOpen,
+    autoOpenStatus,
+    autoOpenCandidate,
     currentProject,
-    projects,
-    projectHistory,
     navigate,
     upsertAndSetCurrentProject,
+    isRootRoute,
   ]);
 
   // Bootstrap Codex models on app startup (after auth completes)
@@ -732,6 +754,22 @@ function RootLayoutContent() {
     return (
       <main className="flex h-screen items-center justify-center" data-testid="app-container">
         <LoadingState message="Redirecting..." />
+      </main>
+    );
+  }
+
+  if (shouldBlockForSettings) {
+    return (
+      <main className="flex h-screen items-center justify-center" data-testid="app-container">
+        <LoadingState message="Loading settings..." />
+      </main>
+    );
+  }
+
+  if (shouldAutoOpen) {
+    return (
+      <main className="flex h-screen items-center justify-center" data-testid="app-container">
+        <LoadingState message="Opening project..." />
       </main>
     );
   }
