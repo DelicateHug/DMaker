@@ -367,15 +367,16 @@ export interface SpecRegenerationAPI {
     error?: string;
   }>;
 
-  stop: () => Promise<{
+  stop: (projectPath?: string) => Promise<{
     success: boolean;
     error?: string;
   }>;
 
-  status: () => Promise<{
+  status: (projectPath?: string) => Promise<{
     success: boolean;
     isRunning?: boolean;
     currentPhase?: string;
+    projectPath?: string;
     error?: string;
   }>;
 

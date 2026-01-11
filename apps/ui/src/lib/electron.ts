@@ -433,11 +433,12 @@ export interface SpecRegenerationAPI {
     success: boolean;
     error?: string;
   }>;
-  stop: () => Promise<{ success: boolean; error?: string }>;
-  status: () => Promise<{
+  stop: (projectPath?: string) => Promise<{ success: boolean; error?: string }>;
+  status: (projectPath?: string) => Promise<{
     success: boolean;
     isRunning?: boolean;
     currentPhase?: string;
+    projectPath?: string;
     error?: string;
   }>;
   onEvent: (callback: (event: SpecRegenerationEvent) => void) => () => void;
@@ -2506,7 +2507,7 @@ function createMockSpecRegenerationAPI(): SpecRegenerationAPI {
       return { success: true };
     },
 
-    stop: async () => {
+    stop: async (_projectPath?: string) => {
       mockSpecRegenerationRunning = false;
       mockSpecRegenerationPhase = '';
       if (mockSpecRegenerationTimeout) {
@@ -2516,7 +2517,7 @@ function createMockSpecRegenerationAPI(): SpecRegenerationAPI {
       return { success: true };
     },
 
-    status: async () => {
+    status: async (_projectPath?: string) => {
       return {
         success: true,
         isRunning: mockSpecRegenerationRunning,

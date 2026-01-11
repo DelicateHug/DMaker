@@ -1670,8 +1670,13 @@ export class HttpApiClient implements ElectronAPI {
         projectPath,
         maxFeatures,
       }),
-    stop: () => this.post('/api/spec-regeneration/stop'),
-    status: () => this.get('/api/spec-regeneration/status'),
+    stop: (projectPath?: string) => this.post('/api/spec-regeneration/stop', { projectPath }),
+    status: (projectPath?: string) =>
+      this.get(
+        projectPath
+          ? `/api/spec-regeneration/status?projectPath=${encodeURIComponent(projectPath)}`
+          : '/api/spec-regeneration/status'
+      ),
     onEvent: (callback: (event: SpecRegenerationEvent) => void) => {
       return this.subscribeToEvent('spec-regeneration:event', callback as EventCallback);
     },

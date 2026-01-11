@@ -10,6 +10,7 @@ import {
   GitPullRequest,
   Lightbulb,
   Brain,
+  Network,
 } from 'lucide-react';
 import type { NavSection, NavItem } from '../types';
 import type { KeyboardShortcut } from '@/hooks/use-keyboard-shortcuts';
@@ -27,6 +28,7 @@ interface UseNavigationProps {
     context: string;
     memory: string;
     board: string;
+    graph: string;
     agent: string;
     terminal: string;
     settings: string;
@@ -48,6 +50,8 @@ interface UseNavigationProps {
   cycleNextProject: () => void;
   /** Count of unviewed validations to show on GitHub Issues nav item */
   unviewedValidationsCount?: number;
+  /** Whether spec generation is currently running for the current project */
+  isSpecGenerating?: boolean;
 }
 
 export function useNavigation({
@@ -65,6 +69,7 @@ export function useNavigation({
   cyclePrevProject,
   cycleNextProject,
   unviewedValidationsCount,
+  isSpecGenerating,
 }: UseNavigationProps) {
   // Track if current project has a GitHub remote
   const [hasGitHubRemote, setHasGitHubRemote] = useState(false);
@@ -104,6 +109,7 @@ export function useNavigation({
         label: 'Spec Editor',
         icon: FileText,
         shortcut: shortcuts.spec,
+        isLoading: isSpecGenerating,
       },
       {
         id: 'context',
@@ -137,6 +143,12 @@ export function useNavigation({
         label: 'Kanban Board',
         icon: LayoutGrid,
         shortcut: shortcuts.board,
+      },
+      {
+        id: 'graph',
+        label: 'Graph View',
+        icon: Network,
+        shortcut: shortcuts.graph,
       },
       {
         id: 'agent',
@@ -197,6 +209,7 @@ export function useNavigation({
     hideTerminal,
     hasGitHubRemote,
     unviewedValidationsCount,
+    isSpecGenerating,
   ]);
 
   // Build keyboard shortcuts for navigation
