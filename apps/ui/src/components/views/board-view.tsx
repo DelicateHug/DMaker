@@ -1449,6 +1449,7 @@ export function BoardView() {
         setPendingPlanResult={setPendingBacklogPlan}
         isGeneratingPlan={isGeneratingPlan}
         setIsGeneratingPlan={setIsGeneratingPlan}
+        currentBranch={selectedWorktreeBranch}
       />
 
       {/* Plan Approval Dialog */}

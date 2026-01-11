@@ -651,7 +651,8 @@ export interface ElectronAPI {
           removedDependencies: string[];
           addedDependencies: string[];
         }>;
-      }
+      },
+      branchName?: string
     ) => Promise<{ success: boolean; appliedChanges?: string[]; error?: string }>;
     onEvent: (callback: (data: unknown) => void) => () => void;
   };
