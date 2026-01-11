@@ -21,11 +21,9 @@ import {
   FeatureTextFilePath as DescriptionTextFilePath,
   ImagePreviewMap,
 } from '@/components/ui/description-image-dropzone';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Sparkles, ChevronDown, ChevronRight, Play, Cpu, FolderKanban } from 'lucide-react';
+import { Play, Cpu, FolderKanban } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import { getElectronAPI } from '@/lib/electron';
 import { modelSupportsThinking } from '@/lib/utils';
 import {
   useAppStore,
@@ -43,16 +41,12 @@ import {
   WorkModeSelector,
   PlanningModeSelect,
   AncestorContextSection,
+  EnhanceWithAI,
+  EnhancementHistoryButton,
+  type BaseHistoryEntry,
 } from '../shared';
 import type { WorkMode } from '../shared';
 import { PhaseModelSelector } from '@/components/views/settings-view/model-defaults/phase-model-selector';
-import { ModelOverrideTrigger, useModelOverride } from '@/components/shared';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import {
   getAncestors,
@@ -97,6 +91,13 @@ interface AddFeatureDialogProps {
   allFeatures?: Feature[];
 }
 
+/**
+ * A single entry in the description history
+ */
+interface DescriptionHistoryEntry extends BaseHistoryEntry {
+  description: string;
+}
+
 export function AddFeatureDialog({
   open,
   onOpenChange,
@@ -139,11 +140,9 @@ export function AddFeatureDialog({
   // UI state
   const [previewMap, setPreviewMap] = useState<ImagePreviewMap>(() => new Map());
   const [descriptionError, setDescriptionError] = useState(false);
-  const [isEnhancing, setIsEnhancing] = useState(false);
-  const [enhancementMode, setEnhancementMode] = useState<
-    'improve' | 'technical' | 'simplify' | 'acceptance' | 'ux-reviewer'
-  >('improve');
-  const [enhanceOpen, setEnhanceOpen] = useState(false);
+
+  // Description history state
+  const [descriptionHistory, setDescriptionHistory] = useState<DescriptionHistoryEntry[]>([]);
 
   // Spawn mode state
   const [ancestors, setAncestors] = useState<AncestorContext[]>([]);
@@ -151,9 +150,6 @@ export function AddFeatureDialog({
 
   // Get defaults from store
   const { defaultPlanningMode, defaultRequirePlanApproval } = useAppStore();
-
-  // Enhancement model override
-  const enhancementOverride = useModelOverride({ phase: 'enhancementModel' });
 
   // Track previous open state to detect when dialog opens
   const wasOpenRef = useRef(false);
@@ -170,6 +166,9 @@ export function AddFeatureDialog({
       setPlanningMode(defaultPlanningMode);
       setRequirePlanApproval(defaultRequirePlanApproval);
       setModelEntry({ model: 'opus' });
+
+      // Initialize description history (empty for new feature)
+      setDescriptionHistory([]);
 
       // Initialize ancestors for spawn mode
       if (parentFeature) {
@@ -279,7 +278,7 @@ export function AddFeatureDialog({
     setRequirePlanApproval(defaultRequirePlanApproval);
     setPreviewMap(new Map());
     setDescriptionError(false);
-    setEnhanceOpen(false);
+    setDescriptionHistory([]);
     onOpenChange(false);
   };
 
@@ -299,33 +298,6 @@ export function AddFeatureDialog({
     if (!open) {
       setPreviewMap(new Map());
       setDescriptionError(false);
-    }
-  };
-
-  const handleEnhanceDescription = async () => {
-    if (!description.trim() || isEnhancing) return;
-
-    setIsEnhancing(true);
-    try {
-      const api = getElectronAPI();
-      const result = await api.enhancePrompt?.enhance(
-        description,
-        enhancementMode,
-        enhancementOverride.effectiveModel,
-        enhancementOverride.effectiveModelEntry.thinkingLevel
-      );
-
-      if (result?.success && result.enhancedText) {
-        setDescription(result.enhancedText);
-        toast.success('Description enhanced!');
-      } else {
-        toast.error(result?.error || 'Failed to enhance description');
-      }
-    } catch (error) {
-      logger.error('Enhancement failed:', error);
-      toast.error('Failed to enhance description');
-    } finally {
-      setIsEnhancing(false);
     }
   };
 
@@ -380,7 +352,18 @@ export function AddFeatureDialog({
           {/* Task Details Section */}
           <div className={cardClass}>
             <div className="space-y-2">
-              <Label htmlFor="description">Description</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="description">Description</Label>
+                {/* Version History Button */}
+                <EnhancementHistoryButton
+                  history={descriptionHistory}
+                  currentValue={description}
+                  onRestore={setDescription}
+                  valueAccessor={(entry) => entry.description}
+                  title="Version History"
+                  restoreMessage="Description restored from history"
+                />
+              </div>
               <DescriptionImageDropZone
                 value={description}
                 onChange={(value) => {
@@ -409,75 +392,35 @@ export function AddFeatureDialog({
               />
             </div>
 
-            {/* Collapsible Enhancement Section */}
-            <Collapsible open={enhanceOpen} onOpenChange={setEnhanceOpen}>
-              <CollapsibleTrigger asChild>
-                <button className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors w-full py-1">
-                  {enhanceOpen ? (
-                    <ChevronDown className="w-4 h-4" />
-                  ) : (
-                    <ChevronRight className="w-4 h-4" />
-                  )}
-                  <Sparkles className="w-4 h-4" />
-                  <span>Enhance with AI</span>
-                </button>
-              </CollapsibleTrigger>
-              <CollapsibleContent className="pt-3">
-                <div className="flex flex-wrap items-center gap-2 pl-6">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="outline" size="sm" className="h-8 text-xs">
-                        {enhancementMode === 'improve' && 'Improve Clarity'}
-                        {enhancementMode === 'technical' && 'Add Technical Details'}
-                        {enhancementMode === 'simplify' && 'Simplify'}
-                        {enhancementMode === 'acceptance' && 'Add Acceptance Criteria'}
-                        {enhancementMode === 'ux-reviewer' && 'User Experience'}
-                        <ChevronDown className="w-3 h-3 ml-1" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="start">
-                      <DropdownMenuItem onClick={() => setEnhancementMode('improve')}>
-                        Improve Clarity
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => setEnhancementMode('technical')}>
-                        Add Technical Details
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => setEnhancementMode('simplify')}>
-                        Simplify
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => setEnhancementMode('acceptance')}>
-                        Add Acceptance Criteria
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => setEnhancementMode('ux-reviewer')}>
-                        User Experience
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-
-                  <Button
-                    type="button"
-                    variant="default"
-                    size="sm"
-                    className="h-8 text-xs"
-                    onClick={handleEnhanceDescription}
-                    disabled={!description.trim() || isEnhancing}
-                    loading={isEnhancing}
-                  >
-                    <Sparkles className="w-3 h-3 mr-1" />
-                    Enhance
-                  </Button>
-
-                  <ModelOverrideTrigger
-                    currentModelEntry={enhancementOverride.effectiveModelEntry}
-                    onModelChange={enhancementOverride.setOverride}
-                    phase="enhancementModel"
-                    isOverridden={enhancementOverride.isOverridden}
-                    size="sm"
-                    variant="icon"
-                  />
-                </div>
-              </CollapsibleContent>
-            </Collapsible>
+            {/* Enhancement Section */}
+            <EnhanceWithAI
+              value={description}
+              onChange={setDescription}
+              onHistoryAdd={({ mode, originalText, enhancedText }) => {
+                const timestamp = new Date().toISOString();
+                setDescriptionHistory((prev) => {
+                  const newHistory = [...prev];
+                  // Add original text first (so user can restore to pre-enhancement state)
+                  // Only add if it's different from the last entry to avoid duplicates
+                  const lastEntry = prev[prev.length - 1];
+                  if (!lastEntry || lastEntry.description !== originalText) {
+                    newHistory.push({
+                      description: originalText,
+                      timestamp,
+                      source: prev.length === 0 ? 'initial' : 'edit',
+                    });
+                  }
+                  // Add enhanced text
+                  newHistory.push({
+                    description: enhancedText,
+                    timestamp,
+                    source: 'enhance',
+                    enhancementMode: mode,
+                  });
+                  return newHistory;
+                });
+              }}
+            />
           </div>
 
           {/* AI & Execution Section */}
