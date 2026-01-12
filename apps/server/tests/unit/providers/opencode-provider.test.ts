@@ -3,7 +3,7 @@ import {
   OpencodeProvider,
   resetToolUseIdCounter,
 } from '../../../src/providers/opencode-provider.js';
-import type { ProviderMessage } from '@automaker/types';
+import type { ProviderMessage, ModelDefinition } from '@automaker/types';
 import { collectAsyncGenerator } from '../../utils/helpers.js';
 import { spawnJSONLProcess, getOpenCodeAuthIndicators } from '@automaker/platform';
 
@@ -125,6 +125,28 @@ describe('opencode-provider.ts', () => {
         expect(model).toHaveProperty('modelString');
         expect(typeof model.modelString).toBe('string');
       }
+    });
+  });
+
+  describe('parseModelsOutput', () => {
+    it('should parse nested provider model IDs', () => {
+      const output = [
+        'openrouter/anthropic/claude-3.5-sonnet',
+        'openai/gpt-4o',
+        'amazon-bedrock/anthropic.claude-sonnet-4-5-20250929-v1:0',
+      ].join('\n');
+
+      const parseModelsOutput = (
+        provider as unknown as { parseModelsOutput: (output: string) => ModelDefinition[] }
+      ).parseModelsOutput;
+      const models = parseModelsOutput(output);
+
+      expect(models).toHaveLength(3);
+      const openrouterModel = models.find((model) => model.id.startsWith('openrouter/'));
+
+      expect(openrouterModel).toBeDefined();
+      expect(openrouterModel?.provider).toBe('openrouter');
+      expect(openrouterModel?.modelString).toBe('openrouter/anthropic/claude-3.5-sonnet');
     });
   });
 
