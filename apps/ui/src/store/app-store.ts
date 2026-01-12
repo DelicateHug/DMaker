@@ -3115,23 +3115,29 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
 
   // Codex Models actions
   fetchCodexModels: async (forceRefresh = false) => {
+    const FAILURE_COOLDOWN_MS = 30 * 1000; // 30 seconds
+    const SUCCESS_CACHE_MS = 5 * 60 * 1000; // 5 minutes
+
     const { codexModelsLastFetched, codexModelsLoading, codexModelsLastFailedAt } = get();
 
     // Skip if already loading
     if (codexModelsLoading) return;
 
-    // Skip if recently failed (< 30 seconds ago) and not forcing refresh
-    const FAILURE_COOLDOWN = 30000; // 30 seconds
+    // Skip if recently failed and not forcing refresh
     if (
       !forceRefresh &&
       codexModelsLastFailedAt &&
-      Date.now() - codexModelsLastFailedAt < FAILURE_COOLDOWN
+      Date.now() - codexModelsLastFailedAt < FAILURE_COOLDOWN_MS
     ) {
       return;
     }
 
-    // Skip if recently fetched (< 5 minutes ago) and not forcing refresh
-    if (!forceRefresh && codexModelsLastFetched && Date.now() - codexModelsLastFetched < 300000) {
+    // Skip if recently fetched successfully and not forcing refresh
+    if (
+      !forceRefresh &&
+      codexModelsLastFetched &&
+      Date.now() - codexModelsLastFetched < SUCCESS_CACHE_MS
+    ) {
       return;
     }
 
