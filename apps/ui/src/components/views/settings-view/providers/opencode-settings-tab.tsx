@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 import { useAppStore } from '@/store/app-store';
 import { OpencodeCliStatus, OpencodeCliStatusSkeleton } from '../cli-status/opencode-cli-status';
@@ -10,6 +10,13 @@ import type { OpencodeModelId } from '@automaker/types';
 import type { OpencodeAuthStatus, OpenCodeProviderInfo } from '../cli-status/opencode-cli-status';
 
 const logger = createLogger('OpencodeSettings');
+const OPENCODE_PROVIDER_ID = 'opencode';
+const OPENCODE_BEDROCK_PROVIDER_ID = 'amazon-bedrock';
+const OPENCODE_PROVIDER_SIGNATURE_SEPARATOR = '|';
+const OPENCODE_STATIC_MODEL_PROVIDERS = new Set([
+  OPENCODE_PROVIDER_ID,
+  OPENCODE_BEDROCK_PROVIDER_ID,
+]);
 
 export function OpencodeSettingsTab() {
   const {
@@ -30,6 +37,7 @@ export function OpencodeSettingsTab() {
   const [cliStatus, setCliStatus] = useState<SharedCliStatus | null>(null);
   const [authStatus, setAuthStatus] = useState<OpencodeAuthStatus | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const providerRefreshSignatureRef = useRef<string>('');
 
   // Phase 1: Load CLI status quickly on mount
   useEffect(() => {
@@ -117,6 +125,63 @@ export function OpencodeSettingsTab() {
     };
     loadDynamicContent();
   }, [cliStatus?.success, cliStatus?.status]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const refreshModelsForNewProviders = async () => {
+      const api = getElectronAPI();
+      const isInstalled = cliStatus?.success && cliStatus?.status === 'installed';
+
+      if (!isInstalled || !api?.setup?.refreshOpencodeModels) return;
+      if (isLoadingDynamicModels) return;
+
+      const authenticatedProviders = cachedOpencodeProviders
+        .filter((provider) => provider.authenticated)
+        .map((provider) => provider.id)
+        .filter((providerId) => !OPENCODE_STATIC_MODEL_PROVIDERS.has(providerId));
+
+      if (authenticatedProviders.length === 0) {
+        providerRefreshSignatureRef.current = '';
+        return;
+      }
+
+      const dynamicProviderIds = new Set(
+        dynamicOpencodeModels.map((model) => model.provider).filter(Boolean)
+      );
+      const missingProviders = authenticatedProviders.filter(
+        (providerId) => !dynamicProviderIds.has(providerId)
+      );
+
+      if (missingProviders.length === 0) {
+        providerRefreshSignatureRef.current = '';
+        return;
+      }
+
+      const signature = [...missingProviders].sort().join(OPENCODE_PROVIDER_SIGNATURE_SEPARATOR);
+      if (providerRefreshSignatureRef.current === signature) return;
+      providerRefreshSignatureRef.current = signature;
+
+      setIsLoadingDynamicModels(true);
+      try {
+        const modelsResult = await api.setup.refreshOpencodeModels();
+        if (modelsResult.success && modelsResult.models) {
+          setDynamicOpencodeModels(modelsResult.models);
+        }
+      } catch (error) {
+        logger.error('Failed to refresh OpenCode models for new providers:', error);
+      } finally {
+        setIsLoadingDynamicModels(false);
+      }
+    };
+
+    refreshModelsForNewProviders();
+  }, [
+    cachedOpencodeProviders,
+    dynamicOpencodeModels,
+    cliStatus?.success,
+    cliStatus?.status,
+    isLoadingDynamicModels,
+    setDynamicOpencodeModels,
+  ]);
 
   const handleRefreshOpencodeCli = useCallback(async () => {
     setIsCheckingOpencodeCli(true);
