@@ -40,8 +40,12 @@ import {
   createDeleteInitScriptHandler,
   createRunInitScriptHandler,
 } from './routes/init-script.js';
+import type { SettingsService } from '../../services/settings-service.js';
 
-export function createWorktreeRoutes(events: EventEmitter): Router {
+export function createWorktreeRoutes(
+  events: EventEmitter,
+  settingsService?: SettingsService
+): Router {
   const router = Router();
 
   router.post('/info', validatePathParams('projectPath'), createInfoHandler());
@@ -69,7 +73,7 @@ export function createWorktreeRoutes(events: EventEmitter): Router {
     '/generate-commit-message',
     validatePathParams('worktreePath'),
     requireGitRepoOnly,
-    createGenerateCommitMessageHandler()
+    createGenerateCommitMessageHandler(settingsService)
   );
   router.post(
     '/push',

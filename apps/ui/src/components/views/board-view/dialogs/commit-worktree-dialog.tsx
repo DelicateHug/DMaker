@@ -13,6 +13,7 @@ import { Label } from '@/components/ui/label';
 import { GitCommit, Loader2, Sparkles } from 'lucide-react';
 import { getElectronAPI } from '@/lib/electron';
 import { toast } from 'sonner';
+import { useAppStore } from '@/store/app-store';
 
 interface WorktreeInfo {
   path: string;
@@ -39,6 +40,7 @@ export function CommitWorktreeDialog({
   const [isLoading, setIsLoading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const enableAiCommitMessages = useAppStore((state) => state.enableAiCommitMessages);
 
   const handleCommit = async () => {
     if (!worktree || !message.trim()) return;
@@ -83,19 +85,24 @@ export function CommitWorktreeDialog({
     }
   };
 
-  // Generate AI commit message when dialog opens
+  // Generate AI commit message when dialog opens (if enabled)
   useEffect(() => {
     if (open && worktree) {
       // Reset state
       setMessage('');
       setError(null);
+
+      // Only generate AI commit message if enabled
+      if (!enableAiCommitMessages) {
+        return;
+      }
+
       setIsGenerating(true);
 
       const generateMessage = async () => {
         try {
           const api = getElectronAPI();
           if (!api?.worktree?.generateCommitMessage) {
-            setError('AI commit message generation not available');
             setIsGenerating(false);
             return;
           }
@@ -120,7 +127,7 @@ export function CommitWorktreeDialog({
 
       generateMessage();
     }
-  }, [open, worktree]);
+  }, [open, worktree, enableAiCommitMessages]);
 
   if (!worktree) return null;
 

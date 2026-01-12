@@ -44,6 +44,8 @@ export function SettingsView() {
     setEnableDependencyBlocking,
     skipVerificationInAutoMode,
     setSkipVerificationInAutoMode,
+    enableAiCommitMessages,
+    setEnableAiCommitMessages,
     useWorktrees,
     setUseWorktrees,
     muteDoneSound,
@@ -182,11 +184,13 @@ export function SettingsView() {
             skipVerificationInAutoMode={skipVerificationInAutoMode}
             defaultPlanningMode={defaultPlanningMode}
             defaultRequirePlanApproval={defaultRequirePlanApproval}
+            enableAiCommitMessages={enableAiCommitMessages}
             onDefaultSkipTestsChange={setDefaultSkipTests}
             onEnableDependencyBlockingChange={setEnableDependencyBlocking}
             onSkipVerificationInAutoModeChange={setSkipVerificationInAutoMode}
             onDefaultPlanningModeChange={setDefaultPlanningMode}
             onDefaultRequirePlanApprovalChange={setDefaultRequirePlanApproval}
+            onEnableAiCommitMessagesChange={setEnableAiCommitMessages}
           />
         );
       case 'worktrees':

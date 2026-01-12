@@ -157,6 +157,10 @@ export interface PhaseModelConfig {
   // Memory tasks - for learning extraction and memory operations
   /** Model for extracting learnings from completed agent sessions */
   memoryExtractionModel: PhaseModelEntry;
+
+  // Quick tasks - commit messages
+  /** Model for generating git commit messages from diffs */
+  commitMessageModel: PhaseModelEntry;
 }
 
 /** Keys of PhaseModelConfig for type-safe access */
@@ -397,6 +401,10 @@ export interface GlobalSettings {
   ntfyAuthToken?: string;
   /** Priority for ntfy notifications (1-5, default: 3) */
   ntfyPriority: 1 | 2 | 3 | 4 | 5;
+
+  // AI Commit Message Generation
+  /** Enable AI-generated commit messages when opening commit dialog (default: true) */
+  enableAiCommitMessages: boolean;
 
   // AI Model Selection (per-phase configuration)
   /** Phase-specific AI model configuration */
@@ -669,6 +677,9 @@ export const DEFAULT_PHASE_MODELS: PhaseModelConfig = {
 
   // Memory - use fast model for learning extraction (cost-effective)
   memoryExtractionModel: { model: 'haiku' },
+
+  // Commit messages - use fast model for speed
+  commitMessageModel: { model: 'haiku' },
 };
 
 /** Current version of the global settings schema */
@@ -724,6 +735,7 @@ export const DEFAULT_GLOBAL_SETTINGS: GlobalSettings = {
   ntfyTopic: '',
   ntfyAuthToken: undefined,
   ntfyPriority: 3,
+  enableAiCommitMessages: true,
   phaseModels: DEFAULT_PHASE_MODELS,
   enhancementModel: 'sonnet',
   validationModel: 'opus',

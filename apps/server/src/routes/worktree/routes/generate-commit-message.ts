@@ -1,7 +1,8 @@
 /**
  * POST /worktree/generate-commit-message endpoint - Generate an AI commit message from git diff
  *
- * Uses Claude Haiku to generate a concise, conventional commit message from git changes.
+ * Uses the configured model (via phaseModels.commitMessageModel) to generate a concise,
+ * conventional commit message from git changes. Defaults to Claude Haiku for speed.
  */
 
 import type { Request, Response } from 'express';
@@ -9,11 +10,25 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import { createLogger } from '@automaker/utils';
-import { CLAUDE_MODEL_MAP } from '@automaker/model-resolver';
+import { DEFAULT_PHASE_MODELS, isCursorModel, stripProviderPrefix } from '@automaker/types';
+import { resolvePhaseModel } from '@automaker/model-resolver';
+import { mergeCommitMessagePrompts } from '@automaker/prompts';
+import { ProviderFactory } from '../../../providers/provider-factory.js';
+import type { SettingsService } from '../../../services/settings-service.js';
 import { getErrorMessage, logError } from '../common.js';
 
 const logger = createLogger('GenerateCommitMessage');
 const execAsync = promisify(exec);
+
+/**
+ * Get the effective system prompt for commit message generation.
+ * Uses custom prompt from settings if enabled, otherwise falls back to default.
+ */
+async function getSystemPrompt(settingsService?: SettingsService): Promise<string> {
+  const settings = await settingsService?.getGlobalSettings();
+  const prompts = mergeCommitMessagePrompts(settings?.promptCustomization?.commitMessage);
+  return prompts.systemPrompt;
+}
 
 interface GenerateCommitMessageRequestBody {
   worktreePath: string;
@@ -28,23 +43,6 @@ interface GenerateCommitMessageErrorResponse {
   success: false;
   error: string;
 }
-
-const SYSTEM_PROMPT = `You are a git commit message generator. Your task is to create a clear, concise commit message based on the git diff provided.
-
-Rules:
-- Output ONLY the commit message, nothing else
-- First line should be a short summary (50 chars or less) in imperative mood
-- Start with a conventional commit type if appropriate (feat:, fix:, refactor:, docs:, etc.)
-- Keep it concise and descriptive
-- Focus on WHAT changed and WHY (if clear from the diff), not HOW
-- No quotes, backticks, or extra formatting
-- If there are multiple changes, provide a brief summary on the first line
-
-Examples:
-- feat: Add dark mode toggle to settings
-- fix: Resolve login validation edge case
-- refactor: Extract user authentication logic
-- docs: Update installation instructions`;
 
 async function extractTextFromStream(
   stream: AsyncIterable<{
@@ -73,10 +71,9 @@ async function extractTextFromStream(
   return responseText;
 }
 
-export function createGenerateCommitMessageHandler(): (
-  req: Request,
-  res: Response
-) => Promise<void> {
+export function createGenerateCommitMessageHandler(
+  settingsService?: SettingsService
+): (req: Request, res: Response) => Promise<void> {
   return async (req: Request, res: Response): Promise<void> => {
     try {
       const { worktreePath } = req.body as GenerateCommitMessageRequestBody;
@@ -136,21 +133,66 @@ export function createGenerateCommitMessageHandler(): (
 
       const userPrompt = `Generate a commit message for these changes:\n\n\`\`\`diff\n${truncatedDiff}\n\`\`\``;
 
-      const stream = query({
-        prompt: userPrompt,
-        options: {
-          model: CLAUDE_MODEL_MAP.haiku,
-          systemPrompt: SYSTEM_PROMPT,
+      // Get model from phase settings
+      const settings = await settingsService?.getGlobalSettings();
+      const phaseModelEntry =
+        settings?.phaseModels?.commitMessageModel || DEFAULT_PHASE_MODELS.commitMessageModel;
+      const { model } = resolvePhaseModel(phaseModelEntry);
+
+      logger.info(`Using model for commit message: ${model}`);
+
+      // Get the effective system prompt (custom or default)
+      const systemPrompt = await getSystemPrompt(settingsService);
+
+      let message: string;
+
+      // Route to appropriate provider based on model type
+      if (isCursorModel(model)) {
+        // Use Cursor provider for Cursor models
+        logger.info(`Using Cursor provider for model: ${model}`);
+
+        const provider = ProviderFactory.getProviderForModel(model);
+        const bareModel = stripProviderPrefix(model);
+
+        const cursorPrompt = `${systemPrompt}\n\n${userPrompt}`;
+
+        let responseText = '';
+        for await (const msg of provider.executeQuery({
+          prompt: cursorPrompt,
+          model: bareModel,
+          cwd: worktreePath,
           maxTurns: 1,
           allowedTools: [],
-          permissionMode: 'default',
-        },
-      });
+          readOnly: true,
+        })) {
+          if (msg.type === 'assistant' && msg.message?.content) {
+            for (const block of msg.message.content) {
+              if (block.type === 'text' && block.text) {
+                responseText += block.text;
+              }
+            }
+          }
+        }
 
-      const message = await extractTextFromStream(stream);
+        message = responseText.trim();
+      } else {
+        // Use Claude SDK for Claude models
+        const stream = query({
+          prompt: userPrompt,
+          options: {
+            model,
+            systemPrompt,
+            maxTurns: 1,
+            allowedTools: [],
+            permissionMode: 'default',
+          },
+        });
+
+        message = await extractTextFromStream(stream);
+      }
 
       if (!message || message.trim().length === 0) {
-        logger.warn('Received empty response from Claude');
+        logger.warn('Received empty response from model');
         const response: GenerateCommitMessageErrorResponse = {
           success: false,
           error: 'Failed to generate commit message - empty response',
