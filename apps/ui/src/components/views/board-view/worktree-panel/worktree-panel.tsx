@@ -13,7 +13,12 @@ import {
   useWorktreeActions,
   useRunningFeatures,
 } from './hooks';
-import { WorktreeTab, WorktreeMobileDropdown, WorktreeActionsDropdown } from './components';
+import {
+  WorktreeTab,
+  WorktreeMobileDropdown,
+  WorktreeActionsDropdown,
+  BranchSwitchDropdown,
+} from './components';
 
 export function WorktreePanel({
   projectPath,
@@ -185,6 +190,24 @@ export function WorktreePanel({
           branchCardCounts={branchCardCounts}
           onSelectWorktree={handleSelectWorktree}
         />
+
+        {/* Branch switch dropdown for the selected worktree */}
+        {selectedWorktree && (
+          <BranchSwitchDropdown
+            worktree={selectedWorktree}
+            isSelected={true}
+            standalone={true}
+            branches={branches}
+            filteredBranches={filteredBranches}
+            branchFilter={branchFilter}
+            isLoadingBranches={isLoadingBranches}
+            isSwitching={isSwitching}
+            onOpenChange={handleBranchDropdownOpenChange(selectedWorktree)}
+            onFilterChange={setBranchFilter}
+            onSwitchBranch={handleSwitchBranch}
+            onCreateBranch={onCreateBranch}
+          />
+        )}
 
         {/* Actions menu for the selected worktree */}
         {selectedWorktree && (
