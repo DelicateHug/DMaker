@@ -98,16 +98,21 @@ export function CommitWorktreeDialog({
       }
 
       setIsGenerating(true);
+      let cancelled = false;
 
       const generateMessage = async () => {
         try {
           const api = getElectronAPI();
           if (!api?.worktree?.generateCommitMessage) {
-            setIsGenerating(false);
+            if (!cancelled) {
+              setIsGenerating(false);
+            }
             return;
           }
 
           const result = await api.worktree.generateCommitMessage(worktree.path);
+
+          if (cancelled) return;
 
           if (result.success && result.message) {
             setMessage(result.message);
@@ -117,15 +122,22 @@ export function CommitWorktreeDialog({
             setMessage('');
           }
         } catch (err) {
+          if (cancelled) return;
           // Don't show error toast for generation failures
           console.warn('Error generating commit message:', err);
           setMessage('');
         } finally {
-          setIsGenerating(false);
+          if (!cancelled) {
+            setIsGenerating(false);
+          }
         }
       };
 
       generateMessage();
+
+      return () => {
+        cancelled = true;
+      };
     }
   }, [open, worktree, enableAiCommitMessages]);
 

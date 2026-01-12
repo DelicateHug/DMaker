@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useState } from 'react';
 import { RefreshCw, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getElectronAPI } from '@/lib/electron';
@@ -104,6 +104,8 @@ function UsageItem({
 export function MobileUsageBar({ showClaudeUsage, showCodexUsage }: MobileUsageBarProps) {
   const { claudeUsage, claudeUsageLastUpdated, setClaudeUsage } = useAppStore();
   const { codexUsage, codexUsageLastUpdated, setCodexUsage } = useAppStore();
+  const [isClaudeLoading, setIsClaudeLoading] = useState(false);
+  const [isCodexLoading, setIsCodexLoading] = useState(false);
 
   // Check if data is stale (older than 2 minutes)
   const isClaudeStale =
@@ -111,6 +113,7 @@ export function MobileUsageBar({ showClaudeUsage, showCodexUsage }: MobileUsageB
   const isCodexStale = !codexUsageLastUpdated || Date.now() - codexUsageLastUpdated > 2 * 60 * 1000;
 
   const fetchClaudeUsage = useCallback(async () => {
+    setIsClaudeLoading(true);
     try {
       const api = getElectronAPI();
       if (!api.claude) return;
@@ -120,10 +123,13 @@ export function MobileUsageBar({ showClaudeUsage, showCodexUsage }: MobileUsageB
       }
     } catch {
       // Silently fail - usage display is optional
+    } finally {
+      setIsClaudeLoading(false);
     }
   }, [setClaudeUsage]);
 
   const fetchCodexUsage = useCallback(async () => {
+    setIsCodexLoading(true);
     try {
       const api = getElectronAPI();
       if (!api.codex) return;
@@ -133,6 +139,8 @@ export function MobileUsageBar({ showClaudeUsage, showCodexUsage }: MobileUsageB
       }
     } catch {
       // Silently fail - usage display is optional
+    } finally {
+      setIsCodexLoading(false);
     }
   }, [setCodexUsage]);
 
@@ -166,7 +174,7 @@ export function MobileUsageBar({ showClaudeUsage, showCodexUsage }: MobileUsageB
         <UsageItem
           icon={AnthropicIcon}
           label="Claude"
-          isLoading={false}
+          isLoading={isClaudeLoading}
           onRefresh={fetchClaudeUsage}
         >
           {claudeUsage ? (
@@ -189,7 +197,12 @@ export function MobileUsageBar({ showClaudeUsage, showCodexUsage }: MobileUsageB
       )}
 
       {showCodexUsage && (
-        <UsageItem icon={OpenAIIcon} label="Codex" isLoading={false} onRefresh={fetchCodexUsage}>
+        <UsageItem
+          icon={OpenAIIcon}
+          label="Codex"
+          isLoading={isCodexLoading}
+          onRefresh={fetchCodexUsage}
+        >
           {codexUsage?.rateLimits ? (
             <>
               {codexUsage.rateLimits.primary && (

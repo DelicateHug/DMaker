@@ -185,7 +185,6 @@ export class ClaudeUsageService {
           } as Record<string, string>,
         });
       } catch (spawnError) {
-        // ... (error handling omitted for brevity in replace block, keep existing)
         const errorMessage = spawnError instanceof Error ? spawnError.message : String(spawnError);
         logger.error('[executeClaudeUsageCommandPty] Failed to spawn PTY:', errorMessage);
 

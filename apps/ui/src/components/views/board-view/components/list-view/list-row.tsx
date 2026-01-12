@@ -1,3 +1,5 @@
+// TODO: Remove @ts-nocheck after fixing BaseFeature's index signature issue
+// The `[key: string]: unknown` in BaseFeature causes property access type errors
 // @ts-nocheck
 import { memo, useCallback, useMemo } from 'react';
 import { cn } from '@/lib/utils';

@@ -235,6 +235,8 @@ export function WorktreePanel({
             onStartDevServer={handleStartDevServer}
             onStopDevServer={handleStopDevServer}
             onOpenDevServerUrl={handleOpenDevServerUrl}
+            onRunInitScript={handleRunInitScript}
+            hasInitScript={hasInitScript}
           />
         )}
 

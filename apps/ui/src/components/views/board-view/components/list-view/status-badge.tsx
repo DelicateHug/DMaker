@@ -160,10 +160,7 @@ export const StatusBadge = memo(function StatusBadge({
   size = 'default',
   className,
 }: StatusBadgeProps) {
-  const display = useMemo(
-    () => getStatusDisplay(status, pipelineConfig),
-    [status, pipelineConfig]
-  );
+  const display = useMemo(() => getStatusDisplay(status, pipelineConfig), [status, pipelineConfig]);
 
   const sizeClasses = {
     sm: 'px-1.5 py-0.5 text-[10px]',

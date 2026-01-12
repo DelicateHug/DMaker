@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { memo, useMemo, useCallback, useState } from 'react';
 import { ChevronDown, ChevronRight, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -10,7 +9,7 @@ import { ListHeader } from './list-header';
 import { ListRow, sortFeatures } from './list-row';
 import { createRowActionHandlers, type RowActionHandlers } from './row-actions';
 import { getStatusLabel, getStatusOrder } from './status-badge';
-import { COLUMNS, getColumnsWithPipeline } from '../../constants';
+import { getColumnsWithPipeline } from '../../constants';
 import type { SortConfig, SortColumn } from '../../hooks/use-list-view-state';
 
 /**
@@ -98,11 +97,7 @@ const StatusGroupHeader = memo(function StatusGroupHeader({
     >
       {/* Collapse indicator */}
       <span className="text-muted-foreground">
-        {isExpanded ? (
-          <ChevronDown className="w-4 h-4" />
-        ) : (
-          <ChevronRight className="w-4 h-4" />
-        )}
+        {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
       </span>
 
       {/* Status color indicator */}
@@ -123,11 +118,7 @@ const StatusGroupHeader = memo(function StatusGroupHeader({
 /**
  * EmptyState displays a message when there are no features
  */
-const EmptyState = memo(function EmptyState({
-  onAddFeature,
-}: {
-  onAddFeature?: () => void;
-}) {
+const EmptyState = memo(function EmptyState({ onAddFeature }: { onAddFeature?: () => void }) {
   return (
     <div
       className={cn(
@@ -210,11 +201,7 @@ export const ListView = memo(function ListView({
       const features = columnFeaturesMap[column.id] || [];
       if (features.length > 0) {
         // Sort features within the group according to current sort config
-        const sortedFeatures = sortFeatures(
-          features,
-          sortConfig.column,
-          sortConfig.direction
-        );
+        const sortedFeatures = sortFeatures(features, sortConfig.column, sortConfig.direction);
 
         groups.push({
           id: column.id as FeatureStatusWithPipeline,
@@ -366,20 +353,12 @@ export const ListView = memo(function ListView({
         }
       }
     }
-  }, [
-    onToggleFeatureSelection,
-    selectionState.allSelected,
-    selectedFeatureIds,
-    statusGroups,
-  ]);
+  }, [onToggleFeatureSelection, selectionState.allSelected, selectedFeatureIds, statusGroups]);
 
   // Show empty state if no features
   if (totalFeatures === 0) {
     return (
-      <div
-        className={cn('flex flex-col h-full bg-background', className)}
-        data-testid="list-view"
-      >
+      <div className={cn('flex flex-col h-full bg-background', className)} data-testid="list-view">
         <EmptyState onAddFeature={onAddFeature} />
       </div>
     );
@@ -466,20 +445,13 @@ export const ListView = memo(function ListView({
 /**
  * Helper to get all features from the columnFeaturesMap as a flat array
  */
-export function getFlatFeatures(
-  columnFeaturesMap: Record<string, Feature[]>
-): Feature[] {
+export function getFlatFeatures(columnFeaturesMap: Record<string, Feature[]>): Feature[] {
   return Object.values(columnFeaturesMap).flat();
 }
 
 /**
  * Helper to count total features across all groups
  */
-export function getTotalFeatureCount(
-  columnFeaturesMap: Record<string, Feature[]>
-): number {
-  return Object.values(columnFeaturesMap).reduce(
-    (sum, features) => sum + features.length,
-    0
-  );
+export function getTotalFeatureCount(columnFeaturesMap: Record<string, Feature[]>): number {
+  return Object.values(columnFeaturesMap).reduce((sum, features) => sum + features.length, 0);
 }

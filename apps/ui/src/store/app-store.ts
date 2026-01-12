@@ -340,7 +340,7 @@ export type ClaudeModel = 'opus' | 'sonnet' | 'haiku';
 
 export interface Feature extends Omit<
   BaseFeature,
-  'steps' | 'imagePaths' | 'textFilePaths' | 'status'
+  'steps' | 'imagePaths' | 'textFilePaths' | 'status' | 'planSpec'
 > {
   id: string;
   title?: string;
@@ -354,6 +354,7 @@ export interface Feature extends Omit<
   textFilePaths?: FeatureTextFilePath[]; // Text file attachments for context
   justFinishedAt?: string; // UI-specific: ISO timestamp when agent just finished
   prUrl?: string; // UI-specific: Pull request URL
+  planSpec?: PlanSpec; // Explicit planSpec type to override BaseFeature's index signature
 }
 
 // Parsed task from spec (for spec and full planning modes)

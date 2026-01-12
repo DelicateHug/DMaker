@@ -263,7 +263,7 @@ export function BoardHeader({
         />
 
         {/* Plan Button with Settings - only show on desktop, mobile has it in the menu */}
-        {!isMobile && (
+        {isMounted && !isMobile && (
           <div className={controlContainerClass} data-testid="plan-button-container">
             <button
               onClick={onOpenPlanDialog}

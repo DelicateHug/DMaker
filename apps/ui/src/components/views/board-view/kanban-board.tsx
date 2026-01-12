@@ -9,8 +9,6 @@ import { useResponsiveKanban } from '@/hooks/use-responsive-kanban';
 import { getColumnsWithPipeline, type ColumnId } from './constants';
 import type { PipelineConfig } from '@automaker/types';
 import { cn } from '@/lib/utils';
-import type { ViewMode } from './hooks/use-list-view-state';
-
 interface KanbanBoardProps {
   sensors: any;
   collisionDetectionStrategy: (args: any) => any;
@@ -59,8 +57,6 @@ interface KanbanBoardProps {
   isDragging?: boolean;
   /** Whether the board is in read-only mode */
   isReadOnly?: boolean;
-  // View mode for transition animation
-  viewMode?: ViewMode;
   /** Additional className for custom styling (e.g., transition classes) */
   className?: string;
 }
@@ -101,7 +97,6 @@ export function KanbanBoard({
   onAiSuggest,
   isDragging = false,
   isReadOnly = false,
-  viewMode,
   className,
 }: KanbanBoardProps) {
   // Generate columns including pipeline steps

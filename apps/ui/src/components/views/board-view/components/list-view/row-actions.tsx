@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { memo, useCallback, useState } from 'react';
 import {
   MoreHorizontal,
@@ -253,7 +252,13 @@ export const RowActions = memo(function RowActions({
 
   // Use controlled or uncontrolled state
   const open = isOpen ?? internalOpen;
-  const setOpen = onOpenChange ?? setInternalOpen;
+  const setOpen = (value: boolean) => {
+    if (onOpenChange) {
+      onOpenChange(value);
+    } else {
+      setInternalOpen(value);
+    }
+  };
 
   const handleOpenChange = useCallback(
     (newOpen: boolean) => {

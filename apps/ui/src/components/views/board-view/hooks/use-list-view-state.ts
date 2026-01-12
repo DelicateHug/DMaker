@@ -52,7 +52,14 @@ function validateViewMode(value: unknown): ViewMode {
  * Validates and returns a valid SortColumn, defaulting to 'createdAt' if invalid
  */
 function validateSortColumn(value: unknown): SortColumn {
-  const validColumns: SortColumn[] = ['title', 'status', 'category', 'priority', 'createdAt', 'updatedAt'];
+  const validColumns: SortColumn[] = [
+    'title',
+    'status',
+    'category',
+    'priority',
+    'createdAt',
+    'updatedAt',
+  ];
   if (typeof value === 'string' && validColumns.includes(value as SortColumn)) {
     return value as SortColumn;
   }
@@ -139,7 +146,9 @@ export interface UseListViewStateReturn {
 export function useListViewState(): UseListViewStateReturn {
   // Initialize state from localStorage
   const [viewMode, setViewModeState] = useState<ViewMode>(() => loadPersistedState().viewMode);
-  const [sortConfig, setSortConfigState] = useState<SortConfig>(() => loadPersistedState().sortConfig);
+  const [sortConfig, setSortConfigState] = useState<SortConfig>(
+    () => loadPersistedState().sortConfig
+  );
 
   // Derived state
   const isListView = viewMode === 'list';
@@ -199,6 +208,16 @@ export function useListViewState(): UseListViewStateReturn {
       setSortConfig,
       resetSort,
     }),
-    [viewMode, setViewMode, toggleViewMode, isListView, isKanbanView, sortConfig, setSortColumn, setSortConfig, resetSort]
+    [
+      viewMode,
+      setViewMode,
+      toggleViewMode,
+      isListView,
+      isKanbanView,
+      sortConfig,
+      setSortColumn,
+      setSortConfig,
+      resetSort,
+    ]
   );
 }
