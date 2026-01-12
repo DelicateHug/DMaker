@@ -12,6 +12,9 @@ import { getStatusLabel, getStatusOrder } from './status-badge';
 import { getColumnsWithPipeline } from '../../constants';
 import type { SortConfig, SortColumn } from '../../hooks/use-list-view-state';
 
+/** Empty set constant to avoid creating new instances on each render */
+const EMPTY_SET = new Set<string>();
+
 /**
  * Status group configuration for the list view
  */
@@ -184,7 +187,7 @@ export const ListView = memo(function ListView({
   pipelineConfig = null,
   onAddFeature,
   isSelectionMode = false,
-  selectedFeatureIds = new Set(),
+  selectedFeatureIds = EMPTY_SET,
   onToggleFeatureSelection,
   onRowClick,
   className,

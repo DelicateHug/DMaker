@@ -1320,7 +1320,7 @@ export function BoardView() {
                 handleViewOutput(feature);
               }
             }}
-            className="transition-opacity duration-250"
+            className="transition-opacity duration-200"
           />
         ) : (
           <KanbanBoard
@@ -1362,7 +1362,7 @@ export function BoardView() {
             viewMode={viewMode}
             isDragging={activeFeature !== null}
             onAiSuggest={() => setShowPlanDialog(true)}
-            className="transition-opacity duration-250"
+            className="transition-opacity duration-200"
           />
         )}
       </div>

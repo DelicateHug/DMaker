@@ -16,6 +16,9 @@ import {
 import { NoProjectState, AgentHeader, ChatArea } from './agent-view/components';
 import { AgentInputArea } from './agent-view/input-area';
 
+/** Tailwind lg breakpoint in pixels */
+const LG_BREAKPOINT = 1024;
+
 export function AgentView() {
   const { currentProject } = useAppStore();
   const [input, setInput] = useState('');
@@ -24,12 +27,21 @@ export function AgentView() {
   // Then updates on mount based on actual screen size to prevent hydration mismatch
   const [showSessionManager, setShowSessionManager] = useState(true);
 
-  // Update session manager visibility based on screen size after mount
+  // Update session manager visibility based on screen size after mount and on resize
   useEffect(() => {
-    // Check if we're on a mobile screen (< lg breakpoint = 1024px)
-    const isDesktop = window.innerWidth >= 1024;
-    setShowSessionManager(isDesktop);
+    const updateVisibility = () => {
+      const isDesktop = window.innerWidth >= LG_BREAKPOINT;
+      setShowSessionManager(isDesktop);
+    };
+
+    // Set initial value
+    updateVisibility();
+
+    // Listen for resize events
+    window.addEventListener('resize', updateVisibility);
+    return () => window.removeEventListener('resize', updateVisibility);
   }, []);
+
   const [modelSelection, setModelSelection] = useState<PhaseModelEntry>({ model: 'sonnet' });
 
   // Input ref for auto-focus

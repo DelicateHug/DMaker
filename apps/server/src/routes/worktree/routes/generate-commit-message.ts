@@ -22,6 +22,34 @@ import { getErrorMessage, logError } from '../common.js';
 const logger = createLogger('GenerateCommitMessage');
 const execAsync = promisify(exec);
 
+/** Timeout for AI provider calls in milliseconds (30 seconds) */
+const AI_TIMEOUT_MS = 30_000;
+
+/**
+ * Wraps an async generator with a timeout.
+ * If the generator takes longer than the timeout, it throws an error.
+ */
+async function* withTimeout<T>(
+  generator: AsyncIterable<T>,
+  timeoutMs: number
+): AsyncGenerator<T, void, unknown> {
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    setTimeout(() => reject(new Error(`AI provider timed out after ${timeoutMs}ms`)), timeoutMs);
+  });
+
+  const iterator = generator[Symbol.asyncIterator]();
+  let done = false;
+
+  while (!done) {
+    const result = await Promise.race([iterator.next(), timeoutPromise]);
+    if (result.done) {
+      done = true;
+    } else {
+      yield result.value;
+    }
+  }
+}
+
 /**
  * Get the effective system prompt for commit message generation.
  * Uses custom prompt from settings if enabled, otherwise falls back to default.
@@ -180,14 +208,17 @@ export function createGenerateCommitMessageHandler(
         const cursorPrompt = `${systemPrompt}\n\n${userPrompt}`;
 
         let responseText = '';
-        for await (const msg of provider.executeQuery({
+        const cursorStream = provider.executeQuery({
           prompt: cursorPrompt,
           model: bareModel,
           cwd: worktreePath,
           maxTurns: 1,
           allowedTools: [],
           readOnly: true,
-        })) {
+        });
+
+        // Wrap with timeout to prevent indefinite hangs
+        for await (const msg of withTimeout(cursorStream, AI_TIMEOUT_MS)) {
           if (msg.type === 'assistant' && msg.message?.content) {
             for (const block of msg.message.content) {
               if (block.type === 'text' && block.text) {
@@ -211,7 +242,8 @@ export function createGenerateCommitMessageHandler(
           },
         });
 
-        message = await extractTextFromStream(stream);
+        // Wrap with timeout to prevent indefinite hangs
+        message = await extractTextFromStream(withTimeout(stream, AI_TIMEOUT_MS));
       }
 
       if (!message || message.trim().length === 0) {

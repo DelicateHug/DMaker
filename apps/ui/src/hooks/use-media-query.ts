@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 /**
  * Hook to detect if a media query matches
@@ -11,6 +11,9 @@ export function useMediaQuery(query: string): boolean {
     return window.matchMedia(query).matches;
   });
 
+  // Track if this is the initial mount to avoid redundant setMatches call
+  const isInitialMount = useRef(true);
+
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
@@ -19,8 +22,13 @@ export function useMediaQuery(query: string): boolean {
       setMatches(e.matches);
     };
 
-    // Set initial value
-    setMatches(mediaQuery.matches);
+    // Only sync state when query changes after initial mount
+    // (initial mount already has correct value from useState initializer)
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+    } else {
+      setMatches(mediaQuery.matches);
+    }
 
     // Listen for changes
     mediaQuery.addEventListener('change', handleChange);

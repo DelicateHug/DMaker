@@ -26,6 +26,58 @@ const USAGE_COLOR_CRITICAL = 'bg-red-500';
 const USAGE_COLOR_WARNING = 'bg-amber-500';
 const USAGE_COLOR_OK = 'bg-indigo-500';
 
+/**
+ * Get the appropriate color class for a usage percentage
+ */
+function getUsageColor(percentage: number): string {
+  if (percentage >= WARNING_THRESHOLD) {
+    return USAGE_COLOR_CRITICAL;
+  }
+  if (percentage >= CAUTION_THRESHOLD) {
+    return USAGE_COLOR_WARNING;
+  }
+  return USAGE_COLOR_OK;
+}
+
+/**
+ * Individual usage card displaying a usage metric with progress bar
+ */
+function UsageCard({
+  title,
+  subtitle,
+  percentage,
+  resetText,
+}: {
+  title: string;
+  subtitle: string;
+  percentage: number;
+  resetText?: string;
+}) {
+  const safePercentage = Math.min(Math.max(percentage, 0), MAX_PERCENTAGE);
+
+  return (
+    <div className="rounded-xl border border-border/60 bg-card/50 p-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm font-semibold text-foreground">{title}</p>
+          <p className="text-xs text-muted-foreground">{subtitle}</p>
+        </div>
+        <span className="text-sm font-semibold text-foreground">{Math.round(safePercentage)}%</span>
+      </div>
+      <div className="mt-3 h-2 w-full rounded-full bg-secondary/60">
+        <div
+          className={cn(
+            'h-full rounded-full transition-all duration-300',
+            getUsageColor(safePercentage)
+          )}
+          style={{ width: `${safePercentage}%` }}
+        />
+      </div>
+      {resetText && <p className="mt-2 text-xs text-muted-foreground">{resetText}</p>}
+    </div>
+  );
+}
+
 export function ClaudeUsageSection() {
   const claudeAuthStatus = useSetupStore((state) => state.claudeAuthStatus);
   const { claudeUsage, claudeUsageLastUpdated, setClaudeUsage } = useAppStore();
@@ -99,54 +151,6 @@ export function ClaudeUsageSection() {
 
     return () => clearInterval(intervalId);
   }, [fetchUsage, canFetchUsage]);
-
-  const getUsageColor = (percentage: number) => {
-    if (percentage >= WARNING_THRESHOLD) {
-      return USAGE_COLOR_CRITICAL;
-    }
-    if (percentage >= CAUTION_THRESHOLD) {
-      return USAGE_COLOR_WARNING;
-    }
-    return USAGE_COLOR_OK;
-  };
-
-  const UsageCard = ({
-    title,
-    subtitle,
-    percentage,
-    resetText,
-  }: {
-    title: string;
-    subtitle: string;
-    percentage: number;
-    resetText?: string;
-  }) => {
-    const safePercentage = Math.min(Math.max(percentage, 0), MAX_PERCENTAGE);
-
-    return (
-      <div className="rounded-xl border border-border/60 bg-card/50 p-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm font-semibold text-foreground">{title}</p>
-            <p className="text-xs text-muted-foreground">{subtitle}</p>
-          </div>
-          <span className="text-sm font-semibold text-foreground">
-            {Math.round(safePercentage)}%
-          </span>
-        </div>
-        <div className="mt-3 h-2 w-full rounded-full bg-secondary/60">
-          <div
-            className={cn(
-              'h-full rounded-full transition-all duration-300',
-              getUsageColor(safePercentage)
-            )}
-            style={{ width: `${safePercentage}%` }}
-          />
-        </div>
-        {resetText && <p className="mt-2 text-xs text-muted-foreground">{resetText}</p>}
-      </div>
-    );
-  };
 
   return (
     <div

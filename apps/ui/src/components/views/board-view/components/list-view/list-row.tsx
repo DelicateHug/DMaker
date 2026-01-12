@@ -1,7 +1,7 @@
 // TODO: Remove @ts-nocheck after fixing BaseFeature's index signature issue
 // The `[key: string]: unknown` in BaseFeature causes property access type errors
 // @ts-nocheck
-import { memo, useCallback, useMemo } from 'react';
+import { memo, useCallback, useState, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { AlertCircle, Lock, Hand, Sparkles, FileText } from 'lucide-react';
@@ -49,14 +49,34 @@ const IndicatorBadges = memo(function IndicatorBadges({
     feature.skipTests && !feature.error && feature.status === 'backlog';
   const hasPlan = feature.planSpec?.content;
 
-  // Check if just finished (within 2 minutes)
-  const isJustFinished = useMemo(() => {
+  // Check if just finished (within 2 minutes) - uses timer to auto-expire
+  const [isJustFinished, setIsJustFinished] = useState(false);
+
+  useEffect(() => {
     if (!feature.justFinishedAt || feature.status !== 'waiting_approval' || feature.error) {
-      return false;
+      setIsJustFinished(false);
+      return;
     }
+
     const finishedTime = new Date(feature.justFinishedAt).getTime();
     const twoMinutes = 2 * 60 * 1000;
-    return Date.now() - finishedTime < twoMinutes;
+    const elapsed = Date.now() - finishedTime;
+
+    if (elapsed >= twoMinutes) {
+      setIsJustFinished(false);
+      return;
+    }
+
+    // Set as just finished
+    setIsJustFinished(true);
+
+    // Set a timeout to clear the "just finished" state when 2 minutes have passed
+    const remainingTime = twoMinutes - elapsed;
+    const timeoutId = setTimeout(() => {
+      setIsJustFinished(false);
+    }, remainingTime);
+
+    return () => clearTimeout(timeoutId);
   }, [feature.justFinishedAt, feature.status, feature.error]);
 
   const badges: Array<{

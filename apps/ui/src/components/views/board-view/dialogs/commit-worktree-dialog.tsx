@@ -80,7 +80,8 @@ export function CommitWorktreeDialog({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && e.metaKey && !isLoading && message.trim()) {
+    // Prevent commit while loading or while AI is generating a message
+    if (e.key === 'Enter' && e.metaKey && !isLoading && !isGenerating && message.trim()) {
       handleCommit();
     }
   };

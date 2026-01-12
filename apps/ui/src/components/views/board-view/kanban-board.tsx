@@ -114,7 +114,7 @@ export function KanbanBoard({
     <div
       className={cn(
         'flex-1 overflow-x-auto px-5 pt-4 pb-4 relative',
-        'transition-opacity duration-250',
+        'transition-opacity duration-200',
         className
       )}
       style={backgroundImageStyle}

@@ -1,9 +1,8 @@
-import { useEffect, useCallback, useState } from 'react';
-import { RefreshCw, AlertTriangle } from 'lucide-react';
+import { useEffect, useCallback, useState, type ComponentType, type ReactNode } from 'react';
+import { RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getElectronAPI } from '@/lib/electron';
-import { useAppStore, type ClaudeUsage, type CodexUsage } from '@/store/app-store';
-import { useSetupStore } from '@/store/setup-store';
+import { useAppStore } from '@/store/app-store';
 import { AnthropicIcon, OpenAIIcon } from '@/components/ui/provider-icon';
 
 interface MobileUsageBarProps {
@@ -70,11 +69,11 @@ function UsageItem({
   onRefresh,
   children,
 }: {
-  icon: React.ComponentType<{ className?: string }>;
+  icon: ComponentType<{ className?: string }>;
   label: string;
   isLoading: boolean;
   onRefresh: () => void;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
     <div className="px-2 py-2">
