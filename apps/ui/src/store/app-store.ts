@@ -874,6 +874,7 @@ export interface AppActions {
   clearProjectHistory: () => void; // Clear history, keeping only current project
   toggleProjectFavorite: (projectId: string) => void; // Toggle project favorite status
   setProjectIcon: (projectId: string, icon: string | null) => void; // Set project icon (null to clear)
+  setProjectCustomIcon: (projectId: string, customIconPath: string | null) => void; // Set custom project icon image path (null to clear)
   setProjectName: (projectId: string, name: string) => void; // Update project name
 
   // View actions
@@ -1574,6 +1575,25 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
         currentProject: {
           ...currentProject,
           icon: icon === null ? undefined : icon,
+        },
+      });
+    }
+  },
+
+  setProjectCustomIcon: (projectId, customIconPath) => {
+    const { projects, currentProject } = get();
+    const updatedProjects = projects.map((p) =>
+      p.id === projectId
+        ? { ...p, customIconPath: customIconPath === null ? undefined : customIconPath }
+        : p
+    );
+    set({ projects: updatedProjects });
+    // Also update currentProject if it matches
+    if (currentProject?.id === projectId) {
+      set({
+        currentProject: {
+          ...currentProject,
+          customIconPath: customIconPath === null ? undefined : customIconPath,
         },
       });
     }
