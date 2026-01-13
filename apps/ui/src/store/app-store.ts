@@ -689,6 +689,7 @@ export interface AppState {
   codexModelsLoading: boolean;
   codexModelsError: string | null;
   codexModelsLastFetched: number | null;
+  codexModelsLastFailedAt: number | null;
 
   // Pipeline Configuration (per-project, keyed by project path)
   pipelineConfigByProject: Record<string, PipelineConfig>;
@@ -1286,6 +1287,7 @@ const initialState: AppState = {
   codexModelsLoading: false,
   codexModelsError: null,
   codexModelsLastFetched: null,
+  codexModelsLastFailedAt: null,
   pipelineConfigByProject: {},
   worktreePanelVisibleByProject: {},
   showInitScriptIndicatorByProject: {},
@@ -3113,13 +3115,29 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
 
   // Codex Models actions
   fetchCodexModels: async (forceRefresh = false) => {
-    const { codexModelsLastFetched, codexModelsLoading } = get();
+    const FAILURE_COOLDOWN_MS = 30 * 1000; // 30 seconds
+    const SUCCESS_CACHE_MS = 5 * 60 * 1000; // 5 minutes
+
+    const { codexModelsLastFetched, codexModelsLoading, codexModelsLastFailedAt } = get();
 
     // Skip if already loading
     if (codexModelsLoading) return;
 
-    // Skip if recently fetched (< 5 minutes ago) and not forcing refresh
-    if (!forceRefresh && codexModelsLastFetched && Date.now() - codexModelsLastFetched < 300000) {
+    // Skip if recently failed and not forcing refresh
+    if (
+      !forceRefresh &&
+      codexModelsLastFailedAt &&
+      Date.now() - codexModelsLastFailedAt < FAILURE_COOLDOWN_MS
+    ) {
+      return;
+    }
+
+    // Skip if recently fetched successfully and not forcing refresh
+    if (
+      !forceRefresh &&
+      codexModelsLastFetched &&
+      Date.now() - codexModelsLastFetched < SUCCESS_CACHE_MS
+    ) {
       return;
     }
 
@@ -3142,12 +3160,14 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
         codexModelsLastFetched: Date.now(),
         codexModelsLoading: false,
         codexModelsError: null,
+        codexModelsLastFailedAt: null, // Clear failure on success
       });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       set({
         codexModelsError: errorMessage,
         codexModelsLoading: false,
+        codexModelsLastFailedAt: Date.now(), // Record failure time for cooldown
       });
     }
   },
