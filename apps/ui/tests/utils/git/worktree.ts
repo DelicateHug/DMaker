@@ -78,9 +78,6 @@ export async function createTestGitRepo(tempDir: string): Promise<TestRepo> {
   const tmpDir = path.join(tempDir, `test-repo-${Date.now()}`);
   fs.mkdirSync(tmpDir, { recursive: true });
 
-  // Initialize git repo
-  await execAsync('git init', { cwd: tmpDir });
-
   // Use environment variables instead of git config to avoid affecting user's git config
   // These env vars override git config without modifying it
   const gitEnv = {
@@ -91,13 +88,22 @@ export async function createTestGitRepo(tempDir: string): Promise<TestRepo> {
     GIT_COMMITTER_EMAIL: 'test@example.com',
   };
 
+  // Initialize git repo with explicit branch name to avoid CI environment differences
+  // Use -b main to set initial branch (git 2.28+), falling back to branch -M for older versions
+  try {
+    await execAsync('git init -b main', { cwd: tmpDir, env: gitEnv });
+  } catch {
+    // Fallback for older git versions that don't support -b flag
+    await execAsync('git init', { cwd: tmpDir, env: gitEnv });
+  }
+
   // Create initial commit
   fs.writeFileSync(path.join(tmpDir, 'README.md'), '# Test Project\n');
   await execAsync('git add .', { cwd: tmpDir, env: gitEnv });
   await execAsync('git commit -m "Initial commit"', { cwd: tmpDir, env: gitEnv });
 
-  // Create main branch explicitly
-  await execAsync('git branch -M main', { cwd: tmpDir });
+  // Ensure branch is named 'main' (handles both new repos and older git versions)
+  await execAsync('git branch -M main', { cwd: tmpDir, env: gitEnv });
 
   // Create .automaker directories
   const automakerDir = path.join(tmpDir, '.automaker');
@@ -346,11 +352,11 @@ export async function setupProjectWithPath(page: Page, projectPath: string): Pro
         currentView: 'board',
         theme: 'dark',
         sidebarOpen: true,
+        skipSandboxWarning: true,
         apiKeys: { anthropic: '', google: '' },
         chatSessions: [],
         chatHistoryOpen: false,
         maxConcurrency: 3,
-        aiProfiles: [],
         useWorktrees: true, // Enable worktree feature for tests
         currentWorktreeByProject: {
           [pathArg]: { path: null, branch: 'main' }, // Initialize to main branch
@@ -373,6 +379,9 @@ export async function setupProjectWithPath(page: Page, projectPath: string): Pro
       version: 0, // setup-store.ts doesn't specify a version, so zustand defaults to 0
     };
     localStorage.setItem('automaker-setup', JSON.stringify(setupState));
+
+    // Disable splash screen in tests
+    sessionStorage.setItem('automaker-splash-shown', 'true');
   }, projectPath);
 }
 
@@ -399,11 +408,11 @@ export async function setupProjectWithPathNoWorktrees(
         currentView: 'board',
         theme: 'dark',
         sidebarOpen: true,
+        skipSandboxWarning: true,
         apiKeys: { anthropic: '', google: '' },
         chatSessions: [],
         chatHistoryOpen: false,
         maxConcurrency: 3,
-        aiProfiles: [],
         useWorktrees: false, // Worktree feature DISABLED
         currentWorktreeByProject: {},
         worktreesByProject: {},
@@ -424,6 +433,9 @@ export async function setupProjectWithPathNoWorktrees(
       version: 0, // setup-store.ts doesn't specify a version, so zustand defaults to 0
     };
     localStorage.setItem('automaker-setup', JSON.stringify(setupState));
+
+    // Disable splash screen in tests
+    sessionStorage.setItem('automaker-splash-shown', 'true');
   }, projectPath);
 }
 
@@ -451,11 +463,11 @@ export async function setupProjectWithStaleWorktree(
         currentView: 'board',
         theme: 'dark',
         sidebarOpen: true,
+        skipSandboxWarning: true,
         apiKeys: { anthropic: '', google: '' },
         chatSessions: [],
         chatHistoryOpen: false,
         maxConcurrency: 3,
-        aiProfiles: [],
         useWorktrees: true, // Enable worktree feature for tests
         currentWorktreeByProject: {
           // This is STALE data - pointing to a worktree path that doesn't exist
@@ -479,6 +491,9 @@ export async function setupProjectWithStaleWorktree(
       version: 0, // setup-store.ts doesn't specify a version, so zustand defaults to 0
     };
     localStorage.setItem('automaker-setup', JSON.stringify(setupState));
+
+    // Disable splash screen in tests
+    sessionStorage.setItem('automaker-splash-shown', 'true');
   }, projectPath);
 }
 

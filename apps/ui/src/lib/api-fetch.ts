@@ -13,6 +13,7 @@ import { getApiKey, getSessionToken, getServerUrlSync } from './http-api-client'
 
 // Server URL - uses shared cached URL from http-api-client
 const getServerUrl = (): string => getServerUrlSync();
+const DEFAULT_CACHE_MODE: RequestCache = 'no-store';
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
 
@@ -80,7 +81,7 @@ export async function apiFetch(
   method: HttpMethod = 'GET',
   options: ApiFetchOptions = {}
 ): Promise<Response> {
-  const { headers: additionalHeaders, body, skipAuth, ...restOptions } = options;
+  const { headers: additionalHeaders, body, skipAuth, cache, ...restOptions } = options;
 
   const headers = skipAuth
     ? { 'Content-Type': 'application/json', ...additionalHeaders }
@@ -90,6 +91,7 @@ export async function apiFetch(
     method,
     headers,
     credentials: 'include',
+    cache: cache ?? DEFAULT_CACHE_MODE,
     ...restOptions,
   };
 
@@ -152,4 +154,38 @@ export async function apiDeleteRaw(
   options: ApiFetchOptions = {}
 ): Promise<Response> {
   return apiFetch(endpoint, 'DELETE', options);
+}
+
+/**
+ * Build an authenticated image URL for use in <img> tags or CSS background-image
+ * Adds authentication via query parameter since headers can't be set for image loads
+ *
+ * @param path - Image path
+ * @param projectPath - Project path
+ * @param version - Optional cache-busting version
+ * @returns Full URL with auth credentials
+ */
+export function getAuthenticatedImageUrl(
+  path: string,
+  projectPath: string,
+  version?: string | number
+): string {
+  const serverUrl = getServerUrl();
+  const params = new URLSearchParams({
+    path,
+    projectPath,
+  });
+
+  if (version !== undefined) {
+    params.set('v', String(version));
+  }
+
+  // Add auth credential as query param (needed for image loads that can't set headers)
+  const apiKey = getApiKey();
+  if (apiKey) {
+    params.set('apiKey', apiKey);
+  }
+  // Note: Session token auth relies on cookies which are sent automatically by the browser
+
+  return `${serverUrl}/api/fs/image?${params.toString()}`;
 }

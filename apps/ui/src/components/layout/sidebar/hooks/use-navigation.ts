@@ -5,11 +5,12 @@ import {
   LayoutGrid,
   Bot,
   BookOpen,
-  UserCircle,
   Terminal,
   CircleDot,
   GitPullRequest,
-  Zap,
+  Lightbulb,
+  Brain,
+  Network,
 } from 'lucide-react';
 import type { NavSection, NavItem } from '../types';
 import type { KeyboardShortcut } from '@/hooks/use-keyboard-shortcuts';
@@ -25,16 +26,19 @@ interface UseNavigationProps {
     cycleNextProject: string;
     spec: string;
     context: string;
-    profiles: string;
+    memory: string;
     board: string;
+    graph: string;
     agent: string;
     terminal: string;
     settings: string;
+    ideation: string;
+    githubIssues: string;
+    githubPrs: string;
   };
   hideSpecEditor: boolean;
   hideContext: boolean;
   hideTerminal: boolean;
-  hideAiProfiles: boolean;
   currentProject: Project | null;
   projects: Project[];
   projectHistory: string[];
@@ -46,6 +50,8 @@ interface UseNavigationProps {
   cycleNextProject: () => void;
   /** Count of unviewed validations to show on GitHub Issues nav item */
   unviewedValidationsCount?: number;
+  /** Whether spec generation is currently running for the current project */
+  isSpecGenerating?: boolean;
 }
 
 export function useNavigation({
@@ -53,7 +59,6 @@ export function useNavigation({
   hideSpecEditor,
   hideContext,
   hideTerminal,
-  hideAiProfiles,
   currentProject,
   projects,
   projectHistory,
@@ -64,6 +69,7 @@ export function useNavigation({
   cyclePrevProject,
   cycleNextProject,
   unviewedValidationsCount,
+  isSpecGenerating,
 }: UseNavigationProps) {
   // Track if current project has a GitHub remote
   const [hasGitHubRemote, setHasGitHubRemote] = useState(false);
@@ -93,10 +99,17 @@ export function useNavigation({
   const navSections: NavSection[] = useMemo(() => {
     const allToolsItems: NavItem[] = [
       {
+        id: 'ideation',
+        label: 'Ideation',
+        icon: Lightbulb,
+        shortcut: shortcuts.ideation,
+      },
+      {
         id: 'spec',
         label: 'Spec Editor',
         icon: FileText,
         shortcut: shortcuts.spec,
+        isLoading: isSpecGenerating,
       },
       {
         id: 'context',
@@ -105,10 +118,10 @@ export function useNavigation({
         shortcut: shortcuts.context,
       },
       {
-        id: 'profiles',
-        label: 'AI Profiles',
-        icon: UserCircle,
-        shortcut: shortcuts.profiles,
+        id: 'memory',
+        label: 'Memory',
+        icon: Brain,
+        shortcut: shortcuts.memory,
       },
     ];
 
@@ -118,9 +131,6 @@ export function useNavigation({
         return false;
       }
       if (item.id === 'context' && hideContext) {
-        return false;
-      }
-      if (item.id === 'profiles' && hideAiProfiles) {
         return false;
       }
       return true;
@@ -133,6 +143,12 @@ export function useNavigation({
         label: 'Kanban Board',
         icon: LayoutGrid,
         shortcut: shortcuts.board,
+      },
+      {
+        id: 'graph',
+        label: 'Graph View',
+        icon: Network,
+        shortcut: shortcuts.graph,
       },
       {
         id: 'agent',
@@ -172,12 +188,14 @@ export function useNavigation({
             id: 'github-issues',
             label: 'Issues',
             icon: CircleDot,
+            shortcut: shortcuts.githubIssues,
             count: unviewedValidationsCount,
           },
           {
             id: 'github-prs',
             label: 'Pull Requests',
             icon: GitPullRequest,
+            shortcut: shortcuts.githubPrs,
           },
         ],
       });
@@ -189,9 +207,9 @@ export function useNavigation({
     hideSpecEditor,
     hideContext,
     hideTerminal,
-    hideAiProfiles,
     hasGitHubRemote,
     unviewedValidationsCount,
+    isSpecGenerating,
   ]);
 
   // Build keyboard shortcuts for navigation
@@ -242,7 +260,8 @@ export function useNavigation({
           if (item.shortcut) {
             shortcutsList.push({
               key: item.shortcut,
-              action: () => navigate({ to: `/${item.id}` as const }),
+              // Cast to router path type; ids are constrained to known routes
+              action: () => navigate({ to: `/${item.id}` as unknown as '/' }),
               description: `Navigate to ${item.label}`,
             });
           }

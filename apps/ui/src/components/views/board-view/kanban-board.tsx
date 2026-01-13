@@ -2,13 +2,11 @@ import { useMemo } from 'react';
 import { DndContext, DragOverlay } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { Button } from '@/components/ui/button';
-import { HotkeyButton } from '@/components/ui/hotkey-button';
-import { KanbanColumn, KanbanCard } from './components';
-import { Feature } from '@/store/app-store';
-import { FastForward, Lightbulb, Archive, Plus, Settings2 } from 'lucide-react';
-import { useKeyboardShortcutsConfig } from '@/hooks/use-keyboard-shortcuts';
+import { KanbanColumn, KanbanCard, EmptyStateCard } from './components';
+import { Feature, useAppStore, formatShortcut } from '@/store/app-store';
+import { Archive, Settings2, CheckSquare, GripVertical, Plus } from 'lucide-react';
 import { useResponsiveKanban } from '@/hooks/use-responsive-kanban';
-import { getColumnsWithPipeline, type Column, type ColumnId } from './constants';
+import { getColumnsWithPipeline, type ColumnId } from './constants';
 import type { PipelineConfig } from '@automaker/types';
 
 interface KanbanBoardProps {
@@ -37,7 +35,6 @@ interface KanbanBoardProps {
   onManualVerify: (feature: Feature) => void;
   onMoveBackToInProgress: (feature: Feature) => void;
   onFollowUp: (feature: Feature) => void;
-  onCommit: (feature: Feature) => void;
   onComplete: (feature: Feature) => void;
   onImplement: (feature: Feature) => void;
   onViewPlan: (feature: Feature) => void;
@@ -45,13 +42,21 @@ interface KanbanBoardProps {
   onSpawnTask?: (feature: Feature) => void;
   featuresWithContext: Set<string>;
   runningAutoTasks: string[];
-  shortcuts: ReturnType<typeof useKeyboardShortcutsConfig>;
-  onStartNextFeatures: () => void;
-  onShowSuggestions: () => void;
-  suggestionsCount: number;
   onArchiveAllVerified: () => void;
+  onAddFeature: () => void;
   pipelineConfig: PipelineConfig | null;
   onOpenPipelineSettings?: () => void;
+  // Selection mode props
+  isSelectionMode?: boolean;
+  selectedFeatureIds?: Set<string>;
+  onToggleFeatureSelection?: (featureId: string) => void;
+  onToggleSelectionMode?: () => void;
+  // Empty state action props
+  onAiSuggest?: () => void;
+  /** Whether currently dragging (hides empty states during drag) */
+  isDragging?: boolean;
+  /** Whether the board is in read-only mode */
+  isReadOnly?: boolean;
 }
 
 export function KanbanBoard({
@@ -72,7 +77,6 @@ export function KanbanBoard({
   onManualVerify,
   onMoveBackToInProgress,
   onFollowUp,
-  onCommit,
   onComplete,
   onImplement,
   onViewPlan,
@@ -80,23 +84,31 @@ export function KanbanBoard({
   onSpawnTask,
   featuresWithContext,
   runningAutoTasks,
-  shortcuts,
-  onStartNextFeatures,
-  onShowSuggestions,
-  suggestionsCount,
   onArchiveAllVerified,
+  onAddFeature,
   pipelineConfig,
   onOpenPipelineSettings,
+  isSelectionMode = false,
+  selectedFeatureIds = new Set(),
+  onToggleFeatureSelection,
+  onToggleSelectionMode,
+  onAiSuggest,
+  isDragging = false,
+  isReadOnly = false,
 }: KanbanBoardProps) {
   // Generate columns including pipeline steps
   const columns = useMemo(() => getColumnsWithPipeline(pipelineConfig), [pipelineConfig]);
+
+  // Get the keyboard shortcut for adding features
+  const { keyboardShortcuts } = useAppStore();
+  const addFeatureShortcut = keyboardShortcuts.addFeature || 'N';
 
   // Use responsive column widths based on window size
   // containerStyle handles centering and ensures columns fit without horizontal scroll in Electron
   const { columnWidth, containerStyle } = useResponsiveKanban(columns.length);
 
   return (
-    <div className="flex-1 overflow-x-auto px-5 pb-4 relative" style={backgroundImageStyle}>
+    <div className="flex-1 overflow-x-auto px-5 pt-4 pb-4 relative" style={backgroundImageStyle}>
       <DndContext
         sensors={sensors}
         collisionDetection={collisionDetectionStrategy}
@@ -132,37 +144,35 @@ export function KanbanBoard({
                   ) : column.id === 'backlog' ? (
                     <div className="flex items-center gap-1">
                       <Button
+                        variant="default"
+                        size="sm"
+                        className="h-6 w-6 p-0"
+                        onClick={onAddFeature}
+                        title="Add Feature"
+                        data-testid="add-feature-button"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                      </Button>
+                      <Button
                         variant="ghost"
                         size="sm"
-                        className="h-6 w-6 p-0 text-yellow-500 hover:text-yellow-400 hover:bg-yellow-500/10 relative"
-                        onClick={onShowSuggestions}
-                        title="Feature Suggestions"
-                        data-testid="feature-suggestions-button"
+                        className={`h-6 px-2 text-xs ${isSelectionMode ? 'text-primary bg-primary/10' : 'text-muted-foreground hover:text-foreground'}`}
+                        onClick={onToggleSelectionMode}
+                        title={isSelectionMode ? 'Switch to Drag Mode' : 'Select Multiple'}
+                        data-testid="selection-mode-button"
                       >
-                        <Lightbulb className="w-3.5 h-3.5" />
-                        {suggestionsCount > 0 && (
-                          <span
-                            className="absolute -top-1 -right-1 w-4 h-4 text-[9px] font-mono rounded-full bg-yellow-500 text-black flex items-center justify-center"
-                            data-testid="suggestions-count"
-                          >
-                            {suggestionsCount}
-                          </span>
+                        {isSelectionMode ? (
+                          <>
+                            <GripVertical className="w-3.5 h-3.5 mr-1" />
+                            Drag
+                          </>
+                        ) : (
+                          <>
+                            <CheckSquare className="w-3.5 h-3.5 mr-1" />
+                            Select
+                          </>
                         )}
                       </Button>
-                      {columnFeatures.length > 0 && (
-                        <HotkeyButton
-                          variant="ghost"
-                          size="sm"
-                          className="h-6 px-2 text-xs text-primary hover:text-primary hover:bg-primary/10"
-                          onClick={onStartNextFeatures}
-                          hotkey={shortcuts.startNext}
-                          hotkeyActive={false}
-                          data-testid="start-next-button"
-                        >
-                          <FastForward className="w-3 h-3 mr-1" />
-                          Make
-                        </HotkeyButton>
-                      )}
                     </div>
                   ) : column.id === 'in_progress' ? (
                     <Button
@@ -188,11 +198,48 @@ export function KanbanBoard({
                     </Button>
                   ) : undefined
                 }
+                footerAction={
+                  column.id === 'backlog' ? (
+                    <Button
+                      variant="default"
+                      size="sm"
+                      className="w-full h-9 text-sm"
+                      onClick={onAddFeature}
+                      data-testid="add-feature-floating-button"
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      Add Feature
+                      <span className="ml-auto pl-2 text-[10px] font-mono opacity-70 bg-black/20 px-1.5 py-0.5 rounded">
+                        {formatShortcut(addFeatureShortcut, true)}
+                      </span>
+                    </Button>
+                  ) : undefined
+                }
               >
                 <SortableContext
                   items={columnFeatures.map((f) => f.id)}
                   strategy={verticalListSortingStrategy}
                 >
+                  {/* Empty state card when column has no features */}
+                  {columnFeatures.length === 0 && !isDragging && (
+                    <EmptyStateCard
+                      columnId={column.id}
+                      columnTitle={column.title}
+                      addFeatureShortcut={addFeatureShortcut}
+                      isReadOnly={isReadOnly}
+                      onAiSuggest={column.id === 'backlog' ? onAiSuggest : undefined}
+                      opacity={backgroundSettings.cardOpacity}
+                      glassmorphism={backgroundSettings.cardGlassmorphism}
+                      customConfig={
+                        column.isPipelineStep
+                          ? {
+                              title: `${column.title} Empty`,
+                              description: `Features will appear here during the ${column.title.toLowerCase()} phase of the pipeline.`,
+                            }
+                          : undefined
+                      }
+                    />
+                  )}
                   {columnFeatures.map((feature, index) => {
                     // Calculate shortcut key for in-progress cards (first 10 get 1-9, 0)
                     let shortcutKey: string | undefined;
@@ -224,6 +271,9 @@ export function KanbanBoard({
                         glassmorphism={backgroundSettings.cardGlassmorphism}
                         cardBorderEnabled={backgroundSettings.cardBorderEnabled}
                         cardBorderOpacity={backgroundSettings.cardBorderOpacity}
+                        isSelectionMode={isSelectionMode}
+                        isSelected={selectedFeatureIds.has(feature.id)}
+                        onToggleSelect={() => onToggleFeatureSelection?.(feature.id)}
                       />
                     );
                   })}
