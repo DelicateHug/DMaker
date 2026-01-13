@@ -137,8 +137,8 @@ async function fetchGitHubPRs(projectPath: string): Promise<Map<string, Worktree
 
     // Fetch open PRs from GitHub
     const { stdout } = await execAsync(
-      'gh pr list --state open --json number,title,url,state,headRefName,createdAt --limit 100',
-      { cwd: projectPath, env: execEnv }
+      'gh pr list --state open --json number,title,url,state,headRefName,createdAt --limit 1000',
+      { cwd: projectPath, env: execEnv, timeout: 15000 }
     );
 
     const prs = JSON.parse(stdout || '[]') as Array<{
@@ -287,17 +287,19 @@ export function createListHandler() {
         }
       }
 
-      // Fetch open PRs from GitHub to detect PRs created outside the app
-      const githubPRs = await fetchGitHubPRs(projectPath);
-
       // Add PR info from metadata or GitHub for each worktree
+      // Only fetch GitHub PRs if includeDetails is requested (performance optimization)
+      const githubPRs = includeDetails
+        ? await fetchGitHubPRs(projectPath)
+        : new Map<string, WorktreePRInfo>();
+
       for (const worktree of worktrees) {
         const metadata = allMetadata.get(worktree.branch);
         if (metadata?.pr) {
           // Use stored metadata (more complete info)
           worktree.pr = metadata.pr;
-        } else {
-          // Fall back to GitHub PR detection
+        } else if (includeDetails) {
+          // Fall back to GitHub PR detection only when includeDetails is requested
           const githubPR = githubPRs.get(worktree.branch);
           if (githubPR) {
             worktree.pr = githubPR;
