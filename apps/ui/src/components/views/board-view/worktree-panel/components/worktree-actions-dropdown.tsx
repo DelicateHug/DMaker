@@ -324,7 +324,7 @@ export function WorktreeActionsDropdown({
           <>
             <DropdownMenuItem
               onClick={() => {
-                window.open(worktree.pr!.url, '_blank');
+                window.open(worktree.pr!.url, '_blank', 'noopener,noreferrer');
               }}
               className="text-xs"
             >

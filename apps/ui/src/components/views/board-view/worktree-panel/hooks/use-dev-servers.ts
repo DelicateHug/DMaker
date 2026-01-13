@@ -143,7 +143,7 @@ export function useDevServers({ projectPath }: UseDevServersOptions) {
         }
 
         devServerUrl.hostname = window.location.hostname;
-        window.open(devServerUrl.toString(), '_blank');
+        window.open(devServerUrl.toString(), '_blank', 'noopener,noreferrer');
       } catch (error) {
         logger.error('Failed to parse dev server URL:', error);
         toast.error('Failed to open dev server', {
