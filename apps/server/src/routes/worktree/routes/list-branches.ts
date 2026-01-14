@@ -92,12 +92,12 @@ export function createListBranchesHandler() {
               // Skip HEAD pointers like "origin/HEAD"
               if (cleanName.includes('/HEAD')) return;
 
-              // Extract the branch name without the remote prefix for deduplication
-              // e.g., "origin/main" -> "main"
-              const branchNameWithoutRemote = cleanName.replace(/^[^/]+\//, '');
-
-              // Only add remote branches that don't exist locally (to avoid duplicates)
-              if (!localBranchNames.has(branchNameWithoutRemote)) {
+              // Only add remote branches if a branch with the exact same name isn't already
+              // in the list. This avoids duplicates if a local branch is named like a remote one.
+              // Note: We intentionally include remote branches even when a local branch with the
+              // same base name exists (e.g., show "origin/main" even if local "main" exists),
+              // since users need to select remote branches as PR base targets.
+              if (!localBranchNames.has(cleanName)) {
                 branches.push({
                   name: cleanName, // Keep full name like "origin/main"
                   isCurrent: false,

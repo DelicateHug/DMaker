@@ -59,6 +59,21 @@ export function CreatePRDialog({
   // Track whether an operation completed that warrants a refresh
   const operationCompletedRef = useRef(false);
 
+  // Common state reset function to avoid duplication
+  const resetState = useCallback(() => {
+    setTitle('');
+    setBody('');
+    setCommitMessage('');
+    setBaseBranch(defaultBaseBranch);
+    setIsDraft(false);
+    setError(null);
+    setPrUrl(null);
+    setBrowserUrl(null);
+    setShowBrowserFallback(false);
+    operationCompletedRef.current = false;
+    setBranches([]);
+  }, [defaultBaseBranch]);
+
   // Fetch branches for autocomplete
   const fetchBranches = useCallback(async () => {
     if (!worktree?.path) return;
@@ -87,39 +102,13 @@ export function CreatePRDialog({
 
   // Reset state when dialog opens or worktree changes
   useEffect(() => {
+    // Reset all state on both open and close
+    resetState();
     if (open) {
-      // Reset form fields
-      setTitle('');
-      setBody('');
-      setCommitMessage('');
-      setBaseBranch(defaultBaseBranch);
-      setIsDraft(false);
-      setError(null);
-      // Also reset result states when opening for a new worktree
-      // This prevents showing stale PR URLs from previous worktrees
-      setPrUrl(null);
-      setBrowserUrl(null);
-      setShowBrowserFallback(false);
-      // Reset operation tracking
-      operationCompletedRef.current = false;
-      // Reset branches and fetch fresh ones
-      setBranches([]);
+      // Fetch fresh branches when dialog opens
       fetchBranches();
-    } else {
-      // Reset everything when dialog closes
-      setTitle('');
-      setBody('');
-      setCommitMessage('');
-      setBaseBranch(defaultBaseBranch);
-      setIsDraft(false);
-      setError(null);
-      setPrUrl(null);
-      setBrowserUrl(null);
-      setShowBrowserFallback(false);
-      operationCompletedRef.current = false;
-      setBranches([]);
     }
-  }, [open, worktree?.path, defaultBaseBranch, fetchBranches]);
+  }, [open, worktree?.path, resetState, fetchBranches]);
 
   const handleCreate = async () => {
     if (!worktree) return;
