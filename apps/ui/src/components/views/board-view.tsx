@@ -1324,8 +1324,6 @@ export function BoardView() {
         isCreatingSpec={isCreatingSpec}
         creatingSpecProjectPath={creatingSpecProjectPath}
         onShowBoardBackground={() => setShowBoardBackgroundModal(true)}
-        onShowCompletedModal={() => setShowCompletedModal(true)}
-        completedCount={completedFeatures.length}
         viewMode={viewMode}
         onViewModeChange={setViewMode}
       />
@@ -1437,6 +1435,8 @@ export function BoardView() {
             runningAutoTasks={runningAutoTasks}
             onArchiveAllVerified={() => setShowArchiveAllVerifiedDialog(true)}
             onAddFeature={() => setShowAddDialog(true)}
+            onShowCompletedModal={() => setShowCompletedModal(true)}
+            completedCount={completedFeatures.length}
             pipelineConfig={pipelineConfig}
             onOpenPipelineSettings={() => setShowPipelineSettings(true)}
             isSelectionMode={isSelectionMode}

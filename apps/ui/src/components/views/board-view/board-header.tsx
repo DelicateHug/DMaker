@@ -1,17 +1,14 @@
-import { useState, useCallback } from 'react';
-import { Button } from '@/components/ui/button';
-import { Slider } from '@/components/ui/slider';
+import { useCallback } from 'react';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Bot, Wand2, Settings2, GitBranch } from 'lucide-react';
+import { Wand2, GitBranch } from 'lucide-react';
 import { UsagePopover } from '@/components/usage-popover';
 import { useAppStore } from '@/store/app-store';
 import { useSetupStore } from '@/store/setup-store';
 import { useIsMobile } from '@/hooks/use-media-query';
-import { AutoModeSettingsDialog } from './dialogs/auto-mode-settings-dialog';
-import { WorktreeSettingsDialog } from './dialogs/worktree-settings-dialog';
-import { PlanSettingsDialog } from './dialogs/plan-settings-dialog';
+import { AutoModeSettingsPopover } from './dialogs/auto-mode-settings-popover';
+import { WorktreeSettingsPopover } from './dialogs/worktree-settings-popover';
+import { PlanSettingsPopover } from './dialogs/plan-settings-popover';
 import { getHttpApiClient } from '@/lib/http-api-client';
 import { BoardSearchBar } from './board-search-bar';
 import { BoardControls } from './board-controls';
@@ -36,8 +33,6 @@ interface BoardHeaderProps {
   creatingSpecProjectPath?: string;
   // Board controls props
   onShowBoardBackground: () => void;
-  onShowCompletedModal: () => void;
-  completedCount: number;
   // View toggle props
   viewMode: ViewMode;
   onViewModeChange: (mode: ViewMode) => void;
@@ -61,14 +56,9 @@ export function BoardHeader({
   isCreatingSpec,
   creatingSpecProjectPath,
   onShowBoardBackground,
-  onShowCompletedModal,
-  completedCount,
   viewMode,
   onViewModeChange,
 }: BoardHeaderProps) {
-  const [showAutoModeSettings, setShowAutoModeSettings] = useState(false);
-  const [showWorktreeSettings, setShowWorktreeSettings] = useState(false);
-  const [showPlanSettings, setShowPlanSettings] = useState(false);
   const claudeAuthStatus = useSetupStore((state) => state.claudeAuthStatus);
   const skipVerificationInAutoMode = useAppStore((state) => state.skipVerificationInAutoMode);
   const setSkipVerificationInAutoMode = useAppStore((state) => state.setSkipVerificationInAutoMode);
@@ -127,12 +117,7 @@ export function BoardHeader({
           currentProjectPath={projectPath}
         />
         {isMounted && <ViewToggle viewMode={viewMode} onViewModeChange={onViewModeChange} />}
-        <BoardControls
-          isMounted={isMounted}
-          onShowBoardBackground={onShowBoardBackground}
-          onShowCompletedModal={onShowCompletedModal}
-          completedCount={completedCount}
-        />
+        <BoardControls isMounted={isMounted} onShowBoardBackground={onShowBoardBackground} />
       </div>
       <div className="flex gap-4 items-center">
         {/* Usage Popover - show if either provider is authenticated, only on desktop */}
@@ -148,7 +133,7 @@ export function BoardHeader({
             onConcurrencyChange={onConcurrencyChange}
             isAutoModeRunning={isAutoModeRunning}
             onAutoModeToggle={onAutoModeToggle}
-            onOpenAutoModeSettings={() => setShowAutoModeSettings(true)}
+            onOpenAutoModeSettings={() => {}}
             onOpenPlanDialog={onOpenPlanDialog}
             showClaudeUsage={showClaudeUsage}
             showCodexUsage={showCodexUsage}
@@ -160,7 +145,10 @@ export function BoardHeader({
         {isMounted && !isMobile && (
           <div className={controlContainerClass} data-testid="worktrees-toggle-container">
             <GitBranch className="w-4 h-4 text-muted-foreground" />
-            <Label htmlFor="worktrees-toggle" className="text-sm font-medium cursor-pointer">
+            <Label
+              htmlFor="worktrees-toggle"
+              className="text-xs font-medium cursor-pointer whitespace-nowrap"
+            >
               Worktree Bar
             </Label>
             <Switch
@@ -169,72 +157,20 @@ export function BoardHeader({
               onCheckedChange={handleWorktreePanelToggle}
               data-testid="worktrees-toggle"
             />
-            <button
-              onClick={() => setShowWorktreeSettings(true)}
-              className="p-1 rounded hover:bg-accent/50 transition-colors"
-              title="Worktree Settings"
-              data-testid="worktree-settings-button"
-            >
-              <Settings2 className="w-4 h-4 text-muted-foreground" />
-            </button>
+            <WorktreeSettingsPopover
+              addFeatureUseSelectedWorktreeBranch={addFeatureUseSelectedWorktreeBranch}
+              onAddFeatureUseSelectedWorktreeBranchChange={setAddFeatureUseSelectedWorktreeBranch}
+            />
           </div>
-        )}
-
-        {/* Worktree Settings Dialog */}
-        <WorktreeSettingsDialog
-          open={showWorktreeSettings}
-          onOpenChange={setShowWorktreeSettings}
-          addFeatureUseSelectedWorktreeBranch={addFeatureUseSelectedWorktreeBranch}
-          onAddFeatureUseSelectedWorktreeBranchChange={setAddFeatureUseSelectedWorktreeBranch}
-        />
-
-        {/* Concurrency Control - only show after mount to prevent hydration issues */}
-        {isMounted && !isMobile && (
-          <Popover>
-            <PopoverTrigger asChild>
-              <button
-                className={`${controlContainerClass} cursor-pointer hover:bg-accent/50 transition-colors`}
-                data-testid="concurrency-slider-container"
-              >
-                <Bot className="w-4 h-4 text-muted-foreground" />
-                <span className="text-sm font-medium">Agents</span>
-                <span className="text-sm text-muted-foreground" data-testid="concurrency-value">
-                  {runningAgentsCount}/{maxConcurrency}
-                </span>
-              </button>
-            </PopoverTrigger>
-            <PopoverContent className="w-64" align="end">
-              <div className="space-y-4">
-                <div>
-                  <h4 className="font-medium text-sm mb-1">Max Concurrent Agents</h4>
-                  <p className="text-xs text-muted-foreground">
-                    Controls how many AI agents can run simultaneously. Higher values process more
-                    features in parallel but use more API resources.
-                  </p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <Slider
-                    value={[maxConcurrency]}
-                    onValueChange={(value) => onConcurrencyChange(value[0])}
-                    min={1}
-                    max={10}
-                    step={1}
-                    className="flex-1"
-                    data-testid="concurrency-slider"
-                  />
-                  <span className="text-sm font-medium min-w-[2ch] text-right">
-                    {maxConcurrency}
-                  </span>
-                </div>
-              </div>
-            </PopoverContent>
-          </Popover>
         )}
 
         {/* Auto Mode Toggle - only show after mount to prevent hydration issues */}
         {isMounted && !isMobile && (
           <div className={controlContainerClass} data-testid="auto-mode-toggle-container">
-            <Label htmlFor="auto-mode-toggle" className="text-sm font-medium cursor-pointer">
+            <Label
+              htmlFor="auto-mode-toggle"
+              className="text-xs font-medium cursor-pointer whitespace-nowrap"
+            >
               Auto Mode
             </Label>
             <Switch
@@ -243,24 +179,15 @@ export function BoardHeader({
               onCheckedChange={onAutoModeToggle}
               data-testid="auto-mode-toggle"
             />
-            <button
-              onClick={() => setShowAutoModeSettings(true)}
-              className="p-1 rounded hover:bg-accent/50 transition-colors"
-              title="Auto Mode Settings"
-              data-testid="auto-mode-settings-button"
-            >
-              <Settings2 className="w-4 h-4 text-muted-foreground" />
-            </button>
+            <AutoModeSettingsPopover
+              skipVerificationInAutoMode={skipVerificationInAutoMode}
+              onSkipVerificationChange={setSkipVerificationInAutoMode}
+              maxConcurrency={maxConcurrency}
+              runningAgentsCount={runningAgentsCount}
+              onConcurrencyChange={onConcurrencyChange}
+            />
           </div>
         )}
-
-        {/* Auto Mode Settings Dialog */}
-        <AutoModeSettingsDialog
-          open={showAutoModeSettings}
-          onOpenChange={setShowAutoModeSettings}
-          skipVerificationInAutoMode={skipVerificationInAutoMode}
-          onSkipVerificationChange={setSkipVerificationInAutoMode}
-        />
 
         {/* Plan Button with Settings - only show on desktop, mobile has it in the menu */}
         {isMounted && !isMobile && (
@@ -273,24 +200,12 @@ export function BoardHeader({
               <Wand2 className="w-4 h-4 text-muted-foreground" />
               <span className="text-sm font-medium">Plan</span>
             </button>
-            <button
-              onClick={() => setShowPlanSettings(true)}
-              className="p-1 rounded hover:bg-accent/50 transition-colors"
-              title="Plan Settings"
-              data-testid="plan-settings-button"
-            >
-              <Settings2 className="w-4 h-4 text-muted-foreground" />
-            </button>
+            <PlanSettingsPopover
+              planUseSelectedWorktreeBranch={planUseSelectedWorktreeBranch}
+              onPlanUseSelectedWorktreeBranchChange={setPlanUseSelectedWorktreeBranch}
+            />
           </div>
         )}
-
-        {/* Plan Settings Dialog */}
-        <PlanSettingsDialog
-          open={showPlanSettings}
-          onOpenChange={setShowPlanSettings}
-          planUseSelectedWorktreeBranch={planUseSelectedWorktreeBranch}
-          onPlanUseSelectedWorktreeBranchChange={setPlanUseSelectedWorktreeBranch}
-        />
       </div>
     </div>
   );

@@ -38,7 +38,7 @@ export function ViewToggle({ viewMode, onViewModeChange, className }: ViewToggle
         data-testid="view-toggle-kanban"
       >
         <LayoutGrid className="w-4 h-4" />
-        <span className="sr-only sm:not-sr-only">Kanban</span>
+        <span className="sr-only">Kanban</span>
       </button>
       <button
         role="tab"
@@ -55,7 +55,7 @@ export function ViewToggle({ viewMode, onViewModeChange, className }: ViewToggle
         data-testid="view-toggle-list"
       >
         <List className="w-4 h-4" />
-        <span className="sr-only sm:not-sr-only">List</span>
+        <span className="sr-only">List</span>
       </button>
     </div>
   );
