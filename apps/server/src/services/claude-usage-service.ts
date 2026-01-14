@@ -171,9 +171,7 @@ export class ClaudeUsageService {
       let hasSeenTrustPrompt = false;
 
       // Use current working directory (project dir) - most likely already trusted by Claude CLI
-      const workingDirectory = this.isWindows
-        ? process.env.USERPROFILE || os.homedir() || 'C:\\'
-        : process.cwd();
+      const workingDirectory = process.cwd();
 
       // Use platform-appropriate shell and command
       const shell = this.isWindows ? 'cmd.exe' : '/bin/sh';
