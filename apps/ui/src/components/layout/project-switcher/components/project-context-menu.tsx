@@ -14,9 +14,9 @@ const Z_INDEX = {
   THEME_SUBMENU: 101,
 } as const;
 
-// Theme option type from sidebar constants
+// Theme option type - using ThemeMode for type safety
 interface ThemeOption {
-  value: string;
+  value: ThemeMode;
   label: string;
   icon: LucideIcon;
   color: string;
@@ -64,10 +64,10 @@ interface ThemeColumnProps {
   title: string;
   icon: LucideIcon;
   themes: ThemeOption[];
-  selectedTheme: string | null;
-  onPreviewEnter: (value: string) => void;
+  selectedTheme: ThemeMode | null;
+  onPreviewEnter: (value: ThemeMode) => void;
   onPreviewLeave: (e: React.PointerEvent) => void;
-  onSelect: (value: string) => void;
+  onSelect: (value: ThemeMode) => void;
 }
 
 const ThemeColumn = memo(function ThemeColumn({
@@ -160,14 +160,14 @@ export function ProjectContextMenu({
     setShowRemoveDialog(true);
   };
 
-  const handleThemeSelect = (value: string) => {
+  const handleThemeSelect = (value: ThemeMode | '') => {
     setPreviewTheme(null);
     if (value !== '') {
-      setTheme(value as ThemeMode);
+      setTheme(value);
     } else {
       setTheme(globalTheme);
     }
-    setProjectTheme(project.id, value === '' ? null : (value as ThemeMode));
+    setProjectTheme(project.id, value === '' ? null : value);
     setShowThemeSubmenu(false);
   };
 
@@ -209,9 +209,15 @@ export function ProjectContextMenu({
           </button>
 
           {/* Theme Submenu Trigger */}
-          <div className="relative">
+          <div
+            className="relative"
+            onMouseEnter={() => setShowThemeSubmenu(true)}
+            onMouseLeave={() => {
+              setShowThemeSubmenu(false);
+              setPreviewTheme(null);
+            }}
+          >
             <button
-              onMouseEnter={() => setShowThemeSubmenu(true)}
               onClick={() => setShowThemeSubmenu(!showThemeSubmenu)}
               className={cn(
                 'w-full flex items-center gap-2 px-3 py-2 rounded-md',
@@ -242,17 +248,13 @@ export function ProjectContextMenu({
                   'animate-in fade-in zoom-in-95 duration-100'
                 )}
                 style={{ zIndex: Z_INDEX.THEME_SUBMENU }}
-                onMouseLeave={() => {
-                  setShowThemeSubmenu(false);
-                  setPreviewTheme(null);
-                }}
                 data-testid="project-theme-submenu"
               >
                 <div className="p-2">
                   {/* Use Global Option */}
                   <button
                     onPointerEnter={() => handlePreviewEnter(globalTheme)}
-                    onPointerLeave={() => setPreviewTheme(null)}
+                    onPointerLeave={handlePreviewLeave}
                     onClick={() => handleThemeSelect('')}
                     className={cn(
                       'w-full flex items-center gap-2 px-3 py-2 rounded-md',
@@ -277,8 +279,8 @@ export function ProjectContextMenu({
                     <ThemeColumn
                       title="Dark"
                       icon={Moon}
-                      themes={PROJECT_DARK_THEMES}
-                      selectedTheme={project.theme ?? null}
+                      themes={PROJECT_DARK_THEMES as ThemeOption[]}
+                      selectedTheme={project.theme as ThemeMode | null}
                       onPreviewEnter={handlePreviewEnter}
                       onPreviewLeave={handlePreviewLeave}
                       onSelect={handleThemeSelect}
@@ -286,8 +288,8 @@ export function ProjectContextMenu({
                     <ThemeColumn
                       title="Light"
                       icon={Sun}
-                      themes={PROJECT_LIGHT_THEMES}
-                      selectedTheme={project.theme ?? null}
+                      themes={PROJECT_LIGHT_THEMES as ThemeOption[]}
+                      selectedTheme={project.theme as ThemeMode | null}
                       onPreviewEnter={handlePreviewEnter}
                       onPreviewLeave={handlePreviewLeave}
                       onSelect={handleThemeSelect}
