@@ -1,7 +1,8 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Edit2, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/store/app-store';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import type { Project } from '@/lib/electron';
 
 interface ProjectContextMenuProps {
@@ -19,6 +20,7 @@ export function ProjectContextMenu({
 }: ProjectContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null);
   const { moveProjectToTrash } = useAppStore();
+  const [showRemoveDialog, setShowRemoveDialog] = useState(false);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -47,57 +49,73 @@ export function ProjectContextMenu({
   };
 
   const handleRemove = () => {
-    if (confirm(`Remove "${project.name}" from the project list?`)) {
-      moveProjectToTrash(project.id);
-    }
+    setShowRemoveDialog(true);
+  };
+
+  const handleConfirmRemove = () => {
+    moveProjectToTrash(project.id);
     onClose();
   };
 
   return (
-    <div
-      ref={menuRef}
-      className={cn(
-        'fixed z-[100] min-w-48 rounded-lg',
-        'bg-popover text-popover-foreground',
-        'border border-border shadow-lg',
-        'animate-in fade-in zoom-in-95 duration-100'
-      )}
-      style={{
-        top: position.y,
-        left: position.x,
-      }}
-      data-testid="project-context-menu"
-    >
-      <div className="p-1">
-        <button
-          onClick={handleEdit}
-          className={cn(
-            'w-full flex items-center gap-2 px-3 py-2 rounded-md',
-            'text-sm font-medium text-left',
-            'hover:bg-accent transition-colors',
-            'focus:outline-none focus:bg-accent'
-          )}
-          data-testid="edit-project-button"
-        >
-          <Edit2 className="w-4 h-4" />
-          <span>Edit Name & Icon</span>
-        </button>
+    <>
+      <div
+        ref={menuRef}
+        className={cn(
+          'fixed z-[100] min-w-48 rounded-lg',
+          'bg-popover text-popover-foreground',
+          'border border-border shadow-lg',
+          'animate-in fade-in zoom-in-95 duration-100'
+        )}
+        style={{
+          top: position.y,
+          left: position.x,
+        }}
+        data-testid="project-context-menu"
+      >
+        <div className="p-1">
+          <button
+            onClick={handleEdit}
+            className={cn(
+              'w-full flex items-center gap-2 px-3 py-2 rounded-md',
+              'text-sm font-medium text-left',
+              'hover:bg-accent transition-colors',
+              'focus:outline-none focus:bg-accent'
+            )}
+            data-testid="edit-project-button"
+          >
+            <Edit2 className="w-4 h-4" />
+            <span>Edit Name & Icon</span>
+          </button>
 
-        <button
-          onClick={handleRemove}
-          className={cn(
-            'w-full flex items-center gap-2 px-3 py-2 rounded-md',
-            'text-sm font-medium text-left',
-            'text-destructive hover:bg-destructive/10',
-            'transition-colors',
-            'focus:outline-none focus:bg-destructive/10'
-          )}
-          data-testid="remove-project-button"
-        >
-          <Trash2 className="w-4 h-4" />
-          <span>Remove Project</span>
-        </button>
+          <button
+            onClick={handleRemove}
+            className={cn(
+              'w-full flex items-center gap-2 px-3 py-2 rounded-md',
+              'text-sm font-medium text-left',
+              'text-destructive hover:bg-destructive/10',
+              'transition-colors',
+              'focus:outline-none focus:bg-destructive/10'
+            )}
+            data-testid="remove-project-button"
+          >
+            <Trash2 className="w-4 h-4" />
+            <span>Remove Project</span>
+          </button>
+        </div>
       </div>
-    </div>
+
+      <ConfirmDialog
+        open={showRemoveDialog}
+        onOpenChange={setShowRemoveDialog}
+        onConfirm={handleConfirmRemove}
+        title="Remove Project"
+        description={`Are you sure you want to remove "${project.name}" from the project list? This won't delete any files on disk.`}
+        icon={Trash2}
+        iconClassName="text-destructive"
+        confirmText="Remove"
+        confirmVariant="destructive"
+      />
+    </>
   );
 }

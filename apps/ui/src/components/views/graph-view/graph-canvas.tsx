@@ -35,7 +35,7 @@ import {
 } from './hooks';
 import { cn } from '@/lib/utils';
 import { useDebounceValue } from 'usehooks-ts';
-import { SearchX } from 'lucide-react';
+import { SearchX, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 // Define custom node and edge types - using any to avoid React Flow's strict typing
@@ -64,6 +64,7 @@ interface GraphCanvasProps {
   onNodeDoubleClick?: (featureId: string) => void;
   nodeActionCallbacks?: NodeActionCallbacks;
   onCreateDependency?: (sourceId: string, targetId: string) => Promise<boolean>;
+  onAddFeature?: () => void;
   backgroundStyle?: React.CSSProperties;
   backgroundSettings?: BackgroundSettings;
   className?: string;
@@ -77,6 +78,7 @@ function GraphCanvasInner({
   onNodeDoubleClick,
   nodeActionCallbacks,
   onCreateDependency,
+  onAddFeature,
   backgroundStyle,
   backgroundSettings,
   className,
@@ -397,6 +399,14 @@ function GraphCanvasInner({
         />
 
         <GraphLegend />
+
+        {/* Add Feature Button */}
+        <Panel position="top-right">
+          <Button variant="default" size="sm" onClick={onAddFeature} className="gap-1.5">
+            <Plus className="w-4 h-4" />
+            Add Feature
+          </Button>
+        </Panel>
 
         {/* Empty state when all nodes are filtered out */}
         {filterResult.hasActiveFilter && filterResult.matchedNodeIds.size === 0 && (
