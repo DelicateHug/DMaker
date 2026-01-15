@@ -19,6 +19,10 @@ import type {
   ResolvedTitleGenerationPrompts,
   ResolvedIssueValidationPrompts,
   ResolvedIdeationPrompts,
+  ResolvedAppSpecPrompts,
+  ResolvedContextDescriptionPrompts,
+  ResolvedSuggestionsPrompts,
+  ResolvedTaskExecutionPrompts,
 } from '@automaker/types';
 import { STATIC_PORT, SERVER_PORT } from '@automaker/types';
 
@@ -686,7 +690,7 @@ IMPORTANT: Do not ask for clarification. The specification is provided above. Ge
 /**
  * Default App Spec prompts (for project specification generation)
  */
-export const DEFAULT_APP_SPEC_PROMPTS: import('@automaker/types').ResolvedAppSpecPrompts = {
+export const DEFAULT_APP_SPEC_PROMPTS: ResolvedAppSpecPrompts = {
   generateSpecSystemPrompt: DEFAULT_APP_SPEC_GENERATE_SYSTEM_PROMPT,
   structuredSpecInstructions: DEFAULT_APP_SPEC_STRUCTURED_INSTRUCTIONS,
   generateFeaturesFromSpecPrompt: DEFAULT_GENERATE_FEATURES_FROM_SPEC_PROMPT,
@@ -709,11 +713,10 @@ Respond with ONLY the description text, no additional formatting, preamble, or e
 /**
  * Default Context Description prompts (for file/image descriptions)
  */
-export const DEFAULT_CONTEXT_DESCRIPTION_PROMPTS: import('@automaker/types').ResolvedContextDescriptionPrompts =
-  {
-    describeFilePrompt: DEFAULT_DESCRIBE_FILE_PROMPT,
-    describeImagePrompt: DEFAULT_DESCRIBE_IMAGE_PROMPT,
-  };
+export const DEFAULT_CONTEXT_DESCRIPTION_PROMPTS: ResolvedContextDescriptionPrompts = {
+  describeFilePrompt: DEFAULT_DESCRIBE_FILE_PROMPT,
+  describeImagePrompt: DEFAULT_DESCRIBE_IMAGE_PROMPT,
+};
 
 /**
  * ========================================================================
@@ -743,7 +746,7 @@ The response will be automatically formatted as structured JSON.`;
 /**
  * Default Suggestions prompts (for features, refactoring, security, performance)
  */
-export const DEFAULT_SUGGESTIONS_PROMPTS: import('@automaker/types').ResolvedSuggestionsPrompts = {
+export const DEFAULT_SUGGESTIONS_PROMPTS: ResolvedSuggestionsPrompts = {
   featuresPrompt: DEFAULT_SUGGESTIONS_FEATURES_PROMPT,
   refactoringPrompt: DEFAULT_SUGGESTIONS_REFACTORING_PROMPT,
   securityPrompt: DEFAULT_SUGGESTIONS_SECURITY_PROMPT,
@@ -930,18 +933,17 @@ Format your response as a structured markdown document.`;
 /**
  * Default Task Execution prompts (for Auto Mode task execution, learning extraction)
  */
-export const DEFAULT_TASK_EXECUTION_PROMPTS: import('@automaker/types').ResolvedTaskExecutionPrompts =
-  {
-    taskPromptTemplate: DEFAULT_TASK_PROMPT_TEMPLATE,
-    implementationInstructions: DEFAULT_IMPLEMENTATION_INSTRUCTIONS,
-    playwrightVerificationInstructions: DEFAULT_PLAYWRIGHT_VERIFICATION_INSTRUCTIONS,
-    learningExtractionSystemPrompt: DEFAULT_LEARNING_EXTRACTION_SYSTEM_PROMPT,
-    learningExtractionUserPromptTemplate: DEFAULT_LEARNING_EXTRACTION_USER_TEMPLATE,
-    planRevisionTemplate: DEFAULT_PLAN_REVISION_TEMPLATE,
-    continuationAfterApprovalTemplate: DEFAULT_CONTINUATION_AFTER_APPROVAL_TEMPLATE,
-    resumeFeatureTemplate: DEFAULT_RESUME_FEATURE_TEMPLATE,
-    projectAnalysisPrompt: DEFAULT_PROJECT_ANALYSIS_PROMPT,
-  };
+export const DEFAULT_TASK_EXECUTION_PROMPTS: ResolvedTaskExecutionPrompts = {
+  taskPromptTemplate: DEFAULT_TASK_PROMPT_TEMPLATE,
+  implementationInstructions: DEFAULT_IMPLEMENTATION_INSTRUCTIONS,
+  playwrightVerificationInstructions: DEFAULT_PLAYWRIGHT_VERIFICATION_INSTRUCTIONS,
+  learningExtractionSystemPrompt: DEFAULT_LEARNING_EXTRACTION_SYSTEM_PROMPT,
+  learningExtractionUserPromptTemplate: DEFAULT_LEARNING_EXTRACTION_USER_TEMPLATE,
+  planRevisionTemplate: DEFAULT_PLAN_REVISION_TEMPLATE,
+  continuationAfterApprovalTemplate: DEFAULT_CONTINUATION_AFTER_APPROVAL_TEMPLATE,
+  resumeFeatureTemplate: DEFAULT_RESUME_FEATURE_TEMPLATE,
+  projectAnalysisPrompt: DEFAULT_PROJECT_ANALYSIS_PROMPT,
+};
 
 /**
  * ========================================================================
