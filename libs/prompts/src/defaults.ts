@@ -604,7 +604,7 @@ IMPORTANT: You do NOT have access to any tools. You CANNOT read files, search co
 You must generate suggestions based ONLY on the project context provided below.
 Do NOT say "I'll analyze" or "Let me explore" - you cannot do those things.
 
-Based on the project context and the user's prompt, generate creative and actionable feature suggestions.
+Based on the project context and the user's prompt, generate exactly {{count}} creative and actionable feature suggestions.
 
 YOUR RESPONSE MUST BE ONLY A JSON ARRAY - nothing else. No explanation, no preamble, no markdown code fences.
 

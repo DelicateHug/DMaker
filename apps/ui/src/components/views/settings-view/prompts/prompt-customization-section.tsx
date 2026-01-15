@@ -66,6 +66,44 @@ function calculateMinHeight(text: string): string {
 }
 
 /**
+ * PromptTabContent Component
+ *
+ * Reusable container for prompt customization tabs.
+ * Provides consistent header with title and reset button.
+ */
+interface PromptTabContentProps {
+  value: string;
+  title: string;
+  category: keyof PromptCustomization;
+  onReset: (category: keyof PromptCustomization) => void;
+  children: React.ReactNode;
+  infoBanner?: React.ReactNode;
+}
+
+function PromptTabContent({
+  value,
+  title,
+  category,
+  onReset,
+  children,
+  infoBanner,
+}: PromptTabContentProps) {
+  return (
+    <TabsContent value={value} className="space-y-6 mt-6">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-sm font-medium text-foreground">{title}</h3>
+        <Button variant="ghost" size="sm" onClick={() => onReset(category)} className="gap-2">
+          <RotateCcw className="w-3 h-3" />
+          Reset Section
+        </Button>
+      </div>
+      {infoBanner}
+      <div className="space-y-4">{children}</div>
+    </TabsContent>
+  );
+}
+
+/**
  * PromptField Component
  *
  * Shows a prompt with a toggle to switch between default and custom mode.
@@ -423,30 +461,20 @@ export function PromptCustomizationSection({
           </TabsContent>
 
           {/* Agent Tab */}
-          <TabsContent value="agent" className="space-y-6 mt-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-medium text-foreground">Agent Runner Prompts</h3>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => resetToDefaults('agent')}
-                className="gap-2"
-              >
-                <RotateCcw className="w-3 h-3" />
-                Reset Section
-              </Button>
-            </div>
-
-            <div className="space-y-4">
-              <PromptField
-                label="System Prompt"
-                description="Defines the AI's role and behavior in interactive chat sessions"
-                defaultValue={DEFAULT_AGENT_PROMPTS.systemPrompt}
-                customValue={promptCustomization?.agent?.systemPrompt}
-                onCustomValueChange={(value) => updatePrompt('agent', 'systemPrompt', value)}
-              />
-            </div>
-          </TabsContent>
+          <PromptTabContent
+            value="agent"
+            title="Agent Runner Prompts"
+            category="agent"
+            onReset={resetToDefaults}
+          >
+            <PromptField
+              label="System Prompt"
+              description="Defines the AI's role and behavior in interactive chat sessions"
+              defaultValue={DEFAULT_AGENT_PROMPTS.systemPrompt}
+              customValue={promptCustomization?.agent?.systemPrompt}
+              onCustomValueChange={(value) => updatePrompt('agent', 'systemPrompt', value)}
+            />
+          </PromptTabContent>
 
           {/* Backlog Plan Tab */}
           <TabsContent value="backlog-plan" className="space-y-6 mt-6">
@@ -569,60 +597,38 @@ export function PromptCustomizationSection({
           </TabsContent>
 
           {/* Commit Message Tab */}
-          <TabsContent value="commit-message" className="space-y-6 mt-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-medium text-foreground">Commit Message Prompts</h3>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => resetToDefaults('commitMessage')}
-                className="gap-2"
-              >
-                <RotateCcw className="w-3 h-3" />
-                Reset Section
-              </Button>
-            </div>
-
-            <div className="space-y-4">
-              <PromptField
-                label="System Prompt"
-                description="Instructions for generating git commit messages from diffs. The AI will receive the git diff and generate a conventional commit message."
-                defaultValue={DEFAULT_COMMIT_MESSAGE_PROMPTS.systemPrompt}
-                customValue={promptCustomization?.commitMessage?.systemPrompt}
-                onCustomValueChange={(value) =>
-                  updatePrompt('commitMessage', 'systemPrompt', value)
-                }
-              />
-            </div>
-          </TabsContent>
+          <PromptTabContent
+            value="commit-message"
+            title="Commit Message Prompts"
+            category="commitMessage"
+            onReset={resetToDefaults}
+          >
+            <PromptField
+              label="System Prompt"
+              description="Instructions for generating git commit messages from diffs. The AI will receive the git diff and generate a conventional commit message."
+              defaultValue={DEFAULT_COMMIT_MESSAGE_PROMPTS.systemPrompt}
+              customValue={promptCustomization?.commitMessage?.systemPrompt}
+              onCustomValueChange={(value) => updatePrompt('commitMessage', 'systemPrompt', value)}
+            />
+          </PromptTabContent>
 
           {/* Title Generation Tab */}
-          <TabsContent value="title-generation" className="space-y-6 mt-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-medium text-foreground">Title Generation Prompts</h3>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => resetToDefaults('titleGeneration')}
-                className="gap-2"
-              >
-                <RotateCcw className="w-3 h-3" />
-                Reset Section
-              </Button>
-            </div>
-
-            <div className="space-y-4">
-              <PromptField
-                label="System Prompt"
-                description="Instructions for generating concise, descriptive feature titles from descriptions. Used when auto-generating titles for new features."
-                defaultValue={DEFAULT_TITLE_GENERATION_PROMPTS.systemPrompt}
-                customValue={promptCustomization?.titleGeneration?.systemPrompt}
-                onCustomValueChange={(value) =>
-                  updatePrompt('titleGeneration', 'systemPrompt', value)
-                }
-              />
-            </div>
-          </TabsContent>
+          <PromptTabContent
+            value="title-generation"
+            title="Title Generation Prompts"
+            category="titleGeneration"
+            onReset={resetToDefaults}
+          >
+            <PromptField
+              label="System Prompt"
+              description="Instructions for generating concise, descriptive feature titles from descriptions. Used when auto-generating titles for new features."
+              defaultValue={DEFAULT_TITLE_GENERATION_PROMPTS.systemPrompt}
+              customValue={promptCustomization?.titleGeneration?.systemPrompt}
+              onCustomValueChange={(value) =>
+                updatePrompt('titleGeneration', 'systemPrompt', value)
+              }
+            />
+          </PromptTabContent>
 
           {/* Issue Validation Tab */}
           <TabsContent value="issue-validation" className="space-y-6 mt-6">
@@ -667,330 +673,274 @@ export function PromptCustomizationSection({
           </TabsContent>
 
           {/* Ideation Tab */}
-          <TabsContent value="ideation" className="space-y-6 mt-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-medium text-foreground">Ideation Prompts</h3>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => resetToDefaults('ideation')}
-                className="gap-2"
-              >
-                <RotateCcw className="w-3 h-3" />
-                Reset Section
-              </Button>
-            </div>
+          <PromptTabContent
+            value="ideation"
+            title="Ideation Prompts"
+            category="ideation"
+            onReset={resetToDefaults}
+          >
+            <PromptField
+              label="Ideation Chat System Prompt"
+              description="System prompt for AI-powered ideation chat conversations. Guides the AI to brainstorm and suggest feature ideas."
+              defaultValue={DEFAULT_IDEATION_PROMPTS.ideationSystemPrompt}
+              customValue={promptCustomization?.ideation?.ideationSystemPrompt}
+              onCustomValueChange={(value) =>
+                updatePrompt('ideation', 'ideationSystemPrompt', value)
+              }
+            />
 
-            <div className="space-y-4">
-              <PromptField
-                label="Ideation Chat System Prompt"
-                description="System prompt for AI-powered ideation chat conversations. Guides the AI to brainstorm and suggest feature ideas."
-                defaultValue={DEFAULT_IDEATION_PROMPTS.ideationSystemPrompt}
-                customValue={promptCustomization?.ideation?.ideationSystemPrompt}
-                onCustomValueChange={(value) =>
-                  updatePrompt('ideation', 'ideationSystemPrompt', value)
-                }
-              />
-
-              <PromptField
-                label="Suggestions System Prompt"
-                description="System prompt for generating structured feature suggestions. Used when generating batch suggestions from prompts."
-                defaultValue={DEFAULT_IDEATION_PROMPTS.suggestionsSystemPrompt}
-                customValue={promptCustomization?.ideation?.suggestionsSystemPrompt}
-                onCustomValueChange={(value) =>
-                  updatePrompt('ideation', 'suggestionsSystemPrompt', value)
-                }
-                critical={true}
-              />
-            </div>
-          </TabsContent>
+            <PromptField
+              label="Suggestions System Prompt"
+              description="System prompt for generating structured feature suggestions. Used when generating batch suggestions from prompts."
+              defaultValue={DEFAULT_IDEATION_PROMPTS.suggestionsSystemPrompt}
+              customValue={promptCustomization?.ideation?.suggestionsSystemPrompt}
+              onCustomValueChange={(value) =>
+                updatePrompt('ideation', 'suggestionsSystemPrompt', value)
+              }
+              critical={true}
+            />
+          </PromptTabContent>
 
           {/* App Spec Tab */}
-          <TabsContent value="app-spec" className="space-y-6 mt-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-medium text-foreground">App Specification Prompts</h3>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => resetToDefaults('appSpec')}
-                className="gap-2"
-              >
-                <RotateCcw className="w-3 h-3" />
-                Reset Section
-              </Button>
-            </div>
+          <PromptTabContent
+            value="app-spec"
+            title="App Specification Prompts"
+            category="appSpec"
+            onReset={resetToDefaults}
+          >
+            <PromptField
+              label="Generate Spec System Prompt"
+              description="System prompt for generating project specifications from overview"
+              defaultValue={DEFAULT_APP_SPEC_PROMPTS.generateSpecSystemPrompt}
+              customValue={promptCustomization?.appSpec?.generateSpecSystemPrompt}
+              onCustomValueChange={(value) =>
+                updatePrompt('appSpec', 'generateSpecSystemPrompt', value)
+              }
+            />
 
-            <div className="space-y-4">
-              <PromptField
-                label="Generate Spec System Prompt"
-                description="System prompt for generating project specifications from overview"
-                defaultValue={DEFAULT_APP_SPEC_PROMPTS.generateSpecSystemPrompt}
-                customValue={promptCustomization?.appSpec?.generateSpecSystemPrompt}
-                onCustomValueChange={(value) =>
-                  updatePrompt('appSpec', 'generateSpecSystemPrompt', value)
-                }
-              />
+            <PromptField
+              label="Structured Spec Instructions"
+              description="Instructions for structured specification output format"
+              defaultValue={DEFAULT_APP_SPEC_PROMPTS.structuredSpecInstructions}
+              customValue={promptCustomization?.appSpec?.structuredSpecInstructions}
+              onCustomValueChange={(value) =>
+                updatePrompt('appSpec', 'structuredSpecInstructions', value)
+              }
+              critical={true}
+            />
 
-              <PromptField
-                label="Structured Spec Instructions"
-                description="Instructions for structured specification output format"
-                defaultValue={DEFAULT_APP_SPEC_PROMPTS.structuredSpecInstructions}
-                customValue={promptCustomization?.appSpec?.structuredSpecInstructions}
-                onCustomValueChange={(value) =>
-                  updatePrompt('appSpec', 'structuredSpecInstructions', value)
-                }
-                critical={true}
-              />
-
-              <PromptField
-                label="Generate Features from Spec"
-                description="Prompt for generating features from a project specification"
-                defaultValue={DEFAULT_APP_SPEC_PROMPTS.generateFeaturesFromSpecPrompt}
-                customValue={promptCustomization?.appSpec?.generateFeaturesFromSpecPrompt}
-                onCustomValueChange={(value) =>
-                  updatePrompt('appSpec', 'generateFeaturesFromSpecPrompt', value)
-                }
-                critical={true}
-              />
-            </div>
-          </TabsContent>
+            <PromptField
+              label="Generate Features from Spec"
+              description="Prompt for generating features from a project specification"
+              defaultValue={DEFAULT_APP_SPEC_PROMPTS.generateFeaturesFromSpecPrompt}
+              customValue={promptCustomization?.appSpec?.generateFeaturesFromSpecPrompt}
+              onCustomValueChange={(value) =>
+                updatePrompt('appSpec', 'generateFeaturesFromSpecPrompt', value)
+              }
+              critical={true}
+            />
+          </PromptTabContent>
 
           {/* Context Description Tab */}
-          <TabsContent value="context-description" className="space-y-6 mt-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-medium text-foreground">Context Description Prompts</h3>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => resetToDefaults('contextDescription')}
-                className="gap-2"
-              >
-                <RotateCcw className="w-3 h-3" />
-                Reset Section
-              </Button>
-            </div>
+          <PromptTabContent
+            value="context-description"
+            title="Context Description Prompts"
+            category="contextDescription"
+            onReset={resetToDefaults}
+          >
+            <PromptField
+              label="Describe File Prompt"
+              description="Prompt for generating descriptions of text files added as context"
+              defaultValue={DEFAULT_CONTEXT_DESCRIPTION_PROMPTS.describeFilePrompt}
+              customValue={promptCustomization?.contextDescription?.describeFilePrompt}
+              onCustomValueChange={(value) =>
+                updatePrompt('contextDescription', 'describeFilePrompt', value)
+              }
+            />
 
-            <div className="space-y-4">
-              <PromptField
-                label="Describe File Prompt"
-                description="Prompt for generating descriptions of text files added as context"
-                defaultValue={DEFAULT_CONTEXT_DESCRIPTION_PROMPTS.describeFilePrompt}
-                customValue={promptCustomization?.contextDescription?.describeFilePrompt}
-                onCustomValueChange={(value) =>
-                  updatePrompt('contextDescription', 'describeFilePrompt', value)
-                }
-              />
-
-              <PromptField
-                label="Describe Image Prompt"
-                description="Prompt for generating descriptions of images added as context"
-                defaultValue={DEFAULT_CONTEXT_DESCRIPTION_PROMPTS.describeImagePrompt}
-                customValue={promptCustomization?.contextDescription?.describeImagePrompt}
-                onCustomValueChange={(value) =>
-                  updatePrompt('contextDescription', 'describeImagePrompt', value)
-                }
-              />
-            </div>
-          </TabsContent>
+            <PromptField
+              label="Describe Image Prompt"
+              description="Prompt for generating descriptions of images added as context"
+              defaultValue={DEFAULT_CONTEXT_DESCRIPTION_PROMPTS.describeImagePrompt}
+              customValue={promptCustomization?.contextDescription?.describeImagePrompt}
+              onCustomValueChange={(value) =>
+                updatePrompt('contextDescription', 'describeImagePrompt', value)
+              }
+            />
+          </PromptTabContent>
 
           {/* Suggestions Tab */}
-          <TabsContent value="suggestions" className="space-y-6 mt-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-medium text-foreground">Suggestions Prompts</h3>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => resetToDefaults('suggestions')}
-                className="gap-2"
-              >
-                <RotateCcw className="w-3 h-3" />
-                Reset Section
-              </Button>
-            </div>
+          <PromptTabContent
+            value="suggestions"
+            title="Suggestions Prompts"
+            category="suggestions"
+            onReset={resetToDefaults}
+          >
+            <PromptField
+              label="Features Suggestion Prompt"
+              description="Prompt for analyzing the project and suggesting new features"
+              defaultValue={DEFAULT_SUGGESTIONS_PROMPTS.featuresPrompt}
+              customValue={promptCustomization?.suggestions?.featuresPrompt}
+              onCustomValueChange={(value) => updatePrompt('suggestions', 'featuresPrompt', value)}
+            />
 
-            <div className="space-y-4">
-              <PromptField
-                label="Features Suggestion Prompt"
-                description="Prompt for analyzing the project and suggesting new features"
-                defaultValue={DEFAULT_SUGGESTIONS_PROMPTS.featuresPrompt}
-                customValue={promptCustomization?.suggestions?.featuresPrompt}
-                onCustomValueChange={(value) =>
-                  updatePrompt('suggestions', 'featuresPrompt', value)
-                }
-              />
+            <PromptField
+              label="Refactoring Suggestion Prompt"
+              description="Prompt for identifying refactoring opportunities"
+              defaultValue={DEFAULT_SUGGESTIONS_PROMPTS.refactoringPrompt}
+              customValue={promptCustomization?.suggestions?.refactoringPrompt}
+              onCustomValueChange={(value) =>
+                updatePrompt('suggestions', 'refactoringPrompt', value)
+              }
+            />
 
-              <PromptField
-                label="Refactoring Suggestion Prompt"
-                description="Prompt for identifying refactoring opportunities"
-                defaultValue={DEFAULT_SUGGESTIONS_PROMPTS.refactoringPrompt}
-                customValue={promptCustomization?.suggestions?.refactoringPrompt}
-                onCustomValueChange={(value) =>
-                  updatePrompt('suggestions', 'refactoringPrompt', value)
-                }
-              />
+            <PromptField
+              label="Security Suggestion Prompt"
+              description="Prompt for analyzing security vulnerabilities"
+              defaultValue={DEFAULT_SUGGESTIONS_PROMPTS.securityPrompt}
+              customValue={promptCustomization?.suggestions?.securityPrompt}
+              onCustomValueChange={(value) => updatePrompt('suggestions', 'securityPrompt', value)}
+            />
 
-              <PromptField
-                label="Security Suggestion Prompt"
-                description="Prompt for analyzing security vulnerabilities"
-                defaultValue={DEFAULT_SUGGESTIONS_PROMPTS.securityPrompt}
-                customValue={promptCustomization?.suggestions?.securityPrompt}
-                onCustomValueChange={(value) =>
-                  updatePrompt('suggestions', 'securityPrompt', value)
-                }
-              />
+            <PromptField
+              label="Performance Suggestion Prompt"
+              description="Prompt for identifying performance issues"
+              defaultValue={DEFAULT_SUGGESTIONS_PROMPTS.performancePrompt}
+              customValue={promptCustomization?.suggestions?.performancePrompt}
+              onCustomValueChange={(value) =>
+                updatePrompt('suggestions', 'performancePrompt', value)
+              }
+            />
 
-              <PromptField
-                label="Performance Suggestion Prompt"
-                description="Prompt for identifying performance issues"
-                defaultValue={DEFAULT_SUGGESTIONS_PROMPTS.performancePrompt}
-                customValue={promptCustomization?.suggestions?.performancePrompt}
-                onCustomValueChange={(value) =>
-                  updatePrompt('suggestions', 'performancePrompt', value)
-                }
-              />
-
-              <PromptField
-                label="Base Template"
-                description="Base template applied to all suggestion types"
-                defaultValue={DEFAULT_SUGGESTIONS_PROMPTS.baseTemplate}
-                customValue={promptCustomization?.suggestions?.baseTemplate}
-                onCustomValueChange={(value) => updatePrompt('suggestions', 'baseTemplate', value)}
-              />
-            </div>
-          </TabsContent>
+            <PromptField
+              label="Base Template"
+              description="Base template applied to all suggestion types"
+              defaultValue={DEFAULT_SUGGESTIONS_PROMPTS.baseTemplate}
+              customValue={promptCustomization?.suggestions?.baseTemplate}
+              onCustomValueChange={(value) => updatePrompt('suggestions', 'baseTemplate', value)}
+            />
+          </PromptTabContent>
 
           {/* Task Execution Tab */}
-          <TabsContent value="task-execution" className="space-y-6 mt-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-medium text-foreground">Task Execution Prompts</h3>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => resetToDefaults('taskExecution')}
-                className="gap-2"
-              >
-                <RotateCcw className="w-3 h-3" />
-                Reset Section
-              </Button>
-            </div>
-
-            {/* Info Banner for Task Execution */}
-            <div className="flex items-start gap-3 p-4 rounded-xl bg-blue-500/10 border border-blue-500/20">
-              <Info className="w-5 h-5 text-blue-500 mt-0.5 flex-shrink-0" />
-              <div className="space-y-1">
-                <p className="text-sm text-foreground font-medium">Template Variables</p>
-                <p className="text-xs text-muted-foreground/80 leading-relaxed">
-                  Task execution prompts use Handlebars syntax for variable substitution. Variables
-                  include{' '}
-                  <code className="px-1 py-0.5 rounded bg-muted text-xs">{'{{taskId}}'}</code>,{' '}
-                  <code className="px-1 py-0.5 rounded bg-muted text-xs">
-                    {'{{taskDescription}}'}
-                  </code>
-                  ,{' '}
-                  <code className="px-1 py-0.5 rounded bg-muted text-xs">
-                    {'{{completedTasks}}'}
-                  </code>
-                  , etc.
-                </p>
+          <PromptTabContent
+            value="task-execution"
+            title="Task Execution Prompts"
+            category="taskExecution"
+            onReset={resetToDefaults}
+            infoBanner={
+              <div className="flex items-start gap-3 p-4 rounded-xl bg-blue-500/10 border border-blue-500/20">
+                <Info className="w-5 h-5 text-blue-500 mt-0.5 shrink-0" />
+                <div className="space-y-1">
+                  <p className="text-sm text-foreground font-medium">Template Variables</p>
+                  <p className="text-xs text-muted-foreground/80 leading-relaxed">
+                    Task execution prompts use Handlebars syntax for variable substitution.
+                    Variables include{' '}
+                    <code className="px-1 py-0.5 rounded bg-muted text-xs">{'{{taskId}}'}</code>,{' '}
+                    <code className="px-1 py-0.5 rounded bg-muted text-xs">
+                      {'{{taskDescription}}'}
+                    </code>
+                    ,{' '}
+                    <code className="px-1 py-0.5 rounded bg-muted text-xs">
+                      {'{{completedTasks}}'}
+                    </code>
+                    , etc.
+                  </p>
+                </div>
               </div>
-            </div>
+            }
+          >
+            <PromptField
+              label="Task Prompt Template"
+              description="Template for building individual task execution prompts"
+              defaultValue={DEFAULT_TASK_EXECUTION_PROMPTS.taskPromptTemplate}
+              customValue={promptCustomization?.taskExecution?.taskPromptTemplate}
+              onCustomValueChange={(value) =>
+                updatePrompt('taskExecution', 'taskPromptTemplate', value)
+              }
+            />
 
-            <div className="space-y-4">
-              <PromptField
-                label="Task Prompt Template"
-                description="Template for building individual task execution prompts"
-                defaultValue={DEFAULT_TASK_EXECUTION_PROMPTS.taskPromptTemplate}
-                customValue={promptCustomization?.taskExecution?.taskPromptTemplate}
-                onCustomValueChange={(value) =>
-                  updatePrompt('taskExecution', 'taskPromptTemplate', value)
-                }
-              />
+            <PromptField
+              label="Implementation Instructions"
+              description="Instructions appended to feature implementation prompts"
+              defaultValue={DEFAULT_TASK_EXECUTION_PROMPTS.implementationInstructions}
+              customValue={promptCustomization?.taskExecution?.implementationInstructions}
+              onCustomValueChange={(value) =>
+                updatePrompt('taskExecution', 'implementationInstructions', value)
+              }
+            />
 
-              <PromptField
-                label="Implementation Instructions"
-                description="Instructions appended to feature implementation prompts"
-                defaultValue={DEFAULT_TASK_EXECUTION_PROMPTS.implementationInstructions}
-                customValue={promptCustomization?.taskExecution?.implementationInstructions}
-                onCustomValueChange={(value) =>
-                  updatePrompt('taskExecution', 'implementationInstructions', value)
-                }
-              />
+            <PromptField
+              label="Playwright Verification Instructions"
+              description="Instructions for automated Playwright verification (when enabled)"
+              defaultValue={DEFAULT_TASK_EXECUTION_PROMPTS.playwrightVerificationInstructions}
+              customValue={promptCustomization?.taskExecution?.playwrightVerificationInstructions}
+              onCustomValueChange={(value) =>
+                updatePrompt('taskExecution', 'playwrightVerificationInstructions', value)
+              }
+            />
 
-              <PromptField
-                label="Playwright Verification Instructions"
-                description="Instructions for automated Playwright verification (when enabled)"
-                defaultValue={DEFAULT_TASK_EXECUTION_PROMPTS.playwrightVerificationInstructions}
-                customValue={promptCustomization?.taskExecution?.playwrightVerificationInstructions}
-                onCustomValueChange={(value) =>
-                  updatePrompt('taskExecution', 'playwrightVerificationInstructions', value)
-                }
-              />
+            <PromptField
+              label="Learning Extraction System Prompt"
+              description="System prompt for extracting learnings/ADRs from implementation output"
+              defaultValue={DEFAULT_TASK_EXECUTION_PROMPTS.learningExtractionSystemPrompt}
+              customValue={promptCustomization?.taskExecution?.learningExtractionSystemPrompt}
+              onCustomValueChange={(value) =>
+                updatePrompt('taskExecution', 'learningExtractionSystemPrompt', value)
+              }
+              critical={true}
+            />
 
-              <PromptField
-                label="Learning Extraction System Prompt"
-                description="System prompt for extracting learnings/ADRs from implementation output"
-                defaultValue={DEFAULT_TASK_EXECUTION_PROMPTS.learningExtractionSystemPrompt}
-                customValue={promptCustomization?.taskExecution?.learningExtractionSystemPrompt}
-                onCustomValueChange={(value) =>
-                  updatePrompt('taskExecution', 'learningExtractionSystemPrompt', value)
-                }
-                critical={true}
-              />
+            <PromptField
+              label="Learning Extraction User Template"
+              description="User prompt template for learning extraction. Variables: featureTitle, implementationLog"
+              defaultValue={DEFAULT_TASK_EXECUTION_PROMPTS.learningExtractionUserPromptTemplate}
+              customValue={promptCustomization?.taskExecution?.learningExtractionUserPromptTemplate}
+              onCustomValueChange={(value) =>
+                updatePrompt('taskExecution', 'learningExtractionUserPromptTemplate', value)
+              }
+              critical={true}
+            />
 
-              <PromptField
-                label="Learning Extraction User Template"
-                description="User prompt template for learning extraction. Variables: featureTitle, implementationLog"
-                defaultValue={DEFAULT_TASK_EXECUTION_PROMPTS.learningExtractionUserPromptTemplate}
-                customValue={
-                  promptCustomization?.taskExecution?.learningExtractionUserPromptTemplate
-                }
-                onCustomValueChange={(value) =>
-                  updatePrompt('taskExecution', 'learningExtractionUserPromptTemplate', value)
-                }
-                critical={true}
-              />
+            <PromptField
+              label="Plan Revision Template"
+              description="Template for prompting plan revisions. Variables: planVersion, previousPlan, userFeedback"
+              defaultValue={DEFAULT_TASK_EXECUTION_PROMPTS.planRevisionTemplate}
+              customValue={promptCustomization?.taskExecution?.planRevisionTemplate}
+              onCustomValueChange={(value) =>
+                updatePrompt('taskExecution', 'planRevisionTemplate', value)
+              }
+            />
 
-              <PromptField
-                label="Plan Revision Template"
-                description="Template for prompting plan revisions. Variables: planVersion, previousPlan, userFeedback"
-                defaultValue={DEFAULT_TASK_EXECUTION_PROMPTS.planRevisionTemplate}
-                customValue={promptCustomization?.taskExecution?.planRevisionTemplate}
-                onCustomValueChange={(value) =>
-                  updatePrompt('taskExecution', 'planRevisionTemplate', value)
-                }
-              />
+            <PromptField
+              label="Continuation After Approval Template"
+              description="Template for continuation after plan approval. Variables: userFeedback, approvedPlan"
+              defaultValue={DEFAULT_TASK_EXECUTION_PROMPTS.continuationAfterApprovalTemplate}
+              customValue={promptCustomization?.taskExecution?.continuationAfterApprovalTemplate}
+              onCustomValueChange={(value) =>
+                updatePrompt('taskExecution', 'continuationAfterApprovalTemplate', value)
+              }
+            />
 
-              <PromptField
-                label="Continuation After Approval Template"
-                description="Template for continuation after plan approval. Variables: userFeedback, approvedPlan"
-                defaultValue={DEFAULT_TASK_EXECUTION_PROMPTS.continuationAfterApprovalTemplate}
-                customValue={promptCustomization?.taskExecution?.continuationAfterApprovalTemplate}
-                onCustomValueChange={(value) =>
-                  updatePrompt('taskExecution', 'continuationAfterApprovalTemplate', value)
-                }
-              />
+            <PromptField
+              label="Resume Feature Template"
+              description="Template for resuming interrupted features. Variables: featurePrompt, previousContext"
+              defaultValue={DEFAULT_TASK_EXECUTION_PROMPTS.resumeFeatureTemplate}
+              customValue={promptCustomization?.taskExecution?.resumeFeatureTemplate}
+              onCustomValueChange={(value) =>
+                updatePrompt('taskExecution', 'resumeFeatureTemplate', value)
+              }
+            />
 
-              <PromptField
-                label="Resume Feature Template"
-                description="Template for resuming interrupted features. Variables: featurePrompt, previousContext"
-                defaultValue={DEFAULT_TASK_EXECUTION_PROMPTS.resumeFeatureTemplate}
-                customValue={promptCustomization?.taskExecution?.resumeFeatureTemplate}
-                onCustomValueChange={(value) =>
-                  updatePrompt('taskExecution', 'resumeFeatureTemplate', value)
-                }
-              />
-
-              <PromptField
-                label="Project Analysis Prompt"
-                description="Prompt for AI-powered project analysis"
-                defaultValue={DEFAULT_TASK_EXECUTION_PROMPTS.projectAnalysisPrompt}
-                customValue={promptCustomization?.taskExecution?.projectAnalysisPrompt}
-                onCustomValueChange={(value) =>
-                  updatePrompt('taskExecution', 'projectAnalysisPrompt', value)
-                }
-              />
-            </div>
-          </TabsContent>
+            <PromptField
+              label="Project Analysis Prompt"
+              description="Prompt for AI-powered project analysis"
+              defaultValue={DEFAULT_TASK_EXECUTION_PROMPTS.projectAnalysisPrompt}
+              customValue={promptCustomization?.taskExecution?.projectAnalysisPrompt}
+              onCustomValueChange={(value) =>
+                updatePrompt('taskExecution', 'projectAnalysisPrompt', value)
+              }
+            />
+          </PromptTabContent>
         </Tabs>
       </div>
     </div>
