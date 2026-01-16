@@ -39,7 +39,7 @@ SERVER_PORT=$DEFAULT_SERVER_PORT
 
 # Extract VERSION from package.json (using node for reliable JSON parsing)
 if command -v node &> /dev/null; then
-    VERSION="v$(node -p "require('./package.json').version" 2>/dev/null || echo "0.0.0")"
+    VERSION="v$(node -p "require('$SCRIPT_DIR/package.json').version" 2>/dev/null || echo "0.0.0")"
 else
     VERSION=$(grep '"version"' "$SCRIPT_DIR/package.json" | head -1 | sed 's/.*"version"[^"]*"\([^"]*\)".*/v\1/')
 fi
