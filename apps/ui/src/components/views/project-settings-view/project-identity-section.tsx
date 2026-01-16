@@ -8,6 +8,7 @@ import { useAppStore } from '@/store/app-store';
 import { IconPicker } from '@/components/layout/project-switcher/components/icon-picker';
 import { getAuthenticatedImageUrl } from '@/lib/api-fetch';
 import { getHttpApiClient } from '@/lib/http-api-client';
+import { toast } from 'sonner';
 import type { Project } from '@/lib/electron';
 
 interface ProjectIdentitySectionProps {
@@ -61,11 +62,17 @@ export function ProjectIdentitySection({ project }: ProjectIdentitySectionProps)
     // Validate file type
     const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
     if (!validTypes.includes(file.type)) {
+      toast.error('Invalid file type', {
+        description: 'Please upload a PNG, JPG, GIF, or WebP image.',
+      });
       return;
     }
 
     // Validate file size (max 2MB for icons)
     if (file.size > 2 * 1024 * 1024) {
+      toast.error('File too large', {
+        description: 'Please upload an image smaller than 2MB.',
+      });
       return;
     }
 
@@ -74,20 +81,39 @@ export function ProjectIdentitySection({ project }: ProjectIdentitySectionProps)
       // Convert to base64
       const reader = new FileReader();
       reader.onload = async () => {
-        const base64Data = reader.result as string;
-        const result = await getHttpApiClient().saveImageToTemp(
-          base64Data,
-          `project-icon-${file.name}`,
-          file.type,
-          project.path
-        );
-        if (result.success && result.path) {
-          handleCustomIconChange(result.path);
+        try {
+          const base64Data = reader.result as string;
+          const result = await getHttpApiClient().saveImageToTemp(
+            base64Data,
+            `project-icon-${file.name}`,
+            file.type,
+            project.path
+          );
+          if (result.success && result.path) {
+            handleCustomIconChange(result.path);
+            toast.success('Icon uploaded successfully');
+          } else {
+            toast.error('Failed to upload icon', {
+              description: result.error || 'Please try again.',
+            });
+          }
+        } catch (error) {
+          toast.error('Failed to upload icon', {
+            description: 'Network error. Please try again.',
+          });
+        } finally {
+          setIsUploadingIcon(false);
         }
+      };
+      reader.onerror = () => {
+        toast.error('Failed to read file', {
+          description: 'Please try again with a different file.',
+        });
         setIsUploadingIcon(false);
       };
       reader.readAsDataURL(file);
     } catch {
+      toast.error('Failed to upload icon');
       setIsUploadingIcon(false);
     }
   };

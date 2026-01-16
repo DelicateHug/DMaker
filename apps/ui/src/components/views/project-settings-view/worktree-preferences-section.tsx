@@ -64,35 +64,48 @@ export function WorktreePreferencesSection({ project }: WorktreePreferencesSecti
 
   // Load project settings (including useWorktrees) when project changes
   useEffect(() => {
+    let isCancelled = false;
+    const currentPath = project.path;
+
     const loadProjectSettings = async () => {
       try {
         const httpClient = getHttpApiClient();
-        const response = await httpClient.settings.getProject(project.path);
+        const response = await httpClient.settings.getProject(currentPath);
+
+        // Avoid updating state if component unmounted or project changed
+        if (isCancelled) return;
+
         if (response.success && response.settings) {
           // Sync useWorktrees to store if it has a value
           if (response.settings.useWorktrees !== undefined) {
-            setProjectUseWorktrees(project.path, response.settings.useWorktrees);
+            setProjectUseWorktrees(currentPath, response.settings.useWorktrees);
           }
           // Also sync other settings to store
           if (response.settings.showInitScriptIndicator !== undefined) {
-            setShowInitScriptIndicator(project.path, response.settings.showInitScriptIndicator);
+            setShowInitScriptIndicator(currentPath, response.settings.showInitScriptIndicator);
           }
           if (response.settings.defaultDeleteBranchWithWorktree !== undefined) {
-            setDefaultDeleteBranch(project.path, response.settings.defaultDeleteBranchWithWorktree);
+            setDefaultDeleteBranch(currentPath, response.settings.defaultDeleteBranchWithWorktree);
           }
           if (response.settings.autoDismissInitScriptIndicator !== undefined) {
             setAutoDismissInitScriptIndicator(
-              project.path,
+              currentPath,
               response.settings.autoDismissInitScriptIndicator
             );
           }
         }
       } catch (error) {
-        console.error('Failed to load project settings:', error);
+        if (!isCancelled) {
+          console.error('Failed to load project settings:', error);
+        }
       }
     };
 
     loadProjectSettings();
+
+    return () => {
+      isCancelled = true;
+    };
   }, [
     project.path,
     setProjectUseWorktrees,
@@ -103,12 +116,19 @@ export function WorktreePreferencesSection({ project }: WorktreePreferencesSecti
 
   // Load init script content when project changes
   useEffect(() => {
+    let isCancelled = false;
+    const currentPath = project.path;
+
     const loadInitScript = async () => {
       setIsLoading(true);
       try {
         const response = await apiGet<InitScriptResponse>(
-          `/api/worktree/init-script?projectPath=${encodeURIComponent(project.path)}`
+          `/api/worktree/init-script?projectPath=${encodeURIComponent(currentPath)}`
         );
+
+        // Avoid updating state if component unmounted or project changed
+        if (isCancelled) return;
+
         if (response.success) {
           const content = response.content || '';
           setScriptContent(content);
@@ -116,13 +136,21 @@ export function WorktreePreferencesSection({ project }: WorktreePreferencesSecti
           setScriptExists(response.exists);
         }
       } catch (error) {
-        console.error('Failed to load init script:', error);
+        if (!isCancelled) {
+          console.error('Failed to load init script:', error);
+        }
       } finally {
-        setIsLoading(false);
+        if (!isCancelled) {
+          setIsLoading(false);
+        }
       }
     };
 
     loadInitScript();
+
+    return () => {
+      isCancelled = true;
+    };
   }, [project.path]);
 
   // Save script
