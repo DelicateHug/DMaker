@@ -231,8 +231,7 @@
         "libuuid"
       ],
       "compression": "xz",
-      "vendor": "AutoMaker Team",
-      "license": "SEE LICENSE IN LICENSE"
+      "vendor": "AutoMaker Team"
     },
     "nsis": {
       "oneClick": false,
