@@ -299,6 +299,8 @@ export interface KeyboardShortcuts {
   context: string;
   /** Open settings */
   settings: string;
+  /** Open project settings */
+  projectSettings: string;
   /** Open terminal */
   terminal: string;
   /** Open notifications */
@@ -804,6 +806,7 @@ export const DEFAULT_KEYBOARD_SHORTCUTS: KeyboardShortcuts = {
   spec: 'D',
   context: 'C',
   settings: 'S',
+  projectSettings: 'Shift+S',
   terminal: 'T',
   notifications: 'X',
   toggleSidebar: '`',

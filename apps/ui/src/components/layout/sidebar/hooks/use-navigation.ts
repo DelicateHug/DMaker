@@ -12,6 +12,7 @@ import {
   Brain,
   Network,
   Bell,
+  Settings,
 } from 'lucide-react';
 import type { NavSection, NavItem } from '../types';
 import type { KeyboardShortcut } from '@/hooks/use-keyboard-shortcuts';
@@ -33,6 +34,7 @@ interface UseNavigationProps {
     agent: string;
     terminal: string;
     settings: string;
+    projectSettings: string;
     ideation: string;
     githubIssues: string;
     githubPrs: string;
@@ -218,6 +220,19 @@ export function useNavigation({
       ],
     });
 
+    // Add Project Settings as a standalone section (no label for visual separation)
+    sections.push({
+      label: '',
+      items: [
+        {
+          id: 'project-settings',
+          label: 'Project Settings',
+          icon: Settings,
+          shortcut: shortcuts.projectSettings,
+        },
+      ],
+    });
+
     return sections;
   }, [
     shortcuts,
@@ -277,11 +292,11 @@ export function useNavigation({
         });
       });
 
-      // Add settings shortcut
+      // Add global settings shortcut
       shortcutsList.push({
         key: shortcuts.settings,
         action: () => navigate({ to: '/settings' }),
-        description: 'Navigate to Settings',
+        description: 'Navigate to Global Settings',
       });
     }
 

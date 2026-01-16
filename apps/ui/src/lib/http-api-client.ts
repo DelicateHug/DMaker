@@ -2175,6 +2175,9 @@ export class HttpApiClient implements ElectronAPI {
           hideScrollbar: boolean;
         };
         worktreePanelVisible?: boolean;
+        showInitScriptIndicator?: boolean;
+        defaultDeleteBranchWithWorktree?: boolean;
+        autoDismissInitScriptIndicator?: boolean;
         lastSelectedSessionId?: string;
       };
       error?: string;
