@@ -15,8 +15,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 HISTORY_FILE="${HOME}/.automaker_launcher_history"
 MIN_TERM_WIDTH=70
 MIN_TERM_HEIGHT=20
-MENU_BOX_WIDTH=60
-MENU_INNER_WIDTH=58
+MENU_BOX_WIDTH=66
+MENU_INNER_WIDTH=64
 LOGO_WIDTH=52
 INPUT_TIMEOUT=30
 SELECTED_OPTION=1
@@ -639,16 +639,16 @@ show_menu() {
     [[ -z "$sel3" ]] && sel3="  ${C_MUTE}"
     [[ -z "$sel4" ]] && sel4="  ${C_MUTE}"
 
-    printf "%s${border}${sel1}[1]${RESET} 🌐  ${txt1}Web App${RESET}           ${C_MUTE}Server + Browser (localhost:$WEB_PORT)${RESET}  ${border}\n" "$pad"
-    printf "%s${border}${sel2}[2]${RESET} 🖥   ${txt2}Electron${RESET}          ${DIM}Desktop App (embedded server)${RESET}   ${border}\n" "$pad"
-    printf "%s${border}${sel3}[3]${RESET} 🐳  ${txt3}Docker${RESET}            ${DIM}Full Stack (live reload)${RESET}        ${border}\n" "$pad"
-    printf "%s${border}${sel4}[4]${RESET} 🔗  ${txt4}Electron & Docker${RESET}   ${DIM}Desktop + Docker Server${RESET}         ${border}\n" "$pad"
+    printf "%s${border}${sel1}[1]${RESET} 🌐  ${txt1}Web App${RESET}           ${C_MUTE}Server + Browser (localhost:$WEB_PORT)${RESET}   ${border}\n" "$pad"
+    printf "%s${border}${sel2}[2]${RESET} 🖥   ${txt2}Electron${RESET}          ${DIM}Desktop App (embedded server)${RESET}       ${border}\n" "$pad"
+    printf "%s${border}${sel3}[3]${RESET} 🐳  ${txt3}Docker${RESET}            ${DIM}Full Stack (live reload)${RESET}            ${border}\n" "$pad"
+    printf "%s${border}${sel4}[4]${RESET} 🔗  ${txt4}Electron & Docker${RESET} ${DIM}Desktop + Docker Server${RESET}             ${border}\n" "$pad"
 
     printf "%s${C_GRAY}├" "$pad"
     draw_line "─" "$C_GRAY" "$MENU_INNER_WIDTH"
     printf "┤${RESET}\n"
 
-    printf "%s${border}    ${C_RED}[Q]${RESET} ⏻   ${C_MUTE}Exit${RESET}                                          ${border}\n" "$pad"
+    printf "%s${border}    ${C_RED}[Q]${RESET} ⏻   ${C_MUTE}Exit${RESET}                                                ${border}\n" "$pad"
 
     printf "%s${C_GRAY}╰" "$pad"
     draw_line "─" "$C_GRAY" "$MENU_INNER_WIDTH"
