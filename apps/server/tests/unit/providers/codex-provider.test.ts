@@ -388,6 +388,13 @@ describe('codex-provider.ts', () => {
       );
     });
 
+    it('falls back to 1.0 multiplier for invalid reasoning effort', () => {
+      // Test that invalid values fallback gracefully to default multiplier
+      // This tests the defensive ?? 1.0 in calculateReasoningTimeout
+      const invalidEffort = 'invalid_effort' as never;
+      expect(calculateReasoningTimeout(invalidEffort)).toBe(DEFAULT_TIMEOUT_MS);
+    });
+
     it('produces expected absolute timeout values', () => {
       // Verify the actual timeout values that will be used:
       // none: 30000ms (30s)

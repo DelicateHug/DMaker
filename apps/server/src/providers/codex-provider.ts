@@ -34,7 +34,7 @@ import {
   supportsReasoningEffort,
   validateBareModelId,
   calculateReasoningTimeout,
-  DEFAULT_TIMEOUT_MS as TYPES_DEFAULT_TIMEOUT_MS,
+  DEFAULT_TIMEOUT_MS,
   type CodexApprovalPolicy,
   type CodexSandboxMode,
   type CodexAuthStatus,
@@ -100,7 +100,7 @@ const TEXT_ENCODING = 'utf-8';
  * reasoning effort, this timeout is dynamically extended via calculateReasoningTimeout().
  * @see calculateReasoningTimeout from @automaker/types
  */
-const CODEX_CLI_TIMEOUT_MS = TYPES_DEFAULT_TIMEOUT_MS;
+const CODEX_CLI_TIMEOUT_MS = DEFAULT_TIMEOUT_MS;
 const CONTEXT_WINDOW_256K = 256000;
 const MAX_OUTPUT_32K = 32000;
 const MAX_OUTPUT_16K = 16000;
