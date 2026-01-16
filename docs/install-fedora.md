@@ -43,18 +43,20 @@ See main [README.md authentication section](../README.md#authentication) for det
 
 ### Option 2: Install Directly from URL
 
-Install from GitHub releases URL without downloading first:
+Install from GitHub releases URL without downloading first. Visit [releases page](https://github.com/AutoMaker-Org/automaker/releases) to find the latest version.
 
 **Fedora:**
 
 ```bash
-sudo dnf install https://github.com/AutoMaker-Org/automaker/releases/latest/download/Automaker-<version>-x86_64.rpm
+# Replace v0.11.0 with the actual latest version
+sudo dnf install https://github.com/AutoMaker-Org/automaker/releases/download/v0.11.0/Automaker-0.11.0-x86_64.rpm
 ```
 
 **RHEL/CentOS:**
 
 ```bash
-sudo yum install https://github.com/AutoMaker-Org/automaker/releases/latest/download/Automaker-<version>-x86_64.rpm
+# Replace v0.11.0 with the actual latest version
+sudo yum install https://github.com/AutoMaker-Org/automaker/releases/download/v0.11.0/Automaker-0.11.0-x86_64.rpm
 ```
 
 ## Running Automaker
@@ -289,13 +291,13 @@ If Claude API calls fail:
 
 ```bash
 # Test internet connectivity
-ping claude.ai
+ping -c 3 api.anthropic.com
 
 # Test API access
 curl -I https://api.anthropic.com
 
-# Verify API key
-echo $ANTHROPIC_API_KEY
+# Verify API key is set (without exposing the value)
+[ -n "$ANTHROPIC_API_KEY" ] && echo "API key is set" || echo "API key is NOT set"
 ```
 
 ## Uninstallation
@@ -384,7 +386,11 @@ sudo yum update automaker
 
 # Or reinstall latest release
 sudo dnf remove automaker
-sudo dnf install https://github.com/AutoMaker-Org/automaker/releases/latest/download/Automaker-<version>-x86_64.rpm
+
+# Download the latest .rpm from releases page
+# https://github.com/AutoMaker-Org/automaker/releases
+# Then reinstall with:
+# sudo dnf install ./Automaker-<VERSION>-x86_64.rpm
 ```
 
 ## Getting Help
