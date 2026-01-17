@@ -1882,6 +1882,7 @@ export class HttpApiClient implements ElectronAPI {
         projectPath,
         maxFeatures,
       }),
+    sync: (projectPath: string) => this.post('/api/spec-regeneration/sync', { projectPath }),
     stop: (projectPath?: string) => this.post('/api/spec-regeneration/stop', { projectPath }),
     status: (projectPath?: string) =>
       this.get(

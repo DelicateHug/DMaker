@@ -1,5 +1,5 @@
 /**
- * POST /generate-features endpoint - Generate features from existing spec
+ * POST /sync endpoint - Sync spec with codebase and features
  */
 
 import type { Request, Response } from 'express';
@@ -12,27 +12,22 @@ import {
   logError,
   getErrorMessage,
 } from '../common.js';
-import { generateFeaturesFromSpec } from '../generate-features-from-spec.js';
+import { syncSpec } from '../sync-spec.js';
 import type { SettingsService } from '../../../services/settings-service.js';
 
-const logger = createLogger('SpecRegeneration');
+const logger = createLogger('SpecSync');
 
-export function createGenerateFeaturesHandler(
-  events: EventEmitter,
-  settingsService?: SettingsService
-) {
+export function createSyncHandler(events: EventEmitter, settingsService?: SettingsService) {
   return async (req: Request, res: Response): Promise<void> => {
-    logger.info('========== /generate-features endpoint called ==========');
+    logger.info('========== /sync endpoint called ==========');
     logger.debug('Request body:', JSON.stringify(req.body, null, 2));
 
     try {
-      const { projectPath, maxFeatures } = req.body as {
+      const { projectPath } = req.body as {
         projectPath: string;
-        maxFeatures?: number;
       };
 
       logger.debug('projectPath:', projectPath);
-      logger.debug('maxFeatures:', maxFeatures);
 
       if (!projectPath) {
         logger.error('Missing projectPath parameter');
@@ -42,34 +37,39 @@ export function createGenerateFeaturesHandler(
 
       const { isRunning } = getSpecRegenerationStatus(projectPath);
       if (isRunning) {
-        logger.warn('Generation already running for project:', projectPath);
-        res.json({ success: false, error: 'Generation already running for this project' });
+        logger.warn('Generation/sync already running for project:', projectPath);
+        res.json({ success: false, error: 'Operation already running for this project' });
         return;
       }
 
-      logAuthStatus('Before starting feature generation');
+      logAuthStatus('Before starting spec sync');
 
       const abortController = new AbortController();
-      setRunningState(projectPath, true, abortController, 'feature_generation');
-      logger.info('Starting background feature generation task...');
+      setRunningState(projectPath, true, abortController, 'sync');
+      logger.info('Starting background spec sync task...');
 
-      generateFeaturesFromSpec(projectPath, events, abortController, maxFeatures, settingsService)
+      syncSpec(projectPath, events, abortController, settingsService)
+        .then((result) => {
+          logger.info('Spec sync completed successfully');
+          logger.info('Result:', JSON.stringify(result, null, 2));
+        })
         .catch((error) => {
-          logError(error, 'Feature generation failed with error');
+          logError(error, 'Spec sync failed with error');
           events.emit('spec-regeneration:event', {
-            type: 'features_error',
+            type: 'spec_regeneration_error',
             error: getErrorMessage(error),
+            projectPath,
           });
         })
         .finally(() => {
-          logger.info('Feature generation task finished (success or error)');
+          logger.info('Spec sync task finished (success or error)');
           setRunningState(projectPath, false, null);
         });
 
-      logger.info('Returning success response (generation running in background)');
+      logger.info('Returning success response (sync running in background)');
       res.json({ success: true });
     } catch (error) {
-      logError(error, 'Generate features route handler failed');
+      logError(error, 'Sync route handler failed');
       res.status(500).json({ success: false, error: getErrorMessage(error) });
     }
   };

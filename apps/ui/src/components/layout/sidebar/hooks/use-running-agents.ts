@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { createLogger } from '@automaker/utils/logger';
 import { getElectronAPI } from '@/lib/electron';
 
@@ -6,6 +6,7 @@ const logger = createLogger('RunningAgents');
 
 export function useRunningAgents() {
   const [runningAgentsCount, setRunningAgentsCount] = useState(0);
+  const fetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Fetch running agents count function - used for initial load and event-driven updates
   const fetchRunningAgentsCount = useCallback(async () => {
@@ -31,6 +32,16 @@ export function useRunningAgents() {
       logger.error('Error fetching running agents count:', error);
     }
   }, []);
+
+  // Debounced fetch to avoid excessive API calls from frequent events
+  const debouncedFetchRunningAgentsCount = useCallback(() => {
+    if (fetchTimeoutRef.current) {
+      clearTimeout(fetchTimeoutRef.current);
+    }
+    fetchTimeoutRef.current = setTimeout(() => {
+      fetchRunningAgentsCount();
+    }, 300);
+  }, [fetchRunningAgentsCount]);
 
   // Subscribe to auto-mode events to update running agents count in real-time
   useEffect(() => {
@@ -79,6 +90,41 @@ export function useRunningAgents() {
       unsubscribe();
     };
   }, [fetchRunningAgentsCount]);
+
+  // Subscribe to spec regeneration events to update running agents count
+  useEffect(() => {
+    const api = getElectronAPI();
+    if (!api.specRegeneration) return;
+
+    fetchRunningAgentsCount();
+
+    const unsubscribe = api.specRegeneration.onEvent((event) => {
+      logger.debug('Spec regeneration event for running agents hook', {
+        type: event.type,
+      });
+      // When spec regeneration completes or errors, refresh immediately
+      if (event.type === 'spec_regeneration_complete' || event.type === 'spec_regeneration_error') {
+        fetchRunningAgentsCount();
+      }
+      // For progress events, use debounced fetch to avoid excessive calls
+      else if (event.type === 'spec_regeneration_progress') {
+        debouncedFetchRunningAgentsCount();
+      }
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [fetchRunningAgentsCount, debouncedFetchRunningAgentsCount]);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (fetchTimeoutRef.current) {
+        clearTimeout(fetchTimeoutRef.current);
+      }
+    };
+  }, []);
 
   return {
     runningAgentsCount,

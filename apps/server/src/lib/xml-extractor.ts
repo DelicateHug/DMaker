@@ -463,3 +463,149 @@ export function fromSpecOutputFeatures(
       : {}),
   }));
 }
+
+/**
+ * Represents a roadmap phase extracted from XML
+ */
+export interface RoadmapPhase {
+  name: string;
+  status: string;
+  description?: string;
+}
+
+/**
+ * Extract the technology stack from app_spec.txt XML content
+ *
+ * @param specContent - The full XML content
+ * @param options - Optional extraction options
+ * @returns Array of technology names
+ */
+export function extractTechnologyStack(
+  specContent: string,
+  options: ExtractXmlOptions = {}
+): string[] {
+  const log = options.logger || logger;
+
+  const techSection = extractXmlSection(specContent, 'technology_stack', options);
+  if (!techSection) {
+    log.debug('No technology_stack section found');
+    return [];
+  }
+
+  const technologies = extractXmlElements(techSection, 'technology', options);
+  log.debug(`Extracted ${technologies.length} technologies`);
+  return technologies;
+}
+
+/**
+ * Update the technology_stack section in XML content
+ *
+ * @param specContent - The full XML content
+ * @param technologies - The new technology list
+ * @param options - Optional extraction options
+ * @returns Updated XML content
+ */
+export function updateTechnologyStack(
+  specContent: string,
+  technologies: string[],
+  options: ExtractXmlOptions = {}
+): string {
+  const log = options.logger || logger;
+  const indent = '  ';
+  const i2 = indent.repeat(2);
+
+  // Generate new section content
+  const techXml = technologies
+    .map((t) => `${i2}<technology>${escapeXml(t)}</technology>`)
+    .join('\n');
+  const newSection = `<technology_stack>\n${techXml}\n${indent}</technology_stack>`;
+
+  // Check if section exists
+  const sectionRegex = /<technology_stack>[\s\S]*?<\/technology_stack>/;
+
+  if (sectionRegex.test(specContent)) {
+    log.debug('Replacing existing technology_stack section');
+    return specContent.replace(sectionRegex, newSection);
+  }
+
+  log.debug('No technology_stack section found to update');
+  return specContent;
+}
+
+/**
+ * Extract roadmap phases from app_spec.txt XML content
+ *
+ * @param specContent - The full XML content
+ * @param options - Optional extraction options
+ * @returns Array of roadmap phases
+ */
+export function extractRoadmapPhases(
+  specContent: string,
+  options: ExtractXmlOptions = {}
+): RoadmapPhase[] {
+  const log = options.logger || logger;
+  const phases: RoadmapPhase[] = [];
+
+  const roadmapSection = extractXmlSection(specContent, 'implementation_roadmap', options);
+  if (!roadmapSection) {
+    log.debug('No implementation_roadmap section found');
+    return phases;
+  }
+
+  // Extract individual phase blocks
+  const phaseRegex = /<phase>([\s\S]*?)<\/phase>/g;
+  const phaseMatches = roadmapSection.matchAll(phaseRegex);
+
+  for (const phaseMatch of phaseMatches) {
+    const phaseContent = phaseMatch[1];
+
+    const nameMatch = phaseContent.match(/<name>([\s\S]*?)<\/name>/);
+    const name = nameMatch ? unescapeXml(nameMatch[1].trim()) : '';
+
+    const statusMatch = phaseContent.match(/<status>([\s\S]*?)<\/status>/);
+    const status = statusMatch ? unescapeXml(statusMatch[1].trim()) : 'pending';
+
+    const descMatch = phaseContent.match(/<description>([\s\S]*?)<\/description>/);
+    const description = descMatch ? unescapeXml(descMatch[1].trim()) : undefined;
+
+    if (name) {
+      phases.push({ name, status, description });
+    }
+  }
+
+  log.debug(`Extracted ${phases.length} roadmap phases`);
+  return phases;
+}
+
+/**
+ * Update a roadmap phase status in XML content
+ *
+ * @param specContent - The full XML content
+ * @param phaseName - The name of the phase to update
+ * @param newStatus - The new status value
+ * @param options - Optional extraction options
+ * @returns Updated XML content
+ */
+export function updateRoadmapPhaseStatus(
+  specContent: string,
+  phaseName: string,
+  newStatus: string,
+  options: ExtractXmlOptions = {}
+): string {
+  const log = options.logger || logger;
+
+  // Find the phase and update its status
+  // Match the phase block containing the specific name
+  const phaseRegex = new RegExp(
+    `(<phase>\\s*<name>\\s*${escapeXml(phaseName)}\\s*<\\/name>\\s*<status>)[\\s\\S]*?(<\\/status>)`,
+    'i'
+  );
+
+  if (phaseRegex.test(specContent)) {
+    log.debug(`Updating phase "${phaseName}" status to "${newStatus}"`);
+    return specContent.replace(phaseRegex, `$1${escapeXml(newStatus)}$2`);
+  }
+
+  log.debug(`Phase "${phaseName}" not found`);
+  return specContent;
+}

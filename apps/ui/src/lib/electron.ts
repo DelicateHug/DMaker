@@ -437,6 +437,10 @@ export interface SpecRegenerationAPI {
     success: boolean;
     error?: string;
   }>;
+  sync: (projectPath: string) => Promise<{
+    success: boolean;
+    error?: string;
+  }>;
   stop: (projectPath?: string) => Promise<{ success: boolean; error?: string }>;
   status: (projectPath?: string) => Promise<{
     success: boolean;
@@ -2738,6 +2742,30 @@ function createMockSpecRegenerationAPI(): SpecRegenerationAPI {
 
       // Simulate async feature generation
       simulateFeatureGeneration(projectPath);
+
+      return { success: true };
+    },
+
+    sync: async (projectPath: string) => {
+      if (mockSpecRegenerationRunning) {
+        return {
+          success: false,
+          error: 'Spec sync is already running',
+        };
+      }
+
+      mockSpecRegenerationRunning = true;
+      console.log(`[Mock] Syncing spec for: ${projectPath}`);
+
+      // Simulate async spec sync (similar to feature generation but simpler)
+      setTimeout(() => {
+        emitSpecRegenerationEvent({
+          type: 'spec_regeneration_complete',
+          message: 'Spec synchronized successfully',
+          projectPath,
+        });
+        mockSpecRegenerationRunning = false;
+      }, 1000);
 
       return { success: true };
     },

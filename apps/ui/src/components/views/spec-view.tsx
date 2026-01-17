@@ -56,6 +56,9 @@ export function SpecView() {
     // Feature generation
     isGeneratingFeatures,
 
+    // Sync
+    isSyncing,
+
     // Status
     currentPhase,
     errorMessage,
@@ -63,6 +66,8 @@ export function SpecView() {
     // Handlers
     handleCreateSpec,
     handleRegenerate,
+    handleGenerateFeatures,
+    handleSync,
   } = useSpecGeneration({ loadSpec });
 
   // Reset hasChanges when spec is reloaded
@@ -86,10 +91,9 @@ export function SpecView() {
     );
   }
 
-  // Empty state - no spec exists or generation is running
-  // When generation is running, we skip loading the spec to avoid 500 errors,
-  // so we show the empty state with generation indicator
-  if (!specExists || isGenerationRunning) {
+  // Empty state - only show when spec doesn't exist AND no generation is running
+  // If generation is running but no spec exists, show the generating UI
+  if (!specExists) {
     // If generation is running (from loading hook check), ensure we show the generating UI
     const showAsGenerating = isCreating || isGenerationRunning;
 
@@ -127,14 +131,17 @@ export function SpecView() {
     <div className="flex-1 flex flex-col overflow-hidden content-bg" data-testid="spec-view">
       <SpecHeader
         projectPath={currentProject.path}
-        isRegenerating={isRegenerating}
+        isRegenerating={isRegenerating || isGenerationRunning}
         isCreating={isCreating}
         isGeneratingFeatures={isGeneratingFeatures}
+        isSyncing={isSyncing}
         isSaving={isSaving}
         hasChanges={hasChanges}
-        currentPhase={currentPhase}
+        currentPhase={currentPhase || (isGenerationRunning ? 'working' : '')}
         errorMessage={errorMessage}
         onRegenerateClick={() => setShowRegenerateDialog(true)}
+        onGenerateFeaturesClick={handleGenerateFeatures}
+        onSyncClick={handleSync}
         onSaveClick={saveSpec}
         showActionsPanel={showActionsPanel}
         onToggleActionsPanel={() => setShowActionsPanel(!showActionsPanel)}

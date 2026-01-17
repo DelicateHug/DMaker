@@ -3,7 +3,7 @@ import {
   HeaderActionsPanel,
   HeaderActionsPanelTrigger,
 } from '@/components/ui/header-actions-panel';
-import { Save, Sparkles, Loader2, FileText, AlertCircle } from 'lucide-react';
+import { Save, Sparkles, Loader2, FileText, AlertCircle, ListPlus, RefreshCcw } from 'lucide-react';
 import { PHASE_LABELS } from '../constants';
 
 interface SpecHeaderProps {
@@ -11,11 +11,14 @@ interface SpecHeaderProps {
   isRegenerating: boolean;
   isCreating: boolean;
   isGeneratingFeatures: boolean;
+  isSyncing: boolean;
   isSaving: boolean;
   hasChanges: boolean;
   currentPhase: string;
   errorMessage: string;
   onRegenerateClick: () => void;
+  onGenerateFeaturesClick: () => void;
+  onSyncClick: () => void;
   onSaveClick: () => void;
   showActionsPanel: boolean;
   onToggleActionsPanel: () => void;
@@ -26,16 +29,19 @@ export function SpecHeader({
   isRegenerating,
   isCreating,
   isGeneratingFeatures,
+  isSyncing,
   isSaving,
   hasChanges,
   currentPhase,
   errorMessage,
   onRegenerateClick,
+  onGenerateFeaturesClick,
+  onSyncClick,
   onSaveClick,
   showActionsPanel,
   onToggleActionsPanel,
 }: SpecHeaderProps) {
-  const isProcessing = isRegenerating || isCreating || isGeneratingFeatures;
+  const isProcessing = isRegenerating || isCreating || isGeneratingFeatures || isSyncing;
   const phaseLabel = PHASE_LABELS[currentPhase] || currentPhase;
 
   return (
@@ -58,11 +64,13 @@ export function SpecHeader({
               </div>
               <div className="flex flex-col gap-1 min-w-0">
                 <span className="text-sm font-semibold text-primary leading-tight tracking-tight">
-                  {isGeneratingFeatures
-                    ? 'Generating Features'
-                    : isCreating
-                      ? 'Generating Specification'
-                      : 'Regenerating Specification'}
+                  {isSyncing
+                    ? 'Syncing Specification'
+                    : isGeneratingFeatures
+                      ? 'Generating Features'
+                      : isCreating
+                        ? 'Generating Specification'
+                        : 'Regenerating Specification'}
                 </span>
                 {currentPhase && (
                   <span className="text-xs text-muted-foreground/90 leading-tight font-medium">
@@ -99,32 +107,42 @@ export function SpecHeader({
               <span className="text-xs font-medium text-destructive">Error</span>
             </div>
           )}
-          {/* Desktop: show actions inline */}
-          <div className="hidden lg:flex gap-2">
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={onRegenerateClick}
-              disabled={isProcessing}
-              data-testid="regenerate-spec"
-            >
-              {isRegenerating ? (
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              ) : (
+          {/* Desktop: show actions inline - hidden when processing since status card shows progress */}
+          {!isProcessing && (
+            <div className="hidden lg:flex gap-2">
+              <Button size="sm" variant="outline" onClick={onSyncClick} data-testid="sync-spec">
+                <RefreshCcw className="w-4 h-4 mr-2" />
+                Sync
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={onRegenerateClick}
+                data-testid="regenerate-spec"
+              >
                 <Sparkles className="w-4 h-4 mr-2" />
-              )}
-              {isRegenerating ? 'Regenerating...' : 'Regenerate'}
-            </Button>
-            <Button
-              size="sm"
-              onClick={onSaveClick}
-              disabled={!hasChanges || isSaving || isProcessing}
-              data-testid="save-spec"
-            >
-              <Save className="w-4 h-4 mr-2" />
-              {isSaving ? 'Saving...' : hasChanges ? 'Save Changes' : 'Saved'}
-            </Button>
-          </div>
+                Regenerate
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={onGenerateFeaturesClick}
+                data-testid="generate-features"
+              >
+                <ListPlus className="w-4 h-4 mr-2" />
+                Generate Features
+              </Button>
+              <Button
+                size="sm"
+                onClick={onSaveClick}
+                disabled={!hasChanges || isSaving}
+                data-testid="save-spec"
+              >
+                <Save className="w-4 h-4 mr-2" />
+                {isSaving ? 'Saving...' : hasChanges ? 'Save Changes' : 'Saved'}
+              </Button>
+            </div>
+          )}
           {/* Tablet/Mobile: show trigger for actions panel */}
           <HeaderActionsPanelTrigger isOpen={showActionsPanel} onToggle={onToggleActionsPanel} />
         </div>
@@ -142,11 +160,13 @@ export function SpecHeader({
             <Loader2 className="w-4 h-4 animate-spin text-primary shrink-0" />
             <div className="flex flex-col gap-0.5 min-w-0">
               <span className="text-sm font-medium text-primary">
-                {isGeneratingFeatures
-                  ? 'Generating Features'
-                  : isCreating
-                    ? 'Generating Specification'
-                    : 'Regenerating Specification'}
+                {isSyncing
+                  ? 'Syncing Specification'
+                  : isGeneratingFeatures
+                    ? 'Generating Features'
+                    : isCreating
+                      ? 'Generating Specification'
+                      : 'Regenerating Specification'}
               </span>
               {currentPhase && <span className="text-xs text-muted-foreground">{phaseLabel}</span>}
             </div>
@@ -161,29 +181,47 @@ export function SpecHeader({
             </div>
           </div>
         )}
-        <Button
-          variant="outline"
-          className="w-full justify-start"
-          onClick={onRegenerateClick}
-          disabled={isProcessing}
-          data-testid="regenerate-spec-mobile"
-        >
-          {isRegenerating ? (
-            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-          ) : (
-            <Sparkles className="w-4 h-4 mr-2" />
-          )}
-          {isRegenerating ? 'Regenerating...' : 'Regenerate'}
-        </Button>
-        <Button
-          className="w-full justify-start"
-          onClick={onSaveClick}
-          disabled={!hasChanges || isSaving || isProcessing}
-          data-testid="save-spec-mobile"
-        >
-          <Save className="w-4 h-4 mr-2" />
-          {isSaving ? 'Saving...' : hasChanges ? 'Save Changes' : 'Saved'}
-        </Button>
+        {/* Hide action buttons when processing - status card shows progress */}
+        {!isProcessing && (
+          <>
+            <Button
+              variant="outline"
+              className="w-full justify-start"
+              onClick={onSyncClick}
+              data-testid="sync-spec-mobile"
+            >
+              <RefreshCcw className="w-4 h-4 mr-2" />
+              Sync
+            </Button>
+            <Button
+              variant="outline"
+              className="w-full justify-start"
+              onClick={onRegenerateClick}
+              data-testid="regenerate-spec-mobile"
+            >
+              <Sparkles className="w-4 h-4 mr-2" />
+              Regenerate
+            </Button>
+            <Button
+              variant="outline"
+              className="w-full justify-start"
+              onClick={onGenerateFeaturesClick}
+              data-testid="generate-features-mobile"
+            >
+              <ListPlus className="w-4 h-4 mr-2" />
+              Generate Features
+            </Button>
+            <Button
+              className="w-full justify-start"
+              onClick={onSaveClick}
+              disabled={!hasChanges || isSaving}
+              data-testid="save-spec-mobile"
+            >
+              <Save className="w-4 h-4 mr-2" />
+              {isSaving ? 'Saving...' : hasChanges ? 'Save Changes' : 'Saved'}
+            </Button>
+          </>
+        )}
       </HeaderActionsPanel>
     </>
   );
