@@ -160,6 +160,10 @@ function RootLayoutContent() {
     getEffectiveTheme,
     getEffectiveFontSans,
     getEffectiveFontMono,
+    // Subscribe to theme and font state to trigger re-renders when they change
+    theme,
+    fontFamilySans,
+    fontFamilyMono,
     skipSandboxWarning,
     setSkipSandboxWarning,
     fetchCodexModels,
@@ -250,7 +254,14 @@ function RootLayoutContent() {
   // Defer the theme value to keep UI responsive during rapid hover changes
   const deferredTheme = useDeferredValue(effectiveTheme);
 
-  // Get effective fonts for the current project
+  // Get effective theme and fonts for the current project
+  // Note: theme/fontFamilySans/fontFamilyMono are destructured above to ensure re-renders when they change
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  void theme; // Used for subscription
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  void fontFamilySans; // Used for subscription
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  void fontFamilyMono; // Used for subscription
   const effectiveFontSans = getEffectiveFontSans();
   const effectiveFontMono = getEffectiveFontMono();
 

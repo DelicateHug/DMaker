@@ -396,6 +396,10 @@ export interface ProjectRef {
   lastOpened?: string;
   /** Project-specific theme override (or undefined to use global) */
   theme?: string;
+  /** Project-specific UI/sans font override (or undefined to use global) */
+  fontFamilySans?: string;
+  /** Project-specific code/mono font override (or undefined to use global) */
+  fontFamilyMono?: string;
   /** Whether project is pinned to favorites on dashboard */
   isFavorite?: boolean;
   /** Lucide icon name for project identification */

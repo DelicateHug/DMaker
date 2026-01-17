@@ -533,6 +533,8 @@ export function hydrateStoreFromSettings(settings: GlobalSettings): void {
     path: ref.path,
     lastOpened: ref.lastOpened,
     theme: ref.theme,
+    fontFamilySans: ref.fontFamilySans,
+    fontFamilyMono: ref.fontFamilyMono,
     isFavorite: ref.isFavorite,
     icon: ref.icon,
     customIconPath: ref.customIconPath,

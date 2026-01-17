@@ -542,9 +542,10 @@ const grayTheme: TerminalTheme = {
 
 // Theme mapping
 const terminalThemes: Record<ThemeMode, TerminalTheme> = {
-  light: lightTheme,
-  dark: darkTheme,
+  // Special
   system: darkTheme, // Will be resolved at runtime
+  // Dark themes
+  dark: darkTheme,
   retro: retroTheme,
   dracula: draculaTheme,
   nord: nordTheme,
@@ -556,9 +557,35 @@ const terminalThemes: Record<ThemeMode, TerminalTheme> = {
   onedark: onedarkTheme,
   synthwave: synthwaveTheme,
   red: redTheme,
-  cream: creamTheme,
   sunset: sunsetTheme,
   gray: grayTheme,
+  forest: gruvboxTheme, // Green-ish theme, gruvbox is close
+  ocean: nordTheme, // Blue-ish theme, nord is close
+  ember: monokaiTheme, // Warm orange theme, monokai is close
+  'ayu-dark': darkTheme, // Deep dark with warm accents
+  'ayu-mirage': darkTheme, // Soft dark with golden accents
+  matcha: nordTheme, // Calming blue-gray with sage green
+  // Light themes
+  light: lightTheme,
+  cream: creamTheme,
+  solarizedlight: lightTheme, // TODO: Create dedicated solarized light terminal theme
+  github: lightTheme, // TODO: Create dedicated github terminal theme
+  paper: lightTheme,
+  rose: lightTheme,
+  mint: lightTheme,
+  lavender: lightTheme,
+  sand: creamTheme, // Warm tones like cream
+  sky: lightTheme,
+  peach: creamTheme, // Warm tones like cream
+  snow: lightTheme,
+  sepia: creamTheme, // Warm tones like cream
+  gruvboxlight: creamTheme, // Warm light theme
+  nordlight: lightTheme, // Cool light theme
+  blossom: lightTheme,
+  'ayu-light': lightTheme, // Clean light with orange accents
+  onelight: lightTheme, // Atom One Light - blue accent
+  bluloco: lightTheme, // Bluloco - cyan-blue accent
+  feather: lightTheme, // Feather - orange accent
 };
 
 /**
