@@ -32,26 +32,55 @@ export function ProjectThemeSection({ project }: ProjectThemeSectionProps) {
     setProjectFontSans,
     setProjectFontMono,
   } = useAppStore();
-  const [activeTab, setActiveTab] = useState<'dark' | 'light'>('dark');
-
-  // Font local state - tracks what's selected when using custom fonts
-  const [fontSansLocal, setFontSansLocal] = useState<string>(
-    project.fontFamilySans || DEFAULT_FONT_VALUE
-  );
-  const [fontMonoLocal, setFontMonoLocal] = useState<string>(
-    project.fontFamilyMono || DEFAULT_FONT_VALUE
-  );
-
-  // Sync font state when project changes
-  useEffect(() => {
-    setFontSansLocal(project.fontFamilySans || DEFAULT_FONT_VALUE);
-    setFontMonoLocal(project.fontFamilyMono || DEFAULT_FONT_VALUE);
-  }, [project]);
 
   // Theme state
   const projectTheme = project.theme as Theme | undefined;
   const hasCustomTheme = projectTheme !== undefined;
   const effectiveTheme = projectTheme || globalTheme;
+
+  // Determine if current theme is light or dark
+  const isLightTheme = lightThemes.some((t) => t.value === effectiveTheme);
+  const [activeTab, setActiveTab] = useState<'dark' | 'light'>(isLightTheme ? 'light' : 'dark');
+
+  // Helper to validate fonts against available options
+  const isValidSansFont = (font: string | undefined): boolean => {
+    if (!font) return false;
+    return UI_SANS_FONT_OPTIONS.some((opt) => opt.value === font);
+  };
+  const isValidMonoFont = (font: string | undefined): boolean => {
+    if (!font) return false;
+    return UI_MONO_FONT_OPTIONS.some((opt) => opt.value === font);
+  };
+
+  // Font local state - tracks what's selected when using custom fonts
+  // Falls back to default if stored font is not in available options
+  const [fontSansLocal, setFontSansLocal] = useState<string>(
+    project.fontFamilySans && isValidSansFont(project.fontFamilySans)
+      ? project.fontFamilySans
+      : DEFAULT_FONT_VALUE
+  );
+  const [fontMonoLocal, setFontMonoLocal] = useState<string>(
+    project.fontFamilyMono && isValidMonoFont(project.fontFamilyMono)
+      ? project.fontFamilyMono
+      : DEFAULT_FONT_VALUE
+  );
+
+  // Sync state when project changes
+  useEffect(() => {
+    setFontSansLocal(
+      project.fontFamilySans && isValidSansFont(project.fontFamilySans)
+        ? project.fontFamilySans
+        : DEFAULT_FONT_VALUE
+    );
+    setFontMonoLocal(
+      project.fontFamilyMono && isValidMonoFont(project.fontFamilyMono)
+        ? project.fontFamilyMono
+        : DEFAULT_FONT_VALUE
+    );
+    // Also sync the active tab based on current theme
+    const currentIsLight = lightThemes.some((t) => t.value === (project.theme || globalTheme));
+    setActiveTab(currentIsLight ? 'light' : 'dark');
+  }, [project, globalTheme]);
 
   // Font state - check if project has custom fonts set
   const hasCustomFontSans = project.fontFamilySans !== undefined;
@@ -79,10 +108,11 @@ export function ProjectThemeSection({ project }: ProjectThemeSectionProps) {
       setProjectFontSans(project.id, null);
       setFontSansLocal(DEFAULT_FONT_VALUE);
     } else {
-      // Set to current global font or default
+      // Set explicit project override - use 'default' value to indicate explicit default choice
       const fontToSet = globalFontSans || DEFAULT_FONT_VALUE;
       setFontSansLocal(fontToSet);
-      setProjectFontSans(project.id, fontToSet === DEFAULT_FONT_VALUE ? null : fontToSet);
+      // Store the actual value (including 'default') so hasCustomFontSans stays true
+      setProjectFontSans(project.id, fontToSet);
     }
   };
 
@@ -92,21 +122,24 @@ export function ProjectThemeSection({ project }: ProjectThemeSectionProps) {
       setProjectFontMono(project.id, null);
       setFontMonoLocal(DEFAULT_FONT_VALUE);
     } else {
-      // Set to current global font or default
+      // Set explicit project override - use 'default' value to indicate explicit default choice
       const fontToSet = globalFontMono || DEFAULT_FONT_VALUE;
       setFontMonoLocal(fontToSet);
-      setProjectFontMono(project.id, fontToSet === DEFAULT_FONT_VALUE ? null : fontToSet);
+      // Store the actual value (including 'default') so hasCustomFontMono stays true
+      setProjectFontMono(project.id, fontToSet);
     }
   };
 
   const handleFontSansChange = (value: string) => {
     setFontSansLocal(value);
-    setProjectFontSans(project.id, value === DEFAULT_FONT_VALUE ? null : value);
+    // Store the actual value (including 'default') - only null clears to use global
+    setProjectFontSans(project.id, value);
   };
 
   const handleFontMonoChange = (value: string) => {
     setFontMonoLocal(value);
-    setProjectFontMono(project.id, value === DEFAULT_FONT_VALUE ? null : value);
+    // Store the actual value (including 'default') - only null clears to use global
+    setProjectFontMono(project.id, value);
   };
 
   // Get display label for global font

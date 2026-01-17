@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Label } from '@/components/ui/label';
 import {
   Select,
@@ -24,14 +24,34 @@ interface AppearanceSectionProps {
 }
 
 export function AppearanceSection({ effectiveTheme, onThemeChange }: AppearanceSectionProps) {
-  const [activeTab, setActiveTab] = useState<'dark' | 'light'>('dark');
   const { fontFamilySans, fontFamilyMono, setFontSans, setFontMono } = useAppStore();
+
+  // Determine if current theme is light or dark
+  const isLightTheme = lightThemes.some((t) => t.value === effectiveTheme);
+  const [activeTab, setActiveTab] = useState<'dark' | 'light'>(isLightTheme ? 'light' : 'dark');
+
+  // Sync active tab when theme changes
+  useEffect(() => {
+    const currentIsLight = lightThemes.some((t) => t.value === effectiveTheme);
+    setActiveTab(currentIsLight ? 'light' : 'dark');
+  }, [effectiveTheme]);
 
   const themesToShow = activeTab === 'dark' ? darkThemes : lightThemes;
 
   // Convert null to 'default' for Select component
-  const fontSansValue = fontFamilySans || DEFAULT_FONT_VALUE;
-  const fontMonoValue = fontFamilyMono || DEFAULT_FONT_VALUE;
+  // Also fallback to default if the stored font is not in the available options
+  const isValidSansFont = (font: string | null): boolean => {
+    if (!font) return false;
+    return UI_SANS_FONT_OPTIONS.some((opt) => opt.value === font);
+  };
+  const isValidMonoFont = (font: string | null): boolean => {
+    if (!font) return false;
+    return UI_MONO_FONT_OPTIONS.some((opt) => opt.value === font);
+  };
+  const fontSansValue =
+    fontFamilySans && isValidSansFont(fontFamilySans) ? fontFamilySans : DEFAULT_FONT_VALUE;
+  const fontMonoValue =
+    fontFamilyMono && isValidMonoFont(fontFamilyMono) ? fontFamilyMono : DEFAULT_FONT_VALUE;
 
   const handleFontSansChange = (value: string) => {
     setFontSans(value === DEFAULT_FONT_VALUE ? null : value);
