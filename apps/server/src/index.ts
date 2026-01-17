@@ -88,6 +88,7 @@ import { getEventHistoryService } from './services/event-history-service.js';
 dotenv.config();
 
 const PORT = parseInt(process.env.PORT || '3008', 10);
+const HOST = process.env.HOST || '0.0.0.0';
 const DATA_DIR = process.env.DATA_DIR || './data';
 const ENABLE_REQUEST_LOGGING_DEFAULT = process.env.ENABLE_REQUEST_LOGGING !== 'false'; // Default to true
 
@@ -609,22 +610,24 @@ terminalWss.on('connection', (ws: WebSocket, req: import('http').IncomingMessage
 });
 
 // Start server with error handling for port conflicts
-const startServer = (port: number) => {
-  server.listen(port, () => {
+const startServer = (port: number, host: string) => {
+  server.listen(port, host, () => {
     const terminalStatus = isTerminalEnabled()
       ? isTerminalPasswordRequired()
         ? 'enabled (password protected)'
         : 'enabled'
       : 'disabled';
     const portStr = port.toString().padEnd(4);
+    const hostDisplay = host === '0.0.0.0' ? 'localhost' : host;
     logger.info(`
 ╔═══════════════════════════════════════════════════════╗
 ║           Automaker Backend Server                    ║
 ╠═══════════════════════════════════════════════════════╣
-║  HTTP API:    http://localhost:${portStr}                 ║
-║  WebSocket:   ws://localhost:${portStr}/api/events        ║
-║  Terminal:    ws://localhost:${portStr}/api/terminal/ws   ║
-║  Health:      http://localhost:${portStr}/api/health      ║
+║  Listening:   ${host}:${port}${' '.repeat(Math.max(0, 34 - host.length - port.toString().length))}║
+║  HTTP API:    http://${hostDisplay}:${portStr}                 ║
+║  WebSocket:   ws://${hostDisplay}:${portStr}/api/events        ║
+║  Terminal:    ws://${hostDisplay}:${portStr}/api/terminal/ws   ║
+║  Health:      http://${hostDisplay}:${portStr}/api/health      ║
 ║  Terminal:    ${terminalStatus.padEnd(37)}║
 ╚═══════════════════════════════════════════════════════╝
 `);
@@ -658,7 +661,7 @@ const startServer = (port: number) => {
   });
 };
 
-startServer(PORT);
+startServer(PORT, HOST);
 
 // Global error handlers to prevent crashes from uncaught errors
 process.on('unhandledRejection', (reason: unknown, _promise: Promise<unknown>) => {

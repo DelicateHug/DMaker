@@ -65,6 +65,7 @@ export default defineConfig(({ command }) => {
       },
     },
     server: {
+      host: process.env.HOST || '0.0.0.0',
       port: parseInt(process.env.TEST_PORT || '3007', 10),
     },
     build: {
