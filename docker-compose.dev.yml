@@ -76,8 +76,9 @@ services:
       - -c
       - |
         # Install as root to avoid permission issues with named volumes
+        # Use --force to skip platform-specific devDependencies (dmg-license is macOS-only)
         echo 'Installing dependencies...' &&
-        npm ci --legacy-peer-deps &&
+        npm ci --legacy-peer-deps --force &&
         echo 'Building shared packages...' &&
         npm run build:packages &&
 
