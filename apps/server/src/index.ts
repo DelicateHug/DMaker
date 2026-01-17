@@ -79,11 +79,17 @@ import { createIdeationRoutes } from './routes/ideation/index.js';
 import { IdeationService } from './services/ideation-service.js';
 import { getDevServerService } from './services/dev-server-service.js';
 import { eventHookService } from './services/event-hook-service.js';
+import { createNotificationsRoutes } from './routes/notifications/index.js';
+import { getNotificationService } from './services/notification-service.js';
+import { createEventHistoryRoutes } from './routes/event-history/index.js';
+import { getEventHistoryService } from './services/event-history-service.js';
 
 // Load environment variables
 dotenv.config();
 
 const PORT = parseInt(process.env.PORT || '3008', 10);
+const HOST = process.env.HOST || '0.0.0.0';
+const HOSTNAME = process.env.HOSTNAME || 'localhost';
 const DATA_DIR = process.env.DATA_DIR || './data';
 const ENABLE_REQUEST_LOGGING_DEFAULT = process.env.ENABLE_REQUEST_LOGGING !== 'false'; // Default to true
 
@@ -208,8 +214,15 @@ const ideationService = new IdeationService(events, settingsService, featureLoad
 const devServerService = getDevServerService();
 devServerService.setEventEmitter(events);
 
-// Initialize Event Hook Service for custom event triggers
-eventHookService.initialize(events, settingsService);
+// Initialize Notification Service with event emitter for real-time updates
+const notificationService = getNotificationService();
+notificationService.setEventEmitter(events);
+
+// Initialize Event History Service
+const eventHistoryService = getEventHistoryService();
+
+// Initialize Event Hook Service for custom event triggers (with history storage)
+eventHookService.initialize(events, settingsService, eventHistoryService);
 
 // Initialize services
 (async () => {
@@ -264,7 +277,7 @@ app.get('/api/health/detailed', createDetailedHandler());
 app.use('/api/fs', createFsRoutes(events));
 app.use('/api/agent', createAgentRoutes(agentService, events));
 app.use('/api/sessions', createSessionsRoutes(agentService));
-app.use('/api/features', createFeaturesRoutes(featureLoader, settingsService));
+app.use('/api/features', createFeaturesRoutes(featureLoader, settingsService, events));
 app.use('/api/auto-mode', createAutoModeRoutes(autoModeService));
 app.use('/api/enhance-prompt', createEnhancePromptRoutes(settingsService));
 app.use('/api/worktree', createWorktreeRoutes(events, settingsService));
@@ -285,6 +298,8 @@ app.use('/api/backlog-plan', createBacklogPlanRoutes(events, settingsService));
 app.use('/api/mcp', createMCPRoutes(mcpTestService));
 app.use('/api/pipeline', createPipelineRoutes(pipelineService));
 app.use('/api/ideation', createIdeationRoutes(events, ideationService, featureLoader));
+app.use('/api/notifications', createNotificationsRoutes(notificationService));
+app.use('/api/event-history', createEventHistoryRoutes(eventHistoryService, settingsService));
 
 // Create HTTP server
 const server = createServer(app);
@@ -596,8 +611,8 @@ terminalWss.on('connection', (ws: WebSocket, req: import('http').IncomingMessage
 });
 
 // Start server with error handling for port conflicts
-const startServer = (port: number) => {
-  server.listen(port, () => {
+const startServer = (port: number, host: string) => {
+  server.listen(port, host, () => {
     const terminalStatus = isTerminalEnabled()
       ? isTerminalPasswordRequired()
         ? 'enabled (password protected)'
@@ -608,10 +623,11 @@ const startServer = (port: number) => {
 ╔═══════════════════════════════════════════════════════╗
 ║           Automaker Backend Server                    ║
 ╠═══════════════════════════════════════════════════════╣
-║  HTTP API:    http://localhost:${portStr}                 ║
-║  WebSocket:   ws://localhost:${portStr}/api/events        ║
-║  Terminal:    ws://localhost:${portStr}/api/terminal/ws   ║
-║  Health:      http://localhost:${portStr}/api/health      ║
+║  Listening:   ${host}:${port}${' '.repeat(Math.max(0, 34 - host.length - port.toString().length))}║
+║  HTTP API:    http://${HOSTNAME}:${portStr}                 ║
+║  WebSocket:   ws://${HOSTNAME}:${portStr}/api/events        ║
+║  Terminal:    ws://${HOSTNAME}:${portStr}/api/terminal/ws   ║
+║  Health:      http://${HOSTNAME}:${portStr}/api/health      ║
 ║  Terminal:    ${terminalStatus.padEnd(37)}║
 ╚═══════════════════════════════════════════════════════╝
 `);
@@ -645,7 +661,7 @@ const startServer = (port: number) => {
   });
 };
 
-startServer(PORT);
+startServer(PORT, HOST);
 
 // Global error handlers to prevent crashes from uncaught errors
 process.on('unhandledRejection', (reason: unknown, _promise: Promise<unknown>) => {

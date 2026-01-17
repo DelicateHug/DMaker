@@ -367,6 +367,11 @@ export interface SpecRegenerationAPI {
     error?: string;
   }>;
 
+  sync: (projectPath: string) => Promise<{
+    success: boolean;
+    error?: string;
+  }>;
+
   stop: (projectPath?: string) => Promise<{
     success: boolean;
     error?: string;
@@ -994,6 +999,7 @@ export interface WorktreeAPI {
     result?: {
       worktreePath: string;
       port: number;
+      url: string;
       logs: string;
       startedAt: string;
     };

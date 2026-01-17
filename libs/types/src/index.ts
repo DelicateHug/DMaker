@@ -21,6 +21,13 @@ export type {
   ReasoningEffort,
 } from './provider.js';
 
+// Provider constants and utilities
+export {
+  DEFAULT_TIMEOUT_MS,
+  REASONING_TIMEOUT_MULTIPLIERS,
+  calculateReasoningTimeout,
+} from './provider.js';
+
 // Codex CLI types
 export type {
   CodexSandboxMode,
@@ -270,3 +277,18 @@ export type {
   IdeationStreamEvent,
   IdeationAnalysisEvent,
 } from './ideation.js';
+
+// Notification types
+export type { NotificationType, Notification, NotificationsFile } from './notification.js';
+export { NOTIFICATIONS_VERSION, DEFAULT_NOTIFICATIONS_FILE } from './notification.js';
+
+// Event history types
+export type {
+  StoredEvent,
+  StoredEventIndex,
+  StoredEventSummary,
+  EventHistoryFilter,
+  EventReplayResult,
+  EventReplayHookResult,
+} from './event-history.js';
+export { EVENT_HISTORY_VERSION, DEFAULT_EVENT_HISTORY_INDEX } from './event-history.js';

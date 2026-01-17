@@ -521,9 +521,9 @@ export function BoardView() {
           // Empty string clears the branch assignment, moving features to main/current branch
           finalBranchName = '';
         } else if (workMode === 'auto') {
-          // Auto-generate a branch name based on current branch and timestamp
-          const baseBranch =
-            currentWorktreeBranch || getPrimaryWorktreeBranch(currentProject.path) || 'main';
+          // Auto-generate a branch name based on primary branch (main/master) and timestamp
+          // Always use primary branch to avoid nested feature/feature/... paths
+          const baseBranch = getPrimaryWorktreeBranch(currentProject.path) || 'main';
           const timestamp = Date.now();
           const randomSuffix = Math.random().toString(36).substring(2, 6);
           finalBranchName = `feature/${baseBranch}-${timestamp}-${randomSuffix}`;
@@ -603,7 +603,6 @@ export function BoardView() {
       selectedFeatureIds,
       updateFeature,
       exitSelectionMode,
-      currentWorktreeBranch,
       getPrimaryWorktreeBranch,
       addAndSelectWorktree,
       setWorktreeRefreshKey,

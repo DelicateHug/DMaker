@@ -32,7 +32,10 @@ import type {
   CreateIdeaInput,
   UpdateIdeaInput,
   ConvertToFeatureOptions,
+  NotificationsAPI,
+  EventHistoryAPI,
 } from './electron';
+import type { EventHistoryFilter } from '@automaker/types';
 import type { Message, SessionListItem } from '@/types/electron';
 import type { Feature, ClaudeUsageResponse, CodexUsageResponse } from '@/store/app-store';
 import type { WorktreeAPI, GitAPI, ModelDefinition, ProviderStatus } from '@/types/electron';
@@ -154,7 +157,9 @@ const getServerUrl = (): string => {
     const envUrl = import.meta.env.VITE_SERVER_URL;
     if (envUrl) return envUrl;
   }
-  return 'http://localhost:3008';
+  // Use VITE_HOSTNAME if set, otherwise default to localhost
+  const hostname = import.meta.env.VITE_HOSTNAME || 'localhost';
+  return `http://${hostname}:3008`;
 };
 
 /**
@@ -514,7 +519,8 @@ type EventType =
   | 'worktree:init-completed'
   | 'dev-server:started'
   | 'dev-server:output'
-  | 'dev-server:stopped';
+  | 'dev-server:stopped'
+  | 'notification:created';
 
 /**
  * Dev server log event payloads for WebSocket streaming
@@ -553,6 +559,7 @@ export interface DevServerLogsResponse {
   result?: {
     worktreePath: string;
     port: number;
+    url: string;
     logs: string;
     startedAt: string;
   };
@@ -1875,6 +1882,7 @@ export class HttpApiClient implements ElectronAPI {
         projectPath,
         maxFeatures,
       }),
+    sync: (projectPath: string) => this.post('/api/spec-regeneration/sync', { projectPath }),
     stop: (projectPath?: string) => this.post('/api/spec-regeneration/stop', { projectPath }),
     status: (projectPath?: string) =>
       this.get(
@@ -2171,6 +2179,9 @@ export class HttpApiClient implements ElectronAPI {
           hideScrollbar: boolean;
         };
         worktreePanelVisible?: boolean;
+        showInitScriptIndicator?: boolean;
+        defaultDeleteBranchWithWorktree?: boolean;
+        autoDismissInitScriptIndicator?: boolean;
         lastSelectedSessionId?: string;
       };
       error?: string;
@@ -2438,6 +2449,43 @@ export class HttpApiClient implements ElectronAPI {
     onAnalysisEvent: (callback: (event: any) => void): (() => void) => {
       return this.subscribeToEvent('ideation:analysis', callback as EventCallback);
     },
+  };
+
+  // Notifications API - project-level notifications
+  notifications: NotificationsAPI & {
+    onNotificationCreated: (callback: (notification: any) => void) => () => void;
+  } = {
+    list: (projectPath: string) => this.post('/api/notifications/list', { projectPath }),
+
+    getUnreadCount: (projectPath: string) =>
+      this.post('/api/notifications/unread-count', { projectPath }),
+
+    markAsRead: (projectPath: string, notificationId?: string) =>
+      this.post('/api/notifications/mark-read', { projectPath, notificationId }),
+
+    dismiss: (projectPath: string, notificationId?: string) =>
+      this.post('/api/notifications/dismiss', { projectPath, notificationId }),
+
+    onNotificationCreated: (callback: (notification: any) => void): (() => void) => {
+      return this.subscribeToEvent('notification:created', callback as EventCallback);
+    },
+  };
+
+  // Event History API - stored events for debugging and replay
+  eventHistory: EventHistoryAPI = {
+    list: (projectPath: string, filter?: EventHistoryFilter) =>
+      this.post('/api/event-history/list', { projectPath, filter }),
+
+    get: (projectPath: string, eventId: string) =>
+      this.post('/api/event-history/get', { projectPath, eventId }),
+
+    delete: (projectPath: string, eventId: string) =>
+      this.post('/api/event-history/delete', { projectPath, eventId }),
+
+    clear: (projectPath: string) => this.post('/api/event-history/clear', { projectPath }),
+
+    replay: (projectPath: string, eventId: string, hookIds?: string[]) =>
+      this.post('/api/event-history/replay', { projectPath, eventId, hookIds }),
   };
 
   // MCP API - Test MCP server connections and list tools

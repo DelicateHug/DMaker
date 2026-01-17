@@ -685,6 +685,12 @@ Format as JSON:
 
 Generate features that build on each other logically.
 
+CRITICAL RULES:
+- If an "EXISTING FEATURES" section is provided above, you MUST NOT generate any features that duplicate or overlap with those existing features
+- Check each feature you generate against the existing features list - if it already exists, DO NOT include it
+- Only generate truly NEW features that add value beyond what already exists
+- Generate unique IDs that don't conflict with existing feature IDs
+
 IMPORTANT: Do not ask for clarification. The specification is provided above. Generate the JSON immediately.`;
 
 /**
