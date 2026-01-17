@@ -157,7 +157,9 @@ const getServerUrl = (): string => {
     const envUrl = import.meta.env.VITE_SERVER_URL;
     if (envUrl) return envUrl;
   }
-  return 'http://localhost:3008';
+  // Use VITE_HOSTNAME if set, otherwise default to localhost
+  const hostname = import.meta.env.VITE_HOSTNAME || 'localhost';
+  return `http://${hostname}:3008`;
 };
 
 /**
@@ -557,6 +559,7 @@ export interface DevServerLogsResponse {
   result?: {
     worktreePath: string;
     port: number;
+    url: string;
     logs: string;
     startedAt: string;
   };

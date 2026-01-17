@@ -89,6 +89,7 @@ dotenv.config();
 
 const PORT = parseInt(process.env.PORT || '3008', 10);
 const HOST = process.env.HOST || '0.0.0.0';
+const HOSTNAME = process.env.HOSTNAME || 'localhost';
 const DATA_DIR = process.env.DATA_DIR || './data';
 const ENABLE_REQUEST_LOGGING_DEFAULT = process.env.ENABLE_REQUEST_LOGGING !== 'false'; // Default to true
 
@@ -618,16 +619,15 @@ const startServer = (port: number, host: string) => {
         : 'enabled'
       : 'disabled';
     const portStr = port.toString().padEnd(4);
-    const hostDisplay = host === '0.0.0.0' ? 'localhost' : host;
     logger.info(`
 ╔═══════════════════════════════════════════════════════╗
 ║           Automaker Backend Server                    ║
 ╠═══════════════════════════════════════════════════════╣
 ║  Listening:   ${host}:${port}${' '.repeat(Math.max(0, 34 - host.length - port.toString().length))}║
-║  HTTP API:    http://${hostDisplay}:${portStr}                 ║
-║  WebSocket:   ws://${hostDisplay}:${portStr}/api/events        ║
-║  Terminal:    ws://${hostDisplay}:${portStr}/api/terminal/ws   ║
-║  Health:      http://${hostDisplay}:${portStr}/api/health      ║
+║  HTTP API:    http://${HOSTNAME}:${portStr}                 ║
+║  WebSocket:   ws://${HOSTNAME}:${portStr}/api/events        ║
+║  Terminal:    ws://${HOSTNAME}:${portStr}/api/terminal/ws   ║
+║  Health:      http://${HOSTNAME}:${portStr}/api/health      ║
 ║  Terminal:    ${terminalStatus.padEnd(37)}║
 ╚═══════════════════════════════════════════════════════╝
 `);

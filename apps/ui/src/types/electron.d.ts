@@ -994,6 +994,7 @@ export interface WorktreeAPI {
     result?: {
       worktreePath: string;
       port: number;
+      url: string;
       logs: string;
       startedAt: string;
     };
