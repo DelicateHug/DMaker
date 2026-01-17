@@ -437,6 +437,10 @@ export interface SpecRegenerationAPI {
     success: boolean;
     error?: string;
   }>;
+  sync: (projectPath: string) => Promise<{
+    success: boolean;
+    error?: string;
+  }>;
   stop: (projectPath?: string) => Promise<{ success: boolean; error?: string }>;
   status: (projectPath?: string) => Promise<{
     success: boolean;
@@ -548,6 +552,88 @@ export interface SaveImageResult {
   success: boolean;
   path?: string;
   error?: string;
+}
+
+// Notifications API interface
+import type {
+  Notification,
+  StoredEvent,
+  StoredEventSummary,
+  EventHistoryFilter,
+  EventReplayResult,
+} from '@automaker/types';
+
+export interface NotificationsAPI {
+  list: (projectPath: string) => Promise<{
+    success: boolean;
+    notifications?: Notification[];
+    error?: string;
+  }>;
+  getUnreadCount: (projectPath: string) => Promise<{
+    success: boolean;
+    count?: number;
+    error?: string;
+  }>;
+  markAsRead: (
+    projectPath: string,
+    notificationId?: string
+  ) => Promise<{
+    success: boolean;
+    notification?: Notification;
+    count?: number;
+    error?: string;
+  }>;
+  dismiss: (
+    projectPath: string,
+    notificationId?: string
+  ) => Promise<{
+    success: boolean;
+    dismissed?: boolean;
+    count?: number;
+    error?: string;
+  }>;
+}
+
+// Event History API interface
+export interface EventHistoryAPI {
+  list: (
+    projectPath: string,
+    filter?: EventHistoryFilter
+  ) => Promise<{
+    success: boolean;
+    events?: StoredEventSummary[];
+    total?: number;
+    error?: string;
+  }>;
+  get: (
+    projectPath: string,
+    eventId: string
+  ) => Promise<{
+    success: boolean;
+    event?: StoredEvent;
+    error?: string;
+  }>;
+  delete: (
+    projectPath: string,
+    eventId: string
+  ) => Promise<{
+    success: boolean;
+    error?: string;
+  }>;
+  clear: (projectPath: string) => Promise<{
+    success: boolean;
+    cleared?: number;
+    error?: string;
+  }>;
+  replay: (
+    projectPath: string,
+    eventId: string,
+    hookIds?: string[]
+  ) => Promise<{
+    success: boolean;
+    result?: EventReplayResult;
+    error?: string;
+  }>;
 }
 
 export interface ElectronAPI {
@@ -760,6 +846,8 @@ export interface ElectronAPI {
     }>;
   };
   ideation?: IdeationAPI;
+  notifications?: NotificationsAPI;
+  eventHistory?: EventHistoryAPI;
   codex?: {
     getUsage: () => Promise<CodexUsageResponse>;
     getModels: (refresh?: boolean) => Promise<{
@@ -2654,6 +2742,30 @@ function createMockSpecRegenerationAPI(): SpecRegenerationAPI {
 
       // Simulate async feature generation
       simulateFeatureGeneration(projectPath);
+
+      return { success: true };
+    },
+
+    sync: async (projectPath: string) => {
+      if (mockSpecRegenerationRunning) {
+        return {
+          success: false,
+          error: 'Spec sync is already running',
+        };
+      }
+
+      mockSpecRegenerationRunning = true;
+      console.log(`[Mock] Syncing spec for: ${projectPath}`);
+
+      // Simulate async spec sync (similar to feature generation but simpler)
+      setTimeout(() => {
+        emitSpecRegenerationEvent({
+          type: 'spec_regeneration_complete',
+          message: 'Spec synchronized successfully',
+          projectPath,
+        });
+        mockSpecRegenerationRunning = false;
+      }, 1000);
 
       return { success: true };
     },

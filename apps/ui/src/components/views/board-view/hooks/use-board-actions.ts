@@ -127,8 +127,10 @@ export function useBoardActions({
         // No worktree isolation - work directly on current branch
         finalBranchName = undefined;
       } else if (workMode === 'auto') {
-        // Auto-generate a branch name based on current branch and timestamp
-        const baseBranch = currentWorktreeBranch || 'main';
+        // Auto-generate a branch name based on primary branch (main/master) and timestamp
+        // Always use primary branch to avoid nested feature/feature/... paths
+        const baseBranch =
+          (currentProject?.path ? getPrimaryWorktreeBranch(currentProject.path) : null) || 'main';
         const timestamp = Date.now();
         const randomSuffix = Math.random().toString(36).substring(2, 6);
         finalBranchName = `feature/${baseBranch}-${timestamp}-${randomSuffix}`;
@@ -245,7 +247,7 @@ export function useBoardActions({
       currentProject,
       onWorktreeCreated,
       onWorktreeAutoSelect,
-      currentWorktreeBranch,
+      getPrimaryWorktreeBranch,
       features,
     ]
   );
@@ -282,7 +284,10 @@ export function useBoardActions({
       if (workMode === 'current') {
         finalBranchName = undefined;
       } else if (workMode === 'auto') {
-        const baseBranch = currentWorktreeBranch || 'main';
+        // Auto-generate a branch name based on primary branch (main/master) and timestamp
+        // Always use primary branch to avoid nested feature/feature/... paths
+        const baseBranch =
+          (currentProject?.path ? getPrimaryWorktreeBranch(currentProject.path) : null) || 'main';
         const timestamp = Date.now();
         const randomSuffix = Math.random().toString(36).substring(2, 6);
         finalBranchName = `feature/${baseBranch}-${timestamp}-${randomSuffix}`;
@@ -390,7 +395,7 @@ export function useBoardActions({
       setEditingFeature,
       currentProject,
       onWorktreeCreated,
-      currentWorktreeBranch,
+      getPrimaryWorktreeBranch,
       features,
     ]
   );

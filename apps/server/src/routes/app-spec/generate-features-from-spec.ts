@@ -15,6 +15,7 @@ import { parseAndCreateFeatures } from './parse-and-create-features.js';
 import { getAppSpecPath } from '@automaker/platform';
 import type { SettingsService } from '../../services/settings-service.js';
 import { getAutoLoadClaudeMdSetting, getPromptCustomization } from '../../lib/settings-helpers.js';
+import { FeatureLoader } from '../../services/feature-loader.js';
 
 const logger = createLogger('SpecRegeneration');
 
@@ -56,13 +57,45 @@ export async function generateFeaturesFromSpec(
   // Get customized prompts from settings
   const prompts = await getPromptCustomization(settingsService, '[FeatureGeneration]');
 
+  // Load existing features to prevent duplicates
+  const featureLoader = new FeatureLoader();
+  const existingFeatures = await featureLoader.getAll(projectPath);
+
+  logger.info(`Found ${existingFeatures.length} existing features to exclude from generation`);
+
+  // Build existing features context for the prompt
+  let existingFeaturesContext = '';
+  if (existingFeatures.length > 0) {
+    const featuresList = existingFeatures
+      .map(
+        (f) =>
+          `- "${f.title}" (ID: ${f.id}): ${f.description?.substring(0, 100) || 'No description'}`
+      )
+      .join('\n');
+    existingFeaturesContext = `
+
+## EXISTING FEATURES (DO NOT REGENERATE THESE)
+
+The following ${existingFeatures.length} features already exist in the project. You MUST NOT generate features that duplicate or overlap with these:
+
+${featuresList}
+
+CRITICAL INSTRUCTIONS:
+- DO NOT generate any features with the same or similar titles as the existing features listed above
+- DO NOT generate features that cover the same functionality as existing features
+- ONLY generate NEW features that are not yet in the system
+- If a feature from the roadmap already exists, skip it entirely
+- Generate unique feature IDs that do not conflict with existing IDs: ${existingFeatures.map((f) => f.id).join(', ')}
+`;
+  }
+
   const prompt = `Based on this project specification:
 
 ${spec}
-
+${existingFeaturesContext}
 ${prompts.appSpec.generateFeaturesFromSpecPrompt}
 
-Generate ${featureCount} features that build on each other logically.`;
+Generate ${featureCount} NEW features that build on each other logically. Remember: ONLY generate features that DO NOT already exist.`;
 
   logger.info('========== PROMPT BEING SENT ==========');
   logger.info(`Prompt length: ${prompt.length} chars`);

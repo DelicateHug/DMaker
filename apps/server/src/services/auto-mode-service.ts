@@ -29,6 +29,10 @@ import {
   appendLearning,
   recordMemoryUsage,
   createLogger,
+  atomicWriteJson,
+  readJsonWithRecovery,
+  logRecoveryWarning,
+  DEFAULT_BACKUP_COUNT,
 } from '@automaker/utils';
 
 const logger = createLogger('AutoMode');
@@ -60,6 +64,7 @@ import {
   getMCPServersFromSettings,
   getPromptCustomization,
 } from '../lib/settings-helpers.js';
+import { getNotificationService } from './notification-service.js';
 
 const execAsync = promisify(exec);
 
@@ -386,6 +391,7 @@ export class AutoModeService {
       this.emitAutoModeEvent('auto_mode_error', {
         error: errorInfo.message,
         errorType: errorInfo.type,
+        projectPath,
       });
     });
   }
@@ -1414,13 +1420,13 @@ Address the follow-up instructions above. Review the previous work and make the 
         allImagePaths.push(...allPaths);
       }
 
-      // Save updated feature.json with new images
+      // Save updated feature.json with new images (atomic write with backup)
       if (copiedImagePaths.length > 0 && feature) {
         const featureDirForSave = getFeatureDir(projectPath, featureId);
         const featurePath = path.join(featureDirForSave, 'feature.json');
 
         try {
-          await secureFs.writeFile(featurePath, JSON.stringify(feature, null, 2));
+          await atomicWriteJson(featurePath, feature, { backupCount: DEFAULT_BACKUP_COUNT });
         } catch (error) {
           logger.error(`Failed to save feature.json:`, error);
         }
@@ -1547,6 +1553,7 @@ Address the follow-up instructions above. Review the previous work and make the 
       message: allPassed
         ? 'All verification checks passed'
         : `Verification failed: ${results.find((r) => !r.passed)?.check || 'Unknown'}`,
+      projectPath,
     });
 
     return allPassed;
@@ -1620,6 +1627,7 @@ Address the follow-up instructions above. Review the previous work and make the 
         featureId,
         passes: true,
         message: `Changes committed: ${hash.trim().substring(0, 8)}`,
+        projectPath,
       });
 
       return hash.trim();
@@ -2088,8 +2096,20 @@ Format your response as a structured markdown document.`;
     const featurePath = path.join(featureDir, 'feature.json');
 
     try {
-      const data = (await secureFs.readFile(featurePath, 'utf-8')) as string;
-      const feature = JSON.parse(data);
+      // Use recovery-enabled read for corrupted file handling
+      const result = await readJsonWithRecovery<Feature | null>(featurePath, null, {
+        maxBackups: DEFAULT_BACKUP_COUNT,
+        autoRestore: true,
+      });
+
+      logRecoveryWarning(result, `Feature ${featureId}`, logger);
+
+      const feature = result.data;
+      if (!feature) {
+        logger.warn(`Feature ${featureId} not found or could not be recovered`);
+        return;
+      }
+
       feature.status = status;
       feature.updatedAt = new Date().toISOString();
       // Set justFinishedAt timestamp when moving to waiting_approval (agent just completed)
@@ -2100,9 +2120,41 @@ Format your response as a structured markdown document.`;
         // Clear the timestamp when moving to other statuses
         feature.justFinishedAt = undefined;
       }
-      await secureFs.writeFile(featurePath, JSON.stringify(feature, null, 2));
-    } catch {
-      // Feature file may not exist
+
+      // Use atomic write with backup support
+      await atomicWriteJson(featurePath, feature, { backupCount: DEFAULT_BACKUP_COUNT });
+
+      // Create notifications for important status changes
+      const notificationService = getNotificationService();
+      if (status === 'waiting_approval') {
+        await notificationService.createNotification({
+          type: 'feature_waiting_approval',
+          title: 'Feature Ready for Review',
+          message: `"${feature.name || featureId}" is ready for your review and approval.`,
+          featureId,
+          projectPath,
+        });
+      } else if (status === 'verified') {
+        await notificationService.createNotification({
+          type: 'feature_verified',
+          title: 'Feature Verified',
+          message: `"${feature.name || featureId}" has been verified and is complete.`,
+          featureId,
+          projectPath,
+        });
+      }
+
+      // Sync completed/verified features to app_spec.txt
+      if (status === 'verified' || status === 'completed') {
+        try {
+          await this.featureLoader.syncFeatureToAppSpec(projectPath, feature);
+        } catch (syncError) {
+          // Log but don't fail the status update if sync fails
+          logger.warn(`Failed to sync feature ${featureId} to app_spec.txt:`, syncError);
+        }
+      }
+    } catch (error) {
+      logger.error(`Failed to update feature status for ${featureId}:`, error);
     }
   }
 
@@ -2114,11 +2166,24 @@ Format your response as a structured markdown document.`;
     featureId: string,
     updates: Partial<PlanSpec>
   ): Promise<void> {
-    const featurePath = path.join(projectPath, '.automaker', 'features', featureId, 'feature.json');
+    // Use getFeatureDir helper for consistent path resolution
+    const featureDir = getFeatureDir(projectPath, featureId);
+    const featurePath = path.join(featureDir, 'feature.json');
 
     try {
-      const data = (await secureFs.readFile(featurePath, 'utf-8')) as string;
-      const feature = JSON.parse(data);
+      // Use recovery-enabled read for corrupted file handling
+      const result = await readJsonWithRecovery<Feature | null>(featurePath, null, {
+        maxBackups: DEFAULT_BACKUP_COUNT,
+        autoRestore: true,
+      });
+
+      logRecoveryWarning(result, `Feature ${featureId}`, logger);
+
+      const feature = result.data;
+      if (!feature) {
+        logger.warn(`Feature ${featureId} not found or could not be recovered`);
+        return;
+      }
 
       // Initialize planSpec if it doesn't exist
       if (!feature.planSpec) {
@@ -2138,7 +2203,9 @@ Format your response as a structured markdown document.`;
       }
 
       feature.updatedAt = new Date().toISOString();
-      await secureFs.writeFile(featurePath, JSON.stringify(feature, null, 2));
+
+      // Use atomic write with backup support
+      await atomicWriteJson(featurePath, feature, { backupCount: DEFAULT_BACKUP_COUNT });
     } catch (error) {
       logger.error(`Failed to update planSpec for ${featureId}:`, error);
     }
@@ -2155,25 +2222,34 @@ Format your response as a structured markdown document.`;
       const allFeatures: Feature[] = [];
       const pendingFeatures: Feature[] = [];
 
-      // Load all features (for dependency checking)
+      // Load all features (for dependency checking) with recovery support
       for (const entry of entries) {
         if (entry.isDirectory()) {
           const featurePath = path.join(featuresDir, entry.name, 'feature.json');
-          try {
-            const data = (await secureFs.readFile(featurePath, 'utf-8')) as string;
-            const feature = JSON.parse(data);
-            allFeatures.push(feature);
 
-            // Track pending features separately
-            if (
-              feature.status === 'pending' ||
-              feature.status === 'ready' ||
-              feature.status === 'backlog'
-            ) {
-              pendingFeatures.push(feature);
-            }
-          } catch {
-            // Skip invalid features
+          // Use recovery-enabled read for corrupted file handling
+          const result = await readJsonWithRecovery<Feature | null>(featurePath, null, {
+            maxBackups: DEFAULT_BACKUP_COUNT,
+            autoRestore: true,
+          });
+
+          logRecoveryWarning(result, `Feature ${entry.name}`, logger);
+
+          const feature = result.data;
+          if (!feature) {
+            // Skip features that couldn't be loaded or recovered
+            continue;
+          }
+
+          allFeatures.push(feature);
+
+          // Track pending features separately
+          if (
+            feature.status === 'pending' ||
+            feature.status === 'ready' ||
+            feature.status === 'backlog'
+          ) {
+            pendingFeatures.push(feature);
           }
         }
       }
@@ -3405,31 +3481,39 @@ After generating the revised spec, output:
       for (const entry of entries) {
         if (entry.isDirectory()) {
           const featurePath = path.join(featuresDir, entry.name, 'feature.json');
-          try {
-            const data = (await secureFs.readFile(featurePath, 'utf-8')) as string;
-            const feature = JSON.parse(data) as Feature;
 
-            // Check if feature was interrupted (in_progress or pipeline_*)
-            if (
-              feature.status === 'in_progress' ||
-              (feature.status && feature.status.startsWith('pipeline_'))
-            ) {
-              // Verify it has existing context (agent-output.md)
-              const featureDir = getFeatureDir(projectPath, feature.id);
-              const contextPath = path.join(featureDir, 'agent-output.md');
-              try {
-                await secureFs.access(contextPath);
-                interruptedFeatures.push(feature);
-                logger.info(
-                  `Found interrupted feature: ${feature.id} (${feature.title}) - status: ${feature.status}`
-                );
-              } catch {
-                // No context file, skip this feature - it will be restarted fresh
-                logger.info(`Interrupted feature ${feature.id} has no context, will restart fresh`);
-              }
+          // Use recovery-enabled read for corrupted file handling
+          const result = await readJsonWithRecovery<Feature | null>(featurePath, null, {
+            maxBackups: DEFAULT_BACKUP_COUNT,
+            autoRestore: true,
+          });
+
+          logRecoveryWarning(result, `Feature ${entry.name}`, logger);
+
+          const feature = result.data;
+          if (!feature) {
+            // Skip features that couldn't be loaded or recovered
+            continue;
+          }
+
+          // Check if feature was interrupted (in_progress or pipeline_*)
+          if (
+            feature.status === 'in_progress' ||
+            (feature.status && feature.status.startsWith('pipeline_'))
+          ) {
+            // Verify it has existing context (agent-output.md)
+            const featureDir = getFeatureDir(projectPath, feature.id);
+            const contextPath = path.join(featureDir, 'agent-output.md');
+            try {
+              await secureFs.access(contextPath);
+              interruptedFeatures.push(feature);
+              logger.info(
+                `Found interrupted feature: ${feature.id} (${feature.title}) - status: ${feature.status}`
+              );
+            } catch {
+              // No context file, skip this feature - it will be restarted fresh
+              logger.info(`Interrupted feature ${feature.id} has no context, will restart fresh`);
             }
-          } catch {
-            // Skip invalid features
           }
         }
       }

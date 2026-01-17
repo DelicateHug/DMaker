@@ -27,7 +27,7 @@ services:
     ports:
       - '3008:3008'
     environment:
-      # Required
+      # Optional - Anthropic API key
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
 
       # Optional - Claude CLI OAuth credentials
@@ -43,6 +43,7 @@ services:
       - NODE_ENV=development
       - PORT=3008
       - CORS_ORIGIN=http://localhost:3007
+      - HUSKY=0
 
       # Optional - restrict to specific directory within container
       - ALLOWED_ROOT_DIRECTORY=${ALLOWED_ROOT_DIRECTORY:-/projects}
