@@ -18,29 +18,35 @@ export function useCursorStatusInit() {
     }
     initialized.current = true;
 
-    const initCursorStatus = async () => {
-      try {
-        const api = getHttpApiClient();
-        const statusResult = await api.setup.getCursorStatus();
+    // Defer cursor status check to avoid blocking initial render.
+    // This is non-critical information only needed when creating features.
+    const timeoutId = setTimeout(() => {
+      const initCursorStatus = async () => {
+        try {
+          const api = getHttpApiClient();
+          const statusResult = await api.setup.getCursorStatus();
 
-        if (statusResult.success) {
-          setCursorCliStatus({
-            installed: statusResult.installed ?? false,
-            version: statusResult.version ?? undefined,
-            auth: statusResult.auth?.authenticated
-              ? {
-                  authenticated: true,
-                  method: statusResult.auth.method || 'unknown',
-                }
-              : undefined,
-          });
+          if (statusResult.success) {
+            setCursorCliStatus({
+              installed: statusResult.installed ?? false,
+              version: statusResult.version ?? undefined,
+              auth: statusResult.auth?.authenticated
+                ? {
+                    authenticated: true,
+                    method: statusResult.auth.method || 'unknown',
+                  }
+                : undefined,
+            });
+          }
+        } catch (error) {
+          // Silently fail - cursor is optional
+          console.debug('[CursorStatusInit] Failed to check cursor status:', error);
         }
-      } catch (error) {
-        // Silently fail - cursor is optional
-        console.debug('[CursorStatusInit] Failed to check cursor status:', error);
-      }
-    };
+      };
 
-    initCursorStatus();
+      initCursorStatus();
+    }, 3000); // Defer by 3 seconds to let critical startup complete first
+
+    return () => clearTimeout(timeoutId);
   }, [setCursorCliStatus, cursorCliStatus]);
 }

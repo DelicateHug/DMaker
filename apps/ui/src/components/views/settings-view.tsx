@@ -28,6 +28,8 @@ import { MCPServersSection } from './settings-view/mcp-servers';
 import { PromptCustomizationSection } from './settings-view/prompts';
 import { EventHooksSection } from './settings-view/event-hooks';
 import { ImportExportDialog } from './settings-view/components/import-export-dialog';
+import { ProjectsSection } from './settings-view/projects/projects-section';
+import { VoiceSettingsSection } from './settings-view/voice';
 import type { Theme } from './settings-view/shared/types';
 
 // Breakpoint constant for mobile (matches Tailwind lg breakpoint)
@@ -37,6 +39,9 @@ export function SettingsView() {
   const {
     theme,
     setTheme,
+    setProjectTheme,
+    getEffectiveTheme,
+    currentProject,
     defaultSkipTests,
     setDefaultSkipTests,
     enableDependencyBlocking,
@@ -49,7 +54,6 @@ export function SettingsView() {
     setUseWorktrees,
     muteDoneSound,
     setMuteDoneSound,
-    currentProject,
     defaultPlanningMode,
     setDefaultPlanningMode,
     defaultRequirePlanApproval,
@@ -62,10 +66,16 @@ export function SettingsView() {
     setPromptCustomization,
     skipSandboxWarning,
     setSkipSandboxWarning,
+    defaultAutoDeploy,
+    setDefaultAutoDeploy,
+    defaultDeployEnvironment,
+    setDefaultDeployEnvironment,
+    agentMultiplier,
+    setAgentMultiplier,
   } = useAppStore();
 
-  // Global theme (project-specific themes are managed in Project Settings)
-  const globalTheme = theme as Theme;
+  // Use effective theme which considers project-specific overrides
+  const effectiveTheme = getEffectiveTheme() as Theme;
 
   // Get initial view from URL search params
   const { view: initialView } = useSearch({ from: '/settings' });
@@ -140,8 +150,14 @@ export function SettingsView() {
       case 'appearance':
         return (
           <AppearanceSection
-            effectiveTheme={globalTheme}
-            onThemeChange={(newTheme) => setTheme(newTheme as typeof theme)}
+            effectiveTheme={effectiveTheme}
+            onThemeChange={(newTheme) => {
+              setTheme(newTheme as typeof theme);
+              // Also update the current project's theme so getEffectiveTheme() reflects the change
+              if (currentProject) {
+                setProjectTheme(currentProject.id, newTheme as typeof theme);
+              }
+            }}
           />
         );
       case 'terminal':
@@ -154,6 +170,8 @@ export function SettingsView() {
         return (
           <AudioSection muteDoneSound={muteDoneSound} onMuteDoneSoundChange={setMuteDoneSound} />
         );
+      case 'voice':
+        return <VoiceSettingsSection />;
       case 'event-hooks':
         return <EventHooksSection />;
       case 'defaults':
@@ -166,6 +184,9 @@ export function SettingsView() {
             defaultRequirePlanApproval={defaultRequirePlanApproval}
             enableAiCommitMessages={enableAiCommitMessages}
             defaultFeatureModel={defaultFeatureModel}
+            defaultAutoDeploy={defaultAutoDeploy}
+            defaultDeployEnvironment={defaultDeployEnvironment}
+            agentMultiplier={agentMultiplier}
             onDefaultSkipTestsChange={setDefaultSkipTests}
             onEnableDependencyBlockingChange={setEnableDependencyBlocking}
             onSkipVerificationInAutoModeChange={setSkipVerificationInAutoMode}
@@ -173,6 +194,9 @@ export function SettingsView() {
             onDefaultRequirePlanApprovalChange={setDefaultRequirePlanApproval}
             onEnableAiCommitMessagesChange={setEnableAiCommitMessages}
             onDefaultFeatureModelChange={setDefaultFeatureModel}
+            onDefaultAutoDeployChange={setDefaultAutoDeploy}
+            onDefaultDeployEnvironmentChange={setDefaultDeployEnvironment}
+            onAgentMultiplierChange={setAgentMultiplier}
           />
         );
       case 'worktrees':
@@ -190,6 +214,8 @@ export function SettingsView() {
         );
       case 'developer':
         return <DeveloperSection />;
+      case 'projects':
+        return <ProjectsSection />;
       default:
         return <ApiKeysSection />;
     }

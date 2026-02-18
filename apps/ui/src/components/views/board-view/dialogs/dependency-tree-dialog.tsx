@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Feature } from '@/store/app-store';
-import { AlertCircle, CheckCircle2, Circle } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Circle, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface DependencyTreeDialogProps {
@@ -68,9 +68,25 @@ export function DependencyTreeDialog({
     );
   };
 
+  const getWaitForDependenciesBadge = (feat: Feature) => {
+    if (!feat.waitForDependencies) return null;
+    return (
+      <span
+        className="inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded font-medium bg-amber-500/20 text-amber-600 dark:text-amber-400"
+        title="This feature will wait for all dependencies to complete before starting"
+      >
+        <Clock className="w-3 h-3" />
+        Wait
+      </span>
+    );
+  };
+
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-xl max-h-[80vh] overflow-y-auto">
+      <DialogContent
+        className="max-w-xl max-h-[80vh] overflow-y-auto"
+        data-testid="dependency-tree-dialog"
+      >
         <DialogHeader>
           <DialogTitle>Dependency Tree</DialogTitle>
         </DialogHeader>
@@ -82,6 +98,7 @@ export function DependencyTreeDialog({
               {getStatusIcon(feature.status)}
               <h3 className="font-semibold text-sm">Current Feature</h3>
               {getPriorityBadge(feature.priority)}
+              {getWaitForDependenciesBadge(feature)}
             </div>
             <p className="text-sm text-muted-foreground">{feature.description}</p>
             <p className="text-xs text-muted-foreground/70 mt-2">Category: {feature.category}</p>
@@ -165,6 +182,7 @@ export function DependencyTreeDialog({
                         {dependent.description.length > 100 && '...'}
                       </span>
                       {getPriorityBadge(dependent.priority)}
+                      {getWaitForDependenciesBadge(dependent)}
                     </div>
                     <div className="flex items-center gap-3 ml-7">
                       <span className="text-xs text-muted-foreground">{dependent.category}</span>
@@ -200,6 +218,22 @@ export function DependencyTreeDialog({
                 <p className="text-yellow-600 dark:text-yellow-400 mt-1">
                   This feature has dependencies that aren't completed yet. Consider completing them
                   first for a smoother implementation.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Info about waitForDependencies being enabled */}
+          {feature.waitForDependencies && dependencyTree.dependencies.length > 0 && (
+            <div className="flex items-start gap-3 p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+              <Clock className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+              <div className="text-sm">
+                <p className="font-medium text-amber-700 dark:text-amber-500">
+                  Waiting for Dependencies Enabled
+                </p>
+                <p className="text-amber-600 dark:text-amber-400 mt-1">
+                  This feature is configured to wait until all its dependencies are completed or
+                  verified before it can be started in auto mode.
                 </p>
               </div>
             </div>

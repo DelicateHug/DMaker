@@ -2,6 +2,11 @@
 import { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
 import { useAppStore } from '@/store/app-store';
 
+/**
+ * Selector for sidebar open state used in responsive kanban calculations
+ */
+const selectSidebarOpen = (state: ReturnType<typeof useAppStore.getState>) => state.sidebarOpen;
+
 export interface ResponsiveKanbanConfig {
   columnWidth: number;
   columnMinWidth: number;
@@ -15,10 +20,10 @@ export interface ResponsiveKanbanConfig {
  */
 const DEFAULT_CONFIG: ResponsiveKanbanConfig = {
   columnWidth: 288, // 18rem = 288px (w-72)
-  columnMinWidth: 280, // Minimum column width - ensures usability
+  columnMinWidth: 260, // Minimum column width - ensures usability (reduced for tighter layout)
   columnMaxWidth: Infinity, // No max width - columns scale evenly to fill viewport
-  gap: 20, // gap-5 = 20px
-  padding: 40, // px-5 on both sides = 40px (matches gap between columns)
+  gap: 12, // gap-3 = 12px (reduced from 20px for tighter layout)
+  padding: 24, // px-3 on both sides = 24px (reduced from 40px for more space efficiency)
 };
 
 // Sidebar transition duration (matches sidebar.tsx)
@@ -27,10 +32,30 @@ const SIDEBAR_TRANSITION_MS = 300;
 export interface UseResponsiveKanbanResult {
   columnWidth: number;
   containerStyle: React.CSSProperties;
+  columnStyle: React.CSSProperties;
   isCompact: boolean;
   totalBoardWidth: number;
   isInitialized: boolean;
+  gap: number;
+  /** Calculated width for single-column mode (60-70% of available space) */
+  singleColumnWidth: number;
+  /** Container style optimized for single-column mode */
+  singleColumnContainerStyle: React.CSSProperties;
 }
+
+/**
+ * Single-column mode configuration
+ */
+const SINGLE_COLUMN_CONFIG = {
+  /** Target percentage of available width (65% = middle of 60-70% range) */
+  targetPercentage: 0.65,
+  /** Minimum width for readability */
+  minWidth: 400,
+  /** Maximum width to prevent overly wide cards */
+  maxWidth: 800,
+  /** Horizontal padding in single-column mode */
+  padding: 16,
+};
 
 /**
  * Hook to calculate responsive Kanban column widths based on window size.
@@ -41,6 +66,7 @@ export interface UseResponsiveKanbanResult {
  * - Uses useLayoutEffect to calculate width before paint (prevents bounce)
  * - Observes actual board container for accurate sizing
  * - Recalculates after sidebar transitions
+ * - Provides optimized width calculations for single-column mode
  *
  * @param columnCount - Number of columns in the Kanban board
  * @param config - Optional configuration for column sizing
@@ -55,9 +81,10 @@ export function useResponsiveKanban(
     ...config,
   };
 
-  const sidebarOpen = useAppStore((state) => state.sidebarOpen);
+  const sidebarOpen = useAppStore(selectSidebarOpen);
   const resizeTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
   const [isInitialized, setIsInitialized] = useState(false);
+  const [containerWidth, setContainerWidth] = useState<number>(0);
 
   const calculateColumnWidth = useCallback(
     (containerWidth?: number) => {
@@ -101,6 +128,11 @@ export function useResponsiveKanban(
     if (typeof window === 'undefined') return;
 
     const updateWidth = () => {
+      // Get current container width for single-column calculations
+      const boardContainer = document.querySelector('[data-testid="board-view"]')?.parentElement;
+      const width = boardContainer ? boardContainer.clientWidth : window.innerWidth;
+      setContainerWidth(width);
+
       const newWidth = calculateColumnWidth();
       setColumnWidth(newWidth);
       setIsInitialized(true);
@@ -137,8 +169,9 @@ export function useResponsiveKanban(
         // Use the observed container's width for calculation
         const entry = entries[0];
         if (entry) {
-          const containerWidth = entry.contentRect.width;
-          const newWidth = calculateColumnWidth(containerWidth);
+          const observedWidth = entry.contentRect.width;
+          setContainerWidth(observedWidth);
+          const newWidth = calculateColumnWidth(observedWidth);
           setColumnWidth(newWidth);
         }
       });
@@ -175,19 +208,57 @@ export function useResponsiveKanban(
   // Calculate total board width for container sizing
   const totalBoardWidth = columnWidth * columnCount + gap * (columnCount - 1);
 
-  // Container style for horizontal scrolling support
+  // Container style for horizontal scrolling support with stretch behavior
   const containerStyle: React.CSSProperties = {
     display: 'flex',
     gap: `${gap}px`,
-    width: 'max-content', // Expand to fit all columns, enabling horizontal scroll when needed
+    width: '100%', // Fill available space for better utilization
+    minWidth: 'max-content', // Ensure minimum width when content exceeds container
     minHeight: '100%', // Ensure full height
+    padding: `0 ${padding / 2}px`, // Apply horizontal padding to container
+  };
+
+  // Column style for flex-based stretching
+  const columnStyle: React.CSSProperties = {
+    flex: `1 1 ${columnWidth}px`, // Grow and shrink from base width
+    minWidth: `${columnMinWidth}px`,
+    maxWidth: columnMaxWidth === Infinity ? 'none' : `${columnMaxWidth}px`,
+  };
+
+  // Calculate single-column width based on actual container width
+  // Uses 65% of available space (middle of 60-70% range per spec)
+  // with reasonable min/max bounds for usability
+  const calculateSingleColumnWidth = (): number => {
+    const availableWidth = containerWidth || window.innerWidth;
+    const targetWidth = Math.floor(availableWidth * SINGLE_COLUMN_CONFIG.targetPercentage);
+
+    return Math.max(
+      SINGLE_COLUMN_CONFIG.minWidth,
+      Math.min(SINGLE_COLUMN_CONFIG.maxWidth, targetWidth)
+    );
+  };
+
+  const singleColumnWidth = calculateSingleColumnWidth();
+
+  // Container style optimized for single-column mode (centered layout)
+  const singleColumnContainerStyle: React.CSSProperties = {
+    display: 'flex',
+    gap: `${gap}px`,
+    width: '100%',
+    minHeight: '100%',
+    justifyContent: 'center',
+    padding: `0 ${SINGLE_COLUMN_CONFIG.padding}px`,
   };
 
   return {
     columnWidth,
     containerStyle,
+    columnStyle,
     isCompact,
     totalBoardWidth,
     isInitialized,
+    gap,
+    singleColumnWidth,
+    singleColumnContainerStyle,
   };
 }

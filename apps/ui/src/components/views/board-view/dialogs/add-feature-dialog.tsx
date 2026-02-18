@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { createLogger } from '@automaker/utils/logger';
 import {
   Dialog,
@@ -22,7 +22,7 @@ import {
   FeatureTextFilePath as DescriptionTextFilePath,
   ImagePreviewMap,
 } from '@/components/ui/description-image-dropzone';
-import { Play, Cpu, FolderKanban, Settings2 } from 'lucide-react';
+import { Play, Cpu, FolderKanban, Settings2, Check, ChevronDown } from 'lucide-react';
 import { useNavigate } from '@tanstack/react-router';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -45,11 +45,19 @@ import {
   AncestorContextSection,
   EnhanceWithAI,
   EnhancementHistoryButton,
+  PhaseModelSelector,
   type BaseHistoryEntry,
 } from '../shared';
 import type { WorkMode } from '../shared';
-import { PhaseModelSelector } from '@/components/views/settings-view/model-defaults/phase-model-selector';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import type { Project } from '@/lib/electron';
+import { getProjectIcon } from '@/lib/icon-registry';
 import {
   getAncestors,
   formatAncestorContextForPrompt,
@@ -99,9 +107,12 @@ type FeatureData = {
   priority: number;
   planningMode: PlanningMode;
   requirePlanApproval: boolean;
+  autoDeploy: boolean;
   dependencies?: string[];
   childDependencies?: string[]; // Feature IDs that should depend on this feature
+  waitForDependencies?: boolean; // If true, this feature won't start until all dependencies are completed/verified
   workMode: WorkMode;
+  selectedProjectPath?: string; // The project path to add this feature to
 };
 
 interface AddFeatureDialogProps {
@@ -128,6 +139,21 @@ interface AddFeatureDialogProps {
    * This is used when the "Default to worktree mode" setting is disabled.
    */
   forceCurrentBranchMode?: boolean;
+  /**
+   * All available projects for project selection.
+   * When provided, a project selector will be shown.
+   */
+  projects?: Project[];
+  /**
+   * The currently selected project in the board view.
+   * This will be the default selection in the project dropdown.
+   */
+  selectedProject?: Project | null;
+  /**
+   * Whether "All Projects" mode is active in the board.
+   * When true, the project selector will be more prominently displayed.
+   */
+  showAllProjectsMode?: boolean;
 }
 
 /**
@@ -153,6 +179,9 @@ export function AddFeatureDialog({
   allFeatures = [],
   selectedNonMainWorktreeBranch,
   forceCurrentBranchMode,
+  projects = [],
+  selectedProject,
+  showAllProjectsMode = false,
 }: AddFeatureDialogProps) {
   const isSpawnMode = !!parentFeature;
   const navigate = useNavigate();
@@ -178,6 +207,7 @@ export function AddFeatureDialog({
   // Planning mode state
   const [planningMode, setPlanningMode] = useState<PlanningMode>('skip');
   const [requirePlanApproval, setRequirePlanApproval] = useState(false);
+  const [autoDeploy, setAutoDeploy] = useState(false);
 
   // UI state
   const [previewMap, setPreviewMap] = useState<ImagePreviewMap>(() => new Map());
@@ -193,10 +223,22 @@ export function AddFeatureDialog({
   // Dependency selection state (not in spawn mode)
   const [parentDependencies, setParentDependencies] = useState<string[]>([]);
   const [childDependencies, setChildDependencies] = useState<string[]>([]);
+  const [waitForDependencies, setWaitForDependencies] = useState(false);
+
+  // Project selection state (for multi-project mode)
+  const [dialogSelectedProject, setDialogSelectedProject] = useState<Project | null>(
+    selectedProject ?? null
+  );
+  const [isProjectDropdownOpen, setIsProjectDropdownOpen] = useState(false);
 
   // Get defaults from store
-  const { defaultPlanningMode, defaultRequirePlanApproval, useWorktrees, defaultFeatureModel } =
-    useAppStore();
+  const {
+    defaultPlanningMode,
+    defaultRequirePlanApproval,
+    useWorktrees,
+    defaultFeatureModel,
+    defaultAutoDeploy,
+  } = useAppStore();
 
   // Track previous open state to detect when dialog opens
   const wasOpenRef = useRef(false);
@@ -216,6 +258,7 @@ export function AddFeatureDialog({
       );
       setPlanningMode(defaultPlanningMode);
       setRequirePlanApproval(defaultRequirePlanApproval);
+      setAutoDeploy(defaultAutoDeploy ?? false);
       setModelEntry(defaultFeatureModel);
 
       // Initialize description history (empty for new feature)
@@ -234,6 +277,10 @@ export function AddFeatureDialog({
       // Reset dependency selections
       setParentDependencies([]);
       setChildDependencies([]);
+      setWaitForDependencies(false);
+
+      // Sync the selected project from the board when dialog opens
+      setDialogSelectedProject(selectedProject ?? null);
     }
   }, [
     open,
@@ -241,12 +288,14 @@ export function AddFeatureDialog({
     defaultBranch,
     defaultPlanningMode,
     defaultRequirePlanApproval,
+    defaultAutoDeploy,
     defaultFeatureModel,
     useWorktrees,
     selectedNonMainWorktreeBranch,
     forceCurrentBranchMode,
     parentFeature,
     allFeatures,
+    selectedProject,
   ]);
 
   const handleModelChange = (entry: PhaseModelEntry) => {
@@ -261,6 +310,12 @@ export function AddFeatureDialog({
 
     if (workMode === 'custom' && !branchName.trim()) {
       toast.error('Please select a branch name');
+      return null;
+    }
+
+    // When in "All Projects" mode with multiple projects, require project selection
+    if (showAllProjectsMode && projects.length > 1 && !dialogSelectedProject) {
+      toast.error('Please select a project');
       return null;
     }
 
@@ -326,9 +381,14 @@ export function AddFeatureDialog({
       priority,
       planningMode,
       requirePlanApproval,
+      autoDeploy,
       dependencies: finalDependencies,
       childDependencies: childDependencies.length > 0 ? childDependencies : undefined,
+      waitForDependencies:
+        finalDependencies && finalDependencies.length > 0 ? waitForDependencies : undefined,
       workMode,
+      // Include selected project path for multi-project support
+      selectedProjectPath: dialogSelectedProject?.path,
     };
   };
 
@@ -349,11 +409,13 @@ export function AddFeatureDialog({
     );
     setPlanningMode(defaultPlanningMode);
     setRequirePlanApproval(defaultRequirePlanApproval);
+    setAutoDeploy(defaultAutoDeploy ?? false);
     setPreviewMap(new Map());
     setDescriptionError(false);
     setDescriptionHistory([]);
     setParentDependencies([]);
     setChildDependencies([]);
+    setWaitForDependencies(false);
     onOpenChange(false);
   };
 
@@ -406,6 +468,126 @@ export function AddFeatureDialog({
               : 'Create a new feature card for the Kanban board.'}
           </DialogDescription>
         </DialogHeader>
+
+        {/* Project Indicator/Selector - Always show which project the feature will be added to */}
+        {(projects.length > 0 || dialogSelectedProject) && (
+          <div
+            className={cn(
+              'flex items-center gap-2 px-3 py-2 rounded-md border',
+              showAllProjectsMode && !dialogSelectedProject
+                ? 'border-destructive/50 bg-destructive/10'
+                : 'border-border/50 bg-muted/30'
+            )}
+          >
+            <span className="text-xs text-muted-foreground">Adding to:</span>
+            {projects.length > 1 ? (
+              // Show dropdown when multiple projects are available
+              <DropdownMenu open={isProjectDropdownOpen} onOpenChange={setIsProjectDropdownOpen}>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className={cn(
+                      'flex items-center gap-1.5 h-7 px-2',
+                      'hover:bg-accent/50 transition-colors duration-150',
+                      'font-medium text-xs',
+                      !dialogSelectedProject && 'text-destructive'
+                    )}
+                    data-testid="add-feature-project-dropdown-trigger"
+                  >
+                    {dialogSelectedProject ? (
+                      <>
+                        {(() => {
+                          const ProjectIcon = getProjectIcon(dialogSelectedProject?.icon);
+                          return (
+                            <div className="w-4 h-4 rounded flex items-center justify-center bg-brand-500/10">
+                              <ProjectIcon className="w-2.5 h-2.5 text-brand-500" />
+                            </div>
+                          );
+                        })()}
+                        <span className="max-w-[150px] truncate">{dialogSelectedProject.name}</span>
+                      </>
+                    ) : (
+                      <span>Select project...</span>
+                    )}
+                    <ChevronDown className="w-3 h-3 text-muted-foreground" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent
+                  align="start"
+                  className="w-56"
+                  data-testid="add-feature-project-dropdown-content"
+                >
+                  {projects.map((project) => {
+                    const ProjectIcon = getProjectIcon(project.icon);
+                    const isActive = dialogSelectedProject?.id === project.id;
+                    return (
+                      <DropdownMenuItem
+                        key={project.id}
+                        onClick={() => {
+                          setDialogSelectedProject(project);
+                          setIsProjectDropdownOpen(false);
+                        }}
+                        className={cn(
+                          'flex items-center gap-2 cursor-pointer',
+                          isActive && 'bg-brand-500/10'
+                        )}
+                        data-testid={`add-feature-project-option-${project.id}`}
+                      >
+                        <div
+                          className={cn(
+                            'w-5 h-5 rounded flex items-center justify-center',
+                            isActive ? 'bg-brand-500/20' : 'bg-muted'
+                          )}
+                        >
+                          <ProjectIcon
+                            className={cn(
+                              'w-3 h-3',
+                              isActive ? 'text-brand-500' : 'text-muted-foreground'
+                            )}
+                          />
+                        </div>
+                        <span className="flex-1 text-sm truncate">{project.name}</span>
+                        {isActive && <Check className="w-3.5 h-3.5 text-brand-500" />}
+                      </DropdownMenuItem>
+                    );
+                  })}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : dialogSelectedProject ? (
+              // Show static project indicator when only one project exists
+              <div className="flex items-center gap-1.5">
+                {(() => {
+                  const ProjectIcon = getProjectIcon(dialogSelectedProject?.icon);
+                  return (
+                    <div className="w-4 h-4 rounded flex items-center justify-center bg-brand-500/10">
+                      <ProjectIcon className="w-2.5 h-2.5 text-brand-500" />
+                    </div>
+                  );
+                })()}
+                <span className="text-sm font-medium">{dialogSelectedProject.name}</span>
+              </div>
+            ) : projects.length === 1 ? (
+              // Single project available, show it
+              <div className="flex items-center gap-1.5">
+                {(() => {
+                  const project = projects[0];
+                  const ProjectIcon = getProjectIcon(project.icon);
+                  return (
+                    <>
+                      <div className="w-4 h-4 rounded flex items-center justify-center bg-brand-500/10">
+                        <ProjectIcon className="w-2.5 h-2.5 text-brand-500" />
+                      </div>
+                      <span className="text-sm font-medium">{project.name}</span>
+                    </>
+                  );
+                })()}
+              </div>
+            ) : (
+              <span className="text-sm text-muted-foreground">No project selected</span>
+            )}
+          </div>
+        )}
 
         <div className="py-4 space-y-4 overflow-y-auto flex-1 min-h-0">
           {/* Ancestor Context Section - only in spawn mode */}
@@ -618,6 +800,20 @@ export function AddFeatureDialog({
                       Require approval
                     </Label>
                   </div>
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id="add-feature-auto-deploy"
+                      checked={autoDeploy}
+                      onCheckedChange={(checked) => setAutoDeploy(!!checked)}
+                      data-testid="add-feature-auto-deploy-checkbox"
+                    />
+                    <Label
+                      htmlFor="add-feature-auto-deploy"
+                      className="text-xs font-normal cursor-pointer"
+                    >
+                      Auto-deploy
+                    </Label>
+                  </div>
                 </div>
               </div>
             </div>
@@ -694,6 +890,24 @@ export function AddFeatureDialog({
                     data-testid="add-feature-child-deps"
                   />
                 </div>
+                {/* Wait for dependencies option - only show when there are parent dependencies */}
+                {parentDependencies.length > 0 && (
+                  <div className="flex items-center gap-2 pt-1">
+                    <Checkbox
+                      id="add-feature-wait-for-deps"
+                      checked={waitForDependencies}
+                      onCheckedChange={(checked) => setWaitForDependencies(!!checked)}
+                      data-testid="add-feature-wait-for-deps-checkbox"
+                    />
+                    <Label
+                      htmlFor="add-feature-wait-for-deps"
+                      className="text-xs font-normal cursor-pointer"
+                    >
+                      Wait for dependencies before starting (block in auto mode until all
+                      dependencies are completed)
+                    </Label>
+                  </div>
+                )}
               </div>
             )}
           </div>

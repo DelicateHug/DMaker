@@ -3,6 +3,7 @@ import { createLogger } from '@automaker/utils/logger';
 import { DragStartEvent, DragEndEvent } from '@dnd-kit/core';
 import { Feature } from '@/store/app-store';
 import { useAppStore } from '@/store/app-store';
+import { useShallow } from 'zustand/react/shallow';
 import { toast } from 'sonner';
 import { COLUMNS, ColumnId } from '../constants';
 
@@ -24,7 +25,11 @@ export function useBoardDragDrop({
   handleStartImplementation,
 }: UseBoardDragDropProps) {
   const [activeFeature, setActiveFeature] = useState<Feature | null>(null);
-  const { moveFeature } = useAppStore();
+  const { moveFeature } = useAppStore(
+    useShallow((state) => ({
+      moveFeature: state.moveFeature,
+    }))
+  );
 
   // Note: getOrCreateWorktreeForFeature removed - worktrees are now created server-side
   // at execution time based on feature.branchName
@@ -60,7 +65,7 @@ export function useBoardDragDrop({
       // Determine if dragging is allowed based on status and skipTests
       // - Backlog items can always be dragged
       // - waiting_approval items can always be dragged (to allow manual verification via drag)
-      // - verified items can always be dragged (to allow moving back to waiting_approval)
+      // - completed items can always be dragged (to allow moving back to waiting_approval)
       // - in_progress items can be dragged (but not if they're currently running)
       // - Non-skipTests (TDD) items that are in progress cannot be dragged if they are running
       if (draggedFeature.status === 'in_progress') {
@@ -103,14 +108,15 @@ export function useBoardDragDrop({
           persistFeatureUpdate(featureId, { status: targetStatus });
         }
       } else if (draggedFeature.status === 'waiting_approval') {
-        // waiting_approval features can be dragged to verified for manual verification
+        // waiting_approval features can be dragged to completed for manual verification
         // NOTE: This check must come BEFORE skipTests check because waiting_approval
         // features often have skipTests=true, and we want status-based handling first
-        if (targetStatus === 'verified') {
-          moveFeature(featureId, 'verified');
+        if (targetStatus === 'completed') {
+          moveFeature(featureId, 'completed');
           // Clear justFinishedAt timestamp when manually verifying via drag
           persistFeatureUpdate(featureId, {
-            status: 'verified',
+            status: 'completed',
+            completedAt: new Date().toISOString(),
             justFinishedAt: undefined,
           });
           toast.success('Feature verified', {
@@ -146,10 +152,10 @@ export function useBoardDragDrop({
               50
             )}${draggedFeature.description.length > 50 ? '...' : ''}`,
           });
-        } else if (targetStatus === 'verified' && draggedFeature.skipTests) {
+        } else if (targetStatus === 'completed' && draggedFeature.skipTests) {
           // Manual verify via drag (only for skipTests features)
-          moveFeature(featureId, 'verified');
-          persistFeatureUpdate(featureId, { status: 'verified' });
+          moveFeature(featureId, 'completed');
+          persistFeatureUpdate(featureId, { status: 'completed' });
           toast.success('Feature verified', {
             description: `Marked as verified: ${draggedFeature.description.slice(
               0,
@@ -158,9 +164,9 @@ export function useBoardDragDrop({
           });
         }
       } else if (draggedFeature.skipTests) {
-        // skipTests feature being moved between verified and waiting_approval
-        if (targetStatus === 'waiting_approval' && draggedFeature.status === 'verified') {
-          // Move verified feature back to waiting_approval
+        // skipTests feature being moved between completed and waiting_approval
+        if (targetStatus === 'waiting_approval' && draggedFeature.status === 'completed') {
+          // Move completed feature back to waiting_approval
           moveFeature(featureId, 'waiting_approval');
           persistFeatureUpdate(featureId, { status: 'waiting_approval' });
           toast.info('Feature moved back', {
@@ -170,7 +176,7 @@ export function useBoardDragDrop({
             )}${draggedFeature.description.length > 50 ? '...' : ''}`,
           });
         } else if (targetStatus === 'backlog') {
-          // Allow moving skipTests cards back to backlog (from verified)
+          // Allow moving skipTests cards back to backlog (from completed)
           moveFeature(featureId, 'backlog');
           persistFeatureUpdate(featureId, { status: 'backlog' });
           toast.info('Feature moved to backlog', {
@@ -180,10 +186,10 @@ export function useBoardDragDrop({
             )}${draggedFeature.description.length > 50 ? '...' : ''}`,
           });
         }
-      } else if (draggedFeature.status === 'verified') {
-        // Handle verified TDD (non-skipTests) features being moved back
+      } else if (draggedFeature.status === 'completed') {
+        // Handle completed TDD (non-skipTests) features being moved back
         if (targetStatus === 'waiting_approval') {
-          // Move verified feature back to waiting_approval
+          // Move completed feature back to waiting_approval
           moveFeature(featureId, 'waiting_approval');
           persistFeatureUpdate(featureId, { status: 'waiting_approval' });
           toast.info('Feature moved back', {
@@ -193,7 +199,7 @@ export function useBoardDragDrop({
             )}${draggedFeature.description.length > 50 ? '...' : ''}`,
           });
         } else if (targetStatus === 'backlog') {
-          // Allow moving verified cards back to backlog
+          // Allow moving completed cards back to backlog
           moveFeature(featureId, 'backlog');
           persistFeatureUpdate(featureId, { status: 'backlog' });
           toast.info('Feature moved to backlog', {

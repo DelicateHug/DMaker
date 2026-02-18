@@ -69,7 +69,7 @@
   --status-info: oklch(0.55 0.15 230);
   --status-info-bg: oklch(0.55 0.15 230 / 0.15);
   --status-backlog: oklch(0.6 0.025 340);
-  --status-in-progress: oklch(0.65 0.15 70);
+  --status-in-progress: oklch(0.82 0.15 70);
   --status-waiting: oklch(0.6 0.12 50);
 }
 

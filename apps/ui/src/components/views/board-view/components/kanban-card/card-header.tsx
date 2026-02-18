@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { useState } from 'react';
+import { memo, useState } from 'react';
 import { Feature } from '@/store/app-store';
 import { cn } from '@/lib/utils';
 import { CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -20,6 +20,7 @@ import {
   ChevronDown,
   ChevronUp,
   GitFork,
+  ArrowLeft,
 } from 'lucide-react';
 import { CountUpTimer } from '@/components/ui/count-up-timer';
 import { formatModelName, DEFAULT_MODEL } from '@/lib/agent-context-parser';
@@ -31,21 +32,27 @@ interface CardHeaderProps {
   isDraggable: boolean;
   isCurrentAutoTask: boolean;
   isSelectionMode?: boolean;
+  /** Whether full feature data has been loaded (Phase 2 complete).
+   *  When false, description shows skeleton shimmer placeholders. */
+  isFullyLoaded?: boolean;
   onEdit: () => void;
   onDelete: () => void;
   onViewOutput?: () => void;
   onSpawnTask?: () => void;
+  onMoveBackToBacklog?: () => void;
 }
 
-export function CardHeaderSection({
+export const CardHeaderSection = memo(function CardHeaderSection({
   feature,
   isDraggable,
   isCurrentAutoTask,
   isSelectionMode = false,
+  isFullyLoaded = true,
   onEdit,
   onDelete,
   onViewOutput,
   onSpawnTask,
+  onMoveBackToBacklog,
 }: CardHeaderProps) {
   const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -60,11 +67,11 @@ export function CardHeaderSection({
   };
 
   return (
-    <CardHeader className="p-3 pb-2 block">
+    <CardHeader className="px-2 pt-0.5 pb-1 block">
       {/* Running task header */}
       {isCurrentAutoTask && !isSelectionMode && (
-        <div className="absolute top-2 right-2 flex items-center gap-1">
-          <div className="flex items-center justify-center gap-2 bg-[var(--status-in-progress)]/15 border border-[var(--status-in-progress)]/50 rounded-md px-2 py-0.5">
+        <div className="absolute top-1 right-1.5 flex items-center gap-0.5">
+          <div className="flex items-center justify-center gap-1.5 bg-[var(--status-in-progress)]/15 border border-[var(--status-in-progress)]/50 rounded-md px-1.5 py-0.5">
             <Loader2 className="w-3.5 h-3.5 text-[var(--status-in-progress)] animate-spin" />
             {feature.startedAt && (
               <CountUpTimer
@@ -128,7 +135,7 @@ export function CardHeaderSection({
 
       {/* Backlog header */}
       {!isCurrentAutoTask && !isSelectionMode && feature.status === 'backlog' && (
-        <div className="absolute top-2 right-2 flex items-center gap-1">
+        <div className="absolute top-1 right-1.5 flex items-center gap-0.5">
           <Button
             variant="ghost"
             size="sm"
@@ -161,7 +168,7 @@ export function CardHeaderSection({
         !isSelectionMode &&
         (feature.status === 'waiting_approval' || feature.status === 'verified') && (
           <>
-            <div className="absolute top-2 right-2 flex items-center gap-1">
+            <div className="absolute top-1 right-1.5 flex items-center gap-0.5">
               <Button
                 variant="ghost"
                 size="sm"
@@ -232,7 +239,7 @@ export function CardHeaderSection({
       {/* In progress header */}
       {!isCurrentAutoTask && feature.status === 'in_progress' && (
         <>
-          <div className="absolute top-2 right-2 flex items-center gap-1">
+          <div className="absolute top-1 right-1.5 flex items-center gap-0.5">
             <Button
               variant="ghost"
               size="sm"
@@ -293,6 +300,19 @@ export function CardHeaderSection({
                   <GitFork className="w-3 h-3 mr-2" />
                   Spawn Sub-Task
                 </DropdownMenuItem>
+                {onMoveBackToBacklog && (
+                  <DropdownMenuItem
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onMoveBackToBacklog();
+                    }}
+                    data-testid={`move-to-backlog-${feature.id}`}
+                    className="text-xs"
+                  >
+                    <ArrowLeft className="w-3 h-3 mr-2" />
+                    Move to Backlog
+                  </DropdownMenuItem>
+                )}
                 {/* Model info in dropdown */}
                 {(() => {
                   const ProviderIcon = getProviderIconForModel(feature.model);
@@ -312,10 +332,10 @@ export function CardHeaderSection({
       )}
 
       {/* Title and description */}
-      <div className="flex items-start gap-2">
+      <div className="flex items-start gap-1.5">
         {isDraggable && (
           <div
-            className="-ml-2 -mt-1 p-2 touch-none opacity-40 hover:opacity-70 transition-opacity"
+            className="-ml-1.5 -mt-0.5 p-1.5 touch-none opacity-40 hover:opacity-70 transition-opacity"
             data-testid={`drag-handle-${feature.id}`}
           >
             <GripVertical className="w-3.5 h-3.5 text-muted-foreground" />
@@ -323,45 +343,56 @@ export function CardHeaderSection({
         )}
         <div className="flex-1 min-w-0 overflow-hidden">
           {feature.titleGenerating ? (
-            <div className="flex items-center gap-1.5 mb-1">
+            <div className="flex items-center gap-1 mb-0.5">
               <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />
               <span className="text-xs text-muted-foreground italic">Generating title...</span>
             </div>
           ) : feature.title ? (
-            <CardTitle className="text-sm font-semibold text-foreground mb-1 line-clamp-2">
+            <CardTitle className="text-sm font-semibold text-foreground mb-0.5 line-clamp-2">
               {feature.title}
             </CardTitle>
           ) : null}
-          <CardDescription
-            className={cn(
-              'text-xs leading-snug break-words hyphens-auto overflow-hidden text-muted-foreground',
-              !isDescriptionExpanded && 'line-clamp-3'
-            )}
-          >
-            {feature.description || feature.summary || feature.id}
-          </CardDescription>
-          {(feature.description || feature.summary || '').length > 100 && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setIsDescriptionExpanded(!isDescriptionExpanded);
-              }}
-              onPointerDown={(e) => e.stopPropagation()}
-              className="flex items-center gap-0.5 text-[10px] text-muted-foreground/70 hover:text-muted-foreground mt-1.5 transition-colors"
-              data-testid={`toggle-description-${feature.id}`}
-            >
-              {isDescriptionExpanded ? (
-                <>
-                  <ChevronUp className="w-3 h-3" />
-                  <span>Less</span>
-                </>
-              ) : (
-                <>
-                  <ChevronDown className="w-3 h-3" />
-                  <span>More</span>
-                </>
+          {/* Description — shimmer skeleton when data is still loading */}
+          {!isFullyLoaded && !feature.description && !feature.summary ? (
+            <div className="space-y-1.5 mt-1" data-testid={`description-skeleton-${feature.id}`}>
+              <div className="rounded-md bg-muted/40 animate-pulse h-3 w-full" />
+              <div className="rounded-md bg-muted/40 animate-pulse h-3 w-5/6" />
+              <div className="rounded-md bg-muted/40 animate-pulse h-3 w-2/3" />
+            </div>
+          ) : (
+            <>
+              <CardDescription
+                className={cn(
+                  'text-xs leading-snug break-words hyphens-auto overflow-hidden text-muted-foreground',
+                  !isDescriptionExpanded && 'line-clamp-3'
+                )}
+              >
+                {feature.description || feature.summary || feature.id}
+              </CardDescription>
+              {(feature.description || feature.summary || '').length > 100 && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsDescriptionExpanded(!isDescriptionExpanded);
+                  }}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  className="flex items-center gap-0.5 text-[10px] text-muted-foreground/70 hover:text-muted-foreground mt-1 transition-colors"
+                  data-testid={`toggle-description-${feature.id}`}
+                >
+                  {isDescriptionExpanded ? (
+                    <>
+                      <ChevronUp className="w-3 h-3" />
+                      <span>Less</span>
+                    </>
+                  ) : (
+                    <>
+                      <ChevronDown className="w-3 h-3" />
+                      <span>More</span>
+                    </>
+                  )}
+                </button>
               )}
-            </button>
+            </>
           )}
         </div>
       </div>
@@ -378,4 +409,4 @@ export function CardHeaderSection({
       />
     </CardHeader>
   );
-}
+});

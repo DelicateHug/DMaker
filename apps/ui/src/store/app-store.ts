@@ -1,9 +1,10 @@
 import { create } from 'zustand';
 // Note: persist middleware removed - settings now sync via API (use-settings-sync.ts)
-import type { Project, TrashedProject } from '@/lib/electron';
+import type { Project, TrashedProject, RunningAgent } from '@/lib/electron';
 import { getElectronAPI } from '@/lib/electron';
 import { createLogger } from '@automaker/utils/logger';
 import { setItem, getItem } from '@/lib/storage';
+import { generateFeatureId } from '@/lib/utils';
 import {
   UI_SANS_FONT_OPTIONS,
   UI_MONO_FONT_OPTIONS,
@@ -13,6 +14,7 @@ import type {
   Feature as BaseFeature,
   FeatureImagePath,
   FeatureTextFilePath,
+  SummaryHistoryEntry,
   ModelAlias,
   PlanningMode,
   ThinkingLevel,
@@ -31,6 +33,12 @@ import type {
   ModelDefinition,
   ServerLogLevel,
   EventHook,
+  ClaudeAccountRef,
+  VoiceSettings,
+  VoiceSession,
+  VoiceSessionStatus,
+  VoiceMessage,
+  SyntaxTheme,
 } from '@automaker/types';
 import {
   getAllCursorModelIds,
@@ -38,6 +46,7 @@ import {
   getAllOpencodeModelIds,
   DEFAULT_PHASE_MODELS,
   DEFAULT_OPENCODE_MODEL,
+  DEFAULT_VOICE_SETTINGS,
 } from '@automaker/types';
 
 const logger = createLogger('AppStore');
@@ -51,9 +60,14 @@ export type {
   ThinkingLevel,
   ModelProvider,
   ServerLogLevel,
+  SyntaxTheme,
   FeatureTextFilePath,
   FeatureImagePath,
+  SummaryHistoryEntry,
 };
+
+// Re-export RunningAgent from electron module for convenience
+export type { RunningAgent };
 
 export type ViewMode =
   | 'welcome'
@@ -63,10 +77,7 @@ export type ViewMode =
   | 'agent'
   | 'settings'
   | 'interview'
-  | 'context'
-  | 'running-agents'
   | 'terminal'
-  | 'wiki'
   | 'ideation';
 
 export type ThemeMode =
@@ -117,6 +128,7 @@ export type ThemeMode =
 
 // LocalStorage keys for persistence (fallback when server settings aren't available)
 export const THEME_STORAGE_KEY = 'automaker:theme';
+export const SYNTAX_THEME_STORAGE_KEY = 'automaker:syntax-theme';
 export const FONT_SANS_STORAGE_KEY = 'automaker:font-sans';
 export const FONT_MONO_STORAGE_KEY = 'automaker:font-mono';
 
@@ -183,6 +195,24 @@ function saveThemeToStorage(theme: ThemeMode): void {
 }
 
 /**
+ * Get the syntax theme from localStorage as a fallback
+ * Used before server settings are loaded (e.g., on login/setup pages)
+ */
+export function getStoredSyntaxTheme(): SyntaxTheme | null {
+  const stored = getItem(SYNTAX_THEME_STORAGE_KEY);
+  if (stored) return stored as SyntaxTheme;
+  return null;
+}
+
+/**
+ * Save syntax theme to localStorage for immediate persistence
+ * This is used as a fallback when server settings can't be loaded
+ */
+function saveSyntaxThemeToStorage(syntaxTheme: SyntaxTheme): void {
+  setItem(SYNTAX_THEME_STORAGE_KEY, syntaxTheme);
+}
+
+/**
  * Get fonts from localStorage as a fallback
  * Used before server settings are loaded (e.g., on login/setup pages)
  */
@@ -221,8 +251,6 @@ function persistEffectiveThemeForProject(project: Project | null, fallbackTheme:
   const themeToStore = projectTheme ?? fallbackTheme;
   saveThemeToStorage(themeToStore);
 }
-
-export type BoardViewMode = 'kanban' | 'graph';
 
 export interface ApiKeys {
   anthropic: string;
@@ -318,31 +346,35 @@ export function formatShortcut(shortcut: string | undefined | null, forDisplay =
 export interface KeyboardShortcuts {
   // Navigation shortcuts
   board: string;
-  graph: string;
   agent: string;
   spec: string;
-  context: string;
   memory: string;
   settings: string;
   projectSettings: string;
   terminal: string;
   ideation: string;
-  notifications: string;
   githubIssues: string;
   githubPrs: string;
 
-  // UI shortcuts
-  toggleSidebar: string;
-
   // Action shortcuts
   addFeature: string;
-  addContextFile: string;
   startNext: string;
   newSession: string;
   openProject: string;
   projectPicker: string;
   cyclePrevProject: string;
   cycleNextProject: string;
+  autoMode: string;
+  completedFeatures: string;
+  voiceMode: string;
+  voiceModeToggle: string;
+  recordingToggle: string;
+
+  // Board panel toggle shortcuts
+  toggleFileExplorer: string;
+  toggleKanbanPanel: string;
+  toggleAgentChat: string;
+  toggleDeployPanel: string;
 
   // Terminal shortcuts
   splitTerminalRight: string;
@@ -355,33 +387,35 @@ export interface KeyboardShortcuts {
 export const DEFAULT_KEYBOARD_SHORTCUTS: KeyboardShortcuts = {
   // Navigation
   board: 'K',
-  graph: 'H',
   agent: 'A',
   spec: 'D',
-  context: 'C',
   memory: 'Y',
   settings: 'S',
   projectSettings: 'Shift+S',
   terminal: 'T',
   ideation: 'I',
-  notifications: 'X',
   githubIssues: 'G',
   githubPrs: 'R',
 
-  // UI
-  toggleSidebar: '`',
-
   // Actions
-  // Note: Some shortcuts share the same key (e.g., "N" for addFeature, newSession)
-  // This is intentional as they are context-specific and only active in their respective views
   addFeature: 'N', // Only active in board view
-  addContextFile: 'N', // Only active in context view
-  startNext: 'G', // Only active in board view
-  newSession: 'N', // Only active in agent view
+  startNext: 'Shift+G', // Only active in board view (changed to avoid conflict with githubIssues)
+  newSession: 'Shift+N', // Only active in agent view (changed to avoid conflict with addFeature)
   openProject: 'O', // Global shortcut
-  projectPicker: 'P', // Global shortcut
+  projectPicker: 'P', // Global shortcut - opens project dropdown in top bar
   cyclePrevProject: 'Q', // Global shortcut
   cycleNextProject: 'E', // Global shortcut
+  autoMode: 'M', // Global shortcut - opens auto mode modal
+  completedFeatures: 'C', // Only active in board view - toggles completed features view
+  voiceMode: 'Ctrl+Shift+V', // Global shortcut - opens voice mode dialog
+  voiceModeToggle: 'Alt+M', // Global shortcut - toggle voice mode dialog open/close (bypasses input focus)
+  recordingToggle: 'Alt+N', // Global shortcut - toggle recording start/stop when voice mode is open
+
+  // Board panel toggle shortcuts (only active in board view)
+  toggleFileExplorer: 'Ctrl+Q', // Toggle file explorer panel
+  toggleKanbanPanel: 'Ctrl+W', // Toggle kanban board panel
+  toggleAgentChat: 'Ctrl+E', // Toggle agent chat panel
+  toggleDeployPanel: 'Ctrl+Alt+R', // Toggle deploy panel
 
   // Terminal shortcuts (only active in terminal view)
   // Using Alt modifier to avoid conflicts with both terminal signals AND browser shortcuts
@@ -594,14 +628,18 @@ export interface AppState {
 
   // View state
   currentView: ViewMode;
+  showAllProjects: boolean; // When true, board shows features from all projects
+  pendingBoardStatusTab: string | null; // One-shot signal to switch board status tab (e.g. 'in_progress')
   sidebarOpen: boolean;
   mobileSidebarHidden: boolean; // Completely hides sidebar on mobile
 
   // Agent Session state (per-project, keyed by project path)
   lastSelectedSessionByProject: Record<string, string>; // projectPath -> sessionId
+  sessionListVersion: number; // Bumped on session mutations to notify independent session lists
 
   // Theme
   theme: ThemeMode;
+  syntaxTheme: SyntaxTheme; // Syntax highlighting theme for code blocks ('auto' = match UI theme)
 
   // Fonts (global defaults)
   fontFamilySans: string | null; // null = use default Geist Sans
@@ -633,10 +671,9 @@ export interface AppState {
     }
   >;
   autoModeActivityLog: AutoModeActivity[];
-  maxConcurrency: number; // Maximum number of concurrent agent tasks
-
-  // Kanban Card Display Settings
-  boardViewMode: BoardViewMode; // Whether to show kanban or dependency graph view
+  maxConcurrency: number; // Maximum number of concurrent agent tasks (DEPRECATED - use agentMultiplier instead)
+  agentMultiplier: number; // Global max concurrent agents - applies uniformly to all projects
+  autoModeConfigByProject: Record<string, ProjectAutoModeConfig>; // Per-project auto mode configuration
 
   // Feature Default Settings
   defaultSkipTests: boolean; // Default value for skip tests when creating new features
@@ -645,7 +682,6 @@ export interface AppState {
   enableAiCommitMessages: boolean; // When true, auto-generate commit messages using AI when opening commit dialog
   planUseSelectedWorktreeBranch: boolean; // When true, Plan dialog creates features on the currently selected worktree branch
   addFeatureUseSelectedWorktreeBranch: boolean; // When true, Add Feature dialog defaults to custom mode with selected worktree branch
-
   // Worktree Settings
   useWorktrees: boolean; // Whether to use git worktree isolation for features (default: true)
 
@@ -742,6 +778,25 @@ export interface AppState {
   // Event Hooks
   eventHooks: EventHook[]; // Event hooks for custom commands or webhooks
 
+  // Claude Account Management
+  claudeAccounts: ClaudeAccountRef[]; // Known Claude accounts for switching
+
+  // Voice Mode State
+  voiceSettings: VoiceSettings; // Voice mode settings for hands-free interaction
+  voiceSessionActive: boolean; // Whether a voice session is currently active
+  voiceSession: VoiceSession | null; // Current active voice session
+  voiceSessionStatus: VoiceSessionStatus; // Current status of the voice session
+  voiceRecording: boolean; // Whether voice recording is in progress
+  voiceProcessing: boolean; // Whether voice command is being processed
+  voiceError: string | null; // Current voice error message, if any
+  voiceTranscript: string; // Live transcription text (during recording)
+  voiceMessages: VoiceMessage[]; // Conversation history for current session
+
+  // Voice Widget State
+  voiceWidgetVisible: boolean; // Whether the floating voice widget is visible
+  voiceWidgetExpanded: boolean; // Whether the widget is expanded (true) or minimized (false)
+  voiceWidgetPosition: { x: number; y: number } | null; // Custom position (null = default bottom-right)
+
   // Project Analysis
   projectAnalysis: ProjectAnalysis | null;
   isAnalyzing: boolean;
@@ -788,6 +843,20 @@ export interface AppState {
     planContent: string;
     planningMode: 'lite' | 'spec' | 'full';
   } | null;
+
+  // Multi-agent waiting approval tracking
+  // Tracks all agents that are waiting for plan approval across all projects
+  // Key is featureId for quick lookup
+  pendingPlanApprovals: Record<
+    string,
+    {
+      featureId: string;
+      projectPath: string;
+      planContent: string;
+      planningMode: 'lite' | 'spec' | 'full';
+      timestamp: number; // When the approval was requested
+    }
+  >;
 
   // Claude Usage Tracking
   claudeRefreshInterval: number; // Refresh interval in seconds (default: 60)
@@ -843,9 +912,52 @@ export interface AppState {
   lastProjectDir: string;
   /** Recently accessed folders for quick access */
   recentFolders: string[];
-
+  /** Panel size for kanban board (percentage, 0-100) */
+  kanbanPanelSize: number;
+  /** Panel size for running agents panel (percentage, 0-100) */
+  agentsPanelSize: number;
+  /** Panel size for agent chat panel (percentage, 0-100) */
+  agentChatPanelSize: number;
+  /** Whether agent chat panel is collapsed in board view */
+  isAgentChatPanelCollapsed: boolean;
+  /** Whether kanban panel is collapsed in board view */
+  isKanbanPanelCollapsed: boolean;
+  /** Whether running agents panel is collapsed in board view */
+  isAgentsPanelCollapsed: boolean;
+  /** Panel size for deploy panel (percentage, 0-100) */
+  deployPanelSize: number;
+  /** Whether deploy panel is collapsed in board view */
+  isDeployPanelCollapsed: boolean;
   // Init Script State (keyed by "projectPath::branch" to support concurrent scripts)
   initScriptState: Record<string, InitScriptState>;
+
+  // Recently Completed Features (keyed by featureId)
+  // Tracks features that recently entered waiting_approval status for display in running agents panel
+  recentlyCompletedFeatures: Record<
+    string,
+    {
+      featureId: string;
+      projectPath: string;
+      projectName: string;
+      title: string;
+      timestamp: number; // When feature entered waiting_approval status
+      dismissed: boolean; // Whether user has dismissed this notification
+    }
+  >;
+
+  // Independent Running Agents State
+  // This state is independent of board state and is updated by the polling hook
+  // Stores all running agents across all projects, fetched independently
+  runningAgentsData: {
+    /** Array of all running agents across all projects */
+    agents: RunningAgent[];
+    /** Whether the data is currently being fetched */
+    isLoading: boolean;
+    /** Error message if the last fetch failed, null otherwise */
+    error: string | null;
+    /** Timestamp of the last successful update, null if never updated */
+    lastUpdated: number | null;
+  };
 }
 
 // Claude Usage interface matching the server response
@@ -872,6 +984,9 @@ export type ClaudeUsage = {
 
   lastUpdated: string;
   userTimezone: string;
+
+  // Account information
+  accountEmail?: string | null;
 };
 
 // Response type for Claude usage API (can be success or error)
@@ -984,6 +1099,19 @@ export interface AutoModeActivity {
   errorType?: 'authentication' | 'execution';
 }
 
+/**
+ * Per-project auto mode configuration
+ * Allows configuring verification settings per project
+ */
+export interface ProjectAutoModeConfig {
+  requireVerification: boolean; // Whether to require verification before auto-grabbing features
+}
+
+/** Default configuration for new projects */
+export const DEFAULT_PROJECT_AUTO_MODE_CONFIG: ProjectAutoModeConfig = {
+  requireVerification: true, // Default to require verification (safer)
+};
+
 export interface AppActions {
   // Project actions
   setProjects: (projects: Project[]) => void;
@@ -1003,9 +1131,12 @@ export interface AppActions {
   setProjectIcon: (projectId: string, icon: string | null) => void; // Set project icon (null to clear)
   setProjectCustomIcon: (projectId: string, customIconPath: string | null) => void; // Set custom project icon image path (null to clear)
   setProjectName: (projectId: string, name: string) => void; // Update project name
+  setProjectDefaultBranch: (projectId: string, defaultBranch: string | null) => void; // Set project default branch (null to clear)
 
   // View actions
   setCurrentView: (view: ViewMode) => void;
+  setShowAllProjects: (show: boolean) => void;
+  setPendingBoardStatusTab: (tab: string | null) => void;
   toggleSidebar: () => void;
   setSidebarOpen: (open: boolean) => void;
   toggleMobileSidebarHidden: () => void;
@@ -1016,6 +1147,7 @@ export interface AppActions {
   setProjectTheme: (projectId: string, theme: ThemeMode | null) => void; // Set per-project theme (null to clear)
   getEffectiveTheme: () => ThemeMode; // Get the effective theme (project, global, or preview if set)
   setPreviewTheme: (theme: ThemeMode | null) => void; // Set preview theme for hover preview (null to clear)
+  setSyntaxTheme: (syntaxTheme: SyntaxTheme) => void; // Set syntax highlighting theme for code blocks
 
   // Font actions (global + per-project override)
   setFontSans: (fontFamily: string | null) => void; // Set global UI/sans font (null to clear)
@@ -1031,6 +1163,7 @@ export interface AppActions {
   addFeature: (feature: Omit<Feature, 'id'> & Partial<Pick<Feature, 'id'>>) => Feature;
   removeFeature: (id: string) => void;
   moveFeature: (id: string, newStatus: Feature['status']) => void;
+  clearRemoteModified: (id: string) => void;
 
   // App spec actions
   setAppSpec: (spec: string) => void;
@@ -1064,9 +1197,14 @@ export interface AppActions {
   addAutoModeActivity: (activity: Omit<AutoModeActivity, 'id' | 'timestamp'>) => void;
   clearAutoModeActivity: () => void;
   setMaxConcurrency: (max: number) => void;
+  setAgentMultiplier: (multiplier: number) => void;
 
-  // Kanban Card Settings actions
-  setBoardViewMode: (mode: BoardViewMode) => void;
+  // Per-project auto mode config actions
+  setProjectAutoModeConfig: (projectId: string, config: Partial<ProjectAutoModeConfig>) => void;
+  getProjectAutoModeConfig: (projectId: string) => ProjectAutoModeConfig;
+  clearProjectAutoModeConfig: (projectId: string) => void;
+  getEffectiveMaxAgents: () => number; // Returns global agentMultiplier
+  getEffectiveRequireVerification: (projectId: string) => boolean; // Returns project-specific or global default
 
   // Feature Default Settings actions
   setDefaultSkipTests: (skip: boolean) => void;
@@ -1075,7 +1213,6 @@ export interface AppActions {
   setEnableAiCommitMessages: (enabled: boolean) => Promise<void>;
   setPlanUseSelectedWorktreeBranch: (enabled: boolean) => Promise<void>;
   setAddFeatureUseSelectedWorktreeBranch: (enabled: boolean) => Promise<void>;
-
   // Worktree Settings actions
   setUseWorktrees: (enabled: boolean) => void;
   setCurrentWorktree: (projectPath: string, worktreePath: string | null, branch: string) => void;
@@ -1172,6 +1309,34 @@ export interface AppActions {
   // Event Hook actions
   setEventHooks: (hooks: EventHook[]) => void;
 
+  // Claude Account actions
+  setClaudeAccounts: (accounts: ClaudeAccountRef[]) => void;
+  addOrUpdateClaudeAccount: (email: string) => void;
+  removeClaudeAccount: (email: string) => void;
+
+  // Voice Mode actions
+  setVoiceSettings: (settings: VoiceSettings) => void;
+  updateVoiceSettings: (updates: Partial<VoiceSettings>) => void;
+  setVoiceSessionActive: (active: boolean) => void;
+  setVoiceSession: (session: VoiceSession | null) => void;
+  setVoiceSessionStatus: (status: VoiceSessionStatus) => void;
+  setVoiceRecording: (recording: boolean) => void;
+  setVoiceProcessing: (processing: boolean) => void;
+  setVoiceError: (error: string | null) => void;
+  setVoiceTranscript: (transcript: string) => void;
+  addVoiceMessage: (message: VoiceMessage) => void;
+  clearVoiceMessages: () => void;
+  startVoiceSession: (session: VoiceSession) => void;
+  endVoiceSession: () => void;
+
+  // Voice Widget actions
+  setVoiceWidgetVisible: (visible: boolean) => void;
+  setVoiceWidgetExpanded: (expanded: boolean) => void;
+  setVoiceWidgetPosition: (position: { x: number; y: number } | null) => void;
+  toggleVoiceWidget: () => void;
+  showVoiceWidget: () => void;
+  hideVoiceWidget: () => void;
+
   // MCP Server actions
   addMCPServer: (server: Omit<MCPServerConfig, 'id'>) => void;
   updateMCPServer: (id: string, updates: Partial<MCPServerConfig>) => void;
@@ -1186,6 +1351,7 @@ export interface AppActions {
   // Agent Session actions
   setLastSelectedSession: (projectPath: string, sessionId: string | null) => void;
   getLastSelectedSession: (projectPath: string) => string | null;
+  bumpSessionListVersion: () => void;
 
   // Board Background actions
   setBoardBackground: (projectPath: string, imagePath: string | null) => void;
@@ -1268,6 +1434,24 @@ export interface AppActions {
     } | null
   ) => void;
 
+  // Multi-agent waiting approval actions
+  addPendingPlanApproval: (approval: {
+    featureId: string;
+    projectPath: string;
+    planContent: string;
+    planningMode: 'lite' | 'spec' | 'full';
+  }) => void;
+  removePendingPlanApproval: (featureId: string) => void;
+  getPendingPlanApprovalsForProject: (projectPath: string) => Array<{
+    featureId: string;
+    projectPath: string;
+    planContent: string;
+    planningMode: 'lite' | 'spec' | 'full';
+    timestamp: number;
+  }>;
+  getWaitingApprovalCount: () => number;
+  getWaitingApprovalCountForProject: (projectPath: string) => number;
+
   // Pipeline actions
   setPipelineConfig: (projectPath: string, config: PipelineConfig) => void;
   getPipelineConfig: (projectPath: string) => PipelineConfig | null;
@@ -1309,6 +1493,41 @@ export interface AppActions {
   setLastProjectDir: (dir: string) => void;
   setRecentFolders: (folders: string[]) => void;
   addRecentFolder: (folder: string) => void;
+  setKanbanPanelSize: (size: number) => void;
+  setAgentsPanelSize: (size: number) => void;
+  setAgentChatPanelSize: (size: number) => void;
+  setAgentChatPanelCollapsed: (collapsed: boolean) => void;
+  setKanbanPanelCollapsed: (collapsed: boolean) => void;
+  setAgentsPanelCollapsed: (collapsed: boolean) => void;
+  setDeployPanelSize: (size: number) => void;
+  setDeployPanelCollapsed: (collapsed: boolean) => void;
+  // Recently Completed Features actions
+  addRecentlyCompletedFeature: (feature: {
+    featureId: string;
+    projectPath: string;
+    projectName: string;
+    title: string;
+  }) => void;
+  dismissRecentlyCompletedFeature: (featureId: string) => void;
+  removeRecentlyCompletedFeature: (featureId: string) => void;
+  getRecentlyCompletedFeatures: () => Array<{
+    featureId: string;
+    projectPath: string;
+    projectName: string;
+    title: string;
+    timestamp: number;
+    dismissed: boolean;
+  }>;
+  getVisibleRecentlyCompletedFeatures: () => Array<{
+    featureId: string;
+    projectPath: string;
+    projectName: string;
+    title: string;
+    timestamp: number;
+    dismissed: boolean;
+  }>;
+  cleanupExpiredRecentlyCompletedFeatures: () => void;
+  dismissAllVisibleRecentlyCompletedFeatures: () => void;
 
   // Claude Usage Tracking actions
   setClaudeRefreshInterval: (interval: number) => void;
@@ -1348,6 +1567,31 @@ export interface AppActions {
     projectPath: string
   ) => Array<{ key: string; state: InitScriptState }>;
 
+  // Independent Running Agents State actions
+  // These actions manage running agents state independently of board state
+  setRunningAgents: (agents: RunningAgent[]) => void;
+  setRunningAgentsLoading: (isLoading: boolean) => void;
+  setRunningAgentsError: (error: string | null) => void;
+  updateRunningAgentsData: (data: {
+    agents?: RunningAgent[];
+    isLoading?: boolean;
+    error?: string | null;
+    lastUpdated?: number | null;
+  }) => void;
+  getRunningAgentsData: () => {
+    agents: RunningAgent[];
+    isLoading: boolean;
+    error: string | null;
+    lastUpdated: number | null;
+  };
+  getRunningAgentsCount: () => number;
+  getRunningAgentsByProject: () => Array<{
+    projectPath: string;
+    projectName: string;
+    agentCount: number;
+    agents: RunningAgent[];
+  }>;
+
   // Reset
   reset: () => void;
 }
@@ -1359,10 +1603,14 @@ const initialState: AppState = {
   projectHistory: [],
   projectHistoryIndex: -1,
   currentView: 'welcome',
+  showAllProjects: false,
+  pendingBoardStatusTab: null,
   sidebarOpen: true,
   mobileSidebarHidden: false, // Sidebar visible by default on mobile
   lastSelectedSessionByProject: {},
+  sessionListVersion: 0,
   theme: getStoredTheme() || 'dark', // Use localStorage theme as initial value, fallback to 'dark'
+  syntaxTheme: getStoredSyntaxTheme() || 'auto', // Use localStorage syntax theme as initial value, fallback to 'auto'
   fontFamilySans: getStoredFontSans(), // Use localStorage font as initial value (null = use default Geist Sans)
   fontFamilyMono: getStoredFontMono(), // Use localStorage font as initial value (null = use default Geist Mono)
   features: [],
@@ -1378,8 +1626,9 @@ const initialState: AppState = {
   chatHistoryOpen: false,
   autoModeByProject: {},
   autoModeActivityLog: [],
-  maxConcurrency: 3, // Default to 3 concurrent agents
-  boardViewMode: 'kanban', // Default to kanban view
+  maxConcurrency: 5, // Default to 5 concurrent agents (DEPRECATED - use agentMultiplier)
+  agentMultiplier: 5, // Default global max concurrent agents
+  autoModeConfigByProject: {}, // Per-project auto mode configuration
   defaultSkipTests: true, // Default to manual verification (tests disabled)
   enableDependencyBlocking: true, // Default to enabled (show dependency blocking UI)
   skipVerificationInAutoMode: false, // Default to disabled (require dependencies to be verified)
@@ -1426,6 +1675,21 @@ const initialState: AppState = {
   subagentsSources: ['user', 'project'] as Array<'user' | 'project'>, // Load from both sources by default
   promptCustomization: {}, // Empty by default - all prompts use built-in defaults
   eventHooks: [], // No event hooks configured by default
+  claudeAccounts: [], // No known Claude accounts by default
+  // Voice Mode defaults
+  voiceSettings: DEFAULT_VOICE_SETTINGS, // Default voice settings from types
+  voiceSessionActive: false, // No active voice session by default
+  voiceSession: null, // No current voice session
+  voiceSessionStatus: 'idle' as VoiceSessionStatus, // Default to idle status
+  voiceRecording: false, // Not recording by default
+  voiceProcessing: false, // Not processing by default
+  voiceError: null, // No error by default
+  voiceTranscript: '', // Empty transcript by default
+  voiceMessages: [], // Empty conversation history by default
+  // Voice Widget defaults
+  voiceWidgetVisible: false, // Widget hidden by default
+  voiceWidgetExpanded: true, // Widget expanded when visible (not minimized)
+  voiceWidgetPosition: null, // Default position (bottom-right corner)
   projectAnalysis: null,
   isAnalyzing: false,
   boardBackgroundByProject: {},
@@ -1452,6 +1716,7 @@ const initialState: AppState = {
   defaultRequirePlanApproval: false,
   defaultFeatureModel: { model: 'opus' } as PhaseModelEntry,
   pendingPlanApproval: null,
+  pendingPlanApprovals: {},
   claudeRefreshInterval: 60,
   claudeUsage: null,
   claudeUsageLastUpdated: null,
@@ -1472,7 +1737,23 @@ const initialState: AppState = {
   worktreePanelCollapsed: false,
   lastProjectDir: '',
   recentFolders: [],
+  kanbanPanelSize: 65, // Default: 65% for kanban board
+  agentsPanelSize: 35, // Default: 35% for running agents panel
+  agentChatPanelSize: 30, // Default: 30% for agent chat panel
+  isAgentChatPanelCollapsed: false, // Default: agent chat panel is visible
+  isKanbanPanelCollapsed: false, // Default: kanban panel is visible
+  isAgentsPanelCollapsed: false, // Default: agents panel is visible
+  deployPanelSize: 35, // Default: 35% for deploy panel
+  isDeployPanelCollapsed: true, // Default: deploy panel is collapsed
   initScriptState: {},
+  recentlyCompletedFeatures: {}, // Tracks features that recently entered waiting_approval
+  // Independent Running Agents State - updated by polling hook, independent of board state
+  runningAgentsData: {
+    agents: [],
+    isLoading: false,
+    error: null,
+    lastUpdated: null,
+  },
 };
 
 export const useAppStore = create<AppState & AppActions>()((set, get) => ({
@@ -1788,8 +2069,29 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
     }
   },
 
+  setProjectDefaultBranch: (projectId, defaultBranch) => {
+    const { projects, currentProject } = get();
+    const updatedProjects = projects.map((p) =>
+      p.id === projectId
+        ? { ...p, defaultBranch: defaultBranch === null ? undefined : defaultBranch }
+        : p
+    );
+    set({ projects: updatedProjects });
+    // Also update currentProject if it matches
+    if (currentProject?.id === projectId) {
+      set({
+        currentProject: {
+          ...currentProject,
+          defaultBranch: defaultBranch === null ? undefined : defaultBranch,
+        },
+      });
+    }
+  },
+
   // View actions
   setCurrentView: (view) => set({ currentView: view }),
+  setShowAllProjects: (show) => set({ showAllProjects: show }),
+  setPendingBoardStatusTab: (tab) => set({ pendingBoardStatusTab: tab }),
   toggleSidebar: () => set({ sidebarOpen: !get().sidebarOpen }),
   setSidebarOpen: (open) => set({ sidebarOpen: open }),
   toggleMobileSidebarHidden: () => set({ mobileSidebarHidden: !get().mobileSidebarHidden }),
@@ -1839,6 +2141,12 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
   },
 
   setPreviewTheme: (theme) => set({ previewTheme: theme }),
+
+  setSyntaxTheme: (syntaxTheme) => {
+    // Save to localStorage for fallback when server settings aren't available
+    saveSyntaxThemeToStorage(syntaxTheme);
+    set({ syntaxTheme });
+  },
 
   // Font actions (global + per-project override)
   setFontSans: (fontFamily) => {
@@ -1917,7 +2225,7 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
   },
 
   addFeature: (feature) => {
-    const id = feature.id || `feature-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const id = feature.id || generateFeatureId(feature.description as string | undefined);
     const featureWithId = { ...feature, id } as unknown as Feature;
     set({ features: [...get().features, featureWithId] });
     return featureWithId;
@@ -1930,6 +2238,21 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
   moveFeature: (id, newStatus) => {
     set({
       features: get().features.map((f) => (f.id === id ? { ...f, status: newStatus } : f)),
+    });
+  },
+
+  clearRemoteModified: (id) => {
+    set({
+      features: get().features.map((f) =>
+        f.id === id
+          ? {
+              ...f,
+              remoteModified: false,
+              remoteModifiedBy: undefined,
+              remoteModifiedAt: undefined,
+            }
+          : f
+      ),
     });
   },
 
@@ -2133,8 +2456,43 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
 
   setMaxConcurrency: (max) => set({ maxConcurrency: max }),
 
-  // Kanban Card Settings actions
-  setBoardViewMode: (mode) => set({ boardViewMode: mode }),
+  setAgentMultiplier: (multiplier) => set({ agentMultiplier: multiplier }),
+
+  // Per-project auto mode config actions
+  setProjectAutoModeConfig: (projectId, config) => {
+    const current = get().autoModeConfigByProject;
+    const existingConfig = current[projectId] || DEFAULT_PROJECT_AUTO_MODE_CONFIG;
+    set({
+      autoModeConfigByProject: {
+        ...current,
+        [projectId]: { ...existingConfig, ...config },
+      },
+    });
+  },
+
+  getProjectAutoModeConfig: (projectId) => {
+    const config = get().autoModeConfigByProject[projectId];
+    return config || DEFAULT_PROJECT_AUTO_MODE_CONFIG;
+  },
+
+  clearProjectAutoModeConfig: (projectId) => {
+    const current = get().autoModeConfigByProject;
+    const { [projectId]: _, ...rest } = current;
+    set({ autoModeConfigByProject: rest });
+  },
+
+  getEffectiveMaxAgents: () => {
+    return get().agentMultiplier;
+  },
+
+  getEffectiveRequireVerification: (projectId) => {
+    const projectConfig = get().autoModeConfigByProject[projectId];
+    if (projectConfig?.requireVerification !== undefined) {
+      return projectConfig.requireVerification;
+    }
+    // Fall back to global setting (inverted because skipVerificationInAutoMode is the opposite)
+    return !get().skipVerificationInAutoMode;
+  },
 
   // Feature Default Settings actions
   setDefaultSkipTests: (skip) => set({ defaultSkipTests: skip }),
@@ -2180,7 +2538,6 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
       set({ addFeatureUseSelectedWorktreeBranch: previous });
     }
   },
-
   // Worktree Settings actions
   setUseWorktrees: (enabled) => set({ useWorktrees: enabled }),
 
@@ -2428,6 +2785,73 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
   // Event Hook actions
   setEventHooks: (hooks) => set({ eventHooks: hooks }),
 
+  // Claude Account actions
+  setClaudeAccounts: (accounts) => set({ claudeAccounts: accounts }),
+  addOrUpdateClaudeAccount: (email) => {
+    const now = new Date().toISOString();
+    const current = get().claudeAccounts;
+    const existing = current.find((a) => a.email === email);
+    if (existing) {
+      set({
+        claudeAccounts: current.map((a) => (a.email === email ? { ...a, lastSeenAt: now } : a)),
+      });
+    } else {
+      set({
+        claudeAccounts: [...current, { email, addedAt: now, lastSeenAt: now }],
+      });
+    }
+  },
+  removeClaudeAccount: (email) => {
+    set({ claudeAccounts: get().claudeAccounts.filter((a) => a.email !== email) });
+  },
+
+  // Voice Mode actions
+  setVoiceSettings: (settings) => set({ voiceSettings: settings }),
+  updateVoiceSettings: (updates) =>
+    set((state) => ({
+      voiceSettings: { ...state.voiceSettings, ...updates },
+    })),
+  setVoiceSessionActive: (active) => set({ voiceSessionActive: active }),
+  setVoiceSession: (session) => set({ voiceSession: session }),
+  setVoiceSessionStatus: (status) => set({ voiceSessionStatus: status }),
+  setVoiceRecording: (recording) => set({ voiceRecording: recording }),
+  setVoiceProcessing: (processing) => set({ voiceProcessing: processing }),
+  setVoiceError: (error) => set({ voiceError: error }),
+  setVoiceTranscript: (transcript) => set({ voiceTranscript: transcript }),
+  addVoiceMessage: (message) =>
+    set((state) => ({
+      voiceMessages: [...state.voiceMessages, message],
+    })),
+  clearVoiceMessages: () => set({ voiceMessages: [] }),
+  startVoiceSession: (session) =>
+    set({
+      voiceSession: session,
+      voiceSessionActive: true,
+      voiceSessionStatus: 'idle',
+      voiceError: null,
+      voiceTranscript: '',
+      voiceMessages: session.messages || [],
+    }),
+  endVoiceSession: () =>
+    set({
+      voiceSession: null,
+      voiceSessionActive: false,
+      voiceSessionStatus: 'idle',
+      voiceRecording: false,
+      voiceProcessing: false,
+      voiceError: null,
+      voiceTranscript: '',
+      voiceMessages: [],
+    }),
+
+  // Voice Widget actions
+  setVoiceWidgetVisible: (visible) => set({ voiceWidgetVisible: visible }),
+  setVoiceWidgetExpanded: (expanded) => set({ voiceWidgetExpanded: expanded }),
+  setVoiceWidgetPosition: (position) => set({ voiceWidgetPosition: position }),
+  toggleVoiceWidget: () => set((state) => ({ voiceWidgetVisible: !state.voiceWidgetVisible })),
+  showVoiceWidget: () => set({ voiceWidgetVisible: true }),
+  hideVoiceWidget: () => set({ voiceWidgetVisible: false }),
+
   // MCP Server actions
   addMCPServer: (server) => {
     const id = `mcp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -2477,6 +2901,10 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
 
   getLastSelectedSession: (projectPath) => {
     return get().lastSelectedSessionByProject[projectPath] || null;
+  },
+
+  bumpSessionListVersion: () => {
+    set({ sessionListVersion: get().sessionListVersion + 1 });
   },
 
   // Board Background actions
@@ -3421,14 +3849,53 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
   // Plan Approval actions
   setPendingPlanApproval: (approval) => set({ pendingPlanApproval: approval }),
 
+  // Multi-agent waiting approval actions
+  addPendingPlanApproval: (approval) => {
+    const current = get().pendingPlanApprovals;
+    set({
+      pendingPlanApprovals: {
+        ...current,
+        [approval.featureId]: {
+          ...approval,
+          timestamp: Date.now(),
+        },
+      },
+    });
+  },
+
+  removePendingPlanApproval: (featureId) => {
+    const current = get().pendingPlanApprovals;
+    const { [featureId]: _removed, ...rest } = current;
+    set({ pendingPlanApprovals: rest });
+  },
+
+  getPendingPlanApprovalsForProject: (projectPath) => {
+    const approvals = get().pendingPlanApprovals;
+    return Object.values(approvals).filter((a) => a.projectPath === projectPath);
+  },
+
+  getWaitingApprovalCount: () => {
+    return Object.keys(get().pendingPlanApprovals).length;
+  },
+
+  getWaitingApprovalCountForProject: (projectPath) => {
+    const approvals = get().pendingPlanApprovals;
+    return Object.values(approvals).filter((a) => a.projectPath === projectPath).length;
+  },
+
   // Claude Usage Tracking actions
   setClaudeRefreshInterval: (interval: number) => set({ claudeRefreshInterval: interval }),
   setClaudeUsageLastUpdated: (timestamp: number) => set({ claudeUsageLastUpdated: timestamp }),
-  setClaudeUsage: (usage: ClaudeUsage | null) =>
+  setClaudeUsage: (usage: ClaudeUsage | null) => {
     set({
       claudeUsage: usage,
       claudeUsageLastUpdated: usage ? Date.now() : null,
-    }),
+    });
+    // Auto-detect: if usage data contains an account email, add to known accounts
+    if (usage?.accountEmail) {
+      get().addOrUpdateClaudeAccount(usage.accountEmail);
+    }
+  },
 
   // Codex Usage Tracking actions
   setCodexUsage: (usage: CodexUsage | null) =>
@@ -3757,6 +4224,101 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
     const updated = [folder, ...filtered].slice(0, 10);
     set({ recentFolders: updated });
   },
+  setKanbanPanelSize: (size) => {
+    // Clamp size between 15% and 85%
+    const clampedSize = Math.max(15, Math.min(85, size));
+    set({ kanbanPanelSize: clampedSize });
+  },
+  setAgentsPanelSize: (size) => {
+    // Clamp size between 15% and 85%
+    const clampedSize = Math.max(15, Math.min(85, size));
+    set({ agentsPanelSize: clampedSize });
+  },
+  setAgentChatPanelSize: (size) => {
+    // Clamp size between 15% and 85%
+    const clampedSize = Math.max(15, Math.min(85, size));
+    set({ agentChatPanelSize: clampedSize });
+  },
+  setAgentChatPanelCollapsed: (collapsed) => set({ isAgentChatPanelCollapsed: collapsed }),
+  setKanbanPanelCollapsed: (collapsed) => set({ isKanbanPanelCollapsed: collapsed }),
+  setAgentsPanelCollapsed: (collapsed) => set({ isAgentsPanelCollapsed: collapsed }),
+  setDeployPanelSize: (size) => {
+    // Clamp size between 15% and 85%
+    const clampedSize = Math.max(15, Math.min(85, size));
+    set({ deployPanelSize: clampedSize });
+  },
+  setDeployPanelCollapsed: (collapsed) => set({ isDeployPanelCollapsed: collapsed }),
+  // Recently Completed Features actions
+  addRecentlyCompletedFeature: (feature) => {
+    const current = get().recentlyCompletedFeatures;
+    set({
+      recentlyCompletedFeatures: {
+        ...current,
+        [feature.featureId]: {
+          ...feature,
+          timestamp: Date.now(),
+          dismissed: false,
+        },
+      },
+    });
+  },
+
+  dismissRecentlyCompletedFeature: (featureId) => {
+    const current = get().recentlyCompletedFeatures;
+    if (current[featureId]) {
+      set({
+        recentlyCompletedFeatures: {
+          ...current,
+          [featureId]: {
+            ...current[featureId],
+            dismissed: true,
+          },
+        },
+      });
+    }
+  },
+
+  removeRecentlyCompletedFeature: (featureId) => {
+    const current = get().recentlyCompletedFeatures;
+    const { [featureId]: _removed, ...rest } = current;
+    set({ recentlyCompletedFeatures: rest });
+  },
+
+  getRecentlyCompletedFeatures: () => {
+    return Object.values(get().recentlyCompletedFeatures);
+  },
+
+  getVisibleRecentlyCompletedFeatures: () => {
+    const THIRTY_MINUTES_MS = 30 * 60 * 1000;
+    const now = Date.now();
+    return Object.values(get().recentlyCompletedFeatures).filter(
+      (f) => !f.dismissed && now - f.timestamp < THIRTY_MINUTES_MS
+    );
+  },
+
+  cleanupExpiredRecentlyCompletedFeatures: () => {
+    const THIRTY_MINUTES_MS = 30 * 60 * 1000;
+    const now = Date.now();
+    const current = get().recentlyCompletedFeatures;
+    const filtered = Object.fromEntries(
+      Object.entries(current).filter(([, f]) => now - f.timestamp < THIRTY_MINUTES_MS)
+    );
+    set({ recentlyCompletedFeatures: filtered });
+  },
+
+  dismissAllVisibleRecentlyCompletedFeatures: () => {
+    const THIRTY_MINUTES_MS = 30 * 60 * 1000;
+    const now = Date.now();
+    const current = get().recentlyCompletedFeatures;
+    // Mark all visible (non-dismissed and within 30 min) features as dismissed
+    const updated = Object.fromEntries(
+      Object.entries(current).map(([id, f]) => {
+        const isVisible = !f.dismissed && now - f.timestamp < THIRTY_MINUTES_MS;
+        return [id, isVisible ? { ...f, dismissed: true } : f];
+      })
+    );
+    set({ recentlyCompletedFeatures: updated });
+  },
 
   // Init Script State actions (keyed by "projectPath::branch")
   setInitScriptState: (projectPath, branch, state) => {
@@ -3812,6 +4374,112 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
     return Object.entries(states)
       .filter(([key]) => key.startsWith(prefix))
       .map(([key, state]) => ({ key, state }));
+  },
+
+  // Independent Running Agents State actions
+  // T004: These setters are designed to ensure Zustand subscription notifications
+  // are properly triggered by:
+  // 1. Always creating a new runningAgentsData object reference
+  // 2. Always creating a new agents array reference (via spread) to ensure shallow comparison detects changes
+  // 3. Updating lastUpdated timestamp on meaningful changes to provide additional change signal
+  setRunningAgents: (agents) => {
+    // Create a new array reference to ensure Zustand detects the change
+    // even if the array contents are structurally identical
+    const newAgents = [...agents];
+    set({
+      runningAgentsData: {
+        ...get().runningAgentsData,
+        agents: newAgents,
+        lastUpdated: Date.now(),
+      },
+    });
+  },
+
+  setRunningAgentsLoading: (isLoading) => {
+    const current = get().runningAgentsData;
+    // Skip update if value hasn't changed to avoid unnecessary re-renders
+    if (current.isLoading === isLoading) {
+      return;
+    }
+    set({
+      runningAgentsData: {
+        ...current,
+        isLoading,
+      },
+    });
+  },
+
+  setRunningAgentsError: (error) => {
+    const current = get().runningAgentsData;
+    // Skip update if value hasn't changed to avoid unnecessary re-renders
+    if (current.error === error) {
+      return;
+    }
+    set({
+      runningAgentsData: {
+        ...current,
+        error,
+        // Update timestamp when error state changes to signal the change
+        lastUpdated: Date.now(),
+      },
+    });
+  },
+
+  updateRunningAgentsData: (data) => {
+    const current = get().runningAgentsData;
+    // If updating agents, ensure a new array reference is created
+    const newAgents = data.agents !== undefined ? [...data.agents] : current.agents;
+    set({
+      runningAgentsData: {
+        ...current,
+        ...data,
+        agents: newAgents,
+        // Always update timestamp when data changes to ensure subscriptions fire
+        lastUpdated: data.lastUpdated ?? Date.now(),
+      },
+    });
+  },
+
+  getRunningAgentsData: () => {
+    return get().runningAgentsData;
+  },
+
+  getRunningAgentsCount: () => {
+    return get().runningAgentsData.agents.length;
+  },
+
+  getRunningAgentsByProject: () => {
+    const agents = get().runningAgentsData.agents;
+    const projectMap = new Map<
+      string,
+      {
+        projectPath: string;
+        projectName: string;
+        agentCount: number;
+        agents: RunningAgent[];
+      }
+    >();
+
+    for (const agent of agents) {
+      const existing = projectMap.get(agent.projectPath);
+      if (existing) {
+        existing.agents.push(agent);
+        existing.agentCount = existing.agents.length;
+      } else {
+        projectMap.set(agent.projectPath, {
+          projectPath: agent.projectPath,
+          projectName: agent.projectName,
+          agentCount: 1,
+          agents: [agent],
+        });
+      }
+    }
+
+    // Sort by project name for consistent ordering
+    const groups = Array.from(projectMap.values());
+    groups.sort((a, b) => a.projectName.localeCompare(b.projectName));
+
+    return groups;
   },
 
   // Reset

@@ -632,9 +632,9 @@ describe('pipeline-service.ts', () => {
       expect(nextStatus).toBe('waiting_approval');
     });
 
-    it('should return verified when no pipeline and skipTests is false', () => {
+    it('should return waiting_approval when no pipeline and skipTests is false', () => {
       const nextStatus = pipelineService.getNextStatus('in_progress', null, false);
-      expect(nextStatus).toBe('verified');
+      expect(nextStatus).toBe('waiting_approval');
     });
 
     it('should return first pipeline step when coming from in_progress', () => {
@@ -703,7 +703,7 @@ describe('pipeline-service.ts', () => {
       };
 
       const nextStatus = pipelineService.getNextStatus('pipeline_step1', config, false);
-      expect(nextStatus).toBe('verified');
+      expect(nextStatus).toBe('waiting_approval');
     });
 
     it('should go to waiting_approval when completing last step with skipTests', () => {
@@ -743,7 +743,7 @@ describe('pipeline-service.ts', () => {
       };
 
       const nextStatus = pipelineService.getNextStatus('pipeline_nonexistent', config, false);
-      expect(nextStatus).toBe('verified');
+      expect(nextStatus).toBe('waiting_approval');
     });
 
     it('should preserve other statuses unchanged', () => {
@@ -756,7 +756,6 @@ describe('pipeline-service.ts', () => {
       expect(pipelineService.getNextStatus('waiting_approval', config, false)).toBe(
         'waiting_approval'
       );
-      expect(pipelineService.getNextStatus('verified', config, false)).toBe('verified');
       expect(pipelineService.getNextStatus('completed', config, false)).toBe('completed');
     });
 

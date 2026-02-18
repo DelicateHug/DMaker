@@ -227,7 +227,7 @@ function ClaudeContent() {
   const isReady = claudeCliStatus?.installed && claudeAuthStatus?.authenticated;
 
   return (
-    <Card className="bg-card border-border">
+    <Card className="bg-card border-border" data-testid="provider-claude-content">
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle className="text-lg flex items-center gap-2">
@@ -239,6 +239,7 @@ function ClaudeContent() {
             size="sm"
             onClick={checkStatus}
             disabled={isChecking || isVerifying}
+            data-testid="claude-refresh-button"
           >
             <RefreshCw className={`w-4 h-4 ${isChecking || isVerifying ? 'animate-spin' : ''}`} />
           </Button>
@@ -545,14 +546,20 @@ function CursorContent() {
   const isReady = cursorCliStatus?.installed && cursorCliStatus?.auth?.authenticated;
 
   return (
-    <Card className="bg-card border-border">
+    <Card className="bg-card border-border" data-testid="provider-cursor-content">
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle className="text-lg flex items-center gap-2">
             <CursorIcon className="w-5 h-5" />
             Cursor CLI Status
           </CardTitle>
-          <Button variant="ghost" size="sm" onClick={checkStatus} disabled={isChecking}>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={checkStatus}
+            disabled={isChecking}
+            data-testid="cursor-refresh-button"
+          >
             <RefreshCw className={`w-4 h-4 ${isChecking ? 'animate-spin' : ''}`} />
           </Button>
         </div>
@@ -799,14 +806,20 @@ function CodexContent() {
   const hasApiKey = !!apiKeys.openai || codexAuthStatus?.method === 'api_key';
 
   return (
-    <Card className="bg-card border-border">
+    <Card className="bg-card border-border" data-testid="provider-codex-content">
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle className="text-lg flex items-center gap-2">
             <OpenAIIcon className="w-5 h-5" />
             Codex CLI Status
           </CardTitle>
-          <Button variant="ghost" size="sm" onClick={checkStatus} disabled={isChecking}>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={checkStatus}
+            disabled={isChecking}
+            data-testid="codex-refresh-button"
+          >
             <RefreshCw className={`w-4 h-4 ${isChecking ? 'animate-spin' : ''}`} />
           </Button>
         </div>
@@ -1074,14 +1087,20 @@ function OpencodeContent() {
   const isReady = opencodeCliStatus?.installed && opencodeCliStatus?.auth?.authenticated;
 
   return (
-    <Card className="bg-card border-border">
+    <Card className="bg-card border-border" data-testid="provider-opencode-content">
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle className="text-lg flex items-center gap-2">
             <OpenCodeIcon className="w-5 h-5" />
             OpenCode CLI Status
           </CardTitle>
-          <Button variant="ghost" size="sm" onClick={checkStatus} disabled={isChecking}>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={checkStatus}
+            disabled={isChecking}
+            data-testid="opencode-refresh-button"
+          >
             <RefreshCw className={`w-4 h-4 ${isChecking ? 'animate-spin' : ''}`} />
           </Button>
         </div>
@@ -1428,7 +1447,7 @@ export function ProvidersSetupStep({ onNext, onBack }: ProvidersSetupStepProps) 
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" data-testid="setup-providers-step">
       <div className="text-center mb-6">
         <h2 className="text-2xl font-bold text-foreground mb-2">AI Provider Setup</h2>
         <p className="text-muted-foreground">Configure at least one AI provider to continue</p>
@@ -1449,6 +1468,7 @@ export function ProvidersSetupStep({ onNext, onBack }: ProvidersSetupStepProps) 
               <TabsTrigger
                 key={provider.id}
                 value={provider.id}
+                data-testid={`provider-tab-${provider.id}`}
                 className={cn(
                   'relative flex flex-col items-center gap-1 py-3 px-2',
                   'data-[state=active]:bg-muted'
@@ -1492,7 +1512,12 @@ export function ProvidersSetupStep({ onNext, onBack }: ProvidersSetupStepProps) 
       </Tabs>
 
       <div className="flex justify-between pt-4">
-        <Button variant="ghost" onClick={onBack} className="text-muted-foreground">
+        <Button
+          variant="ghost"
+          onClick={onBack}
+          className="text-muted-foreground"
+          data-testid="providers-back-button"
+        >
           <ArrowLeft className="w-4 h-4 mr-2" />
           Back
         </Button>

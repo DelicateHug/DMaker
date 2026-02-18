@@ -12,7 +12,7 @@ import { spawn, execSync, ChildProcess } from 'child_process';
 import crypto from 'crypto';
 import http, { Server } from 'http';
 import net from 'net';
-import { app, BrowserWindow, ipcMain, dialog, shell, screen } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, shell, screen, Tray, nativeImage } from 'electron';
 import { createLogger } from '@automaker/utils/logger';
 import {
   findNodeExecutable,
@@ -53,16 +53,41 @@ if (isDev) {
   }
 }
 
+// Fix Windows GPU disk cache "Access is denied" errors.
+// Chromium's GPU process can fail to create/move its cache when the default
+// location is locked by another process or has restrictive permissions.
+// Setting explicit cache directories inside userData avoids this.
+// These switches must be set before app.whenReady() as Chromium parses them at startup.
+if (process.platform === 'win32') {
+  const cacheBase = path.join(app.getPath('appData'), 'DMaker');
+  app.commandLine.appendSwitch('disk-cache-dir', path.join(cacheBase, 'Cache'));
+  app.commandLine.appendSwitch('gpu-disk-cache-dir', path.join(cacheBase, 'GPUCache'));
+}
+
 let mainWindow: BrowserWindow | null = null;
 let serverProcess: ChildProcess | null = null;
 let staticServer: Server | null = null;
+let tray: Tray | null = null;
 
 // Default ports (can be overridden via env) - will be dynamically assigned if these are in use
 // When launched via root init.mjs we pass:
 // - PORT (backend)
 // - TEST_PORT (vite dev server / static)
-const DEFAULT_SERVER_PORT = parseInt(process.env.PORT || '3008', 10);
-const DEFAULT_STATIC_PORT = parseInt(process.env.TEST_PORT || '3007', 10);
+// Dev mode uses different ports to allow running alongside production:
+// - Production: server 3009, static 3007
+// - Development: server 3019, static 3017
+const DEV_SERVER_PORT = 3019;
+const DEV_STATIC_PORT = 3017;
+const PROD_SERVER_PORT = 3009;
+const PROD_STATIC_PORT = 3007;
+const DEFAULT_SERVER_PORT = parseInt(
+  process.env.PORT || (isDev ? String(DEV_SERVER_PORT) : String(PROD_SERVER_PORT)),
+  10
+);
+const DEFAULT_STATIC_PORT = parseInt(
+  process.env.TEST_PORT || (isDev ? String(DEV_STATIC_PORT) : String(PROD_STATIC_PORT)),
+  10
+);
 
 // Actual ports in use (set during startup)
 let serverPort = DEFAULT_SERVER_PORT;
@@ -501,62 +526,319 @@ async function startServer(): Promise<void> {
   logger.info('Server path:', serverPath);
   logger.info('Server root (cwd):', serverRoot);
   logger.info('NODE_PATH:', serverNodeModules);
+  logger.info('Node executable:', command);
+  logger.info('Arguments:', JSON.stringify(args));
 
   serverProcess = spawn(command, args, {
     cwd: serverRoot,
     env,
     stdio: ['ignore', 'pipe', 'pipe'],
+    // Don't use shell mode - it can cause issues with argument passing and error handling
+    // Node.js can directly execute .mjs files without shell
+    shell: false,
+    // Hide console window on Windows
+    windowsHide: true,
   });
 
+  // Track spawn errors - must be registered immediately
+  let spawnError: Error | null = null;
+  serverProcess.on('error', (err) => {
+    serverLogger.error('Failed to start server process:', err);
+    spawnError = err;
+    serverProcess = null;
+  });
+
+  // Log the spawn result
+  if (serverProcess.pid) {
+    logger.info('Server process started with PID:', serverProcess.pid);
+  } else {
+    logger.warn('Server process spawned but no PID assigned yet');
+  }
+
+  // Buffer for accumulating server output (helps with partial line logging)
+  let stdoutBuffer = '';
+  let stderrBuffer = '';
+
   serverProcess.stdout?.on('data', (data) => {
-    serverLogger.info(data.toString().trim());
+    stdoutBuffer += data.toString();
+    const lines = stdoutBuffer.split('\n');
+    // Keep the last potentially incomplete line in the buffer
+    stdoutBuffer = lines.pop() || '';
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (trimmed) {
+        serverLogger.info(trimmed);
+      }
+    }
   });
 
   serverProcess.stderr?.on('data', (data) => {
-    serverLogger.error(data.toString().trim());
+    stderrBuffer += data.toString();
+    const lines = stderrBuffer.split('\n');
+    // Keep the last potentially incomplete line in the buffer
+    stderrBuffer = lines.pop() || '';
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (trimmed) {
+        serverLogger.error(trimmed);
+      }
+    }
   });
 
   serverProcess.on('close', (code) => {
+    // Flush any remaining output
+    if (stdoutBuffer.trim()) {
+      serverLogger.info(stdoutBuffer.trim());
+    }
+    if (stderrBuffer.trim()) {
+      serverLogger.error(stderrBuffer.trim());
+    }
     serverLogger.info('Process exited with code', code);
     serverProcess = null;
   });
 
-  serverProcess.on('error', (err) => {
-    serverLogger.error('Failed to start server process:', err);
-    serverProcess = null;
-  });
+  // Allow a small delay for spawn error to fire
+  await new Promise((r) => setTimeout(r, 100));
+  if (spawnError) {
+    throw spawnError;
+  }
 
   await waitForServer();
 }
 
 /**
  * Wait for server to be available
+ * In development mode, TypeScript compilation via tsx can take longer,
+ * so we allow more time for the server to start.
  */
-async function waitForServer(maxAttempts = 30): Promise<void> {
+async function waitForServer(maxAttempts = 60): Promise<void> {
+  let lastError: Error | null = null;
+  const startTime = Date.now();
+
+  logger.info(`Waiting for server on port ${serverPort}...`);
+
   for (let i = 0; i < maxAttempts; i++) {
+    // Check if server process has already exited
+    if (serverProcess && serverProcess.exitCode !== null) {
+      throw new Error(`Server process exited unexpectedly with code ${serverProcess.exitCode}`);
+    }
+
     try {
       await new Promise<void>((resolve, reject) => {
         const req = http.get(`http://localhost:${serverPort}/api/health`, (res) => {
           if (res.statusCode === 200) {
             resolve();
           } else {
-            reject(new Error(`Status: ${res.statusCode}`));
+            reject(new Error(`Health check returned status: ${res.statusCode}`));
           }
         });
-        req.on('error', reject);
-        req.setTimeout(1000, () => {
+        req.on('error', (err) => reject(err));
+        req.setTimeout(2000, () => {
           req.destroy();
-          reject(new Error('Timeout'));
+          reject(new Error('Health check timeout'));
         });
       });
-      logger.info('Server is ready');
+      const elapsedMs = Date.now() - startTime;
+      logger.info(`Server is ready (took ${(elapsedMs / 1000).toFixed(1)}s)`);
       return;
-    } catch {
-      await new Promise((r) => setTimeout(r, 500));
+    } catch (err) {
+      lastError = err as Error;
+      if (i < maxAttempts - 1) {
+        // Log progress every 10 attempts (every 5 seconds)
+        if ((i + 1) % 10 === 0) {
+          const elapsedMs = Date.now() - startTime;
+          logger.info(
+            `Waiting for server... attempt ${i + 1}/${maxAttempts} (${(elapsedMs / 1000).toFixed(1)}s elapsed)`
+          );
+        }
+        await new Promise((r) => setTimeout(r, 500));
+      }
     }
   }
 
-  throw new Error('Server failed to start');
+  // Provide detailed error message
+  const elapsedMs = Date.now() - startTime;
+  const errorDetails = lastError ? ` Last error: ${lastError.message}` : '';
+  const processStatus = serverProcess
+    ? serverProcess.exitCode !== null
+      ? `Process exited with code ${serverProcess.exitCode}`
+      : 'Process still running but not responding'
+    : 'Server process not started';
+
+  throw new Error(
+    `Server failed to start after ${maxAttempts} attempts (${(elapsedMs / 1000).toFixed(1)}s). ${processStatus}.${errorDetails}`
+  );
+}
+
+/**
+ * Create or update the system tray icon with running agent count
+ */
+function updateTrayIcon(count: number = 0): void {
+  const iconPath = getIconPath();
+  if (!iconPath) {
+    logger.warn('Cannot create tray icon: icon file not found');
+    return;
+  }
+
+  try {
+    // Create tray if it doesn't exist
+    if (!tray) {
+      const icon = nativeImage.createFromPath(iconPath);
+      tray = new Tray(icon.resize({ width: 16, height: 16 }));
+      tray.setToolTip('DMaker');
+
+      // On click, show/focus the main window
+      tray.on('click', () => {
+        if (mainWindow) {
+          if (mainWindow.isMinimized()) {
+            mainWindow.restore();
+          }
+          mainWindow.show();
+          mainWindow.focus();
+        }
+      });
+    }
+
+    // Update tooltip with count
+    const tooltip =
+      count > 0 ? `DMaker - ${count} running task${count !== 1 ? 's' : ''}` : 'DMaker';
+    tray.setToolTip(tooltip);
+
+    // Platform-specific badge display
+    if (process.platform === 'win32') {
+      // Windows: Use taskbar overlay icon (the badge in the bottom-right of taskbar icon)
+      if (count > 0) {
+        // Create badge overlay for taskbar
+        const badgeSize = 16;
+        const badge = createBadgeIcon(count, badgeSize);
+
+        // Set overlay icon on the window (this shows in the Windows taskbar)
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.setOverlayIcon(badge, `${count} running task${count !== 1 ? 's' : ''}`);
+        }
+      } else {
+        // Clear overlay when no tasks running
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.setOverlayIcon(null, '');
+        }
+      }
+
+      // Keep tray icon simple
+      const icon = nativeImage.createFromPath(iconPath);
+      tray.setImage(icon.resize({ width: 16, height: 16 }));
+    } else if (process.platform === 'darwin') {
+      // macOS: Update dock badge
+      if (count > 0) {
+        app.dock?.setBadge(count.toString());
+      } else {
+        app.dock?.setBadge('');
+      }
+
+      // Tray icon (menu bar)
+      const icon = nativeImage.createFromPath(iconPath);
+      tray.setImage(icon.resize({ width: 16, height: 16 }));
+    } else {
+      // Linux: Just update tray icon
+      const icon = nativeImage.createFromPath(iconPath);
+      tray.setImage(icon.resize({ width: 16, height: 16 }));
+    }
+  } catch (error) {
+    logger.error('Failed to update tray icon:', error);
+  }
+}
+
+/**
+ * Bitmap font for digits 0-9 and '+' symbol.
+ * Each glyph is 5 columns × 7 rows, stored as an array of 7 row bitmasks.
+ * Bit 4 (0x10) = leftmost pixel, bit 0 (0x01) = rightmost pixel.
+ */
+const GLYPH_FONT: Record<string, number[]> = {
+  '0': [0x0e, 0x11, 0x13, 0x15, 0x19, 0x11, 0x0e],
+  '1': [0x04, 0x0c, 0x04, 0x04, 0x04, 0x04, 0x0e],
+  '2': [0x0e, 0x11, 0x01, 0x06, 0x08, 0x10, 0x1f],
+  '3': [0x0e, 0x11, 0x01, 0x06, 0x01, 0x11, 0x0e],
+  '4': [0x02, 0x06, 0x0a, 0x12, 0x1f, 0x02, 0x02],
+  '5': [0x1f, 0x10, 0x1e, 0x01, 0x01, 0x11, 0x0e],
+  '6': [0x06, 0x08, 0x10, 0x1e, 0x11, 0x11, 0x0e],
+  '7': [0x1f, 0x01, 0x02, 0x04, 0x04, 0x04, 0x04],
+  '8': [0x0e, 0x11, 0x11, 0x0e, 0x11, 0x11, 0x0e],
+  '9': [0x0e, 0x11, 0x11, 0x0f, 0x01, 0x02, 0x0c],
+  '+': [0x00, 0x04, 0x04, 0x1f, 0x04, 0x04, 0x00],
+};
+
+/** Width of each glyph in pixels */
+const GLYPH_WIDTH = 5;
+/** Height of each glyph in pixels */
+const GLYPH_HEIGHT = 7;
+
+/**
+ * Create a badge icon with the agent count rendered on a green circle.
+ * Displays single digits directly; for counts > 9 shows "9+".
+ * Uses a built-in bitmap font so no Canvas or external dependencies are needed.
+ */
+function createBadgeIcon(count: number, size: number): Electron.NativeImage {
+  // Determine the text to render
+  const text = count > 9 ? '9+' : String(count);
+
+  // Calculate total text width (glyphs + 1px spacing between chars)
+  const textWidth = text.length * GLYPH_WIDTH + (text.length - 1);
+  // Center the text on the badge
+  const textX = Math.floor((size - textWidth) / 2);
+  const textY = Math.floor((size - GLYPH_HEIGHT) / 2);
+
+  // Pre-build a lookup set of text pixel positions for fast hit-testing
+  const textPixels = new Set<number>();
+  for (let ci = 0; ci < text.length; ci++) {
+    const glyph = GLYPH_FONT[text[ci]];
+    if (!glyph) continue;
+    const glyphX = textX + ci * (GLYPH_WIDTH + 1);
+    for (let row = 0; row < GLYPH_HEIGHT; row++) {
+      const bits = glyph[row];
+      for (let col = 0; col < GLYPH_WIDTH; col++) {
+        // Bit 4 = leftmost column, bit 0 = rightmost
+        if (bits & (1 << (GLYPH_WIDTH - 1 - col))) {
+          const px = glyphX + col;
+          const py = textY + row;
+          if (px >= 0 && px < size && py >= 0 && py < size) {
+            textPixels.add(py * size + px);
+          }
+        }
+      }
+    }
+  }
+
+  // Build the RGBA pixel buffer
+  const pixelData = Buffer.alloc(size * size * 4);
+
+  const centerX = size / 2;
+  const centerY = size / 2;
+  const radius = size / 2 - 1;
+
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const idx = (y * size + x) * 4;
+      const distance = Math.sqrt((x - centerX) ** 2 + (y - centerY) ** 2);
+
+      if (distance <= radius) {
+        if (textPixels.has(y * size + x)) {
+          // Text pixel – white
+          pixelData[idx] = 255; // R
+          pixelData[idx + 1] = 255; // G
+          pixelData[idx + 2] = 255; // B
+          pixelData[idx + 3] = 255; // A
+        } else {
+          // Circle background – green (matches running-agent indicator)
+          pixelData[idx] = 34; // R
+          pixelData[idx + 1] = 197; // G
+          pixelData[idx + 2] = 94; // B
+          pixelData[idx + 3] = 255; // A
+        }
+      }
+      // Pixels outside the circle stay 0,0,0,0 (transparent)
+    }
+  }
+
+  return nativeImage.createFromBuffer(pixelData, { width: size, height: size });
 }
 
 /**
@@ -606,6 +888,13 @@ function createWindow(): void {
     mainWindow.loadURL(`http://localhost:${staticPort}`);
   }
 
+  // Set window title explicitly
+  mainWindow.webContents.on('did-finish-load', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.setTitle(isDev ? 'DMaker-Dev' : 'DMaker');
+    }
+  });
+
   if (isDev && process.env.OPEN_DEVTOOLS === 'true') {
     mainWindow.webContents.openDevTools();
   }
@@ -649,7 +938,7 @@ function createWindow(): void {
 app.whenReady().then(async () => {
   // Ensure userData path is consistent across dev/prod so files land in Automaker dir
   try {
-    const desiredUserDataPath = path.join(app.getPath('appData'), 'Automaker');
+    const desiredUserDataPath = path.join(app.getPath('appData'), 'DMaker');
     if (app.getPath('userData') !== desiredUserDataPath) {
       app.setPath('userData', desiredUserDataPath);
       logger.info('userData path set to:', desiredUserDataPath);
@@ -697,7 +986,7 @@ app.whenReady().then(async () => {
     isExternalServerMode = skipEmbeddedServer;
 
     if (skipEmbeddedServer) {
-      // Use the default server port (Docker container runs on 3008)
+      // Use the default server port (Docker container runs on 3009)
       serverPort = DEFAULT_SERVER_PORT;
       logger.info('SKIP_EMBEDDED_SERVER=true, using external server at port', serverPort);
 
@@ -739,12 +1028,15 @@ app.whenReady().then(async () => {
 
     // Create window
     createWindow();
+
+    // Create tray icon (Windows taskbar icon)
+    updateTrayIcon(0);
   } catch (error) {
     logger.error('Failed to start:', error);
     const errorMessage = (error as Error).message;
     const isNodeError = errorMessage.includes('Node.js');
     dialog.showErrorBox(
-      'Automaker Failed to Start',
+      'DMaker Failed to Start',
       `The application failed to start.\n\n${errorMessage}\n\n${
         isNodeError
           ? 'Please install Node.js from https://nodejs.org or via a package manager (Homebrew, nvm, fnm).'
@@ -811,6 +1103,12 @@ app.on('before-quit', () => {
     logger.info('Stopping static server...');
     staticServer.close();
     staticServer = null;
+  }
+
+  if (tray) {
+    logger.info('Destroying tray icon...');
+    tray.destroy();
+    tray = null;
   }
 });
 
@@ -962,4 +1260,15 @@ ipcMain.handle('window:updateMinWidth', (_, _sidebarExpanded: boolean) => {
 ipcMain.handle('app:quit', () => {
   logger.info('Quitting application via IPC request');
   app.quit();
+});
+
+// Update tray icon with running agent count
+ipcMain.handle('tray:updateCount', (_, count: number) => {
+  try {
+    updateTrayIcon(count);
+    return { success: true };
+  } catch (error) {
+    logger.error('Failed to update tray icon count:', error);
+    return { success: false, error: (error as Error).message };
+  }
 });

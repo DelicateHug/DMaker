@@ -14,6 +14,8 @@ import { getAllOpencodeModelIds, DEFAULT_OPENCODE_MODEL } from './opencode-model
 import type { PromptCustomization } from './prompts.js';
 import type { CodexSandboxMode, CodexApprovalPolicy } from './codex.js';
 import type { ReasoningEffort } from './provider.js';
+import type { VoiceSettings } from './voice.js';
+import { DEFAULT_VOICE_SETTINGS } from './voice.js';
 
 // Re-export ModelAlias for convenience
 export type { ModelAlias };
@@ -65,6 +67,39 @@ export type ThemeMode =
   | 'nordlight'
   | 'blossom';
 
+/**
+ * SyntaxTheme - Available syntax highlighting themes for code blocks
+ *
+ * Controls the color scheme used for syntax highlighting in code blocks,
+ * diffs, and inline code throughout the UI. Uses 'auto' by default to
+ * match the current UI theme.
+ * - auto: Automatically matches the active UI theme
+ * - Dark themes: dracula, monokai, nord, onedark, tokyonight, github-dark,
+ *   catppuccin, solarized-dark, gruvbox-dark, synthwave
+ * - Light themes: github-light, solarized-light, gruvbox-light, nord-light,
+ *   one-light, catppuccin-latte
+ */
+export type SyntaxTheme =
+  | 'auto'
+  // Dark syntax themes
+  | 'dracula'
+  | 'monokai'
+  | 'nord'
+  | 'onedark'
+  | 'tokyonight'
+  | 'github-dark'
+  | 'catppuccin'
+  | 'solarized-dark'
+  | 'gruvbox-dark'
+  | 'synthwave'
+  // Light syntax themes
+  | 'github-light'
+  | 'solarized-light'
+  | 'gruvbox-light'
+  | 'nord-light'
+  | 'one-light'
+  | 'catppuccin-latte';
+
 /** PlanningMode - Planning levels for feature generation workflows */
 export type PlanningMode = 'skip' | 'lite' | 'spec' | 'full';
 
@@ -113,13 +148,17 @@ export type ModelProvider = 'claude' | 'cursor' | 'codex' | 'opencode';
  * - feature_error: Feature failed with an error
  * - auto_mode_complete: Auto mode finished processing all features
  * - auto_mode_error: Auto mode encountered a critical error and paused
+ * - deploy_success: Deploy script completed successfully
+ * - deploy_error: Deploy script failed with an error
  */
 export type EventHookTrigger =
   | 'feature_created'
   | 'feature_success'
   | 'feature_error'
   | 'auto_mode_complete'
-  | 'auto_mode_error';
+  | 'auto_mode_error'
+  | 'deploy_success'
+  | 'deploy_error';
 
 /** HTTP methods supported for webhook requests */
 export type EventHookHttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH';
@@ -193,7 +232,69 @@ export const EVENT_HOOK_TRIGGER_LABELS: Record<EventHookTrigger, string> = {
   feature_error: 'Feature failed with error',
   auto_mode_complete: 'Auto mode completed all features',
   auto_mode_error: 'Auto mode paused due to error',
+  deploy_success: 'Deploy completed successfully',
+  deploy_error: 'Deploy failed with error',
 };
+
+// ============================================================================
+// Deploy Scripts - Folder-based deployment script discovery and execution
+// ============================================================================
+
+/** Supported deploy script type identifiers */
+export type DeployScriptType = 'python' | 'powershell' | 'node' | 'shell' | 'batch';
+
+/**
+ * DeployFolderScript - Metadata about a deploy script discovered in the project's
+ * `.automaker/deploy` folder.
+ *
+ * Scripts are discovered automatically based on supported file extensions:
+ * .py, .ps1, .js, .ts, .sh, .bat, .cmd
+ */
+export interface DeployFolderScript {
+  /** Script filename, including relative folder prefix for nested scripts (e.g. "deploy-prod.sh" or "infra/setup.sh") */
+  name: string;
+  /** Absolute path to the script file */
+  path: string;
+  /** Inferred script type */
+  type: DeployScriptType;
+  /** File extension (e.g. ".sh") */
+  extension: string;
+  /** File size in bytes */
+  size: number;
+  /** Last modified timestamp (ISO string) */
+  modifiedAt: string;
+  /** Relative folder path within the deploy directory (empty string for root-level scripts) */
+  folder: string;
+}
+
+/** Status of a deploy script run */
+export type DeployRunStatus = 'running' | 'success' | 'error' | 'timeout';
+
+/**
+ * DeployRun - Result of a single deploy script execution.
+ *
+ * Captures the full output, exit code, timing, and status of a script run.
+ */
+export interface DeployRun {
+  /** Current status of the run */
+  status: DeployRunStatus;
+  /** Whether the script exited successfully (exit code 0) */
+  success: boolean;
+  /** The script that was executed */
+  script: DeployFolderScript;
+  /** Captured stdout */
+  stdout: string;
+  /** Captured stderr */
+  stderr: string;
+  /** Exit code (null if killed / timed out) */
+  exitCode: number | null;
+  /** Error message if execution failed */
+  error?: string;
+  /** Execution duration in milliseconds */
+  duration: number;
+  /** ISO timestamp when execution started */
+  startedAt: string;
+}
 
 const DEFAULT_CODEX_AUTO_LOAD_AGENTS = false;
 const DEFAULT_CODEX_SANDBOX_MODE: CodexSandboxMode = 'workspace-write';
@@ -258,6 +359,10 @@ export interface PhaseModelConfig {
   // Quick tasks - commit messages
   /** Model for generating git commit messages from diffs */
   commitMessageModel: PhaseModelEntry;
+
+  // Agent session tasks - recommend fast models (Haiku)
+  /** Model for generating agent session titles from first message */
+  sessionTitleModel: PhaseModelEntry;
 }
 
 /** Keys of PhaseModelConfig for type-safe access */
@@ -329,6 +434,8 @@ export interface KeyboardShortcuts {
   splitTerminalDown: string;
   /** Close current terminal */
   closeTerminal: string;
+  /** Toggle voice mode */
+  voiceMode: string;
 }
 
 /**
@@ -406,6 +513,8 @@ export interface ProjectRef {
   icon?: string;
   /** Custom icon image path for project switcher */
   customIconPath?: string;
+  /** Default branch for this project (e.g., 'main', 'master', 'develop'). Used for display in All Projects view. */
+  defaultBranch?: string;
 }
 
 /**
@@ -466,6 +575,8 @@ export interface GlobalSettings {
   // Theme Configuration
   /** Currently selected theme */
   theme: ThemeMode;
+  /** Syntax highlighting theme for code blocks ('auto' = match UI theme) */
+  syntaxTheme?: SyntaxTheme;
 
   // Font Configuration
   /** Global UI/Sans font family (undefined = use default Geist Sans) */
@@ -482,8 +593,13 @@ export interface GlobalSettings {
   chatHistoryOpen: boolean;
 
   // Feature Generation Defaults
-  /** Max features to generate concurrently */
+  /** Max features to generate concurrently (DEPRECATED - use agentMultiplier instead) */
   maxConcurrency: number;
+  /**
+   * Global max concurrent agents - applies to all projects uniformly
+   * @default 5
+   */
+  agentMultiplier?: number;
   /** Default: skip tests during feature generation */
   defaultSkipTests: boolean;
   /** Default: enable dependency blocking */
@@ -650,6 +766,37 @@ export interface GlobalSettings {
    * @see EventHook for configuration details
    */
   eventHooks?: EventHook[];
+
+  // Voice Mode Configuration
+  /**
+   * Voice mode settings for hands-free voice interaction
+   * Configures microphone, noise gate, input/output modes, and TTS preferences
+   * @see VoiceSettings for configuration details
+   */
+  voiceSettings?: VoiceSettings;
+
+  // Claude Account Management
+  /**
+   * List of known Claude accounts detected via usage service.
+   * Persists across sessions for account switching UX.
+   */
+  claudeAccounts?: ClaudeAccountRef[];
+}
+
+/**
+ * ClaudeAccountRef - A saved Claude CLI account
+ *
+ * Represents a Claude account the user has logged into at some point.
+ * The app cannot switch accounts directly (requires `claude login` in browser),
+ * but remembers known accounts for switching UX.
+ */
+export interface ClaudeAccountRef {
+  /** Account email address (primary key) */
+  email: string;
+  /** ISO timestamp of when this account was first seen */
+  addedAt: string;
+  /** ISO timestamp of last time this account was active */
+  lastSeenAt: string;
 }
 
 /**
@@ -736,6 +883,10 @@ export interface ProjectSettings {
   /** Code/Mono font family override (undefined = use default Geist Mono) */
   fontFamilyMono?: string;
 
+  // Git Configuration
+  /** Default branch for this project (e.g., 'main', 'master', 'develop'). Used for display in All Projects view. */
+  defaultBranch?: string;
+
   // Worktree Management
   /** Project-specific worktree preference override */
   useWorktrees?: boolean;
@@ -780,6 +931,14 @@ export interface ProjectSettings {
    * Value: agent configuration
    */
   customSubagents?: Record<string, import('./provider.js').AgentDefinition>;
+
+  // Voice Mode Configuration
+  /**
+   * Project-specific voice mode settings for hands-free voice interaction
+   * Overrides global voiceSettings when defined
+   * @see VoiceSettings for configuration details
+   */
+  voiceSettings?: VoiceSettings;
 }
 
 /**
@@ -808,6 +967,9 @@ export const DEFAULT_PHASE_MODELS: PhaseModelConfig = {
 
   // Commit messages - use fast model for speed
   commitMessageModel: { model: 'haiku' },
+
+  // Agent session titles - use fast model for speed
+  sessionTitleModel: { model: 'haiku' },
 };
 
 /** Current version of the global settings schema */
@@ -839,6 +1001,7 @@ export const DEFAULT_KEYBOARD_SHORTCUTS: KeyboardShortcuts = {
   splitTerminalRight: 'Alt+D',
   splitTerminalDown: 'Alt+S',
   closeTerminal: 'Alt+W',
+  voiceMode: 'Shift+V',
 };
 
 /** Default global settings used when no settings file exists */
@@ -848,9 +1011,11 @@ export const DEFAULT_GLOBAL_SETTINGS: GlobalSettings = {
   isFirstRun: true,
   skipClaudeSetup: false,
   theme: 'dark',
+  syntaxTheme: 'auto',
   sidebarOpen: true,
   chatHistoryOpen: false,
-  maxConcurrency: 3,
+  maxConcurrency: 5,
+  agentMultiplier: 5,
   defaultSkipTests: true,
   enableDependencyBlocking: true,
   skipVerificationInAutoMode: false,
@@ -896,6 +1061,8 @@ export const DEFAULT_GLOBAL_SETTINGS: GlobalSettings = {
   skillsSources: ['user', 'project'],
   enableSubagents: true,
   subagentsSources: ['user', 'project'],
+  voiceSettings: DEFAULT_VOICE_SETTINGS,
+  claudeAccounts: [],
 };
 
 /** Default credentials (empty strings - user must provide API keys) */

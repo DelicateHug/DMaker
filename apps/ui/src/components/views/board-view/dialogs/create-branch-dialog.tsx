@@ -89,7 +89,7 @@ export function CreateBranchDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="sm:max-w-[425px]" data-testid="create-branch-dialog">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <GitBranchPlus className="w-5 h-5" />

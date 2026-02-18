@@ -69,16 +69,12 @@ test.describe('Project Creation', () => {
 
     await expect(page.locator('[data-testid="board-view"]')).toBeVisible({ timeout: 15000 });
 
-    // Expand sidebar if collapsed to see project name
-    const expandSidebarButton = page.locator('button:has-text("Expand sidebar")');
-    if (await expandSidebarButton.isVisible()) {
-      await expandSidebarButton.click();
-      await page.waitForTimeout(300);
-    }
+    // Wait for project to be set as current and visible in the top navigation bar
+    // The project name appears in the project dropdown trigger
+    await expect(page.getByTestId('project-dropdown-trigger')).toBeVisible({ timeout: 15000 });
 
-    // Wait for project to be set as current and visible on the page
-    // The project name appears in the project switcher button
-    await expect(page.getByTestId(`project-switcher-project-${projectName}`)).toBeVisible({
+    // Verify the project name is visible in the top bar by checking the dropdown trigger text
+    await expect(page.getByTestId('project-dropdown-trigger')).toContainText(projectName, {
       timeout: 15000,
     });
 

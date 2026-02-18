@@ -4,7 +4,7 @@
 
 import type { Request, Response } from 'express';
 import { FeatureLoader } from '../../../services/feature-loader.js';
-import { getErrorMessage, logError } from '../common.js';
+import { getErrorMessage, logError, invalidateFeaturesCache } from '../common.js';
 
 interface BulkDeleteRequest {
   projectPath: string;
@@ -54,6 +54,10 @@ export function createBulkDeleteHandler(featureLoader: FeatureLoader) {
 
       const successCount = results.reduce((count, r) => count + (r.success ? 1 : 0), 0);
       const failureCount = results.length - successCount;
+
+      if (successCount > 0) {
+        invalidateFeaturesCache(projectPath);
+      }
 
       res.json({
         success: failureCount === 0,

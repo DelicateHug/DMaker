@@ -5,10 +5,18 @@
 
 // Path utilities
 export {
+  getMonthName,
+  isMonthDir,
+  isStatusDir,
   getAutomakerDir,
   getFeaturesDir,
+  getFeatureMonthDir,
   getFeatureDir,
+  getFeatureStatusDir,
   getFeatureImagesDir,
+  getFeatureSummariesDir,
+  getFeatureLogsDir,
+  getFeatureBackupsDir,
   getBoardDir,
   getImagesDir,
   getContextDir,

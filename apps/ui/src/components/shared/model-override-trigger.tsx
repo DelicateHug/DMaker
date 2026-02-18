@@ -32,6 +32,8 @@ export interface ModelOverrideTriggerProps {
   isOverridden?: boolean;
   /** Optional class name */
   className?: string;
+  /** Test ID prefix for data-testid attributes */
+  testIdPrefix?: string;
 }
 
 export function ModelOverrideTrigger({
@@ -42,6 +44,7 @@ export function ModelOverrideTrigger({
   variant = 'icon',
   isOverridden = false,
   className,
+  testIdPrefix = 'model-override',
 }: ModelOverrideTriggerProps) {
   const { phaseModels } = useAppStore();
 
@@ -83,7 +86,10 @@ export function ModelOverrideTrigger({
   // For icon variant, wrap PhaseModelSelector and hide text/chevron with CSS
   if (variant === 'icon') {
     return (
-      <div className={cn('relative inline-block', className)}>
+      <div
+        className={cn('relative inline-block', className)}
+        data-testid={`${testIdPrefix}-trigger`}
+      >
         <div className="relative [&_button>span]:hidden [&_button>svg:last-child]:hidden [&_button]:p-0 [&_button]:min-w-0 [&_button]:w-auto [&_button]:h-auto [&_button]:border-0 [&_button]:bg-transparent">
           <PhaseModelSelector
             value={currentModelEntry}
@@ -102,7 +108,10 @@ export function ModelOverrideTrigger({
           />
         </div>
         {isOverridden && (
-          <div className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-brand-500 rounded-full z-10 pointer-events-none" />
+          <div
+            className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-brand-500 rounded-full z-10 pointer-events-none"
+            data-testid={`${testIdPrefix}-indicator`}
+          />
         )}
       </div>
     );
@@ -110,7 +119,7 @@ export function ModelOverrideTrigger({
 
   // For button and inline variants, use PhaseModelSelector in compact mode
   return (
-    <div className={cn('relative', className)}>
+    <div className={cn('relative', className)} data-testid={`${testIdPrefix}-trigger`}>
       <PhaseModelSelector
         value={currentModelEntry}
         onChange={handleChange}
@@ -119,7 +128,10 @@ export function ModelOverrideTrigger({
         disabled={false}
       />
       {isOverridden && (
-        <div className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-brand-500 rounded-full z-10" />
+        <div
+          className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-brand-500 rounded-full z-10"
+          data-testid={`${testIdPrefix}-indicator`}
+        />
       )}
     </div>
   );

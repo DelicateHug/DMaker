@@ -1,8 +1,11 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
+import type { Virtualizer } from '@tanstack/react-virtual';
 import { useAppStore } from '@/store/app-store';
+import { useShallow } from 'zustand/react/shallow';
 import type { PhaseModelEntry } from '@automaker/types';
 import { useElectronAgent } from '@/hooks/use-electron-agent';
-import { SessionManager } from '@/components/session-manager';
+import { cn } from '@/lib/utils';
+import { getElectronAPI } from '@/lib/electron';
 
 // Extracted hooks
 import {
@@ -16,44 +19,40 @@ import {
 import { NoProjectState, AgentHeader, ChatArea } from './agent-view/components';
 import { AgentInputArea } from './agent-view/input-area';
 
-/** Tailwind lg breakpoint in pixels */
-const LG_BREAKPOINT = 1024;
-
 export function AgentView() {
-  const { currentProject } = useAppStore();
+  const { currentProject, bumpSessionListVersion } = useAppStore(
+    useShallow((state) => ({
+      currentProject: state.currentProject,
+      bumpSessionListVersion: state.bumpSessionListVersion,
+    }))
+  );
   const [input, setInput] = useState('');
   const [currentTool, setCurrentTool] = useState<string | null>(null);
-  // Initialize session manager state - starts as true to match SSR
-  // Then updates on mount based on actual screen size to prevent hydration mismatch
-  const [showSessionManager, setShowSessionManager] = useState(true);
-
-  // Update session manager visibility based on screen size after mount and on resize
-  useEffect(() => {
-    const updateVisibility = () => {
-      const isDesktop = window.innerWidth >= LG_BREAKPOINT;
-      setShowSessionManager(isDesktop);
-    };
-
-    // Set initial value
-    updateVisibility();
-
-    // Listen for resize events
-    window.addEventListener('resize', updateVisibility);
-    return () => window.removeEventListener('resize', updateVisibility);
-  }, []);
-
   const [modelSelection, setModelSelection] = useState<PhaseModelEntry>({ model: 'sonnet' });
 
   // Input ref for auto-focus
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  // Ref for quick create session function from SessionManager
-  const quickCreateSessionRef = useRef<(() => Promise<void>) | null>(null);
-
   // Session management hook
   const { currentSessionId, handleSelectSession } = useAgentSession({
     projectPath: currentProject?.path,
   });
+
+  // Create new session with placeholder name (will be auto-renamed on first message)
+  const handleCreateSession = useCallback(async () => {
+    if (!currentProject?.path) return;
+
+    const api = getElectronAPI();
+    if (!api?.sessions) return;
+
+    const sessionName = 'New Session';
+    const result = await api.sessions.create(sessionName, currentProject.path, currentProject.path);
+
+    if (result.success && result.session?.id) {
+      bumpSessionListVersion();
+      handleSelectSession(result.session.id);
+    }
+  }, [currentProject?.path, handleSelectSession, bumpSessionListVersion]);
 
   // Use the Electron agent hook (only if we have a session)
   const {
@@ -85,17 +84,27 @@ export function AgentView() {
     isConnected,
   });
 
-  // Scroll management hook
-  const { messagesContainerRef, handleScroll } = useAgentScroll({
+  // Virtualizer instance — set by MessageList on every render.
+  // Stored as a ref because we only read it inside callbacks (scrollToBottom),
+  // not during render, so we don't need it to trigger re-renders.
+  const virtualizerRef = useRef<Virtualizer<HTMLDivElement, Element> | null>(null);
+
+  const handleVirtualizerReady = useCallback((v: Virtualizer<HTMLDivElement, Element>) => {
+    virtualizerRef.current = v;
+  }, []);
+
+  // Scroll management hook (now driven by virtualizer.scrollToIndex)
+  const { scrollContainerRef, handleScroll } = useAgentScroll({
     messagesLength: messages.length,
     currentSessionId,
+    virtualizerRef,
   });
 
-  // Keyboard shortcuts hook
-  useAgentShortcuts({
-    currentProject,
-    quickCreateSessionRef,
-  });
+  // Keyboard shortcuts hook (removed quickCreateSessionRef as sessions are now managed via header dropdown)
+  // useAgentShortcuts({
+  //   currentProject,
+  //   quickCreateSessionRef,
+  // });
 
   // Handle send message
   const handleSend = useCallback(async () => {
@@ -140,13 +149,6 @@ export function AgentView() {
     }
   }, [currentSessionId]);
 
-  // Auto-close session manager on mobile when a session is selected
-  useEffect(() => {
-    if (currentSessionId && typeof window !== 'undefined' && window.innerWidth < 1024) {
-      setShowSessionManager(false);
-    }
-  }, [currentSessionId]);
-
   // Show welcome message if no messages yet
   const displayMessages =
     messages.length === 0
@@ -166,42 +168,28 @@ export function AgentView() {
   }
 
   return (
-    <div className="flex-1 flex overflow-hidden bg-background" data-testid="agent-view">
-      {/* Mobile backdrop overlay for Session Manager */}
-      {showSessionManager && currentProject && (
-        <div
-          className="fixed inset-0 bg-black/50 z-20 lg:hidden"
-          onClick={() => setShowSessionManager(false)}
-          data-testid="session-manager-backdrop"
-        />
-      )}
-
-      {/* Session Manager Sidebar */}
-      {showSessionManager && currentProject && (
-        <div className="fixed inset-y-0 left-0 w-72 z-30 lg:relative lg:w-80 lg:z-auto border-r border-border shrink-0 bg-card">
-          <SessionManager
-            currentSessionId={currentSessionId}
-            onSelectSession={handleSelectSession}
-            projectPath={currentProject.path}
-            isCurrentSessionThinking={isProcessing}
-            onQuickCreateRef={quickCreateSessionRef}
-          />
-        </div>
-      )}
-
-      {/* Chat Area */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+    <div className={cn('flex-1 flex overflow-hidden', 'bg-background')} data-testid="agent-view">
+      {/* Chat Area - now full width without sidebar */}
+      <div
+        className={cn(
+          'flex-1 flex flex-col overflow-hidden',
+          'transition-all duration-300 ease-out'
+        )}
+      >
         {/* Header */}
         <AgentHeader
           projectName={currentProject.name}
+          projectPath={currentProject.path}
           currentSessionId={currentSessionId}
           isConnected={isConnected}
           isProcessing={isProcessing}
           currentTool={currentTool}
           messagesCount={messages.length}
-          showSessionManager={showSessionManager}
-          onToggleSessionManager={() => setShowSessionManager(!showSessionManager)}
+          showSessionManager={false}
+          onToggleSessionManager={() => {}}
+          onSelectSession={handleSelectSession}
           onClearChat={handleClearChat}
+          showProjectSelector={true}
         />
 
         {/* Messages */}
@@ -209,43 +197,54 @@ export function AgentView() {
           currentSessionId={currentSessionId}
           messages={displayMessages}
           isProcessing={isProcessing}
-          showSessionManager={showSessionManager}
-          messagesContainerRef={messagesContainerRef}
+          showSessionManager={false}
+          scrollContainerRef={scrollContainerRef}
           onScroll={handleScroll}
-          onShowSessionManager={() => setShowSessionManager(true)}
+          onShowSessionManager={() => {}}
+          onCreateSession={handleCreateSession}
+          onVirtualizerReady={handleVirtualizerReady}
         />
 
-        {/* Input Area */}
-        {currentSessionId && (
-          <AgentInputArea
-            input={input}
-            onInputChange={setInput}
-            onSend={handleSend}
-            onStop={stopExecution}
-            modelSelection={modelSelection}
-            onModelSelect={setModelSelection}
-            isProcessing={isProcessing}
-            isConnected={isConnected}
-            selectedImages={fileAttachments.selectedImages}
-            selectedTextFiles={fileAttachments.selectedTextFiles}
-            showImageDropZone={fileAttachments.showImageDropZone}
-            isDragOver={fileAttachments.isDragOver}
-            onImagesSelected={fileAttachments.handleImagesSelected}
-            onToggleImageDropZone={fileAttachments.toggleImageDropZone}
-            onRemoveImage={fileAttachments.removeImage}
-            onRemoveTextFile={fileAttachments.removeTextFile}
-            onClearAllFiles={fileAttachments.clearAllFiles}
-            onDragEnter={fileAttachments.handleDragEnter}
-            onDragLeave={fileAttachments.handleDragLeave}
-            onDragOver={fileAttachments.handleDragOver}
-            onDrop={fileAttachments.handleDrop}
-            onPaste={fileAttachments.handlePaste}
-            serverQueue={serverQueue}
-            onRemoveFromQueue={removeFromServerQueue}
-            onClearQueue={clearServerQueue}
-            inputRef={inputRef}
-          />
-        )}
+        {/* Input Area - with smooth fade-in effect when session is selected */}
+        <div
+          className={cn(
+            'transition-all duration-200 ease-out',
+            currentSessionId
+              ? 'opacity-100 translate-y-0'
+              : 'opacity-0 translate-y-2 pointer-events-none h-0'
+          )}
+        >
+          {currentSessionId && (
+            <AgentInputArea
+              input={input}
+              onInputChange={setInput}
+              onSend={handleSend}
+              onStop={stopExecution}
+              modelSelection={modelSelection}
+              onModelSelect={setModelSelection}
+              isProcessing={isProcessing}
+              isConnected={isConnected}
+              selectedImages={fileAttachments.selectedImages}
+              selectedTextFiles={fileAttachments.selectedTextFiles}
+              showImageDropZone={fileAttachments.showImageDropZone}
+              isDragOver={fileAttachments.isDragOver}
+              onImagesSelected={fileAttachments.handleImagesSelected}
+              onToggleImageDropZone={fileAttachments.toggleImageDropZone}
+              onRemoveImage={fileAttachments.removeImage}
+              onRemoveTextFile={fileAttachments.removeTextFile}
+              onClearAllFiles={fileAttachments.clearAllFiles}
+              onDragEnter={fileAttachments.handleDragEnter}
+              onDragLeave={fileAttachments.handleDragLeave}
+              onDragOver={fileAttachments.handleDragOver}
+              onDrop={fileAttachments.handleDrop}
+              onPaste={fileAttachments.handlePaste}
+              serverQueue={serverQueue}
+              onRemoveFromQueue={removeFromServerQueue}
+              onClearQueue={clearServerQueue}
+              inputRef={inputRef}
+            />
+          )}
+        </div>
       </div>
     </div>
   );

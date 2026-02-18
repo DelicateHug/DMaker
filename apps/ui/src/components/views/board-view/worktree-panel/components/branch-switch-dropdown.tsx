@@ -59,7 +59,7 @@ export function BranchSwitchDropdown({
           <GitBranch className={standalone ? 'w-3.5 h-3.5' : 'w-3 h-3'} />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-64">
+      <DropdownMenuContent align="start" className="w-64 max-w-[calc(100vw-2rem)]">
         <DropdownMenuLabel className="text-xs">Switch Branch</DropdownMenuLabel>
         <DropdownMenuSeparator />
         <div className="px-2 py-1.5">
@@ -78,7 +78,7 @@ export function BranchSwitchDropdown({
           </div>
         </div>
         <DropdownMenuSeparator />
-        <div className="max-h-[250px] overflow-y-auto">
+        <div className="max-h-[min(250px,50vh)] overflow-y-auto">
           {isLoadingBranches ? (
             <DropdownMenuItem disabled className="text-xs">
               <RefreshCw className="w-3.5 h-3.5 mr-2 animate-spin" />

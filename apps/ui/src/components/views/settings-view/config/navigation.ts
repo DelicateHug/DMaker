@@ -7,6 +7,7 @@ import {
   Palette,
   Settings2,
   Volume2,
+  Mic,
   FlaskConical,
   Workflow,
   Plug,
@@ -16,6 +17,7 @@ import {
   GitBranch,
   Code2,
   Webhook,
+  Folder,
 } from 'lucide-react';
 import { AnthropicIcon, CursorIcon, OpenAIIcon, OpenCodeIcon } from '@/components/ui/provider-icon';
 import type { SettingsViewId } from '../hooks/use-settings-view';
@@ -34,6 +36,10 @@ export interface NavigationGroup {
 
 // Global settings organized into groups
 export const GLOBAL_NAV_GROUPS: NavigationGroup[] = [
+  {
+    label: 'Workspace',
+    items: [{ id: 'projects', label: 'Projects', icon: Folder }],
+  },
   {
     label: 'Model & Prompts',
     items: [
@@ -63,6 +69,7 @@ export const GLOBAL_NAV_GROUPS: NavigationGroup[] = [
       { id: 'terminal', label: 'Terminal', icon: SquareTerminal },
       { id: 'keyboard', label: 'Keyboard Shortcuts', icon: Settings2 },
       { id: 'audio', label: 'Audio', icon: Volume2 },
+      { id: 'voice', label: 'Voice Mode', icon: Mic },
       { id: 'event-hooks', label: 'Event Hooks', icon: Webhook },
     ],
   },

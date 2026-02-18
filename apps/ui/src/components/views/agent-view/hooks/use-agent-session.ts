@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { createLogger } from '@automaker/utils/logger';
 import { useAppStore } from '@/store/app-store';
+import { useShallow } from 'zustand/react/shallow';
 
 const logger = createLogger('AgentSession');
 
@@ -14,11 +15,16 @@ interface UseAgentSessionResult {
 }
 
 export function useAgentSession({ projectPath }: UseAgentSessionOptions): UseAgentSessionResult {
-  const { setLastSelectedSession, getLastSelectedSession } = useAppStore();
+  const { setLastSelectedSession, getLastSelectedSession } = useAppStore(
+    useShallow((state) => ({
+      setLastSelectedSession: state.setLastSelectedSession,
+      getLastSelectedSession: state.getLastSelectedSession,
+    }))
+  );
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
 
-  // Track if initial session has been loaded
-  const initialSessionLoadedRef = useRef(false);
+  // Track the previous project path to detect changes
+  const prevProjectPathRef = useRef<string | undefined>(undefined);
 
   // Handle session selection with persistence
   const handleSelectSession = useCallback(
@@ -32,30 +38,42 @@ export function useAgentSession({ projectPath }: UseAgentSessionOptions): UseAge
     [projectPath, setLastSelectedSession]
   );
 
-  // Restore last selected session when switching to Agent view or when project changes
+  // Reset session and restore last selected session when project changes
   useEffect(() => {
+    const previousPath = prevProjectPathRef.current;
+    const isProjectChange = previousPath !== undefined && previousPath !== projectPath;
+
+    // Update ref for next comparison
+    prevProjectPathRef.current = projectPath;
+
     if (!projectPath) {
-      // No project, reset
+      // No project, reset session
+      logger.info('No project path, resetting session');
       setCurrentSessionId(null);
-      initialSessionLoadedRef.current = false;
       return;
     }
 
-    // Only restore once per project
-    if (initialSessionLoadedRef.current) return;
-    initialSessionLoadedRef.current = true;
+    if (isProjectChange) {
+      // Project changed - reset session first, then restore last selected
+      logger.info('Project changed from', previousPath, 'to', projectPath, '- resetting session');
+      setCurrentSessionId(null);
+    }
 
+    // Restore last selected session for this project (on mount or project change)
     const lastSessionId = getLastSelectedSession(projectPath);
     if (lastSessionId) {
-      logger.info('Restoring last selected session:', lastSessionId);
+      logger.info(
+        'Restoring last selected session for project:',
+        projectPath,
+        '- session:',
+        lastSessionId
+      );
       setCurrentSessionId(lastSessionId);
+    } else if (isProjectChange) {
+      // Project changed but no saved session - ensure we stay at null
+      logger.info('No saved session for project:', projectPath);
     }
   }, [projectPath, getLastSelectedSession]);
-
-  // Reset initialSessionLoadedRef when project changes
-  useEffect(() => {
-    initialSessionLoadedRef.current = false;
-  }, [projectPath]);
 
   return {
     currentSessionId,

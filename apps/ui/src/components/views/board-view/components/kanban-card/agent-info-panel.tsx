@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { useEffect, useState, useMemo } from 'react';
 import { Feature, ThinkingLevel, ParsedTask } from '@/store/app-store';
-import type { ReasoningEffort } from '@automaker/types';
+import type { ReasoningEffort, SummaryHistoryEntry } from '@automaker/types';
 import { getProviderFromModel } from '@/lib/utils';
 import {
   AgentTaskInfo,
@@ -20,10 +20,12 @@ import {
   Circle,
   Loader2,
   Wrench,
+  Folder,
 } from 'lucide-react';
 import { getElectronAPI } from '@/lib/electron';
 import { SummaryDialog } from './summary-dialog';
 import { getProviderIconForModel } from '@/components/ui/provider-icon';
+import { useInView } from '@/hooks/use-in-view';
 
 /**
  * Formats thinking level for compact display
@@ -61,6 +63,11 @@ interface AgentInfoPanelProps {
   contextContent?: string;
   summary?: string;
   isCurrentAutoTask?: boolean;
+  /** Whether viewing all projects (shows project badge) */
+  showAllProjects?: boolean;
+  /** Whether full feature data has been loaded (Phase 2 complete).
+   *  When false, non-backlog cards show skeleton shimmer for agent info. */
+  isFullyLoaded?: boolean;
 }
 
 export function AgentInfoPanel({
@@ -68,6 +75,8 @@ export function AgentInfoPanel({
   contextContent,
   summary,
   isCurrentAutoTask,
+  showAllProjects = false,
+  isFullyLoaded = true,
 }: AgentInfoPanelProps) {
   const [agentInfo, setAgentInfo] = useState<AgentTaskInfo | null>(null);
   const [isSummaryDialogOpen, setIsSummaryDialogOpen] = useState(false);
@@ -82,6 +91,12 @@ export function AgentInfoPanel({
     tasksCompleted?: number;
     currentTaskId?: string;
   } | null>(null);
+  // Summary history for displaying model badges chronologically
+  const [summaryHistory, setSummaryHistory] = useState<SummaryHistoryEntry[]>([]);
+
+  // Lazy-load: only fetch agent output and fresh planSpec when the card scrolls into view.
+  // rootMargin adds a 200px buffer so fetching starts just before the card becomes visible.
+  const { ref: inViewRef, isInView } = useInView<HTMLDivElement>({ rootMargin: '200px' });
 
   // Derive effective todos from planSpec.tasks when available, fallback to agentInfo.todos
   // Uses freshPlanSpec (from API) for accurate progress, with taskStatusMap for real-time updates
@@ -134,19 +149,24 @@ export function AgentInfoPanel({
   ]);
 
   useEffect(() => {
+    // When contextContent is provided by the parent, always parse it (no API call needed)
+    if (contextContent) {
+      const info = parseAgentContext(contextContent);
+      setAgentInfo(info);
+      return;
+    }
+
+    if (feature.status === 'backlog') {
+      setAgentInfo(null);
+      setFreshPlanSpec(null);
+      setSummaryHistory([]);
+      return;
+    }
+
+    // Gate API fetches behind IntersectionObserver – only load when card is in/near viewport
+    if (!isInView) return;
+
     const loadContext = async () => {
-      if (contextContent) {
-        const info = parseAgentContext(contextContent);
-        setAgentInfo(info);
-        return;
-      }
-
-      if (feature.status === 'backlog') {
-        setAgentInfo(null);
-        setFreshPlanSpec(null);
-        return;
-      }
-
       try {
         const api = getElectronAPI();
         const currentProject = (window as any).__currentProject;
@@ -166,6 +186,19 @@ export function AgentInfoPanel({
             }
           } catch {
             // Ignore errors fetching fresh planSpec
+          }
+
+          // Fetch summary history to get model execution history
+          try {
+            const summariesResult = await api.features.getSummaries(
+              currentProject.path,
+              feature.id
+            );
+            if (summariesResult.success && 'summaries' in summariesResult) {
+              setSummaryHistory(summariesResult.summaries);
+            }
+          } catch {
+            // Ignore errors fetching summaries
           }
 
           const result = await api.features.getAgentOutput(currentProject.path, feature.id);
@@ -190,15 +223,36 @@ export function AgentInfoPanel({
 
     loadContext();
 
-    // Poll for updates when feature is in_progress (not just isCurrentAutoTask)
-    // This ensures planSpec progress stays in sync
+    // Subscribe to auto-mode events for real-time planSpec updates instead of 3s polling
+    // Fallback polling at 60s ensures data stays in sync if events are missed
     if (isCurrentAutoTask || feature.status === 'in_progress') {
-      const interval = setInterval(loadContext, 3000);
+      const api = getElectronAPI();
+      let unsubscribe: (() => void) | undefined;
+
+      // Subscribe to auto-mode events that indicate progress changes for this feature
+      if (api.autoMode?.onEvent) {
+        unsubscribe = api.autoMode.onEvent((event: AutoModeEvent) => {
+          if (!('featureId' in event) || event.featureId !== feature.id) return;
+          const eventType = (event as any).type;
+          if (
+            eventType === 'auto_mode_progress' ||
+            eventType === 'auto_mode_task_complete' ||
+            eventType === 'auto_mode_feature_complete' ||
+            eventType === 'pipeline_step_complete'
+          ) {
+            loadContext();
+          }
+        });
+      }
+
+      // Fallback polling at 60s as safety net
+      const interval = setInterval(loadContext, 60000);
       return () => {
         clearInterval(interval);
+        unsubscribe?.();
       };
     }
-  }, [feature.id, feature.status, contextContent, isCurrentAutoTask]);
+  }, [feature.id, feature.status, contextContent, isCurrentAutoTask, isInView]);
 
   // Listen to WebSocket events for real-time task status updates
   // This ensures the Kanban card shows the same progress as the Agent Output modal
@@ -252,8 +306,11 @@ export function AgentInfoPanel({
     const isCodex = provider === 'codex';
     const isClaude = provider === 'claude';
 
+    // Get project name from feature (added in use-board-features.ts)
+    const projectName = (feature as any).projectName;
+
     return (
-      <div className="mb-3 space-y-2 overflow-hidden">
+      <div ref={inViewRef} className="mb-3 space-y-2 overflow-hidden">
         <div className="flex items-center gap-2 text-[11px] flex-wrap">
           <div className="flex items-center gap-1 text-[var(--status-info)]">
             {(() => {
@@ -262,6 +319,15 @@ export function AgentInfoPanel({
             })()}
             <span className="font-medium">{formatModelName(feature.model ?? DEFAULT_MODEL)}</span>
           </div>
+          {/* Project badge - always shown similar to model badge */}
+          {projectName && (
+            <div className="flex items-center gap-1 text-muted-foreground">
+              <Folder className="w-3 h-3" />
+              <span className="font-medium truncate max-w-[80px]" title={projectName}>
+                {projectName}
+              </span>
+            </div>
+          )}
           {isClaude && feature.thinkingLevel && feature.thinkingLevel !== 'none' ? (
             <div className="flex items-center gap-1 text-purple-400">
               <Brain className="w-3 h-3" />
@@ -287,18 +353,46 @@ export function AgentInfoPanel({
   // Show panel if we have agentInfo OR planSpec.tasks (for spec/full mode)
   // Note: hasPlanSpecTasks is already defined above and includes freshPlanSpec
   if (feature.status !== 'backlog' && (agentInfo || hasPlanSpecTasks)) {
+    // Get project name from feature (added in use-board-features.ts)
+    const projectName = (feature as any).projectName;
+
+    // Get unique models from summary history (most recent first)
+    const modelHistory = summaryHistory
+      .filter((s) => s.model) // Only include summaries with model info
+      .map((s) => s.model!)
+      .filter((model, index, arr) => arr.indexOf(model) === index) // Remove duplicates, keep first (most recent)
+      .slice(0, 3); // Limit to 3 most recent unique models
+
+    // Fallback to current feature model if no history
+    const modelsToDisplay =
+      modelHistory.length > 0 ? modelHistory : [feature.model ?? DEFAULT_MODEL];
+
     return (
       <>
-        <div className="mb-3 space-y-2 overflow-hidden">
-          {/* Model & Phase */}
+        <div ref={inViewRef} className="mb-3 space-y-2 overflow-hidden">
+          {/* Model badges & Phase - show multiple model badges if there's history */}
           <div className="flex items-center gap-2 text-[11px] flex-wrap">
-            <div className="flex items-center gap-1 text-[var(--status-info)]">
-              {(() => {
-                const ProviderIcon = getProviderIconForModel(feature.model);
-                return <ProviderIcon className="w-3 h-3" />;
-              })()}
-              <span className="font-medium">{formatModelName(feature.model ?? DEFAULT_MODEL)}</span>
-            </div>
+            {modelsToDisplay.map((model, idx) => {
+              const ProviderIcon = getProviderIconForModel(model);
+              return (
+                <div
+                  key={`${model}-${idx}`}
+                  className="flex items-center gap-1 text-[var(--status-info)]"
+                >
+                  <ProviderIcon className="w-3 h-3" />
+                  <span className="font-medium">{formatModelName(model)}</span>
+                </div>
+              );
+            })}
+            {/* Project badge - always shown similar to model badge */}
+            {projectName && (
+              <div className="flex items-center gap-1 text-muted-foreground">
+                <Folder className="w-3 h-3" />
+                <span className="font-medium truncate max-w-[80px]" title={projectName}>
+                  {projectName}
+                </span>
+              </div>
+            )}
             {agentInfo?.currentPhase && (
               <div
                 className={cn(
@@ -437,15 +531,60 @@ export function AgentInfoPanel({
     );
   }
 
+  // Skeleton shimmer for non-backlog cards while Phase 2 data is still loading.
+  // During Phase 1, agentInfo and planSpec are not yet available, so we show
+  // animated placeholders matching the real agent info layout.
+  if (!isFullyLoaded && feature.status !== 'backlog' && !agentInfo && !hasPlanSpecTasks) {
+    return (
+      <div
+        ref={inViewRef}
+        className="mb-3 space-y-2 overflow-hidden"
+        data-testid={`agent-info-skeleton-${feature.id}`}
+      >
+        {/* Model & Phase row shimmer */}
+        <div className="flex items-center gap-2">
+          <div className="rounded-full bg-muted/40 animate-pulse h-3 w-3 flex-none" />
+          <div className="rounded-md bg-muted/40 animate-pulse h-3 w-20" />
+          <div className="rounded-md bg-muted/40 animate-pulse h-4 w-14" />
+        </div>
+
+        {/* Task list progress shimmer */}
+        <div className="space-y-1">
+          <div className="flex items-center gap-1">
+            <div className="rounded-md bg-muted/40 animate-pulse h-3 w-3 flex-none" />
+            <div className="rounded-md bg-muted/40 animate-pulse h-3 w-16" />
+          </div>
+          <div className="space-y-0.5">
+            <div className="flex items-center gap-1.5">
+              <div className="rounded-full bg-muted/40 animate-pulse h-2.5 w-2.5 flex-none" />
+              <div className="rounded-md bg-muted/40 animate-pulse h-2.5 w-4/5" />
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="rounded-full bg-muted/40 animate-pulse h-2.5 w-2.5 flex-none" />
+              <div className="rounded-md bg-muted/40 animate-pulse h-2.5 w-3/5" />
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="rounded-full bg-muted/40 animate-pulse h-2.5 w-2.5 flex-none" />
+              <div className="rounded-md bg-muted/40 animate-pulse h-2.5 w-2/3" />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // Always render SummaryDialog (even if no agentInfo yet)
-  // This ensures the dialog can be opened from the expand button
+  // This ensures the dialog can be opened from the expand button.
+  // The invisible sentinel div ensures IntersectionObserver can track this card.
   return (
-    <SummaryDialog
-      feature={feature}
-      agentInfo={agentInfo}
-      summary={summary}
-      isOpen={isSummaryDialogOpen}
-      onOpenChange={setIsSummaryDialogOpen}
-    />
+    <div ref={inViewRef}>
+      <SummaryDialog
+        feature={feature}
+        agentInfo={agentInfo}
+        summary={summary}
+        isOpen={isSummaryDialogOpen}
+        onOpenChange={setIsSummaryDialogOpen}
+      />
+    </div>
   );
 }

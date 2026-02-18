@@ -35,10 +35,10 @@ import {
   PlanningModeSelect,
   EnhanceWithAI,
   EnhancementHistoryButton,
+  PhaseModelSelector,
   type EnhancementMode,
 } from '../shared';
 import type { WorkMode } from '../shared';
-import { PhaseModelSelector } from '@/components/views/settings-view/model-defaults/phase-model-selector';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { DependencyTreeDialog } from './dependency-tree-dialog';
 import { isClaudeModel, supportsReasoningEffort } from '@automaker/types';
@@ -64,8 +64,10 @@ interface EditFeatureDialogProps {
       priority: number;
       planningMode: PlanningMode;
       requirePlanApproval: boolean;
+      autoDeploy: boolean;
       dependencies?: string[];
       childDependencies?: string[]; // Feature IDs that should depend on this feature
+      waitForDependencies?: boolean; // If true, this feature won't start until all dependencies are completed/verified
     },
     descriptionHistorySource?: 'enhance' | 'edit',
     enhancementMode?: EnhancementMode,
@@ -73,7 +75,7 @@ interface EditFeatureDialogProps {
   ) => void;
   categorySuggestions: string[];
   branchSuggestions: string[];
-  branchCardCounts?: Record<string, number>; // Map of branch name to unarchived card count
+  branchCardCounts?: Record<string, number>; // Map of branch name to active card count
   currentBranch?: string;
   isMaximized: boolean;
   allFeatures: Feature[];
@@ -105,6 +107,10 @@ export function EditFeatureDialog({
   const [planningMode, setPlanningMode] = useState<PlanningMode>(feature?.planningMode ?? 'skip');
   const [requirePlanApproval, setRequirePlanApproval] = useState(
     feature?.requirePlanApproval ?? false
+  );
+  const [autoDeploy, setAutoDeploy] = useState(feature?.autoDeploy ?? false);
+  const [waitForDependencies, setWaitForDependencies] = useState(
+    feature?.waitForDependencies ?? false
   );
 
   // Model selection state
@@ -150,6 +156,7 @@ export function EditFeatureDialog({
     if (feature) {
       setPlanningMode(feature.planningMode ?? 'skip');
       setRequirePlanApproval(feature.requirePlanApproval ?? false);
+      setAutoDeploy(feature.autoDeploy ?? false);
       // Derive workMode from feature's branchName
       setWorkMode(feature.branchName ? 'custom' : 'current');
       // Reset history tracking state
@@ -165,6 +172,7 @@ export function EditFeatureDialog({
       });
       // Reset dependency state
       setParentDependencies(feature.dependencies ?? []);
+      setWaitForDependencies(feature.waitForDependencies ?? false);
       const childDeps = allFeatures
         .filter((f) => f.dependencies?.includes(feature.id))
         .map((f) => f.id);
@@ -178,6 +186,8 @@ export function EditFeatureDialog({
       setParentDependencies([]);
       setChildDependencies([]);
       setOriginalChildDependencies([]);
+      setWaitForDependencies(false);
+      setAutoDeploy(false);
     }
   }, [feature, allFeatures]);
 
@@ -228,9 +238,11 @@ export function EditFeatureDialog({
       priority: editingFeature.priority ?? 2,
       planningMode,
       requirePlanApproval,
+      autoDeploy,
       workMode,
       dependencies: parentDependencies,
       childDependencies: childDepsChanged ? childDependencies : undefined,
+      waitForDependencies,
     };
 
     // Determine if description changed and what source to use
@@ -521,6 +533,20 @@ export function EditFeatureDialog({
                       Require approval
                     </Label>
                   </div>
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id="edit-feature-auto-deploy"
+                      checked={autoDeploy}
+                      onCheckedChange={(checked) => setAutoDeploy(!!checked)}
+                      data-testid="edit-feature-auto-deploy-checkbox"
+                    />
+                    <Label
+                      htmlFor="edit-feature-auto-deploy"
+                      className="text-xs font-normal cursor-pointer"
+                    >
+                      Auto-deploy
+                    </Label>
+                  </div>
                 </div>
               </div>
             </div>
@@ -615,6 +641,24 @@ export function EditFeatureDialog({
                     data-testid="edit-feature-child-deps"
                   />
                 </div>
+                {/* Wait for dependencies option - only show when there are parent dependencies */}
+                {parentDependencies.length > 0 && (
+                  <div className="flex items-center gap-2 pt-1">
+                    <Checkbox
+                      id="edit-feature-wait-for-deps"
+                      checked={waitForDependencies}
+                      onCheckedChange={(checked) => setWaitForDependencies(!!checked)}
+                      data-testid="edit-feature-wait-for-deps-checkbox"
+                    />
+                    <Label
+                      htmlFor="edit-feature-wait-for-deps"
+                      className="text-xs font-normal cursor-pointer"
+                    >
+                      Wait for dependencies before starting (block in auto mode until all
+                      dependencies are completed)
+                    </Label>
+                  </div>
+                )}
               </div>
             )}
           </div>

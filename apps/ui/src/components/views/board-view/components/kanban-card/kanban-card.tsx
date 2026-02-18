@@ -4,8 +4,11 @@ import { useDraggable } from '@dnd-kit/core';
 import { cn } from '@/lib/utils';
 import { Card, CardContent } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Button } from '@/components/ui/button';
+import { Star } from 'lucide-react';
 import { Feature, useAppStore } from '@/store/app-store';
-import { CardBadges, PriorityBadges } from './card-badges';
+import { useShallow } from 'zustand/react/shallow';
+import { CardBadges, PriorityBadges, BranchBadge } from './card-badges';
 import { CardHeaderSection } from './card-header';
 import { CardContentSections } from './card-content-sections';
 import { AgentInfoPanel } from './agent-info-panel';
@@ -45,12 +48,13 @@ interface KanbanCardProps {
   onForceStop?: () => void;
   onManualVerify?: () => void;
   onMoveBackToInProgress?: () => void;
+  onMoveBackToBacklog?: () => void;
   onFollowUp?: () => void;
   onImplement?: () => void;
-  onComplete?: () => void;
   onViewPlan?: () => void;
   onApprovePlan?: () => void;
   onSpawnTask?: () => void;
+  onToggleFavorite?: () => void;
   hasContext?: boolean;
   isCurrentAutoTask?: boolean;
   shortcutKey?: string;
@@ -66,6 +70,12 @@ interface KanbanCardProps {
   isSelected?: boolean;
   onToggleSelect?: () => void;
   selectionTarget?: 'backlog' | 'waiting_approval' | null;
+  // All-projects mode props
+  showAllProjects?: boolean;
+  projectDefaultBranch?: string;
+  /** Whether full feature data has been loaded (Phase 2 complete).
+   *  When false, description and agent info sections show skeleton placeholders. */
+  isFullyLoaded?: boolean;
 }
 
 export const KanbanCard = memo(function KanbanCard({
@@ -78,12 +88,13 @@ export const KanbanCard = memo(function KanbanCard({
   onForceStop,
   onManualVerify,
   onMoveBackToInProgress: _onMoveBackToInProgress,
+  onMoveBackToBacklog,
   onFollowUp,
   onImplement,
-  onComplete,
   onViewPlan,
   onApprovePlan,
   onSpawnTask,
+  onToggleFavorite,
   hasContext,
   isCurrentAutoTask,
   shortcutKey,
@@ -98,8 +109,15 @@ export const KanbanCard = memo(function KanbanCard({
   isSelected = false,
   onToggleSelect,
   selectionTarget = null,
+  showAllProjects = false,
+  projectDefaultBranch,
+  isFullyLoaded = true,
 }: KanbanCardProps) {
-  const { useWorktrees } = useAppStore();
+  const { useWorktrees } = useAppStore(
+    useShallow((state) => ({
+      useWorktrees: state.useWorktrees,
+    }))
+  );
   const [isLifted, setIsLifted] = useState(false);
 
   useLayoutEffect(() => {
@@ -113,8 +131,8 @@ export const KanbanCard = memo(function KanbanCard({
   const isDraggable =
     !isSelectionMode &&
     (feature.status === 'backlog' ||
+      feature.status === 'started' ||
       feature.status === 'waiting_approval' ||
-      feature.status === 'verified' ||
       (feature.status === 'in_progress' && !isCurrentAutoTask));
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: feature.id,
@@ -180,8 +198,8 @@ export const KanbanCard = memo(function KanbanCard({
       {/* Status Badges Row */}
       <CardBadges feature={feature} />
 
-      {/* Category row with selection checkbox */}
-      <div className="px-3 pt-3 flex items-center gap-2">
+      {/* Category row with selection checkbox and favorite toggle */}
+      <div className="px-2.5 pt-2 flex items-center gap-1.5">
         {isSelectable && !isOverlay && (
           <Checkbox
             checked={isSelected}
@@ -190,7 +208,37 @@ export const KanbanCard = memo(function KanbanCard({
             onClick={(e) => e.stopPropagation()}
           />
         )}
-        <span className="text-[11px] text-muted-foreground/70 font-medium">{feature.category}</span>
+        <span className="text-[11px] text-muted-foreground/70 font-medium flex-1">
+          {feature.category}
+        </span>
+        {/* Branch badge for all-projects mode */}
+        <BranchBadge
+          feature={feature}
+          showAllProjects={showAllProjects}
+          projectDefaultBranch={projectDefaultBranch}
+        />
+        {/* Favorite toggle button */}
+        {onToggleFavorite && !isOverlay && !isSelectionMode && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className={cn(
+              'h-5 w-5 p-0 hover:bg-transparent',
+              feature.isFavorite
+                ? 'text-yellow-500 hover:text-yellow-600'
+                : 'text-muted-foreground/40 hover:text-yellow-500'
+            )}
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleFavorite();
+            }}
+            onPointerDown={(e) => e.stopPropagation()}
+            data-testid={`favorite-toggle-${feature.id}`}
+            title={feature.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+          >
+            <Star className={cn('w-3.5 h-3.5', feature.isFavorite && 'fill-current')} />
+          </Button>
+        )}
       </div>
 
       {/* Priority and Manual Verification badges */}
@@ -202,13 +250,15 @@ export const KanbanCard = memo(function KanbanCard({
         isDraggable={isDraggable}
         isCurrentAutoTask={!!isCurrentAutoTask}
         isSelectionMode={isSelectionMode}
+        isFullyLoaded={isFullyLoaded}
         onEdit={onEdit}
         onDelete={onDelete}
         onViewOutput={onViewOutput}
         onSpawnTask={onSpawnTask}
+        onMoveBackToBacklog={onMoveBackToBacklog}
       />
 
-      <CardContent className="px-3 pt-0 pb-0">
+      <CardContent className="px-2.5 pt-0 pb-1.5">
         {/* Content Sections */}
         <CardContentSections feature={feature} useWorktrees={useWorktrees} />
 
@@ -218,6 +268,8 @@ export const KanbanCard = memo(function KanbanCard({
           contextContent={contextContent}
           summary={summary}
           isCurrentAutoTask={isCurrentAutoTask}
+          showAllProjects={showAllProjects}
+          isFullyLoaded={isFullyLoaded}
         />
 
         {/* Actions */}
@@ -235,7 +287,6 @@ export const KanbanCard = memo(function KanbanCard({
           onManualVerify={onManualVerify}
           onFollowUp={onFollowUp}
           onImplement={onImplement}
-          onComplete={onComplete}
           onViewPlan={onViewPlan}
           onApprovePlan={onApprovePlan}
         />

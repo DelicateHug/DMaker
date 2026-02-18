@@ -227,6 +227,7 @@ export function WorktreePreferencesSection({ project }: WorktreePreferencesSecti
         'bg-gradient-to-br from-card/90 via-card/70 to-card/80 backdrop-blur-xl',
         'shadow-sm shadow-black/5'
       )}
+      data-testid="worktree-preferences-section"
     >
       <div className="p-6 border-b border-border/50 bg-gradient-to-r from-transparent via-accent/5 to-transparent">
         <div className="flex items-center gap-3 mb-2">
@@ -299,6 +300,7 @@ export function WorktreePreferencesSection({ project }: WorktreePreferencesSecti
               }
             }}
             className="mt-1"
+            data-testid="project-show-init-script-indicator-checkbox"
           />
           <div className="space-y-1.5">
             <Label
@@ -335,6 +337,7 @@ export function WorktreePreferencesSection({ project }: WorktreePreferencesSecti
                 }
               }}
               className="mt-1"
+              data-testid="project-auto-dismiss-indicator-checkbox"
             />
             <div className="space-y-1.5">
               <Label
@@ -369,6 +372,7 @@ export function WorktreePreferencesSection({ project }: WorktreePreferencesSecti
               }
             }}
             className="mt-1"
+            data-testid="project-default-delete-branch-checkbox"
           />
           <div className="space-y-1.5">
             <Label
@@ -437,6 +441,7 @@ npm install
                   onClick={handleReset}
                   disabled={!hasChanges || isSaving || isDeleting}
                   className="gap-1.5"
+                  data-testid="init-script-reset-button"
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
                   Reset
@@ -447,6 +452,7 @@ npm install
                   onClick={handleDelete}
                   disabled={!scriptExists || isSaving || isDeleting}
                   className="gap-1.5 text-destructive hover:text-destructive hover:bg-destructive/10"
+                  data-testid="init-script-delete-button"
                 >
                   {isDeleting ? (
                     <Loader2 className="w-3.5 h-3.5 animate-spin" />

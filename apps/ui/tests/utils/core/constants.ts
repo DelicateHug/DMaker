@@ -9,8 +9,9 @@
 
 /**
  * Base URL for the API server
+ * Uses TEST_SERVER_PORT env var (default 3008) to match playwright.config.ts
  */
-export const API_BASE_URL = 'http://localhost:3008';
+export const API_BASE_URL = `http://localhost:${process.env.TEST_SERVER_PORT || '3008'}`;
 
 /**
  * API endpoints for worktree operations
@@ -73,24 +74,30 @@ export const TIMEOUTS = {
  * Common data-testid selectors organized by component/view
  */
 export const TEST_IDS = {
-  // Sidebar & Navigation
-  sidebar: 'sidebar',
-  navBoard: 'nav-board',
-  navSpec: 'nav-spec',
-  navContext: 'nav-context',
-  navAgent: 'nav-agent',
+  // Top Navigation Bar
+  topNavBar: 'top-nav-bar',
+  projectDropdownTrigger: 'project-dropdown-trigger',
+  projectDropdownContent: 'project-dropdown-content',
+  tasksDropdownTrigger: 'tasks-dropdown-trigger',
+  githubDropdownTrigger: 'github-dropdown-trigger',
+  toolsDropdownTrigger: 'tools-dropdown-trigger',
   settingsButton: 'settings-button',
-  openProjectButton: 'open-project-button',
+  runningAgentsIndicator: 'running-agents-indicator',
+  mobileMenuToggle: 'mobile-menu-toggle',
 
   // Views
   boardView: 'board-view',
   specView: 'spec-view',
-  contextView: 'context-view',
+  memoryView: 'memory-view',
   agentView: 'agent-view',
+  terminalView: 'terminal-view',
+  ideationView: 'ideation-view',
   settingsView: 'settings-view',
   welcomeView: 'welcome-view',
   dashboardView: 'dashboard-view',
   setupView: 'setup-view',
+  githubIssuesView: 'github-issues-view',
+  githubPrsView: 'github-prs-view',
 
   // Board View Components
   addFeatureButton: 'add-feature-button',
@@ -99,6 +106,7 @@ export const TEST_IDS = {
   featureBranchInput: 'feature-input',
   featureCategoryInput: 'feature-category-input',
   worktreeSelector: 'worktree-selector',
+  completedToggle: 'completed-toggle',
 
   // Spec Editor
   specEditor: 'spec-editor',
@@ -107,9 +115,30 @@ export const TEST_IDS = {
   pathInput: 'path-input',
   goToPathButton: 'go-to-path-button',
 
-  // Context View
-  contextFileList: 'context-file-list',
-  addContextButton: 'add-context-button',
+  // Memory View (formerly Context View)
+  memoryFileList: 'memory-file-list',
+  addMemoryButton: 'add-memory-button',
+
+  // Keyboard Map
+  keyboardMap: 'keyboard-map',
+  keyboardMapLegend: 'keyboard-map-legend',
+  keyboardMapLayout: 'keyboard-map-layout',
+  keyboardMapStats: 'keyboard-map-stats',
+  shortcutReferencePanel: 'shortcut-reference-panel',
+  resetAllShortcutsButton: 'reset-all-shortcuts-button',
+
+  // Description Image Dropzone
+  descriptionImageDropzone: 'description-image-dropzone',
+  descriptionFileInput: 'description-file-input',
+  descriptionDropOverlay: 'drop-overlay',
+  featureDescriptionInput: 'feature-description-input',
+  descriptionBrowseButton: 'description-browse-button',
+  descriptionProcessingIndicator: 'description-processing-indicator',
+  descriptionFilePreviews: 'description-file-previews',
+  descriptionClearAllFiles: 'description-clear-all-files',
+
+  // Xterm Log Viewer
+  xtermLogViewer: 'xterm-log-viewer',
 } as const;
 
 // ============================================================================

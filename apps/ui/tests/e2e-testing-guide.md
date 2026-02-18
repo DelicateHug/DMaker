@@ -160,7 +160,7 @@ If a selector matches multiple elements:
 await page.locator('[data-testid="item"]').first().click();
 
 // Or scope to a unique parent
-await page.locator('[data-testid="sidebar"]').locator('[data-testid="item"]').click();
+await page.locator('[data-testid="top-nav-bar"]').locator('[data-testid="item"]').click();
 ```
 
 ## Clicking Elements

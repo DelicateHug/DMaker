@@ -1,5 +1,6 @@
 export * from './model-constants';
 export * from './model-selector';
+export * from './board-model-selector';
 export * from './thinking-level-selector';
 export * from './reasoning-effort-selector';
 export * from './testing-tab-content';

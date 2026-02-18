@@ -56,6 +56,7 @@ interface HookContext {
  */
 interface AutoModeEventPayload {
   type?: string;
+  timestamp?: string;
   featureId?: string;
   passes?: boolean;
   message?: string;

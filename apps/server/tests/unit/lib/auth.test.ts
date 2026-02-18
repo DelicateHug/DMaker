@@ -6,6 +6,10 @@ import path from 'path';
 /**
  * Note: auth.ts reads AUTOMAKER_API_KEY at module load time.
  * We need to reset modules and reimport for each test to get fresh state.
+ *
+ * Auth is now disabled for local-only mode - authMiddleware always passes,
+ * isRequestAuthenticated and checkRawAuthentication always return true.
+ * The underlying session/API key infrastructure is still tested separately.
  */
 describe('auth.ts', () => {
   beforeEach(() => {
@@ -16,35 +20,25 @@ describe('auth.ts', () => {
   });
 
   describe('authMiddleware', () => {
-    it('should reject request without any authentication', async () => {
+    it('should always call next() in local-only mode (no auth)', async () => {
       const { authMiddleware } = await import('@/lib/auth.js');
       const { req, res, next } = createMockExpressContext();
 
       authMiddleware(req, res, next);
 
-      expect(res.status).toHaveBeenCalledWith(401);
-      expect(res.json).toHaveBeenCalledWith({
-        success: false,
-        error: 'Authentication required.',
-      });
-      expect(next).not.toHaveBeenCalled();
+      expect(next).toHaveBeenCalled();
+      expect(res.status).not.toHaveBeenCalled();
     });
 
-    it('should reject request with invalid API key', async () => {
-      process.env.AUTOMAKER_API_KEY = 'test-secret-key';
-
+    it('should call next() even without API key', async () => {
       const { authMiddleware } = await import('@/lib/auth.js');
       const { req, res, next } = createMockExpressContext();
       req.headers['x-api-key'] = 'wrong-key';
 
       authMiddleware(req, res, next);
 
-      expect(res.status).toHaveBeenCalledWith(403);
-      expect(res.json).toHaveBeenCalledWith({
-        success: false,
-        error: 'Invalid API key.',
-      });
-      expect(next).not.toHaveBeenCalled();
+      expect(next).toHaveBeenCalled();
+      expect(res.status).not.toHaveBeenCalled();
     });
 
     it('should call next() with valid API key', async () => {
@@ -60,7 +54,7 @@ describe('auth.ts', () => {
       expect(res.status).not.toHaveBeenCalled();
     });
 
-    it('should authenticate with session token in header', async () => {
+    it('should call next() with session token in header', async () => {
       const { authMiddleware, createSession } = await import('@/lib/auth.js');
       const token = await createSession();
       const { req, res, next } = createMockExpressContext();
@@ -72,22 +66,18 @@ describe('auth.ts', () => {
       expect(res.status).not.toHaveBeenCalled();
     });
 
-    it('should reject invalid session token in header', async () => {
+    it('should call next() even with invalid session token', async () => {
       const { authMiddleware } = await import('@/lib/auth.js');
       const { req, res, next } = createMockExpressContext();
       req.headers['x-session-token'] = 'invalid-token';
 
       authMiddleware(req, res, next);
 
-      expect(res.status).toHaveBeenCalledWith(403);
-      expect(res.json).toHaveBeenCalledWith({
-        success: false,
-        error: 'Invalid or expired session token.',
-      });
-      expect(next).not.toHaveBeenCalled();
+      expect(next).toHaveBeenCalled();
+      expect(res.status).not.toHaveBeenCalled();
     });
 
-    it('should authenticate with API key in query parameter', async () => {
+    it('should call next() with API key in query parameter', async () => {
       process.env.AUTOMAKER_API_KEY = 'test-secret-key';
 
       const { authMiddleware } = await import('@/lib/auth.js');
@@ -100,7 +90,7 @@ describe('auth.ts', () => {
       expect(res.status).not.toHaveBeenCalled();
     });
 
-    it('should authenticate with session cookie', async () => {
+    it('should call next() with session cookie', async () => {
       const { authMiddleware, createSession, getSessionCookieName } = await import('@/lib/auth.js');
       const token = await createSession();
       const cookieName = getSessionCookieName();
@@ -311,24 +301,21 @@ describe('auth.ts', () => {
   });
 
   describe('isRequestAuthenticated', () => {
-    it('should return true for authenticated request with API key', async () => {
-      process.env.AUTOMAKER_API_KEY = 'test-secret-key';
-
+    it('should always return true in local-only mode', async () => {
       const { isRequestAuthenticated } = await import('@/lib/auth.js');
       const { req } = createMockExpressContext();
-      req.headers['x-api-key'] = 'test-secret-key';
 
       expect(isRequestAuthenticated(req)).toBe(true);
     });
 
-    it('should return false for unauthenticated request', async () => {
+    it('should return true even without credentials', async () => {
       const { isRequestAuthenticated } = await import('@/lib/auth.js');
       const { req } = createMockExpressContext();
 
-      expect(isRequestAuthenticated(req)).toBe(false);
+      expect(isRequestAuthenticated(req)).toBe(true);
     });
 
-    it('should return true for authenticated request with session token', async () => {
+    it('should return true for request with session token', async () => {
       const { isRequestAuthenticated, createSession } = await import('@/lib/auth.js');
       const token = await createSession();
       const { req } = createMockExpressContext();
@@ -339,6 +326,12 @@ describe('auth.ts', () => {
   });
 
   describe('checkRawAuthentication', () => {
+    it('should always return true in local-only mode', async () => {
+      const { checkRawAuthentication } = await import('@/lib/auth.js');
+
+      expect(checkRawAuthentication({}, {}, {})).toBe(true);
+    });
+
     it('should return true for valid API key in headers', async () => {
       process.env.AUTOMAKER_API_KEY = 'test-secret-key';
 
@@ -369,12 +362,6 @@ describe('auth.ts', () => {
       const cookieName = getSessionCookieName();
 
       expect(checkRawAuthentication({}, {}, { [cookieName]: token })).toBe(true);
-    });
-
-    it('should return false for invalid credentials', async () => {
-      const { checkRawAuthentication } = await import('@/lib/auth.js');
-
-      expect(checkRawAuthentication({}, {}, {})).toBe(false);
     });
   });
 

@@ -27,15 +27,15 @@ export async function navigateToBoard(page: Page): Promise<void> {
 }
 
 /**
- * Navigate to the context view
- * Note: Navigates directly to /context since index route shows WelcomeView
+ * Navigate to the memory view (formerly context view)
+ * Note: Navigates directly to /memory since index route shows WelcomeView
  */
-export async function navigateToContext(page: Page): Promise<void> {
+export async function navigateToMemory(page: Page): Promise<void> {
   // Authenticate before navigating
   await authenticateForTests(page);
 
-  // Navigate directly to /context route
-  await page.goto('/context');
+  // Navigate directly to /memory route
+  await page.goto('/memory');
   await page.waitForLoadState('load');
 
   // Wait for splash screen to disappear (safety net)
@@ -44,21 +44,8 @@ export async function navigateToContext(page: Page): Promise<void> {
   // Handle login redirect if needed
   await handleLoginScreenIfPresent(page);
 
-  // Wait for loading to complete (if present)
-  const loadingElement = page.locator('[data-testid="context-view-loading"]');
-  try {
-    const loadingVisible = await loadingElement.isVisible({ timeout: 2000 });
-    if (loadingVisible) {
-      // Wait for loading to disappear (context view will appear)
-      await loadingElement.waitFor({ state: 'hidden', timeout: 10000 });
-    }
-  } catch {
-    // Loading element not found or already hidden, continue
-  }
-
-  // Wait for the context view to be visible
-  // Increase timeout to handle slower server startup
-  await waitForElement(page, 'context-view', { timeout: 15000 });
+  // Wait for the memory view to be visible
+  await waitForElement(page, 'memory-view', { timeout: 15000 });
 }
 
 /**
@@ -176,12 +163,33 @@ export async function navigateToWelcome(page: Page): Promise<void> {
 }
 
 /**
- * Navigate to a specific view using the sidebar navigation
+ * Navigate to a specific view using the top navigation bar
+ * Note: The sidebar has been replaced with a top navigation bar (TopNavigationBar)
  */
 export async function navigateToView(page: Page, viewId: string): Promise<void> {
-  const navSelector = viewId === 'settings' ? 'settings-button' : `nav-${viewId}`;
-  await clickElement(page, navSelector);
-  await page.waitForTimeout(100);
+  // Map view IDs to their routes for direct navigation
+  const routeMap: Record<string, string> = {
+    board: '/board',
+    agent: '/agent',
+    terminal: '/terminal',
+    ideation: '/ideation',
+    spec: '/spec',
+    memory: '/memory',
+    settings: '/settings',
+    'github-issues': '/github-issues',
+    'github-prs': '/github-prs',
+  };
+
+  const route = routeMap[viewId];
+  if (route) {
+    await page.goto(route);
+    await page.waitForLoadState('load');
+  } else {
+    // Fallback: try clicking the settings button for settings
+    const navSelector = viewId === 'settings' ? 'settings-button' : `nav-${viewId}`;
+    await clickElement(page, navSelector);
+    await page.waitForTimeout(100);
+  }
 }
 
 /**

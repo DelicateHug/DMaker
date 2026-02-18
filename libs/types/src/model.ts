@@ -7,7 +7,7 @@ import type { OpencodeModelId } from './opencode-models.js';
 export const CLAUDE_MODEL_MAP: Record<string, string> = {
   haiku: 'claude-haiku-4-5-20251001',
   sonnet: 'claude-sonnet-4-5-20250929',
-  opus: 'claude-opus-4-5-20251101',
+  opus: 'claude-opus-4-6',
 } as const;
 
 /**
@@ -64,7 +64,7 @@ export function getAllCodexModelIds(): CodexModelId[] {
  * Default models per provider
  */
 export const DEFAULT_MODELS = {
-  claude: 'claude-opus-4-5-20251101',
+  claude: 'claude-opus-4-6',
   cursor: 'auto', // Cursor's recommended default
   codex: CODEX_MODEL_MAP.gpt52Codex, // GPT-5.2-Codex is the most advanced agentic coding model
 } as const;

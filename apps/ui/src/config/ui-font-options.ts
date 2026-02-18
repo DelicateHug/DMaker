@@ -1,9 +1,9 @@
 /**
  * Font options for per-project font customization
  *
- * All fonts listed here are bundled with the app via @fontsource packages
- * or custom font files (Zed fonts from zed-industries/zed-fonts).
- * They are self-hosted and will work without any system installation.
+ * Zed fonts (Zed Sans & Zed Mono) are bundled with the app from
+ * zed-industries/zed-fonts and are self-hosted.
+ * All other font options rely on the user's system-installed fonts.
  */
 
 // Sentinel value for "use default font" - Radix Select doesn't allow empty strings
@@ -15,50 +15,27 @@ export interface UIFontOption {
 }
 
 /**
- * Sans/UI fonts for headings, labels, and general text (Top 10)
+ * Sans/UI fonts for headings, labels, and general text
  *
  * 'default' value means "use the theme default" (Geist Sans for all themes)
+ * Only Zed fonts are bundled; others require system installation.
  */
 export const UI_SANS_FONT_OPTIONS: readonly UIFontOption[] = [
   { value: DEFAULT_FONT_VALUE, label: 'Default (Geist Sans)' },
-  // Sans fonts (alphabetical)
-  { value: 'Inter, system-ui, sans-serif', label: 'Inter' },
-  { value: 'Lato, system-ui, sans-serif', label: 'Lato' },
-  { value: 'Montserrat, system-ui, sans-serif', label: 'Montserrat' },
-  { value: "'Open Sans', system-ui, sans-serif", label: 'Open Sans' },
-  { value: 'Poppins, system-ui, sans-serif', label: 'Poppins' },
-  { value: 'Raleway, system-ui, sans-serif', label: 'Raleway' },
-  { value: 'Roboto, system-ui, sans-serif', label: 'Roboto' },
-  { value: "'Source Sans 3', system-ui, sans-serif", label: 'Source Sans' },
-  { value: "'Work Sans', system-ui, sans-serif", label: 'Work Sans' },
+  // Bundled fonts
   { value: "'Zed Sans', system-ui, sans-serif", label: 'Zed Sans' },
-  // Monospace fonts (alphabetical, for users who prefer mono UI)
-  { value: "'Cascadia Code', monospace", label: 'Cascadia Code' },
-  { value: "'Fira Code', monospace", label: 'Fira Code' },
-  { value: "'IBM Plex Mono', monospace", label: 'IBM Plex Mono' },
-  { value: 'Inconsolata, monospace', label: 'Inconsolata' },
-  { value: 'Iosevka, monospace', label: 'Iosevka' },
-  { value: "'JetBrains Mono', monospace", label: 'JetBrains Mono' },
-  { value: "'Source Code Pro', monospace", label: 'Source Code Pro' },
   { value: "'Zed Mono', monospace", label: 'Zed Mono' },
 ] as const;
 
 /**
- * Mono/code fonts for code blocks, terminals, and monospaced text (Top 10)
+ * Mono/code fonts for code blocks, terminals, and monospaced text
  *
  * 'default' value means "use the theme default" (Geist Mono for all themes)
- * Many of these support ligatures for coding symbols (-> => != etc.)
+ * Only Zed Mono is bundled; others require system installation.
  */
 export const UI_MONO_FONT_OPTIONS: readonly UIFontOption[] = [
   { value: DEFAULT_FONT_VALUE, label: 'Default (Geist Mono)' },
-  // Bundled fonts (alphabetical)
-  { value: "'Cascadia Code', monospace", label: 'Cascadia Code' },
-  { value: "'Fira Code', monospace", label: 'Fira Code' },
-  { value: "'IBM Plex Mono', monospace", label: 'IBM Plex Mono' },
-  { value: 'Inconsolata, monospace', label: 'Inconsolata' },
-  { value: 'Iosevka, monospace', label: 'Iosevka' },
-  { value: "'JetBrains Mono', monospace", label: 'JetBrains Mono' },
-  { value: "'Source Code Pro', monospace", label: 'Source Code Pro' },
+  // Bundled fonts
   { value: "'Zed Mono', monospace", label: 'Zed Mono' },
   // System fonts
   { value: 'Menlo, Monaco, monospace', label: 'Menlo / Monaco (macOS)' },

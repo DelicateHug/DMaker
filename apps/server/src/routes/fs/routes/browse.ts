@@ -12,7 +12,11 @@ import { getErrorMessage, logError } from '../common.js';
 export function createBrowseHandler() {
   return async (req: Request, res: Response): Promise<void> => {
     try {
-      const { dirPath } = req.body as { dirPath?: string };
+      const { dirPath, includeFiles, fileExtensions } = req.body as {
+        dirPath?: string;
+        includeFiles?: boolean;
+        fileExtensions?: string[];
+      };
 
       // Default to ALLOWED_ROOT_DIRECTORY if set, otherwise home directory
       const defaultPath = getAllowedRootDirectory() || os.homedir();
@@ -67,18 +71,38 @@ export function createBrowseHandler() {
 
         // Filter for directories only and add parent directory option
         const directories = entries
-          .filter((entry) => entry.isDirectory() && !entry.name.startsWith('.'))
+          .filter((entry) => entry.isDirectory())
           .map((entry) => ({
             name: entry.name,
             path: path.join(targetPath, entry.name),
           }))
           .sort((a, b) => a.name.localeCompare(b.name));
 
+        // Optionally include files in the listing (for file selection mode)
+        let files: Array<{ name: string; path: string }> = [];
+        if (includeFiles) {
+          files = entries
+            .filter((entry) => {
+              if (!entry.isFile()) return false;
+              if (fileExtensions && fileExtensions.length > 0) {
+                const ext = path.extname(entry.name).toLowerCase().replace('.', '');
+                return fileExtensions.includes(ext) || fileExtensions.includes('*');
+              }
+              return true;
+            })
+            .map((entry) => ({
+              name: entry.name,
+              path: path.join(targetPath, entry.name),
+            }))
+            .sort((a, b) => a.name.localeCompare(b.name));
+        }
+
         res.json({
           success: true,
           currentPath: targetPath,
           parentPath: safeParentPath,
           directories,
+          files,
           drives,
         });
       } catch (error) {

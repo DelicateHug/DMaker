@@ -83,6 +83,16 @@ export {
   type TaskContext,
 } from './context-loader.js';
 
+// Retry with exponential backoff
+export {
+  retryWithBackoff,
+  retryWithBackoffResult,
+  isTransientError,
+  calculateBackoffDelay,
+  type RetryOptions,
+  type RetryResult,
+} from './retry.js';
+
 // Memory loading
 export {
   loadRelevantMemory,

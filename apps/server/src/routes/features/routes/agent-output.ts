@@ -5,9 +5,13 @@
 
 import type { Request, Response } from 'express';
 import { FeatureLoader } from '../../../services/feature-loader.js';
+import type { AutoModeService } from '../../../services/auto-mode-service.js';
 import { getErrorMessage, logError } from '../common.js';
 
-export function createAgentOutputHandler(featureLoader: FeatureLoader) {
+export function createAgentOutputHandler(
+  featureLoader: FeatureLoader,
+  autoModeService?: AutoModeService
+) {
   return async (req: Request, res: Response): Promise<void> => {
     try {
       const { projectPath, featureId } = req.body as {
@@ -23,6 +27,15 @@ export function createAgentOutputHandler(featureLoader: FeatureLoader) {
         return;
       }
 
+      // For running features, prefer the in-memory buffer which is always up-to-date
+      // (the disk file may lag behind due to debounced writes)
+      const inMemoryContent = autoModeService?.getInMemoryOutput(featureId);
+      if (inMemoryContent !== null && inMemoryContent !== undefined) {
+        res.json({ success: true, content: inMemoryContent });
+        return;
+      }
+
+      // Fall back to reading from disk for completed features
       const content = await featureLoader.getAgentOutput(projectPath, featureId);
       res.json({ success: true, content });
     } catch (error) {

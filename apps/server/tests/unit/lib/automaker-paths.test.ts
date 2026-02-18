@@ -7,16 +7,41 @@ import {
   getFeaturesDir,
   getFeatureDir,
   getFeatureImagesDir,
+  getFeatureSummariesDir,
+  getFeatureLogsDir,
+  getFeatureBackupsDir,
   getBoardDir,
   getImagesDir,
+  getContextDir,
   getWorktreesDir,
+  getValidationsDir,
+  getValidationDir,
+  getValidationPath,
   getAppSpecPath,
+  getNotificationsPath,
   getBranchTrackingPath,
+  getExecutionStatePath,
   ensureAutomakerDir,
   getGlobalSettingsPath,
   getCredentialsPath,
   getProjectSettingsPath,
   ensureDataDir,
+  // Ideation paths
+  getIdeationDir,
+  getIdeasDir,
+  getIdeaDir,
+  getIdeaPath,
+  getIdeaAttachmentsDir,
+  getIdeationSessionsDir,
+  getIdeationSessionPath,
+  getIdeationDraftsDir,
+  getIdeationAnalysisPath,
+  ensureIdeationDir,
+  // Event history paths
+  getEventHistoryDir,
+  getEventHistoryIndexPath,
+  getEventPath,
+  ensureEventHistoryDir,
 } from '@automaker/platform';
 
 describe('automaker-paths.ts', () => {
@@ -92,6 +117,222 @@ describe('automaker-paths.ts', () => {
       expect(getBranchTrackingPath(projectPath)).toBe(
         path.join(projectPath, '.automaker', 'active-branches.json')
       );
+    });
+  });
+
+  describe('getNotificationsPath', () => {
+    it('should return path to notifications.json file', () => {
+      expect(getNotificationsPath(projectPath)).toBe(
+        path.join(projectPath, '.automaker', 'notifications.json')
+      );
+    });
+
+    it('should handle paths with trailing slashes', () => {
+      const pathWithSlash = path.join('/test', 'project') + path.sep;
+      expect(getNotificationsPath(pathWithSlash)).toBe(
+        path.join(pathWithSlash, '.automaker', 'notifications.json')
+      );
+    });
+  });
+
+  describe('getExecutionStatePath', () => {
+    it('should return path to execution-state.json file', () => {
+      expect(getExecutionStatePath(projectPath)).toBe(
+        path.join(projectPath, '.automaker', 'execution-state.json')
+      );
+    });
+
+    it('should handle paths with trailing slashes', () => {
+      const pathWithSlash = path.join('/test', 'project') + path.sep;
+      expect(getExecutionStatePath(pathWithSlash)).toBe(
+        path.join(pathWithSlash, '.automaker', 'execution-state.json')
+      );
+    });
+  });
+
+  describe('getContextDir', () => {
+    it('should return path to context directory', () => {
+      expect(getContextDir(projectPath)).toBe(path.join(projectPath, '.automaker', 'context'));
+    });
+  });
+
+  describe('Feature subdirectory paths', () => {
+    it('should return path to feature summaries directory', () => {
+      expect(getFeatureSummariesDir(projectPath, 'feature-123')).toBe(
+        path.join(projectPath, '.automaker', 'features', 'feature-123', 'summaries')
+      );
+    });
+
+    it('should return path to feature logs directory', () => {
+      expect(getFeatureLogsDir(projectPath, 'feature-123')).toBe(
+        path.join(projectPath, '.automaker', 'features', 'feature-123', 'logs')
+      );
+    });
+
+    it('should return path to feature backups directory', () => {
+      expect(getFeatureBackupsDir(projectPath, 'feature-123')).toBe(
+        path.join(projectPath, '.automaker', 'features', 'feature-123', 'backups')
+      );
+    });
+  });
+
+  describe('Validation paths', () => {
+    it('should return path to validations directory', () => {
+      expect(getValidationsDir(projectPath)).toBe(
+        path.join(projectPath, '.automaker', 'validations')
+      );
+    });
+
+    it('should return path to specific validation directory', () => {
+      expect(getValidationDir(projectPath, 42)).toBe(
+        path.join(projectPath, '.automaker', 'validations', '42')
+      );
+    });
+
+    it('should return path to validation.json file', () => {
+      expect(getValidationPath(projectPath, 42)).toBe(
+        path.join(projectPath, '.automaker', 'validations', '42', 'validation.json')
+      );
+    });
+  });
+
+  describe('Ideation paths', () => {
+    it('should return path to ideation directory', () => {
+      expect(getIdeationDir(projectPath)).toBe(path.join(projectPath, '.automaker', 'ideation'));
+    });
+
+    it('should return path to ideas directory', () => {
+      expect(getIdeasDir(projectPath)).toBe(
+        path.join(projectPath, '.automaker', 'ideation', 'ideas')
+      );
+    });
+
+    it('should return path to specific idea directory', () => {
+      expect(getIdeaDir(projectPath, 'idea-1')).toBe(
+        path.join(projectPath, '.automaker', 'ideation', 'ideas', 'idea-1')
+      );
+    });
+
+    it('should return path to idea.json file', () => {
+      expect(getIdeaPath(projectPath, 'idea-1')).toBe(
+        path.join(projectPath, '.automaker', 'ideation', 'ideas', 'idea-1', 'idea.json')
+      );
+    });
+
+    it('should return path to idea attachments directory', () => {
+      expect(getIdeaAttachmentsDir(projectPath, 'idea-1')).toBe(
+        path.join(projectPath, '.automaker', 'ideation', 'ideas', 'idea-1', 'attachments')
+      );
+    });
+
+    it('should return path to ideation sessions directory', () => {
+      expect(getIdeationSessionsDir(projectPath)).toBe(
+        path.join(projectPath, '.automaker', 'ideation', 'sessions')
+      );
+    });
+
+    it('should return path to specific session file', () => {
+      expect(getIdeationSessionPath(projectPath, 'session-abc')).toBe(
+        path.join(projectPath, '.automaker', 'ideation', 'sessions', 'session-abc.json')
+      );
+    });
+
+    it('should return path to ideation drafts directory', () => {
+      expect(getIdeationDraftsDir(projectPath)).toBe(
+        path.join(projectPath, '.automaker', 'ideation', 'drafts')
+      );
+    });
+
+    it('should return path to ideation analysis file', () => {
+      expect(getIdeationAnalysisPath(projectPath)).toBe(
+        path.join(projectPath, '.automaker', 'ideation', 'analysis.json')
+      );
+    });
+  });
+
+  describe('Event history paths', () => {
+    it('should return path to event history directory', () => {
+      expect(getEventHistoryDir(projectPath)).toBe(path.join(projectPath, '.automaker', 'events'));
+    });
+
+    it('should return path to event history index file', () => {
+      expect(getEventHistoryIndexPath(projectPath)).toBe(
+        path.join(projectPath, '.automaker', 'events', 'index.json')
+      );
+    });
+
+    it('should return path to specific event file', () => {
+      expect(getEventPath(projectPath, 'evt-12345')).toBe(
+        path.join(projectPath, '.automaker', 'events', 'evt-12345.json')
+      );
+    });
+  });
+
+  describe('ensureIdeationDir', () => {
+    let testDir: string;
+
+    beforeEach(async () => {
+      testDir = path.join(os.tmpdir(), `ideation-dir-test-${Date.now()}`);
+      await fs.mkdir(testDir, { recursive: true });
+    });
+
+    afterEach(async () => {
+      try {
+        await fs.rm(testDir, { recursive: true, force: true });
+      } catch {
+        // Ignore cleanup errors
+      }
+    });
+
+    it('should create ideation directory structure and return path', async () => {
+      const result = await ensureIdeationDir(testDir);
+
+      expect(result).toBe(path.join(testDir, '.automaker', 'ideation'));
+      const stats = await fs.stat(result);
+      expect(stats.isDirectory()).toBe(true);
+    });
+
+    it('should succeed if directory already exists', async () => {
+      const ideationDir = path.join(testDir, '.automaker', 'ideation');
+      await fs.mkdir(ideationDir, { recursive: true });
+
+      const result = await ensureIdeationDir(testDir);
+
+      expect(result).toBe(ideationDir);
+    });
+  });
+
+  describe('ensureEventHistoryDir', () => {
+    let testDir: string;
+
+    beforeEach(async () => {
+      testDir = path.join(os.tmpdir(), `event-history-dir-test-${Date.now()}`);
+      await fs.mkdir(testDir, { recursive: true });
+    });
+
+    afterEach(async () => {
+      try {
+        await fs.rm(testDir, { recursive: true, force: true });
+      } catch {
+        // Ignore cleanup errors
+      }
+    });
+
+    it('should create event history directory and return path', async () => {
+      const result = await ensureEventHistoryDir(testDir);
+
+      expect(result).toBe(path.join(testDir, '.automaker', 'events'));
+      const stats = await fs.stat(result);
+      expect(stats.isDirectory()).toBe(true);
+    });
+
+    it('should succeed if directory already exists', async () => {
+      const eventsDir = path.join(testDir, '.automaker', 'events');
+      await fs.mkdir(eventsDir, { recursive: true });
+
+      const result = await ensureEventHistoryDir(testDir);
+
+      expect(result).toBe(eventsDir);
     });
   });
 

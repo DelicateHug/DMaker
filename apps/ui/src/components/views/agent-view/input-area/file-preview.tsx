@@ -1,6 +1,9 @@
+import { useState } from 'react';
 import { X, FileText } from 'lucide-react';
 import type { ImageAttachment, TextFileAttachment } from '@/store/app-store';
 import { formatFileSize } from '@/lib/image-utils';
+import { ImagePreviewDialog } from '@/components/ui/image-preview-dialog';
+import { LazyImage } from '@/components/ui/lazy-image';
 
 interface FilePreviewProps {
   selectedImages: ImageAttachment[];
@@ -20,6 +23,17 @@ export function FilePreview({
   onClearAll,
 }: FilePreviewProps) {
   const totalFiles = selectedImages.length + selectedTextFiles.length;
+  const [previewDialogOpen, setPreviewDialogOpen] = useState(false);
+  const [previewImageSrc, setPreviewImageSrc] = useState('');
+  const [previewImageAlt, setPreviewImageAlt] = useState('');
+  const [previewImageFilename, setPreviewImageFilename] = useState('');
+
+  const handleImageClick = (image: ImageAttachment) => {
+    setPreviewImageSrc(image.data);
+    setPreviewImageAlt(image.filename);
+    setPreviewImageFilename(image.filename);
+    setPreviewDialogOpen(true);
+  };
 
   if (totalFiles === 0) {
     return null;
@@ -46,8 +60,17 @@ export function FilePreview({
             className="group relative rounded-lg border border-border bg-muted/30 p-2 flex items-center gap-2 hover:border-primary/30 transition-colors"
           >
             {/* Image thumbnail */}
-            <div className="w-8 h-8 rounded-md overflow-hidden bg-muted flex-shrink-0">
-              <img src={image.data} alt={image.filename} className="w-full h-full object-cover" />
+            <div
+              className="w-8 h-8 rounded-md overflow-hidden bg-muted flex-shrink-0 cursor-pointer"
+              onClick={() => handleImageClick(image)}
+            >
+              <LazyImage
+                src={image.data}
+                alt={image.filename}
+                className="w-full h-full object-cover"
+                containerClassName="w-full h-full"
+                errorIconSize="w-3 h-3"
+              />
             </div>
             {/* Image info */}
             <div className="min-w-0 flex-1">
@@ -98,6 +121,15 @@ export function FilePreview({
           </div>
         ))}
       </div>
+
+      {/* Image preview dialog */}
+      <ImagePreviewDialog
+        open={previewDialogOpen}
+        onOpenChange={setPreviewDialogOpen}
+        imageSrc={previewImageSrc}
+        imageAlt={previewImageAlt}
+        imageFilename={previewImageFilename}
+      />
     </div>
   );
 }

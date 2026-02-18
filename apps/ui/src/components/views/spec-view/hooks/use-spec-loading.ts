@@ -6,7 +6,8 @@ const logger = createLogger('SpecLoading');
 import { getElectronAPI } from '@/lib/electron';
 
 export function useSpecLoading() {
-  const { currentProject, setAppSpec } = useAppStore();
+  const currentProject = useAppStore((state) => state.currentProject);
+  const setAppSpec = useAppStore((state) => state.setAppSpec);
   const [isLoading, setIsLoading] = useState(true);
   const [specExists, setSpecExists] = useState(true);
   const [isGenerationRunning, setIsGenerationRunning] = useState(false);

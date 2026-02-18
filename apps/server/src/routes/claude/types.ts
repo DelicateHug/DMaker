@@ -25,6 +25,9 @@ export type ClaudeUsage = {
 
   lastUpdated: string; // ISO date string
   userTimezone: string;
+
+  // Account information
+  accountEmail?: string | null; // User's Claude account email if available
 };
 
 export type ClaudeStatus = {

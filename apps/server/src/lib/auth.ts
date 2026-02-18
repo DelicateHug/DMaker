@@ -332,45 +332,12 @@ function checkAuthentication(
 /**
  * Authentication middleware
  *
- * Accepts either:
- * 1. X-API-Key header (for Electron mode)
- * 2. X-Session-Token header (for web mode with explicit token)
- * 3. apiKey query parameter (fallback for cases where headers can't be set)
- * 4. Session cookie (for web mode)
+ * Auth is disabled for local-only mode - all requests are allowed through.
+ * The auth infrastructure is kept in place for future use.
  */
-export function authMiddleware(req: Request, res: Response, next: NextFunction): void {
-  const result = checkAuthentication(
-    req.headers as Record<string, string | string[] | undefined>,
-    req.query as Record<string, string | undefined>,
-    (req.cookies || {}) as Record<string, string | undefined>
-  );
-
-  if (result.authenticated) {
-    next();
-    return;
-  }
-
-  // Return appropriate error based on what failed
-  switch (result.errorType) {
-    case 'invalid_api_key':
-      res.status(403).json({
-        success: false,
-        error: 'Invalid API key.',
-      });
-      break;
-    case 'invalid_session':
-      res.status(403).json({
-        success: false,
-        error: 'Invalid or expired session token.',
-      });
-      break;
-    case 'no_auth':
-    default:
-      res.status(401).json({
-        success: false,
-        error: 'Authentication required.',
-      });
-  }
+export function authMiddleware(_req: Request, _res: Response, next: NextFunction): void {
+  // Local-only mode: skip authentication, all requests are trusted
+  next();
 }
 
 /**
@@ -392,24 +359,21 @@ export function getAuthStatus(): { enabled: boolean; method: string } {
 
 /**
  * Check if a request is authenticated (for status endpoint)
+ * Local-only mode: always returns true
  */
-export function isRequestAuthenticated(req: Request): boolean {
-  const result = checkAuthentication(
-    req.headers as Record<string, string | string[] | undefined>,
-    req.query as Record<string, string | undefined>,
-    (req.cookies || {}) as Record<string, string | undefined>
-  );
-  return result.authenticated;
+export function isRequestAuthenticated(_req: Request): boolean {
+  return true;
 }
 
 /**
  * Check if raw credentials are authenticated
  * Used for WebSocket authentication where we don't have Express request objects
+ * Local-only mode: always returns true
  */
 export function checkRawAuthentication(
-  headers: Record<string, string | string[] | undefined>,
-  query: Record<string, string | undefined>,
-  cookies: Record<string, string | undefined>
+  _headers: Record<string, string | string[] | undefined>,
+  _query: Record<string, string | undefined>,
+  _cookies: Record<string, string | undefined>
 ): boolean {
-  return checkAuthentication(headers, query, cookies).authenticated;
+  return true;
 }

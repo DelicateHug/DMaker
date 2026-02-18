@@ -253,7 +253,7 @@ export class PipelineService {
     // If no pipeline steps, use original logic
     if (sortedSteps.length === 0) {
       if (currentStatus === 'in_progress') {
-        return skipTests ? 'waiting_approval' : 'verified';
+        return 'waiting_approval';
       }
       return currentStatus;
     }
@@ -270,7 +270,7 @@ export class PipelineService {
 
       if (currentIndex === -1) {
         // Step not found, go to final status
-        return skipTests ? 'waiting_approval' : 'verified';
+        return 'waiting_approval';
       }
 
       if (currentIndex < sortedSteps.length - 1) {
@@ -279,7 +279,7 @@ export class PipelineService {
       }
 
       // Last step completed, go to final status
-      return skipTests ? 'waiting_approval' : 'verified';
+      return 'waiting_approval';
     }
 
     // For other statuses, don't change

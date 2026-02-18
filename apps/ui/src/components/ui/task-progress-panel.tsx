@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { createLogger } from '@automaker/utils/logger';
 import { cn } from '@/lib/utils';
 
@@ -9,6 +9,7 @@ import { Check, Loader2, Circle, ChevronDown, ChevronRight, FileCode } from 'luc
 import { getElectronAPI } from '@/lib/electron';
 import type { AutoModeEvent } from '@/types/electron';
 import { Badge } from '@/components/ui/badge';
+import { parseAgentContext } from '@/lib/agent-context-parser';
 
 interface TaskInfo {
   id: string;
@@ -24,6 +25,51 @@ interface TaskProgressPanelProps {
   className?: string;
   /** Whether the panel starts expanded (default: true) */
   defaultExpanded?: boolean;
+  /** Remove internal max-height constraint for full-page display */
+  fullHeight?: boolean;
+  /** Optional feature data from the store to display tasks immediately without waiting for API */
+  initialFeature?: {
+    planSpec?: {
+      tasks?: Array<{
+        id: string;
+        description: string;
+        filePath?: string;
+        phase?: string;
+        status: string;
+      }>;
+      tasksCompleted?: number;
+      currentTaskId?: string;
+    };
+  };
+}
+
+/**
+ * Converts planSpec data to TaskInfo array with proper status assignment.
+ */
+function planSpecToTasks(
+  planSpec: NonNullable<TaskProgressPanelProps['initialFeature']>['planSpec']
+): { tasks: TaskInfo[]; currentTaskId: string | null } {
+  if (!planSpec?.tasks || planSpec.tasks.length === 0) {
+    return { tasks: [], currentTaskId: null };
+  }
+
+  const currentId = planSpec.currentTaskId;
+  const completedCount = planSpec.tasksCompleted || 0;
+
+  const tasks: TaskInfo[] = planSpec.tasks.map((t, index) => ({
+    id: t.id,
+    description: t.description,
+    filePath: t.filePath,
+    phase: t.phase,
+    status:
+      index < completedCount
+        ? ('completed' as const)
+        : t.id === currentId
+          ? ('in_progress' as const)
+          : ('pending' as const),
+  }));
+
+  return { tasks, currentTaskId: currentId || null };
 }
 
 export function TaskProgressPanel({
@@ -31,17 +77,52 @@ export function TaskProgressPanel({
   projectPath,
   className,
   defaultExpanded = true,
+  fullHeight = false,
+  initialFeature,
 }: TaskProgressPanelProps) {
-  const [tasks, setTasks] = useState<TaskInfo[]>([]);
-  const [isExpanded, setIsExpanded] = useState(defaultExpanded);
-  const [isLoading, setIsLoading] = useState(true);
-  const [currentTaskId, setCurrentTaskId] = useState<string | null>(null);
+  // Seed tasks from initialFeature prop if available (instant display from store data)
+  const initialData = initialFeature?.planSpec?.tasks?.length
+    ? planSpecToTasks(initialFeature.planSpec)
+    : { tasks: [], currentTaskId: null };
 
-  // Load initial tasks from feature's planSpec
+  const [tasks, setTasks] = useState<TaskInfo[]>(initialData.tasks);
+  const [isExpanded, setIsExpanded] = useState(defaultExpanded);
+  const [isLoading, setIsLoading] = useState(initialData.tasks.length === 0);
+  const [currentTaskId, setCurrentTaskId] = useState<string | null>(initialData.currentTaskId);
+  // Track whether we have tasks to avoid showing loading spinner when we already have data
+  const hasTasksRef = useRef(initialData.tasks.length > 0);
+
+  // Update tasks if initialFeature prop changes (e.g. store data updates)
+  useEffect(() => {
+    if (initialFeature?.planSpec?.tasks?.length) {
+      const data = planSpecToTasks(initialFeature.planSpec);
+      if (!hasTasksRef.current) {
+        setTasks(data.tasks);
+        setCurrentTaskId(data.currentTaskId);
+        setIsLoading(false);
+        hasTasksRef.current = true;
+      }
+    }
+  }, [
+    initialFeature?.planSpec?.tasks,
+    initialFeature?.planSpec?.tasksCompleted,
+    initialFeature?.planSpec?.currentTaskId,
+  ]);
+
+  // Load initial tasks from feature's planSpec, with fallback to agent-output.md todos
   const loadInitialTasks = useCallback(async () => {
     if (!projectPath) {
-      setIsLoading(false);
+      // If we already have tasks from initialFeature, keep showing them
+      // Otherwise show the "no plan" message
+      if (!hasTasksRef.current) {
+        setIsLoading(false);
+      }
       return;
+    }
+
+    // Only show loading indicator if we don't already have tasks to display
+    if (!hasTasksRef.current) {
+      setIsLoading(true);
     }
 
     try {
@@ -53,28 +134,30 @@ export function TaskProgressPanel({
 
       const result = await api.features.get(projectPath, featureId);
       const feature: any = (result as any).feature;
-      if (result.success && feature?.planSpec?.tasks) {
-        const planSpec = feature.planSpec as any;
-        const planTasks = planSpec.tasks;
-        const currentId = planSpec.currentTaskId;
-        const completedCount = planSpec.tasksCompleted || 0;
-
-        // Convert planSpec tasks to TaskInfo with proper status
-        const initialTasks: TaskInfo[] = planTasks.map((t: any, index: number) => ({
-          id: t.id,
-          description: t.description,
-          filePath: t.filePath,
-          phase: t.phase,
-          status:
-            index < completedCount
-              ? ('completed' as const)
-              : t.id === currentId
-                ? ('in_progress' as const)
-                : ('pending' as const),
-        }));
-
-        setTasks(initialTasks);
-        setCurrentTaskId(currentId || null);
+      if (result.success && feature?.planSpec?.tasks && feature.planSpec.tasks.length > 0) {
+        const data = planSpecToTasks(feature.planSpec);
+        setTasks(data.tasks);
+        setCurrentTaskId(data.currentTaskId);
+        hasTasksRef.current = true;
+      } else {
+        // Fallback: parse todos from agent-output.md (same approach as AgentInfoPanel)
+        try {
+          const outputResult = await api.features.getAgentOutput(projectPath, featureId);
+          if (outputResult.success && outputResult.content) {
+            const agentInfo = parseAgentContext(outputResult.content);
+            if (agentInfo.todos && agentInfo.todos.length > 0) {
+              const fallbackTasks: TaskInfo[] = agentInfo.todos.map((todo, index) => ({
+                id: `todo-${index}`,
+                description: todo.content,
+                status: todo.status,
+              }));
+              setTasks(fallbackTasks);
+              hasTasksRef.current = true;
+            }
+          }
+        } catch {
+          logger.debug('No agent output available for fallback tasks');
+        }
       }
     } catch (error) {
       logger.error('Failed to load initial tasks:', error);
@@ -157,6 +240,25 @@ export function TaskProgressPanel({
   const progressPercent = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
 
   if (isLoading || tasks.length === 0) {
+    if (fullHeight) {
+      return (
+        <div
+          className={cn(
+            'flex items-center justify-center h-32 text-muted-foreground text-sm',
+            className
+          )}
+        >
+          {isLoading ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin mr-2" />
+              Loading execution plan...
+            </>
+          ) : (
+            'No execution plan available yet.'
+          )}
+        </div>
+      );
+    }
     return null;
   }
 
@@ -230,7 +332,12 @@ export function TaskProgressPanel({
         )}
       >
         <div className="overflow-hidden">
-          <div className="p-4 pt-2 relative max-h-[200px] overflow-y-auto scrollbar-visible">
+          <div
+            className={cn(
+              'p-4 pt-2 relative overflow-y-auto scrollbar-visible',
+              !fullHeight && 'max-h-[200px]'
+            )}
+          >
             {/* Vertical Connector Line */}
             <div className="absolute left-[2.35rem] top-4 bottom-8 w-px bg-linear-to-b from-border/80 via-border/40 to-transparent" />
 

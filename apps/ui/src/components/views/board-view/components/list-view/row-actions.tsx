@@ -10,8 +10,6 @@ import {
   FileText,
   Eye,
   Wand2,
-  Archive,
-  GitBranch,
   GitFork,
   ExternalLink,
 } from 'lucide-react';
@@ -26,6 +24,14 @@ import {
 } from '@/components/ui/dropdown-menu';
 import type { Feature } from '@/store/app-store';
 
+const RECENTLY_STARTED_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
+
+function isRecentlyStarted(feature: Feature): boolean {
+  if (!feature.startedAt) return false;
+  const elapsed = Date.now() - new Date(feature.startedAt as string).getTime();
+  return elapsed < RECENTLY_STARTED_THRESHOLD_MS;
+}
+
 /**
  * Action handler types for row actions
  */
@@ -39,7 +45,6 @@ export interface RowActionHandlers {
   onManualVerify?: () => void;
   onFollowUp?: () => void;
   onImplement?: () => void;
-  onComplete?: () => void;
   onViewPlan?: () => void;
   onApprovePlan?: () => void;
   onSpawnTask?: () => void;
@@ -151,8 +156,8 @@ function getPrimaryAction(
     };
   }
 
-  // In progress - resume is primary
-  if (feature.status === 'in_progress' && handlers.onResume) {
+  // In progress - resume is primary (but not if recently started, agent is likely still running)
+  if (feature.status === 'in_progress' && handlers.onResume && !isRecentlyStarted(feature)) {
     return {
       icon: RotateCcw,
       label: 'Resume',
@@ -161,23 +166,13 @@ function getPrimaryAction(
     };
   }
 
-  // Waiting approval - verify is primary
+  // Waiting approval - complete is primary
   if (feature.status === 'waiting_approval' && handlers.onManualVerify) {
     return {
       icon: CheckCircle2,
-      label: 'Verify',
+      label: 'Complete',
       onClick: handlers.onManualVerify,
       variant: 'success',
-    };
-  }
-
-  // Verified - complete is primary
-  if (feature.status === 'verified' && handlers.onComplete) {
-    return {
-      icon: Archive,
-      label: 'Complete',
-      onClick: handlers.onComplete,
-      variant: 'primary',
     };
   }
 
@@ -189,13 +184,20 @@ function getPrimaryAction(
  */
 function getSecondaryActions(
   feature: Feature,
-  handlers: RowActionHandlers
+  handlers: RowActionHandlers,
+  isCurrentAutoTask: boolean
 ): Array<{
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   onClick: () => void;
+  variant?: 'default' | 'primary' | 'success' | 'warning';
 }> {
-  const actions = [];
+  const actions: Array<{
+    icon: React.ComponentType<{ className?: string }>;
+    label: string;
+    onClick: () => void;
+    variant?: 'default' | 'primary' | 'success' | 'warning';
+  }> = [];
 
   // Refine action for waiting_approval status
   if (feature.status === 'waiting_approval' && handlers.onFollowUp) {
@@ -203,6 +205,17 @@ function getSecondaryActions(
       icon: Wand2,
       label: 'Refine',
       onClick: handlers.onFollowUp,
+      variant: 'default',
+    });
+  }
+
+  // View Logs action for non-backlog statuses
+  if (!isCurrentAutoTask && feature.status !== 'backlog' && handlers.onViewOutput) {
+    actions.push({
+      icon: FileText,
+      label: 'Logs',
+      onClick: handlers.onViewOutput,
+      variant: 'default',
     });
   }
 
@@ -222,8 +235,7 @@ function getSecondaryActions(
  * Actions by status:
  * - Backlog: Edit, Delete, Make (implement), View Plan, Spawn Sub-Task
  * - In Progress: View Logs, Resume, Approve Plan, Manual Verify, Edit, Spawn Sub-Task, Delete
- * - Waiting Approval: Refine (inline secondary), Verify, View Logs, View PR, Edit, Spawn Sub-Task, Delete
- * - Verified: View Logs, View PR, View Branch, Complete, Edit, Spawn Sub-Task, Delete
+ * - Waiting Approval: Refine (inline secondary), Complete, View Logs, View PR, Edit, Spawn Sub-Task, Delete
  * - Running (auto task): View Logs, Approve Plan, Edit, Spawn Sub-Task, Force Stop
  * - Pipeline statuses: View Logs, Edit, Spawn Sub-Task, Delete
  *
@@ -268,7 +280,7 @@ export const RowActions = memo(function RowActions({
   );
 
   const primaryAction = getPrimaryAction(feature, handlers, isCurrentAutoTask);
-  const secondaryActions = getSecondaryActions(feature, handlers);
+  const secondaryActions = getSecondaryActions(feature, handlers, isCurrentAutoTask);
 
   // Helper to close menu after action
   const withClose = useCallback(
@@ -436,11 +448,11 @@ export const RowActions = memo(function RowActions({
               {feature.skipTests && handlers.onManualVerify ? (
                 <MenuItem
                   icon={CheckCircle2}
-                  label="Verify"
+                  label="Complete"
                   onClick={withClose(handlers.onManualVerify)}
                   variant="success"
                 />
-              ) : handlers.onResume ? (
+              ) : handlers.onResume && !isRecentlyStarted(feature) ? (
                 <MenuItem
                   icon={RotateCcw}
                   label="Resume"
@@ -489,60 +501,9 @@ export const RowActions = memo(function RowActions({
               {handlers.onManualVerify && (
                 <MenuItem
                   icon={CheckCircle2}
-                  label={feature.prUrl ? 'Verify' : 'Mark as Verified'}
+                  label="Complete"
                   onClick={withClose(handlers.onManualVerify)}
                   variant="success"
-                />
-              )}
-              <DropdownMenuSeparator />
-              <MenuItem icon={Edit} label="Edit" onClick={withClose(handlers.onEdit)} />
-              {handlers.onSpawnTask && (
-                <MenuItem
-                  icon={GitFork}
-                  label="Spawn Sub-Task"
-                  onClick={withClose(handlers.onSpawnTask)}
-                />
-              )}
-              <MenuItem
-                icon={Trash2}
-                label="Delete"
-                onClick={withClose(handlers.onDelete)}
-                variant="destructive"
-              />
-            </>
-          )}
-
-          {/* Verified actions */}
-          {!isCurrentAutoTask && feature.status === 'verified' && (
-            <>
-              {handlers.onViewOutput && (
-                <MenuItem
-                  icon={FileText}
-                  label="View Logs"
-                  onClick={withClose(handlers.onViewOutput)}
-                />
-              )}
-              {feature.prUrl && (
-                <MenuItem
-                  icon={ExternalLink}
-                  label="View PR"
-                  onClick={withClose(() => window.open(feature.prUrl, '_blank'))}
-                />
-              )}
-              {feature.worktree && (
-                <MenuItem
-                  icon={GitBranch}
-                  label="View Branch"
-                  onClick={withClose(() => {})}
-                  disabled
-                />
-              )}
-              {handlers.onComplete && (
-                <MenuItem
-                  icon={Archive}
-                  label="Complete"
-                  onClick={withClose(handlers.onComplete)}
-                  variant="primary"
                 />
               )}
               <DropdownMenuSeparator />
@@ -611,7 +572,6 @@ export function createRowActionHandlers(
     manualVerify?: (id: string) => void;
     followUp?: (id: string) => void;
     implement?: (id: string) => void;
-    complete?: (id: string) => void;
     viewPlan?: (id: string) => void;
     approvePlan?: (id: string) => void;
     spawnTask?: (id: string) => void;
@@ -627,7 +587,6 @@ export function createRowActionHandlers(
     onManualVerify: actions.manualVerify ? () => actions.manualVerify!(featureId) : undefined,
     onFollowUp: actions.followUp ? () => actions.followUp!(featureId) : undefined,
     onImplement: actions.implement ? () => actions.implement!(featureId) : undefined,
-    onComplete: actions.complete ? () => actions.complete!(featureId) : undefined,
     onViewPlan: actions.viewPlan ? () => actions.viewPlan!(featureId) : undefined,
     onApprovePlan: actions.approvePlan ? () => actions.approvePlan!(featureId) : undefined,
     onSpawnTask: actions.spawnTask ? () => actions.spawnTask!(featureId) : undefined,

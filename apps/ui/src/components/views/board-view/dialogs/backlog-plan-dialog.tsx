@@ -280,6 +280,7 @@ export function BacklogPlanDialog({
               onChange={(e) => setPrompt(e.target.value)}
               className="min-h-[150px] resize-none"
               autoFocus
+              data-testid="backlog-plan-prompt"
             />
             <div className="text-xs text-muted-foreground">
               The AI will automatically handle dependency graph updates when adding or removing
@@ -417,7 +418,7 @@ export function BacklogPlanDialog({
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-2xl" data-testid="backlog-plan-dialog">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Wand2 className="w-5 h-5 text-primary" />
@@ -446,10 +447,14 @@ export function BacklogPlanDialog({
                   isOverridden={modelOverride !== null}
                 />
               </div>
-              <Button variant="outline" onClick={onClose}>
+              <Button variant="outline" onClick={onClose} data-testid="backlog-plan-cancel">
                 Cancel
               </Button>
-              <Button onClick={handleGenerate} disabled={!prompt.trim() || isGeneratingPlan}>
+              <Button
+                onClick={handleGenerate}
+                disabled={!prompt.trim() || isGeneratingPlan}
+                data-testid="backlog-plan-generate"
+              >
                 {isGeneratingPlan ? (
                   <>
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -467,13 +472,17 @@ export function BacklogPlanDialog({
 
           {mode === 'review' && (
             <>
-              <Button variant="outline" onClick={handleDiscard}>
+              <Button variant="outline" onClick={handleDiscard} data-testid="backlog-plan-discard">
                 Discard
               </Button>
-              <Button variant="outline" onClick={onClose}>
+              <Button variant="outline" onClick={onClose} data-testid="backlog-plan-review-later">
                 Review Later
               </Button>
-              <Button onClick={handleApply} disabled={selectedChanges.size === 0}>
+              <Button
+                onClick={handleApply}
+                disabled={selectedChanges.size === 0}
+                data-testid="backlog-plan-apply"
+              >
                 <Check className="w-4 h-4 mr-2" />
                 Apply {selectedChanges.size} Change{selectedChanges.size !== 1 ? 's' : ''}
               </Button>

@@ -1,6 +1,15 @@
 import { useState, useEffect } from 'react';
 import { Label } from '@/components/ui/label';
-import { Palette, Moon, Sun, Type } from 'lucide-react';
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Palette, Moon, Sun, Type, Code2 } from 'lucide-react';
 import { darkThemes, lightThemes } from '@/config/theme-options';
 import {
   UI_SANS_FONT_OPTIONS,
@@ -8,9 +17,55 @@ import {
   DEFAULT_FONT_VALUE,
 } from '@/config/ui-font-options';
 import { cn } from '@/lib/utils';
-import { useAppStore } from '@/store/app-store';
+import { useAppStore, type SyntaxTheme } from '@/store/app-store';
+import { preloadTheme } from '@/lib/theme-loader';
 import { FontSelector } from '@/components/shared';
 import type { Theme } from '../shared/types';
+
+/** Display names for each syntax theme option */
+const SYNTAX_THEME_DISPLAY_NAMES: Record<SyntaxTheme, string> = {
+  auto: 'Auto (Match UI Theme)',
+  dracula: 'Dracula',
+  monokai: 'Monokai',
+  nord: 'Nord',
+  onedark: 'One Dark',
+  tokyonight: 'Tokyo Night',
+  'github-dark': 'GitHub Dark',
+  catppuccin: 'Catppuccin',
+  'solarized-dark': 'Solarized Dark',
+  'gruvbox-dark': 'Gruvbox Dark',
+  synthwave: 'Synthwave',
+  'github-light': 'GitHub Light',
+  'solarized-light': 'Solarized Light',
+  'gruvbox-light': 'Gruvbox Light',
+  'nord-light': 'Nord Light',
+  'one-light': 'One Light',
+  'catppuccin-latte': 'Catppuccin Latte',
+};
+
+/** Dark syntax themes in display order */
+const DARK_SYNTAX_THEMES: SyntaxTheme[] = [
+  'dracula',
+  'monokai',
+  'nord',
+  'onedark',
+  'tokyonight',
+  'github-dark',
+  'catppuccin',
+  'solarized-dark',
+  'gruvbox-dark',
+  'synthwave',
+];
+
+/** Light syntax themes in display order */
+const LIGHT_SYNTAX_THEMES: SyntaxTheme[] = [
+  'github-light',
+  'solarized-light',
+  'gruvbox-light',
+  'nord-light',
+  'one-light',
+  'catppuccin-latte',
+];
 
 interface AppearanceSectionProps {
   effectiveTheme: Theme;
@@ -18,7 +73,8 @@ interface AppearanceSectionProps {
 }
 
 export function AppearanceSection({ effectiveTheme, onThemeChange }: AppearanceSectionProps) {
-  const { fontFamilySans, fontFamilyMono, setFontSans, setFontMono } = useAppStore();
+  const { fontFamilySans, fontFamilyMono, setFontSans, setFontMono, syntaxTheme, setSyntaxTheme } =
+    useAppStore();
 
   // Determine if current theme is light or dark
   const isLightTheme = lightThemes.some((t) => t.value === effectiveTheme);
@@ -115,6 +171,7 @@ export function AppearanceSection({ effectiveTheme, onThemeChange }: AppearanceS
                 <button
                   key={value}
                   onClick={() => onThemeChange(value)}
+                  onMouseEnter={() => preloadTheme(value)}
                   className={cn(
                     'group flex items-center justify-center gap-2.5 px-4 py-3.5 rounded-xl',
                     'text-sm font-medium transition-all duration-200 ease-out',
@@ -140,6 +197,53 @@ export function AppearanceSection({ effectiveTheme, onThemeChange }: AppearanceS
                 </button>
               );
             })}
+          </div>
+        </div>
+
+        {/* Syntax Theme Section */}
+        <div className="space-y-4 pt-6 border-t border-border/50">
+          <div className="flex items-center gap-2 mb-4">
+            <Code2 className="w-4 h-4 text-muted-foreground" />
+            <Label className="text-foreground font-medium">Syntax Theme</Label>
+          </div>
+          <p className="text-xs text-muted-foreground -mt-2 mb-4">
+            Choose a color scheme for syntax highlighting in code blocks and diffs.
+          </p>
+          <div className="max-w-xs">
+            <Select
+              value={syntaxTheme}
+              onValueChange={(value) => setSyntaxTheme(value as SyntaxTheme)}
+            >
+              <SelectTrigger
+                id="syntax-theme-select"
+                className="w-full"
+                data-testid="syntax-theme-select"
+              >
+                <SelectValue placeholder="Auto (Match UI Theme)" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  <SelectLabel>Auto</SelectLabel>
+                  <SelectItem value="auto">{SYNTAX_THEME_DISPLAY_NAMES['auto']}</SelectItem>
+                </SelectGroup>
+                <SelectGroup>
+                  <SelectLabel>Dark Themes</SelectLabel>
+                  {DARK_SYNTAX_THEMES.map((theme) => (
+                    <SelectItem key={theme} value={theme}>
+                      {SYNTAX_THEME_DISPLAY_NAMES[theme]}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+                <SelectGroup>
+                  <SelectLabel>Light Themes</SelectLabel>
+                  {LIGHT_SYNTAX_THEMES.map((theme) => (
+                    <SelectItem key={theme} value={theme}>
+                      {SYNTAX_THEME_DISPLAY_NAMES[theme]}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
           </div>
         </div>
 

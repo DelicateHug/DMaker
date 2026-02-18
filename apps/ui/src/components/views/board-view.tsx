@@ -25,41 +25,72 @@ class DialogAwarePointerSensor extends PointerSensor {
     },
   ];
 }
+import { useShallow } from 'zustand/react/shallow';
 import { useAppStore, Feature } from '@/store/app-store';
 import { getElectronAPI } from '@/lib/electron';
 import { getHttpApiClient } from '@/lib/http-api-client';
 import type { AutoModeEvent } from '@/types/electron';
 import type { ModelAlias, CursorModelId, BacklogPlanResult } from '@automaker/types';
-import { pathsEqual } from '@/lib/utils';
+import { pathsEqual, cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { getBlockingDependencies } from '@automaker/dependency-resolver';
-import { BoardBackgroundModal } from '@/components/dialogs/board-background-modal';
-import { RefreshCw } from 'lucide-react';
+import { BoardBackgroundModal } from '@/components/dialogs';
+import { Button } from '@/components/ui/button';
+import {
+  Activity,
+  Bot,
+  PanelRight,
+  GripVertical,
+  ChevronLeft,
+  ChevronRight,
+  LayoutGrid,
+  FolderOpen,
+  Rocket,
+  Layers,
+} from 'lucide-react';
+import { getProjectIcon } from '@/lib/icon-registry';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { getAuthenticatedImageUrl } from '@/lib/api-fetch';
+import { LazyImage } from '@/components/ui/lazy-image';
+import type { Project } from '@/lib/electron';
+import { DeleteProjectDialog } from '@/components/dialogs';
+import { initializeProject, hasAutomakerDir, hasAppSpec } from '@/lib/project-init';
+import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import { useAutoMode } from '@/hooks/use-auto-mode';
 import { useKeyboardShortcutsConfig } from '@/hooks/use-keyboard-shortcuts';
 import { useWindowState } from '@/hooks/use-window-state';
+import { useIsTablet } from '@/hooks/use-media-query';
 // Board-view specific imports
-import { BoardHeader } from './board-view/board-header';
+// BoardHeader is now integrated into top-nav-bar
+// import { BoardHeader } from './board-view/board-header';
 import { KanbanBoard } from './board-view/kanban-board';
 import {
   AddFeatureDialog,
   AgentOutputModal,
   BacklogPlanDialog,
-  CompletedFeaturesModal,
-  ArchiveAllVerifiedDialog,
-  DeleteCompletedFeatureDialog,
+  CompleteAllWaitingDialog,
   EditFeatureDialog,
   FollowUpDialog,
   PlanApprovalDialog,
+  UnsatisfiedDependenciesDialog,
+  MassEditDialog,
+  CodeEditorWindow,
+  PipelineSettingsDialog,
+  CreateWorktreeDialog,
+  DeleteWorktreeDialog,
+  CommitWorktreeDialog,
+  CreatePRDialog,
+  CreateBranchDialog,
+  MergeWorktreeDialog,
 } from './board-view/dialogs';
-import { PipelineSettingsDialog } from './board-view/dialogs/pipeline-settings-dialog';
-import { CreateWorktreeDialog } from './board-view/dialogs/create-worktree-dialog';
-import { DeleteWorktreeDialog } from './board-view/dialogs/delete-worktree-dialog';
-import { CommitWorktreeDialog } from './board-view/dialogs/commit-worktree-dialog';
-import { CreatePRDialog } from './board-view/dialogs/create-pr-dialog';
-import { CreateBranchDialog } from './board-view/dialogs/create-branch-dialog';
-import { MergeWorktreeDialog } from './board-view/dialogs/merge-worktree-dialog';
-import { WorktreePanel } from './board-view/worktree-panel';
 import type { PRInfo, WorktreeInfo } from './board-view/worktree-panel/types';
 import { COLUMNS, getColumnsWithPipeline } from './board-view/constants';
 import {
@@ -75,10 +106,21 @@ import {
   useSelectionMode,
   useListViewState,
 } from './board-view/hooks';
-import { SelectionActionBar, ListView } from './board-view/components';
-import { MassEditDialog } from './board-view/dialogs';
+import { useBoardStatusTabs } from './board-view/hooks/use-board-status-tabs';
+import { ALL_PROJECTS_ID } from './board-view/components/board-project-dropdown';
+import {
+  SelectionActionBar,
+  ListView,
+  BoardStatusDropdown,
+  AgentChatPanel,
+  DeployPanel,
+  FileExplorer,
+  BoardSkeleton,
+  RunningAgentsPanel,
+} from './board-view/components';
 import { InitScriptIndicator } from './board-view/init-script-indicator';
 import { useInitScriptEvents } from '@/hooks/use-init-script-events';
+import { useBoardControlsStore } from '@/store/board-controls-store';
 
 // Stable empty array to avoid infinite loop in selector
 const EMPTY_WORKTREES: ReturnType<ReturnType<typeof useAppStore.getState>['getWorktrees']> = [];
@@ -88,6 +130,7 @@ const logger = createLogger('Board');
 export function BoardView() {
   const {
     currentProject,
+    projects,
     maxConcurrency,
     setMaxConcurrency,
     defaultSkipTests,
@@ -103,16 +146,81 @@ export function BoardView() {
     useWorktrees,
     enableDependencyBlocking,
     skipVerificationInAutoMode,
+    setSkipVerificationInAutoMode,
     planUseSelectedWorktreeBranch,
     addFeatureUseSelectedWorktreeBranch,
     isPrimaryWorktreeBranch,
     getPrimaryWorktreeBranch,
     setPipelineConfig,
-  } = useAppStore();
+    showAllProjects,
+    pendingBoardStatusTab,
+    setPendingBoardStatusTab,
+    kanbanPanelSize,
+    agentChatPanelSize,
+    isKanbanPanelCollapsed,
+    isAgentChatPanelCollapsed,
+    isDeployPanelCollapsed,
+    setKanbanPanelSize,
+    setAgentChatPanelSize,
+    setKanbanPanelCollapsed,
+    setAgentChatPanelCollapsed,
+    deployPanelSize,
+    setDeployPanelSize,
+    setDeployPanelCollapsed,
+    moveProjectToTrash,
+    removeProject,
+    upsertAndSetCurrentProject,
+    trashedProjects,
+    theme: globalTheme,
+  } = useAppStore(
+    useShallow((state) => ({
+      currentProject: state.currentProject,
+      projects: state.projects,
+      maxConcurrency: state.maxConcurrency,
+      setMaxConcurrency: state.setMaxConcurrency,
+      defaultSkipTests: state.defaultSkipTests,
+      specCreatingForProject: state.specCreatingForProject,
+      setSpecCreatingForProject: state.setSpecCreatingForProject,
+      pendingPlanApproval: state.pendingPlanApproval,
+      setPendingPlanApproval: state.setPendingPlanApproval,
+      updateFeature: state.updateFeature,
+      getCurrentWorktree: state.getCurrentWorktree,
+      setCurrentWorktree: state.setCurrentWorktree,
+      getWorktrees: state.getWorktrees,
+      setWorktrees: state.setWorktrees,
+      useWorktrees: state.useWorktrees,
+      enableDependencyBlocking: state.enableDependencyBlocking,
+      skipVerificationInAutoMode: state.skipVerificationInAutoMode,
+      setSkipVerificationInAutoMode: state.setSkipVerificationInAutoMode,
+      planUseSelectedWorktreeBranch: state.planUseSelectedWorktreeBranch,
+      addFeatureUseSelectedWorktreeBranch: state.addFeatureUseSelectedWorktreeBranch,
+      isPrimaryWorktreeBranch: state.isPrimaryWorktreeBranch,
+      getPrimaryWorktreeBranch: state.getPrimaryWorktreeBranch,
+      setPipelineConfig: state.setPipelineConfig,
+      showAllProjects: state.showAllProjects,
+      pendingBoardStatusTab: state.pendingBoardStatusTab,
+      setPendingBoardStatusTab: state.setPendingBoardStatusTab,
+      kanbanPanelSize: state.kanbanPanelSize,
+      agentChatPanelSize: state.agentChatPanelSize,
+      isKanbanPanelCollapsed: state.isKanbanPanelCollapsed,
+      isAgentChatPanelCollapsed: state.isAgentChatPanelCollapsed,
+      isDeployPanelCollapsed: state.isDeployPanelCollapsed,
+      setKanbanPanelSize: state.setKanbanPanelSize,
+      setAgentChatPanelSize: state.setAgentChatPanelSize,
+      setKanbanPanelCollapsed: state.setKanbanPanelCollapsed,
+      setAgentChatPanelCollapsed: state.setAgentChatPanelCollapsed,
+      deployPanelSize: state.deployPanelSize,
+      setDeployPanelSize: state.setDeployPanelSize,
+      setDeployPanelCollapsed: state.setDeployPanelCollapsed,
+      moveProjectToTrash: state.moveProjectToTrash,
+      removeProject: state.removeProject,
+      upsertAndSetCurrentProject: state.upsertAndSetCurrentProject,
+      trashedProjects: state.trashedProjects,
+      theme: state.theme,
+    }))
+  );
   // Subscribe to pipelineConfigByProject to trigger re-renders when it changes
   const pipelineConfigByProject = useAppStore((state) => state.pipelineConfigByProject);
-  // Subscribe to worktreePanelVisibleByProject to trigger re-renders when it changes
-  const worktreePanelVisibleByProject = useAppStore((state) => state.worktreePanelVisibleByProject);
   // Subscribe to showInitScriptIndicatorByProject to trigger re-renders when it changes
   const showInitScriptIndicatorByProject = useAppStore(
     (state) => state.showInitScriptIndicatorByProject
@@ -123,20 +231,30 @@ export function BoardView() {
   const {
     features: hookFeatures,
     isLoading,
+    isFullyLoaded,
+    isRefreshing,
     persistedCategories,
     loadFeatures,
+    refreshFeatures,
     saveCategory,
-  } = useBoardFeatures({ currentProject });
+    // Board-scoped project selection (does NOT affect global currentProject)
+    boardSelectedProject,
+    setBoardSelectedProject,
+    isDifferentFromGlobal,
+    syncToGlobal,
+    // Board-scoped "show all projects" toggle
+    showAllProjectsInBoard,
+    setShowAllProjectsInBoard,
+  } = useBoardFeatures({ currentProject, projects });
   const [editingFeature, setEditingFeature] = useState<Feature | null>(null);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
   const [showOutputModal, setShowOutputModal] = useState(false);
   const [outputFeature, setOutputFeature] = useState<Feature | null>(null);
   const [featuresWithContext, setFeaturesWithContext] = useState<Set<string>>(new Set());
-  const [showArchiveAllVerifiedDialog, setShowArchiveAllVerifiedDialog] = useState(false);
+  const [showCompleteAllWaitingDialog, setShowCompleteAllWaitingDialog] = useState(false);
   const [showBoardBackgroundModal, setShowBoardBackgroundModal] = useState(false);
-  const [showCompletedModal, setShowCompletedModal] = useState(false);
-  const [deleteCompletedFeature, setDeleteCompletedFeature] = useState<Feature | null>(null);
+  const [showAutoModeModal, setShowAutoModeModal] = useState(false);
   // State for viewing plan in read-only mode
   const [viewPlanFeature, setViewPlanFeature] = useState<Feature | null>(null);
 
@@ -167,6 +285,198 @@ export function BoardView() {
   // Pipeline settings dialog state
   const [showPipelineSettings, setShowPipelineSettings] = useState(false);
 
+  // File explorer and code editor state
+  const [showFileExplorer, setShowFileExplorer] = useState(false);
+  const [showCodeEditor, setShowCodeEditor] = useState(false);
+  const [codeEditorFilePath, setCodeEditorFilePath] = useState<string | undefined>(undefined);
+
+  // Handle file selection from file explorer
+  const handleFileSelect = useCallback((filePath: string) => {
+    setCodeEditorFilePath(filePath);
+    setShowCodeEditor(true);
+  }, []);
+
+  // Project selector state and handlers (in board status tabs row)
+  const [isProjectDropdownOpen, setIsProjectDropdownOpen] = useState(false);
+
+  // Delete project dialog state
+  const [deleteProjectDialogOpen, setDeleteProjectDialogOpen] = useState(false);
+  const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
+
+  const handleOpenDeleteDialog = useCallback((project: Project, e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    setProjectToDelete(project);
+    setDeleteProjectDialogOpen(true);
+    setIsProjectDropdownOpen(false);
+  }, []);
+
+  const handleSoftDelete = useCallback(() => {
+    if (projectToDelete) {
+      moveProjectToTrash(projectToDelete.id);
+      toast.success('Project moved to trash', {
+        description: `${projectToDelete.name} has been moved to trash`,
+      });
+      setDeleteProjectDialogOpen(false);
+      setProjectToDelete(null);
+    }
+  }, [projectToDelete, moveProjectToTrash]);
+
+  const handleHardDelete = useCallback(() => {
+    if (projectToDelete) {
+      removeProject(projectToDelete.id);
+      toast.success('Project deleted', {
+        description: `${projectToDelete.name} has been permanently deleted`,
+      });
+      setDeleteProjectDialogOpen(false);
+      setProjectToDelete(null);
+    }
+  }, [projectToDelete, removeProject]);
+
+  // Handle adding a new project via folder selection dialog
+  const handleAddProject = useCallback(async () => {
+    setIsProjectDropdownOpen(false);
+    const api = getElectronAPI();
+    const result = await api.openDirectory();
+
+    if (!result.canceled && result.filePaths[0]) {
+      const path = result.filePaths[0];
+      const name = path.split(/[/\\]/).filter(Boolean).pop() || 'Untitled Project';
+
+      try {
+        const hadAutomakerDir = await hasAutomakerDir(path);
+        const initResult = await initializeProject(path);
+
+        if (!initResult.success) {
+          toast.error('Failed to initialize project', {
+            description: initResult.error || 'Unknown error occurred',
+          });
+          return;
+        }
+
+        const trashedProject = trashedProjects.find((p) => p.path === path);
+        const effectiveTheme = trashedProject?.theme || currentProject?.theme || globalTheme;
+        upsertAndSetCurrentProject(path, name, effectiveTheme);
+
+        const specExists = await hasAppSpec(path);
+
+        if (!hadAutomakerDir && !specExists) {
+          toast.success('Project opened', {
+            description: `Opened ${name}. Let's set up your app specification!`,
+          });
+        } else if (initResult.createdFiles && initResult.createdFiles.length > 0) {
+          toast.success(initResult.isNewProject ? 'Project initialized' : 'Project updated', {
+            description: `Set up ${initResult.createdFiles.length} file(s) in .automaker`,
+          });
+        } else {
+          toast.success('Project opened', {
+            description: `Opened ${name}`,
+          });
+        }
+      } catch (error) {
+        logger.error('Failed to open project:', error);
+        toast.error('Failed to open project', {
+          description: error instanceof Error ? error.message : 'Unknown error',
+        });
+      }
+    }
+  }, [trashedProjects, upsertAndSetCurrentProject, currentProject, globalTheme]);
+
+  // Agent panel project state - FULLY ISOLATED from board project changes
+  // This allows the agent chat to maintain its session and state while the user:
+  // 1. Switches projects in the board dropdown (boardSelectedProject changes)
+  // 2. Switches the global project (currentProject changes)
+  // The agent panel project is only updated when the user explicitly changes it
+  // via the project selector within the agent chat panel itself.
+  // NOTE: Initialized with currentProject but never auto-synced afterward
+  const [agentPanelProject, setAgentPanelProject] = useState<Project | null>(currentProject);
+
+  // Handle agent panel project change from the session selector
+  const handleAgentPanelProjectChange = useCallback((project: Project) => {
+    setAgentPanelProject(project);
+  }, []);
+
+  // Memoized callback for agent chat panel collapse changes
+  // This prevents unnecessary re-renders of the memoized AgentChatPanel component
+  const handleAgentChatPanelCollapseChange = useCallback(
+    (collapsed: boolean) => {
+      setAgentChatPanelCollapsed(collapsed);
+    },
+    [setAgentChatPanelCollapsed]
+  );
+
+  // Memoized callback for deploy panel collapse changes
+  // This prevents unnecessary re-renders of the memoized DeployPanel component
+  const handleDeployPanelCollapseChange = useCallback(
+    (collapsed: boolean) => {
+      setDeployPanelCollapsed(collapsed);
+    },
+    [setDeployPanelCollapsed]
+  );
+
+  // Track specific project IDs when multiple projects are selected
+  // null means "all projects" (no filtering), otherwise contains specific project IDs
+  const [multiSelectedProjectIds, setMultiSelectedProjectIds] = useState<string[] | null>(null);
+
+  // Handle project selection from dropdown
+  // Uses board-scoped state instead of global state to allow browsing
+  // features from different projects without affecting agent sessions
+  const handleProjectSelect = useCallback(
+    (project: Project | null) => {
+      if (project === null) {
+        // "All Projects" selected
+        setShowAllProjectsInBoard(true);
+        setMultiSelectedProjectIds(null);
+      } else {
+        setShowAllProjectsInBoard(false);
+        setMultiSelectedProjectIds(null);
+        setBoardSelectedProject(project);
+      }
+      setIsProjectDropdownOpen(false);
+    },
+    [setShowAllProjectsInBoard, setBoardSelectedProject]
+  );
+
+  // Computed selectedProjectIds for the multi-select project dropdown
+  const selectedProjectIds = useMemo(() => {
+    if (multiSelectedProjectIds) return multiSelectedProjectIds;
+    if (showAllProjectsInBoard) return [ALL_PROJECTS_ID];
+    if (boardSelectedProject) return [boardSelectedProject.id];
+    return [ALL_PROJECTS_ID];
+  }, [showAllProjectsInBoard, boardSelectedProject, multiSelectedProjectIds]);
+
+  // Handle multi-select project dropdown changes
+  const handleProjectSelectionChange = useCallback(
+    (projectIds: string[]) => {
+      if (projectIds.includes(ALL_PROJECTS_ID) || projectIds.length === 0) {
+        setShowAllProjectsInBoard(true);
+        setMultiSelectedProjectIds(null);
+      } else if (projectIds.length === 1) {
+        // Single project selected
+        const project = projects.find((p) => p.id === projectIds[0]);
+        if (project) {
+          setShowAllProjectsInBoard(false);
+          setMultiSelectedProjectIds(null);
+          setBoardSelectedProject(project);
+        }
+      } else {
+        // Multiple projects selected - load all projects but filter to selection
+        setShowAllProjectsInBoard(true);
+        setMultiSelectedProjectIds(projectIds);
+      }
+    },
+    [projects, setShowAllProjectsInBoard, setBoardSelectedProject]
+  );
+
+  // Computed values for project selector display
+  // Uses board-scoped state instead of global state to show the board's selected project
+  const selectedProject = showAllProjectsInBoard ? null : boardSelectedProject;
+  const selectedProjectLabel = showAllProjectsInBoard
+    ? 'All Projects'
+    : boardSelectedProject?.name || 'Select Project';
+  const CurrentProjectIcon = selectedProject ? getProjectIcon(selectedProject.icon) : Layers;
+  const hasCustomProjectIcon = selectedProject?.customIconPath;
+
   // Follow-up state hook
   const {
     showFollowUpDialog,
@@ -182,6 +492,7 @@ export function BoardView() {
     setFollowUpPreviewMap,
     handleFollowUpDialogChange,
     addToPromptHistory,
+    resetFollowUpState,
   } = useFollowUpState();
 
   // Selection mode hook for mass editing
@@ -201,17 +512,153 @@ export function BoardView() {
   // View mode state (kanban vs list)
   const { viewMode, setViewMode, isListView, sortConfig, setSortColumn } = useListViewState();
 
+  // Filter features by selected projects when multi-project filter is active.
+  // When multiSelectedProjectIds is set, only show features from those specific projects.
+  // This allows the "all projects" loading mode to fetch from all projects,
+  // while the UI only displays the user's selected subset.
+  const projectFilteredFeatures = useMemo(() => {
+    if (!multiSelectedProjectIds) return hookFeatures;
+    const selectedPaths = new Set(
+      projects.filter((p) => multiSelectedProjectIds.includes(p.id)).map((p) => p.path)
+    );
+    return hookFeatures.filter((f) => f.projectPath && selectedPaths.has(f.projectPath));
+  }, [hookFeatures, multiSelectedProjectIds, projects]);
+
+  // Compute lightweight feature counts by status for smart tab defaulting.
+  // This runs before useBoardStatusTabs so the hook can prefer in_progress → completed
+  // as the initial tab when no persisted preference exists.
+  const featureCountsByStatus = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const f of projectFilteredFeatures) {
+      const status = f.status || 'backlog';
+      counts[status] = (counts[status] || 0) + 1;
+    }
+    return counts;
+  }, [projectFilteredFeatures]);
+
+  // Board status tabs state for single-column mode
+  // Note: We initialize with columns after pipelineConfig is loaded below
+  const {
+    activeTab: activeStatusTab,
+    activeTabs: activeStatusTabs,
+    setActiveTab: setActiveStatusTab,
+    setActiveTabs: setActiveStatusTabs,
+    toggleTab: toggleStatusTab,
+    tabs: statusTabs,
+    nextTab: nextStatusTab,
+    previousTab: previousStatusTab,
+    isAllMode: isAllStatusMode,
+  } = useBoardStatusTabs({
+    columns: getColumnsWithPipeline(
+      pipelineConfigByProject[boardSelectedProject?.path ?? ''] || null
+    ),
+    persist: true,
+    featureCounts: featureCountsByStatus,
+  });
+
+  // Consume pending board status tab signal (e.g. from clicking a running agent)
+  useEffect(() => {
+    if (pendingBoardStatusTab) {
+      setActiveStatusTab(pendingBoardStatusTab);
+      setPendingBoardStatusTab(null);
+    }
+  }, [pendingBoardStatusTab, setActiveStatusTab, setPendingBoardStatusTab]);
+
+  // Status tab change handler with multi-select support: clicking a tab toggles it on/off,
+  // and the hook handles "All" deselection logic automatically.
+  const handleStatusTabChange = useCallback(
+    (tabId: string) => {
+      toggleStatusTab(tabId);
+    },
+    [toggleStatusTab]
+  );
+
+  // Batch-commit handler for BoardStatusDropdown staged selection.
+  // When the dropdown closes, it commits the full array of selected tabs.
+  const handleStatusTabsCommit = useCallback(
+    (tabIds: string[]) => {
+      setActiveStatusTabs(tabIds);
+    },
+    [setActiveStatusTabs]
+  );
+
+  // Handler to create a new custom status (pipeline step) from the dropdown.
+  const handleCreateStatus = useCallback(
+    async (name: string, colorClass: string) => {
+      if (!boardSelectedProject?.path) return;
+      try {
+        const api = getHttpApiClient();
+        const step = {
+          name,
+          instructions: `Process features in the "${name}" status.`,
+          colorClass,
+          order: pipelineConfigByProject[boardSelectedProject.path]?.steps?.length ?? 0,
+        };
+        const result = await api.pipeline.addStep(boardSelectedProject.path, step);
+        if (result.success && result.config) {
+          setPipelineConfig(boardSelectedProject.path, result.config);
+          toast.success(`Status "${name}" created`);
+        } else {
+          toast.error(result.error || 'Failed to create status');
+        }
+      } catch {
+        toast.error('Failed to create status');
+      }
+    },
+    [boardSelectedProject?.path, pipelineConfigByProject, setPipelineConfig]
+  );
+
+  // Handler to delete a custom status (pipeline step) from the dropdown.
+  const handleDeleteStatus = useCallback(
+    async (tabId: string) => {
+      if (!boardSelectedProject?.path) return;
+      // Extract step ID from pipeline status (e.g., "pipeline_step_abc" -> "step_abc")
+      const stepId = tabId.startsWith('pipeline_') ? tabId.replace('pipeline_', '') : tabId;
+      try {
+        const api = getHttpApiClient();
+        const result = await api.pipeline.deleteStep(boardSelectedProject.path, stepId);
+        if (result.success) {
+          // Reload the pipeline config
+          const configResult = await api.pipeline.getConfig(boardSelectedProject.path);
+          if (configResult.success && configResult.config) {
+            setPipelineConfig(boardSelectedProject.path, configResult.config);
+          }
+          toast.success('Status deleted');
+        } else {
+          toast.error(result.error || 'Failed to delete status');
+        }
+      } catch {
+        toast.error('Failed to delete status');
+      }
+    },
+    [boardSelectedProject?.path, setPipelineConfig]
+  );
+
   // Search filter for Kanban cards
   const [searchQuery, setSearchQuery] = useState('');
+  // Favorites filter state
+  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   // Plan approval loading state
   const [isPlanApprovalLoading, setIsPlanApprovalLoading] = useState(false);
+  // Active panel for tablet/mobile view - which panel is currently visible
+  // 'kanban' = Kanban board, 'agents' = Running agents, 'deploy' = Deploy panel
+  const [activeMobilePanel, setActiveMobilePanel] = useState<'kanban' | 'agents' | 'deploy'>(
+    'kanban'
+  );
+  // Responsive breakpoint detection
+  const isTabletOrSmaller = useIsTablet();
+  // Ref to track panel sizes during drag - only commit to Zustand when drag ends
+  // This prevents excessive state updates/re-renders during resize
+  const pendingPanelSizesRef = useRef<{ kanban: number; agentChat: number; deploy: number } | null>(
+    null
+  );
   // Derive spec creation state from store - check if current project is the one being created
   const isCreatingSpec = specCreatingForProject === currentProject?.path;
   const creatingSpecProjectPath = specCreatingForProject ?? undefined;
 
   const checkContextExists = useCallback(
     async (featureId: string): Promise<boolean> => {
-      if (!currentProject) return false;
+      if (!boardSelectedProject) return false;
 
       try {
         const api = getElectronAPI();
@@ -219,7 +666,7 @@ export function BoardView() {
           return false;
         }
 
-        const result = await api.autoMode.contextExists(currentProject.path, featureId);
+        const result = await api.autoMode.contextExists(boardSelectedProject.path, featureId);
 
         return result.success && result.exists === true;
       } catch (error) {
@@ -227,7 +674,7 @@ export function BoardView() {
         return false;
       }
     },
-    [currentProject]
+    [boardSelectedProject]
   );
 
   // Use board effects hook
@@ -242,16 +689,70 @@ export function BoardView() {
     setFeaturesWithContext,
   });
 
-  // Load pipeline config when project changes
+  // Reset board state when board-selected project changes
+  // This ensures stale state from a previous project is not carried over
+  // NOTE: Uses boardSelectedProject (not currentProject) because the board dropdown
+  // changes the board-scoped project while leaving the global project unchanged.
+  // This allows users to browse different projects without affecting agent sessions.
   useEffect(() => {
-    if (!currentProject?.path) return;
+    // Reset search and filter state
+    setSearchQuery('');
+    setShowFavoritesOnly(false);
+
+    // Exit selection mode to clear any selected features
+    exitSelectionMode();
+
+    // Close any open dialogs that are project-specific
+    setShowAddDialog(false);
+    setEditingFeature(null);
+    setShowOutputModal(false);
+    setOutputFeature(null);
+    setViewPlanFeature(null);
+    setSpawnParentFeature(null);
+    setShowMassEditDialog(false);
+
+    // Close worktree-related dialogs
+    setShowCreateWorktreeDialog(false);
+    setShowDeleteWorktreeDialog(false);
+    setShowCommitWorktreeDialog(false);
+    setShowCreatePRDialog(false);
+    setShowCreateBranchDialog(false);
+    setShowMergeWorktreeDialog(false);
+    setSelectedWorktreeForAction(null);
+
+    // Close plan-related dialogs
+    setShowPlanDialog(false);
+    setPendingBacklogPlan(null);
+
+    // Reset follow-up dialog state
+    resetFollowUpState();
+
+    // Close other project-specific dialogs
+    setShowPipelineSettings(false);
+    // Keep file explorer open across project switches - users expect it to stay visible
+    setShowCodeEditor(false);
+    setCodeEditorFilePath(undefined);
+
+    // Reset features with context tracking
+    setFeaturesWithContext(new Set());
+
+    // Trigger worktree refresh on project switch
+    setWorktreeRefreshKey((prev) => prev + 1);
+
+    logger.info('Board state reset for project switch');
+  }, [boardSelectedProject?.path, exitSelectionMode, resetFollowUpState]);
+
+  // Load pipeline config when board-selected project changes
+  // This ensures the board shows the correct pipeline columns for the selected project
+  useEffect(() => {
+    if (!boardSelectedProject?.path) return;
 
     const loadPipelineConfig = async () => {
       try {
         const api = getHttpApiClient();
-        const result = await api.pipeline.getConfig(currentProject.path);
+        const result = await api.pipeline.getConfig(boardSelectedProject.path);
         if (result.success && result.config) {
-          setPipelineConfig(currentProject.path, result.config);
+          setPipelineConfig(boardSelectedProject.path, result.config);
         }
       } catch (error) {
         logger.error('Failed to load pipeline config:', error);
@@ -259,7 +760,7 @@ export function BoardView() {
     };
 
     loadPipelineConfig();
-  }, [currentProject?.path, setPipelineConfig]);
+  }, [boardSelectedProject?.path, setPipelineConfig]);
 
   // Auto mode hook
   const autoMode = useAutoMode();
@@ -415,7 +916,7 @@ export function BoardView() {
   const selectedWorktreeBranch =
     currentWorktreeBranch || worktrees.find((w) => w.isMain)?.branch || 'main';
 
-  // Calculate unarchived card counts per branch
+  // Calculate active (non-completed) card counts per branch
   const branchCardCounts = useMemo(() => {
     // Use primary worktree branch as default for features without branchName
     const primaryBranch = worktrees.find((w) => w.isMain)?.branch || 'main';
@@ -466,19 +967,25 @@ export function BoardView() {
     handleResumeFeature,
     handleManualVerify,
     handleMoveBackToInProgress,
+    handleMoveBackToBacklog,
     handleOpenFollowUp,
     handleSendFollowUp,
     handleCommitFeature,
     handleMergeFeature,
     handleCompleteFeature,
-    handleUnarchiveFeature,
+    handleRestoreFeature,
     handleViewOutput,
     handleOutputModalNumberKeyPress,
     handleForceStopFeature,
     handleStartNextFeatures,
-    handleArchiveAllVerified,
+    handleCompleteAllWaiting,
+    // Unsatisfied dependencies dialog state and handlers
+    unsatisfiedDepsDialog,
+    handleConfirmStartWithUnsatisfiedDeps,
+    handleCancelStartWithUnsatisfiedDeps,
+    handleUnsatisfiedDepsDialogOpenChange,
   } = useBoardActions({
-    currentProject,
+    currentProject: boardSelectedProject,
     features: hookFeatures,
     runningAutoTasks,
     loadFeatures,
@@ -499,7 +1006,7 @@ export function BoardView() {
     setShowFollowUpDialog,
     inProgressFeaturesForShortcuts,
     outputFeature,
-    projectPath: currentProject?.path || null,
+    projectPath: boardSelectedProject?.path || null,
     onWorktreeCreated: () => setWorktreeRefreshKey((k) => k + 1),
     onWorktreeAutoSelect: addAndSelectWorktree,
     currentWorktreeBranch,
@@ -508,7 +1015,7 @@ export function BoardView() {
   // Handler for bulk updating multiple features
   const handleBulkUpdate = useCallback(
     async (updates: Partial<Feature>, workMode: 'current' | 'auto' | 'custom') => {
-      if (!currentProject || selectedFeatureIds.size === 0) return;
+      if (!boardSelectedProject || selectedFeatureIds.size === 0) return;
 
       try {
         // Determine final branch name based on work mode:
@@ -523,7 +1030,7 @@ export function BoardView() {
         } else if (workMode === 'auto') {
           // Auto-generate a branch name based on primary branch (main/master) and timestamp
           // Always use primary branch to avoid nested feature/feature/... paths
-          const baseBranch = getPrimaryWorktreeBranch(currentProject.path) || 'main';
+          const baseBranch = getPrimaryWorktreeBranch(boardSelectedProject.path) || 'main';
           const timestamp = Date.now();
           const randomSuffix = Math.random().toString(36).substring(2, 6);
           finalBranchName = `feature/${baseBranch}-${timestamp}-${randomSuffix}`;
@@ -538,7 +1045,7 @@ export function BoardView() {
             const electronApi = getElectronAPI();
             if (electronApi?.worktree?.create) {
               const result = await electronApi.worktree.create(
-                currentProject.path,
+                boardSelectedProject.path,
                 finalBranchName
               );
               if (result.success && result.worktree) {
@@ -579,7 +1086,11 @@ export function BoardView() {
 
         const api = getHttpApiClient();
         const featureIds = Array.from(selectedFeatureIds);
-        const result = await api.features.bulkUpdate(currentProject.path, featureIds, finalUpdates);
+        const result = await api.features.bulkUpdate(
+          boardSelectedProject.path,
+          featureIds,
+          finalUpdates
+        );
 
         if (result.success) {
           // Update local state
@@ -599,7 +1110,7 @@ export function BoardView() {
       }
     },
     [
-      currentProject,
+      boardSelectedProject,
       selectedFeatureIds,
       updateFeature,
       exitSelectionMode,
@@ -611,12 +1122,12 @@ export function BoardView() {
 
   // Handler for bulk deleting multiple features
   const handleBulkDelete = useCallback(async () => {
-    if (!currentProject || selectedFeatureIds.size === 0) return;
+    if (!boardSelectedProject || selectedFeatureIds.size === 0) return;
 
     try {
       const api = getHttpApiClient();
       const featureIds = Array.from(selectedFeatureIds);
-      const result = await api.features.bulkDelete(currentProject.path, featureIds);
+      const result = await api.features.bulkDelete(boardSelectedProject.path, featureIds);
 
       const successfullyDeletedIds =
         result.results?.filter((r) => r.success).map((r) => r.featureId) ?? [];
@@ -646,7 +1157,7 @@ export function BoardView() {
       logger.error('Bulk delete failed:', error);
       toast.error('Failed to delete features');
     }
-  }, [currentProject, selectedFeatureIds, exitSelectionMode, loadFeatures]);
+  }, [boardSelectedProject, selectedFeatureIds, exitSelectionMode, loadFeatures]);
 
   // Get selected features for mass edit dialog
   const selectedFeatures = useMemo(() => {
@@ -660,6 +1171,9 @@ export function BoardView() {
         // Only backlog features
         if (f.status !== 'backlog') return false;
 
+        // Skip worktree filtering in multi-project mode
+        if (showAllProjectsInBoard) return true;
+
         // Filter by current worktree branch
         const featureBranch = f.branchName;
         if (!featureBranch) {
@@ -668,8 +1182,8 @@ export function BoardView() {
         }
         if (currentWorktreeBranch === null) {
           // Viewing main but branch hasn't been initialized
-          return currentProject?.path
-            ? isPrimaryWorktreeBranch(currentProject.path, featureBranch)
+          return boardSelectedProject?.path
+            ? isPrimaryWorktreeBranch(boardSelectedProject.path, featureBranch)
             : false;
         }
         // Match by branch name
@@ -680,8 +1194,9 @@ export function BoardView() {
     hookFeatures,
     currentWorktreePath,
     currentWorktreeBranch,
-    currentProject?.path,
+    boardSelectedProject?.path,
     isPrimaryWorktreeBranch,
+    showAllProjectsInBoard,
   ]);
 
   // Get waiting_approval feature IDs in current branch for "Select All"
@@ -691,6 +1206,9 @@ export function BoardView() {
         // Only waiting_approval features
         if (f.status !== 'waiting_approval') return false;
 
+        // Skip worktree filtering in multi-project mode
+        if (showAllProjectsInBoard) return true;
+
         // Filter by current worktree branch
         const featureBranch = f.branchName;
         if (!featureBranch) {
@@ -699,8 +1217,8 @@ export function BoardView() {
         }
         if (currentWorktreeBranch === null) {
           // Viewing main but branch hasn't been initialized
-          return currentProject?.path
-            ? isPrimaryWorktreeBranch(currentProject.path, featureBranch)
+          return boardSelectedProject?.path
+            ? isPrimaryWorktreeBranch(boardSelectedProject.path, featureBranch)
             : false;
         }
         // Match by branch name
@@ -711,39 +1229,40 @@ export function BoardView() {
     hookFeatures,
     currentWorktreePath,
     currentWorktreeBranch,
-    currentProject?.path,
+    boardSelectedProject?.path,
     isPrimaryWorktreeBranch,
+    showAllProjectsInBoard,
   ]);
 
-  // Handler for bulk verifying multiple features
-  const handleBulkVerify = useCallback(async () => {
-    if (!currentProject || selectedFeatureIds.size === 0) return;
+  // Handler for bulk completing multiple features (mark as complete)
+  const handleBulkComplete = useCallback(async () => {
+    if (!boardSelectedProject || selectedFeatureIds.size === 0) return;
 
     try {
       const api = getHttpApiClient();
       const featureIds = Array.from(selectedFeatureIds);
-      const updates = { status: 'verified' as const };
+      const updates = { status: 'completed' as const };
 
       // Use bulk update API for efficient batch processing
-      const result = await api.features.bulkUpdate(currentProject.path, featureIds, updates);
+      const result = await api.features.bulkUpdate(boardSelectedProject.path, featureIds, updates);
 
       if (result.success) {
         // Update local state for all features
         featureIds.forEach((featureId) => {
           updateFeature(featureId, updates);
         });
-        toast.success(`Verified ${result.updatedCount} features`);
+        toast.success(`Completed ${result.updatedCount} features`);
         exitSelectionMode();
       } else {
-        toast.error('Failed to verify some features', {
-          description: `${result.failedCount} features failed to verify`,
+        toast.error('Failed to complete some features', {
+          description: `${result.failedCount} features failed to complete`,
         });
       }
     } catch (error) {
-      logger.error('Bulk verify failed:', error);
-      toast.error('Failed to verify features');
+      logger.error('Bulk complete failed:', error);
+      toast.error('Failed to complete features');
     }
-  }, [currentProject, selectedFeatureIds, updateFeature, exitSelectionMode]);
+  }, [boardSelectedProject, selectedFeatureIds, updateFeature, exitSelectionMode]);
 
   // Handler for addressing PR comments - creates a feature and starts it automatically
   const handleAddressPRComments = useCallback(
@@ -918,6 +1437,18 @@ export function BoardView() {
 
     return unsubscribe;
   }, [currentProject]);
+
+  // Listen for 'create-worktree' event from TopNavigationBar's Git button
+  useEffect(() => {
+    const handleCreateWorktreeEvent = () => {
+      setShowCreateWorktreeDialog(true);
+    };
+
+    window.addEventListener('automaker:create-worktree', handleCreateWorktreeEvent);
+    return () => {
+      window.removeEventListener('automaker:create-worktree', handleCreateWorktreeEvent);
+    };
+  }, []);
 
   // Listen for backlog plan events (for background generation)
   useEffect(() => {
@@ -1196,6 +1727,17 @@ export function BoardView() {
     onAddFeature: () => setShowAddDialog(true),
     onStartNextFeatures: handleStartNextFeatures,
     onViewOutput: handleViewOutput,
+    onToggleAutoMode: () => setShowAutoModeModal(true),
+    // Tab navigation shortcuts - only active in Kanban view mode
+    onNextTab: !isListView ? nextStatusTab : undefined,
+    onPreviousTab: !isListView ? previousStatusTab : undefined,
+    onGoToTab: !isListView ? handleStatusTabChange : undefined,
+    tabs: statusTabs,
+    // Board panel toggle shortcuts
+    onToggleFileExplorer: () => setShowFileExplorer((prev) => !prev),
+    onToggleKanbanPanel: () => setKanbanPanelCollapsed(!isKanbanPanelCollapsed),
+    onToggleAgentChat: () => setAgentChatPanelCollapsed(!isAgentChatPanelCollapsed),
+    onToggleDeployPanel: () => setDeployPanelCollapsed(!isDeployPanelCollapsed),
   });
 
   // Use drag and drop hook
@@ -1207,39 +1749,176 @@ export function BoardView() {
     handleStartImplementation,
   });
 
-  // Use column features hook
-  const { getColumnFeatures, completedFeatures } = useBoardColumnFeatures({
-    features: hookFeatures,
+  // Get pipeline config for column features hook (uses board-scoped project)
+  const pipelineConfig = boardSelectedProject?.path
+    ? pipelineConfigByProject[boardSelectedProject.path] || null
+    : null;
+
+  // Use column features hook with single-column mode support
+  const { getColumnFeatures, columnFeaturesMap, columnCounts } = useBoardColumnFeatures({
+    features: projectFilteredFeatures,
     runningAutoTasks,
     searchQuery,
+    showFavoritesOnly,
     currentWorktreePath,
     currentWorktreeBranch,
-    projectPath: currentProject?.path || null,
+    projectPath: boardSelectedProject?.path || null,
+    activeStatusTab,
+    activeStatusTabs,
+    singleColumnMode: !isAllStatusMode,
+    showAllProjects: showAllProjectsInBoard,
   });
-
-  // Build columnFeaturesMap for ListView
-  const pipelineConfig = currentProject?.path
-    ? pipelineConfigByProject[currentProject.path] || null
-    : null;
-  const columnFeaturesMap = useMemo(() => {
-    const columns = getColumnsWithPipeline(pipelineConfig);
-    const map: Record<string, typeof hookFeatures> = {};
-    for (const column of columns) {
-      map[column.id] = getColumnFeatures(column.id as any);
-    }
-    return map;
-  }, [pipelineConfig, getColumnFeatures]);
 
   // Use background hook
   const { backgroundSettings, backgroundImageStyle } = useBoardBackground({
-    currentProject,
+    currentProject: boardSelectedProject,
   });
+
+  // Phase 2: T006 - Sync board controls to store for TopNavigationBar
+  // This effect populates the board controls store so that TopNavigationBar
+  // can display board-specific controls without prop drilling
+  const setBoardControls = useBoardControlsStore((state) => state.setControls);
+  const clearBoardControls = useBoardControlsStore((state) => state.clearControls);
+
+  useEffect(() => {
+    if (!isMounted) return;
+
+    // Set all board controls in the store
+    setBoardControls({
+      // Search
+      searchQuery,
+      onSearchChange: setSearchQuery,
+      isCreatingSpec,
+      creatingSpecProjectPath,
+
+      // Favorites
+      showFavoritesOnly,
+      onShowFavoritesOnlyChange: setShowFavoritesOnly,
+
+      // View toggle
+      viewMode,
+      onViewModeChange: setViewMode,
+
+      // Board background
+      onShowBoardBackground: () => setShowBoardBackgroundModal(true),
+
+      // Auto mode
+      isAutoModeRunning: autoMode.isRunning,
+      runningAgentsCount: runningAutoTasks.length,
+      maxConcurrency: autoMode.effectiveMaxAgents,
+      onConcurrencyChange: setMaxConcurrency,
+      onAutoModeToggle: (enabled: boolean) => {
+        if (enabled) {
+          autoMode.start();
+        } else {
+          autoMode.stop();
+        }
+      },
+      isAutoModeModalOpen: showAutoModeModal,
+      onAutoModeModalOpenChange: setShowAutoModeModal,
+
+      // Plan
+      onOpenPlanDialog: () => setShowPlanDialog(true),
+      hasPendingPlan: !!pendingBacklogPlan,
+      onOpenPendingPlan: pendingBacklogPlan ? () => setShowPlanDialog(true) : null,
+
+      // Project filter
+      projects,
+      selectedProjectIds,
+      onProjectSelectionChange: handleProjectSelectionChange,
+
+      // Status filter
+      activeStatusTab,
+      activeStatusTabs,
+      onStatusTabChange: handleStatusTabChange,
+      onStatusTabToggle: toggleStatusTab,
+      onStatusTabsCommit: handleStatusTabsCommit,
+      onCreateStatus: handleCreateStatus,
+      onDeleteStatus: handleDeleteStatus,
+      statusTabs,
+      statusTabCounts: columnCounts,
+      isListView,
+
+      // Deploy panel
+      isDeployPanelCollapsed,
+      onToggleDeployPanel: () => setDeployPanelCollapsed(!isDeployPanelCollapsed),
+      onOpenDeployPanel: () => {
+        if (isDeployPanelCollapsed) {
+          setDeployPanelCollapsed(false);
+        }
+      },
+
+      // Refresh
+      onRefresh: refreshFeatures,
+      isRefreshing,
+
+      // Mounted
+      isMounted: true,
+    });
+
+    // Clear controls on unmount
+    return () => {
+      clearBoardControls();
+    };
+  }, [
+    isMounted,
+    searchQuery,
+    isCreatingSpec,
+    creatingSpecProjectPath,
+    showFavoritesOnly,
+    viewMode,
+    autoMode.isRunning,
+    runningAutoTasks.length,
+    maxConcurrency,
+    showAutoModeModal,
+    pendingBacklogPlan,
+    setBoardControls,
+    clearBoardControls,
+    setSearchQuery,
+    setShowFavoritesOnly,
+    setViewMode,
+    setShowBoardBackgroundModal,
+    setMaxConcurrency,
+    autoMode,
+    setShowAutoModeModal,
+    setShowPlanDialog,
+    // Project filter deps
+    projects,
+    selectedProjectIds,
+    handleProjectSelectionChange,
+    // Status filter deps
+    activeStatusTab,
+    activeStatusTabs,
+    handleStatusTabChange,
+    handleStatusTabsCommit,
+    handleCreateStatus,
+    handleDeleteStatus,
+    toggleStatusTab,
+    statusTabs,
+    columnCounts,
+    isListView,
+    // Deploy panel deps
+    isDeployPanelCollapsed,
+    setDeployPanelCollapsed,
+    // Refresh deps
+    refreshFeatures,
+    isRefreshing,
+  ]);
 
   // Find feature for pending plan approval
   const pendingApprovalFeature = useMemo(() => {
     if (!pendingPlanApproval) return null;
     return hookFeatures.find((f) => f.id === pendingPlanApproval.featureId) || null;
   }, [pendingPlanApproval, hookFeatures]);
+
+  // Build available projects map for completed features filtering (project path -> project name)
+  const availableProjectsMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const project of projects) {
+      map.set(project.path, project.name);
+    }
+    return map;
+  }, [projects]);
 
   // Handle plan approval
   const handlePlanApprove = useCallback(
@@ -1381,171 +2060,607 @@ export function BoardView() {
     );
   }
 
-  if (isLoading) {
-    return (
-      <div className="flex-1 flex items-center justify-center" data-testid="board-view-loading">
-        <RefreshCw className="w-6 h-6 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
+  // NOTE: We intentionally do NOT have an early return for isLoading here.
+  // The isLoading state is now handled within the KanbanBoard/ListView rendering
+  // to prevent unmounting the AgentChatPanel and RunningAgentsPanel during
+  // project switches. This ensures agent chat sessions remain stable.
 
   return (
     <div
-      className="flex-1 flex flex-col overflow-hidden content-bg relative"
+      className="flex-1 flex flex-col min-h-0 overflow-hidden content-bg relative"
       data-testid="board-view"
     >
-      {/* Header */}
-      <BoardHeader
-        projectPath={currentProject.path}
-        maxConcurrency={maxConcurrency}
-        runningAgentsCount={runningAutoTasks.length}
-        onConcurrencyChange={setMaxConcurrency}
-        isAutoModeRunning={autoMode.isRunning}
-        onAutoModeToggle={(enabled) => {
-          if (enabled) {
-            autoMode.start();
-          } else {
-            autoMode.stop();
-          }
-        }}
-        onOpenPlanDialog={() => setShowPlanDialog(true)}
-        hasPendingPlan={Boolean(pendingBacklogPlan)}
-        onOpenPendingPlan={() => setShowPlanDialog(true)}
-        isMounted={isMounted}
-        searchQuery={searchQuery}
-        onSearchChange={setSearchQuery}
-        isCreatingSpec={isCreatingSpec}
-        creatingSpecProjectPath={creatingSpecProjectPath}
-        onShowBoardBackground={() => setShowBoardBackgroundModal(true)}
-        viewMode={viewMode}
-        onViewModeChange={setViewMode}
-      />
+      {/* Main Content Area - Single scrollable box filling available space */}
+      <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+        {/* Main Content Row - Kanban/List + Running Agents + Deploy Panel */}
+        {/* Desktop: Resizable panels with drag handle */}
+        {/* Tablet/Mobile: Panel toggle buttons - show one panel at a time */}
+        {isTabletOrSmaller ? (
+          /* Mobile/Tablet Layout - Single panel with toggle buttons */
+          /* Single scrollable box filling available space */
+          <div className="flex-1 flex flex-col min-h-0 overflow-hidden relative">
+            {/* Floating panel toggle buttons - positioned at top right */}
+            <div className="absolute right-2 top-2 z-10 flex gap-1 rounded-lg border border-border bg-background/95 backdrop-blur-sm shadow-md p-1">
+              {/* Board toggle */}
+              <Button
+                variant={activeMobilePanel === 'kanban' ? 'default' : 'ghost'}
+                size="sm"
+                className={cn(
+                  'gap-1.5 h-8 px-2',
+                  activeMobilePanel === 'kanban' && 'bg-brand-500 hover:bg-brand-600'
+                )}
+                onClick={() => setActiveMobilePanel('kanban')}
+              >
+                <LayoutGrid className="h-4 w-4" />
+                <span className="hidden sm:inline text-xs">Board</span>
+              </Button>
 
-      {/* Worktree Panel - conditionally rendered based on visibility setting */}
-      {(worktreePanelVisibleByProject[currentProject.path] ?? true) && (
-        <WorktreePanel
-          refreshTrigger={worktreeRefreshKey}
-          projectPath={currentProject.path}
-          onCreateWorktree={() => setShowCreateWorktreeDialog(true)}
-          onDeleteWorktree={(worktree) => {
-            setSelectedWorktreeForAction(worktree);
-            setShowDeleteWorktreeDialog(true);
-          }}
-          onCommit={(worktree) => {
-            setSelectedWorktreeForAction(worktree);
-            setShowCommitWorktreeDialog(true);
-          }}
-          onCreatePR={(worktree) => {
-            setSelectedWorktreeForAction(worktree);
-            setShowCreatePRDialog(true);
-          }}
-          onCreateBranch={(worktree) => {
-            setSelectedWorktreeForAction(worktree);
-            setShowCreateBranchDialog(true);
-          }}
-          onAddressPRComments={handleAddressPRComments}
-          onResolveConflicts={handleResolveConflicts}
-          onMerge={(worktree) => {
-            setSelectedWorktreeForAction(worktree);
-            setShowMergeWorktreeDialog(true);
-          }}
-          onRemovedWorktrees={handleRemovedWorktrees}
-          runningFeatureIds={runningAutoTasks}
-          branchCardCounts={branchCardCounts}
-          features={hookFeatures.map((f) => ({
-            id: f.id,
-            branchName: f.branchName,
-          }))}
-        />
-      )}
+              {/* Agents toggle */}
+              <Button
+                variant={activeMobilePanel === 'agents' ? 'default' : 'ghost'}
+                size="sm"
+                className={cn(
+                  'gap-1.5 h-8 px-2',
+                  activeMobilePanel === 'agents' && 'bg-brand-500 hover:bg-brand-600',
+                  activeMobilePanel !== 'agents' &&
+                    runningAutoTasks.length > 0 &&
+                    'border-brand-500/50'
+                )}
+                onClick={() => setActiveMobilePanel('agents')}
+              >
+                <Activity className="h-4 w-4" />
+                <span className="hidden sm:inline text-xs">Agents</span>
+                {runningAutoTasks.length > 0 && activeMobilePanel !== 'agents' && (
+                  <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-brand-500 px-1 text-[10px] font-medium text-white">
+                    {runningAutoTasks.length}
+                  </span>
+                )}
+              </Button>
 
-      {/* Main Content Area */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {/* View Content - Kanban Board or List View */}
-        {isListView ? (
-          <ListView
-            columnFeaturesMap={columnFeaturesMap}
-            allFeatures={hookFeatures}
-            sortConfig={sortConfig}
-            onSortChange={setSortColumn}
-            actionHandlers={{
-              onEdit: (feature) => setEditingFeature(feature),
-              onDelete: (featureId) => handleDeleteFeature(featureId),
-              onViewOutput: handleViewOutput,
-              onVerify: handleVerifyFeature,
-              onResume: handleResumeFeature,
-              onForceStop: handleForceStopFeature,
-              onManualVerify: handleManualVerify,
-              onFollowUp: handleOpenFollowUp,
-              onImplement: handleStartImplementation,
-              onComplete: handleCompleteFeature,
-              onViewPlan: (feature) => setViewPlanFeature(feature),
-              onApprovePlan: handleOpenApprovalDialog,
-              onSpawnTask: (feature) => {
-                setSpawnParentFeature(feature);
-                setShowAddDialog(true);
-              },
-            }}
-            runningAutoTasks={runningAutoTasks}
-            pipelineConfig={pipelineConfig}
-            onAddFeature={() => setShowAddDialog(true)}
-            isSelectionMode={isSelectionMode}
-            selectedFeatureIds={selectedFeatureIds}
-            onToggleFeatureSelection={toggleFeatureSelection}
-            onRowClick={(feature) => {
-              if (feature.status === 'backlog') {
-                setEditingFeature(feature);
-              } else {
-                handleViewOutput(feature);
-              }
-            }}
-            className="transition-opacity duration-200"
-          />
+              {/* Deploy toggle */}
+              <Button
+                variant={activeMobilePanel === 'deploy' ? 'default' : 'ghost'}
+                size="sm"
+                className={cn(
+                  'gap-1.5 h-8 px-2',
+                  activeMobilePanel === 'deploy' && 'bg-brand-500 hover:bg-brand-600'
+                )}
+                onClick={() => setActiveMobilePanel('deploy')}
+              >
+                <Rocket className="h-4 w-4" />
+                <span className="hidden sm:inline text-xs">Deploy</span>
+              </Button>
+            </div>
+
+            {/* Panel content - show one panel at a time */}
+            <div className="flex-1 min-h-0 overflow-hidden">
+              {/* Kanban/List Panel */}
+              {activeMobilePanel === 'kanban' && (
+                <div className="h-full min-h-0 relative">
+                  {isLoading ? (
+                    /* Progressive skeleton — replaces the old full-screen loading overlay */
+                    <BoardSkeleton
+                      pipelineConfig={pipelineConfig}
+                      showBorder={backgroundSettings.columnBorderEnabled}
+                      backgroundImageStyle={backgroundImageStyle}
+                      singleColumnMode={!isAllStatusMode}
+                      activeStatusTab={activeStatusTab}
+                      activeStatusTabs={activeStatusTabs}
+                    />
+                  ) : isListView ? (
+                    <ListView
+                      columnFeaturesMap={columnFeaturesMap}
+                      allFeatures={hookFeatures}
+                      sortConfig={sortConfig}
+                      onSortChange={setSortColumn}
+                      actionHandlers={{
+                        onEdit: (feature) => setEditingFeature(feature),
+                        onDelete: (featureId) => handleDeleteFeature(featureId),
+                        onViewOutput: handleViewOutput,
+                        onVerify: handleVerifyFeature,
+                        onResume: handleResumeFeature,
+                        onForceStop: handleForceStopFeature,
+                        onManualVerify: handleManualVerify,
+                        onFollowUp: handleOpenFollowUp,
+                        onImplement: handleStartImplementation,
+                        onViewPlan: (feature) => setViewPlanFeature(feature),
+                        onApprovePlan: handleOpenApprovalDialog,
+                        onSpawnTask: (feature) => {
+                          setSpawnParentFeature(feature);
+                          setShowAddDialog(true);
+                        },
+                        onToggleFavorite: (feature) => {
+                          const updates = { isFavorite: !feature.isFavorite };
+                          updateFeature(feature.id, updates);
+                          persistFeatureUpdate(feature.id, updates);
+                        },
+                      }}
+                      runningAutoTasks={runningAutoTasks}
+                      pipelineConfig={pipelineConfig}
+                      onAddFeature={() => setShowAddDialog(true)}
+                      isSelectionMode={isSelectionMode}
+                      selectedFeatureIds={selectedFeatureIds}
+                      onToggleFeatureSelection={toggleFeatureSelection}
+                      onRowClick={(feature) => {
+                        if (feature.status === 'backlog') {
+                          setEditingFeature(feature);
+                        } else {
+                          handleViewOutput(feature);
+                        }
+                      }}
+                      className="transition-opacity duration-200"
+                      singleColumnMode={!isAllStatusMode}
+                      activeStatusTab={activeStatusTab}
+                      activeStatusTabs={activeStatusTabs}
+                      showAllProjects={showAllProjectsInBoard}
+                    />
+                  ) : (
+                    <KanbanBoard
+                      sensors={sensors}
+                      collisionDetectionStrategy={collisionDetectionStrategy}
+                      onDragStart={handleDragStart}
+                      onDragEnd={handleDragEnd}
+                      activeFeature={activeFeature}
+                      getColumnFeatures={getColumnFeatures}
+                      backgroundImageStyle={backgroundImageStyle}
+                      backgroundSettings={backgroundSettings}
+                      onEdit={(feature) => setEditingFeature(feature)}
+                      onDelete={(featureId) => handleDeleteFeature(featureId)}
+                      onViewOutput={handleViewOutput}
+                      onVerify={handleVerifyFeature}
+                      onResume={handleResumeFeature}
+                      onForceStop={handleForceStopFeature}
+                      onManualVerify={handleManualVerify}
+                      onMoveBackToInProgress={handleMoveBackToInProgress}
+                      onMoveBackToBacklog={handleMoveBackToBacklog}
+                      onFollowUp={handleOpenFollowUp}
+                      onComplete={handleCompleteFeature}
+                      onImplement={handleStartImplementation}
+                      onViewPlan={(feature) => setViewPlanFeature(feature)}
+                      onApprovePlan={handleOpenApprovalDialog}
+                      onSpawnTask={(feature) => {
+                        setSpawnParentFeature(feature);
+                        setShowAddDialog(true);
+                      }}
+                      onToggleFavorite={(feature) => {
+                        const updates = { isFavorite: !feature.isFavorite };
+                        updateFeature(feature.id, updates);
+                        persistFeatureUpdate(feature.id, updates);
+                      }}
+                      featuresWithContext={featuresWithContext}
+                      runningAutoTasks={runningAutoTasks}
+                      onCompleteAllWaiting={() => setShowCompleteAllWaitingDialog(true)}
+                      onAddFeature={() => setShowAddDialog(true)}
+                      pipelineConfig={pipelineConfig}
+                      onOpenPipelineSettings={() => setShowPipelineSettings(true)}
+                      isSelectionMode={isSelectionMode}
+                      selectionTarget={selectionTarget}
+                      selectedFeatureIds={selectedFeatureIds}
+                      onToggleFeatureSelection={toggleFeatureSelection}
+                      onToggleSelectionMode={toggleSelectionMode}
+                      viewMode={viewMode}
+                      isDragging={activeFeature !== null}
+                      onAiSuggest={() => setShowPlanDialog(true)}
+                      className="transition-opacity duration-200"
+                      singleColumnMode={!isAllStatusMode}
+                      activeStatusTab={activeStatusTab}
+                      activeStatusTabs={activeStatusTabs}
+                      showAllProjects={showAllProjectsInBoard}
+                    />
+                  )}
+                </div>
+              )}
+
+              {/* Running Agents Panel */}
+              {activeMobilePanel === 'agents' && (
+                <div className="h-full overflow-hidden p-2">
+                  <RunningAgentsPanel
+                    compact
+                    maxHeight="calc(100vh - 200px)"
+                    defaultCollapsed={false}
+                    className="h-full"
+                  />
+                </div>
+              )}
+
+              {/* Deploy Panel */}
+              {activeMobilePanel === 'deploy' && (
+                <div className="h-full overflow-hidden p-2">
+                  <DeployPanel
+                    project={agentPanelProject}
+                    isCollapsed={false}
+                    onCollapseChange={handleDeployPanelCollapseChange}
+                    onProjectChange={handleAgentPanelProjectChange}
+                    showProjectSelector
+                    compact
+                    className="h-full"
+                  />
+                </div>
+              )}
+            </div>
+          </div>
         ) : (
-          <KanbanBoard
-            sensors={sensors}
-            collisionDetectionStrategy={collisionDetectionStrategy}
-            onDragStart={handleDragStart}
-            onDragEnd={handleDragEnd}
-            activeFeature={activeFeature}
-            getColumnFeatures={getColumnFeatures}
-            backgroundImageStyle={backgroundImageStyle}
-            backgroundSettings={backgroundSettings}
-            onEdit={(feature) => setEditingFeature(feature)}
-            onDelete={(featureId) => handleDeleteFeature(featureId)}
-            onViewOutput={handleViewOutput}
-            onVerify={handleVerifyFeature}
-            onResume={handleResumeFeature}
-            onForceStop={handleForceStopFeature}
-            onManualVerify={handleManualVerify}
-            onMoveBackToInProgress={handleMoveBackToInProgress}
-            onFollowUp={handleOpenFollowUp}
-            onComplete={handleCompleteFeature}
-            onImplement={handleStartImplementation}
-            onViewPlan={(feature) => setViewPlanFeature(feature)}
-            onApprovePlan={handleOpenApprovalDialog}
-            onSpawnTask={(feature) => {
-              setSpawnParentFeature(feature);
-              setShowAddDialog(true);
-            }}
-            featuresWithContext={featuresWithContext}
-            runningAutoTasks={runningAutoTasks}
-            onArchiveAllVerified={() => setShowArchiveAllVerifiedDialog(true)}
-            onAddFeature={() => setShowAddDialog(true)}
-            onShowCompletedModal={() => setShowCompletedModal(true)}
-            completedCount={completedFeatures.length}
-            pipelineConfig={pipelineConfig}
-            onOpenPipelineSettings={() => setShowPipelineSettings(true)}
-            isSelectionMode={isSelectionMode}
-            selectionTarget={selectionTarget}
-            selectedFeatureIds={selectedFeatureIds}
-            onToggleFeatureSelection={toggleFeatureSelection}
-            onToggleSelectionMode={toggleSelectionMode}
-            viewMode={viewMode}
-            isDragging={activeFeature !== null}
-            onAiSuggest={() => setShowPlanDialog(true)}
-            className="transition-opacity duration-200"
-          />
+          /* Desktop Layout - File Explorer | Kanban | RunningAgents */
+          /* VS Code-style: Double-click resize handles to snap panels between sizes (25%, 50%, 75%) */
+          /* Single scrollable box filling available space */
+          <div className="flex-1 flex min-h-0 overflow-hidden">
+            {/* File Explorer Panel - collapsible sidebar */}
+            {showFileExplorer && (
+              <div className="w-64 border-r border-border bg-background shrink-0 flex flex-col">
+                <div className="flex items-center justify-between h-10 px-3 border-b border-border bg-muted/30 shrink-0">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1 rounded bg-brand-500/10">
+                      <FolderOpen className="h-3.5 w-3.5 text-brand-500" />
+                    </div>
+                    <span className="text-sm font-medium">Files</span>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6"
+                    onClick={() => setShowFileExplorer(false)}
+                    title="Close File Explorer"
+                  >
+                    <ChevronLeft className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+                <FileExplorer
+                  projectPath={boardSelectedProject?.path || null}
+                  onFileSelect={handleFileSelect}
+                  className="flex-1"
+                />
+              </div>
+            )}
+
+            {/* File Explorer Toggle Button - shown when collapsed */}
+            {!showFileExplorer && (
+              <div className="flex items-center justify-center w-10 border-r border-border bg-muted/30 shrink-0">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-full w-full rounded-none hover:bg-brand-500/10"
+                  onClick={() => setShowFileExplorer(true)}
+                  title="Open File Explorer"
+                >
+                  <div className="flex flex-col items-center gap-2">
+                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                    <div className="p-1 rounded bg-brand-500/10">
+                      <FolderOpen className="h-3.5 w-3.5 text-brand-500" />
+                    </div>
+                    <span
+                      className="text-xs font-medium text-muted-foreground"
+                      style={{ writingMode: 'vertical-rl', textOrientation: 'mixed' }}
+                    >
+                      Files
+                    </span>
+                  </div>
+                </Button>
+              </div>
+            )}
+
+            {/* Collapsed Kanban panel - show expand button */}
+            {isKanbanPanelCollapsed && (
+              <div className="flex items-center justify-center w-10 border-r border-border bg-muted/30 shrink-0">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-full w-full rounded-none hover:bg-brand-500/10"
+                  onClick={() => setKanbanPanelCollapsed(false)}
+                  title="Expand Kanban Board"
+                >
+                  <div className="flex flex-col items-center gap-2">
+                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                    <div className="p-1 rounded bg-brand-500/10">
+                      <LayoutGrid className="h-3.5 w-3.5 text-brand-500" />
+                    </div>
+                    <span
+                      className="text-xs font-medium text-muted-foreground"
+                      style={{ writingMode: 'vertical-rl', textOrientation: 'mixed' }}
+                    >
+                      Board
+                    </span>
+                  </div>
+                </Button>
+              </div>
+            )}
+
+            {/* Main Panel Group - only render visible panels */}
+            <PanelGroup
+              direction="horizontal"
+              className="flex-1"
+              onLayout={(sizes) => {
+                // Store panel sizes in ref during drag - don't update Zustand yet
+                // This prevents excessive state updates/re-renders during resize
+                // The actual Zustand update happens in PanelResizeHandle's onDragging callback
+                let sizeIndex = 0;
+                const newKanbanSize = !isKanbanPanelCollapsed
+                  ? sizes[sizeIndex++]
+                  : kanbanPanelSize;
+                const newAgentChatSize = !isAgentChatPanelCollapsed
+                  ? sizes[sizeIndex++]
+                  : agentChatPanelSize;
+                const newDeploySize = !isDeployPanelCollapsed ? sizes[sizeIndex] : deployPanelSize;
+                pendingPanelSizesRef.current = {
+                  kanban: newKanbanSize,
+                  agentChat: newAgentChatSize,
+                  deploy: newDeploySize,
+                };
+              }}
+            >
+              {/* Kanban/List Panel */}
+              {!isKanbanPanelCollapsed && (
+                <Panel defaultSize={kanbanPanelSize} minSize={25} className="overflow-hidden">
+                  <div className="h-full flex flex-col min-h-0">
+                    {/* Kanban/List content - full-bleed container filling available space */}
+                    <div className="flex-1 min-h-0 relative">
+                      {isLoading ? (
+                        /* Progressive skeleton — replaces the old full-screen loading overlay */
+                        <BoardSkeleton
+                          pipelineConfig={pipelineConfig}
+                          showBorder={backgroundSettings.columnBorderEnabled}
+                          backgroundImageStyle={backgroundImageStyle}
+                          singleColumnMode={!isAllStatusMode}
+                          activeStatusTab={activeStatusTab}
+                          activeStatusTabs={activeStatusTabs}
+                        />
+                      ) : isListView ? (
+                        <ListView
+                          columnFeaturesMap={columnFeaturesMap}
+                          allFeatures={hookFeatures}
+                          sortConfig={sortConfig}
+                          onSortChange={setSortColumn}
+                          actionHandlers={{
+                            onEdit: (feature) => setEditingFeature(feature),
+                            onDelete: (featureId) => handleDeleteFeature(featureId),
+                            onViewOutput: handleViewOutput,
+                            onVerify: handleVerifyFeature,
+                            onResume: handleResumeFeature,
+                            onForceStop: handleForceStopFeature,
+                            onManualVerify: handleManualVerify,
+                            onFollowUp: handleOpenFollowUp,
+                            onImplement: handleStartImplementation,
+                            onViewPlan: (feature) => setViewPlanFeature(feature),
+                            onApprovePlan: handleOpenApprovalDialog,
+                            onSpawnTask: (feature) => {
+                              setSpawnParentFeature(feature);
+                              setShowAddDialog(true);
+                            },
+                            onToggleFavorite: (feature) => {
+                              const updates = { isFavorite: !feature.isFavorite };
+                              updateFeature(feature.id, updates);
+                              persistFeatureUpdate(feature.id, updates);
+                            },
+                          }}
+                          runningAutoTasks={runningAutoTasks}
+                          pipelineConfig={pipelineConfig}
+                          onAddFeature={() => setShowAddDialog(true)}
+                          isSelectionMode={isSelectionMode}
+                          selectedFeatureIds={selectedFeatureIds}
+                          onToggleFeatureSelection={toggleFeatureSelection}
+                          onRowClick={(feature) => {
+                            if (feature.status === 'backlog') {
+                              setEditingFeature(feature);
+                            } else {
+                              handleViewOutput(feature);
+                            }
+                          }}
+                          className="transition-opacity duration-200"
+                          singleColumnMode={!isAllStatusMode}
+                          activeStatusTab={activeStatusTab}
+                          activeStatusTabs={activeStatusTabs}
+                          showAllProjects={showAllProjectsInBoard}
+                        />
+                      ) : (
+                        <KanbanBoard
+                          sensors={sensors}
+                          collisionDetectionStrategy={collisionDetectionStrategy}
+                          onDragStart={handleDragStart}
+                          onDragEnd={handleDragEnd}
+                          activeFeature={activeFeature}
+                          getColumnFeatures={getColumnFeatures}
+                          backgroundImageStyle={backgroundImageStyle}
+                          backgroundSettings={backgroundSettings}
+                          onEdit={(feature) => setEditingFeature(feature)}
+                          onDelete={(featureId) => handleDeleteFeature(featureId)}
+                          onViewOutput={handleViewOutput}
+                          onVerify={handleVerifyFeature}
+                          onResume={handleResumeFeature}
+                          onForceStop={handleForceStopFeature}
+                          onManualVerify={handleManualVerify}
+                          onMoveBackToInProgress={handleMoveBackToInProgress}
+                          onMoveBackToBacklog={handleMoveBackToBacklog}
+                          onFollowUp={handleOpenFollowUp}
+                          onComplete={handleCompleteFeature}
+                          onImplement={handleStartImplementation}
+                          onViewPlan={(feature) => setViewPlanFeature(feature)}
+                          onApprovePlan={handleOpenApprovalDialog}
+                          onSpawnTask={(feature) => {
+                            setSpawnParentFeature(feature);
+                            setShowAddDialog(true);
+                          }}
+                          onToggleFavorite={(feature) => {
+                            const updates = { isFavorite: !feature.isFavorite };
+                            updateFeature(feature.id, updates);
+                            persistFeatureUpdate(feature.id, updates);
+                          }}
+                          featuresWithContext={featuresWithContext}
+                          runningAutoTasks={runningAutoTasks}
+                          onCompleteAllWaiting={() => setShowCompleteAllWaitingDialog(true)}
+                          onAddFeature={() => setShowAddDialog(true)}
+                          pipelineConfig={pipelineConfig}
+                          onOpenPipelineSettings={() => setShowPipelineSettings(true)}
+                          isSelectionMode={isSelectionMode}
+                          selectionTarget={selectionTarget}
+                          selectedFeatureIds={selectedFeatureIds}
+                          onToggleFeatureSelection={toggleFeatureSelection}
+                          onToggleSelectionMode={toggleSelectionMode}
+                          viewMode={viewMode}
+                          isDragging={activeFeature !== null}
+                          onAiSuggest={() => setShowPlanDialog(true)}
+                          className="transition-opacity duration-200"
+                          singleColumnMode={!isAllStatusMode}
+                          activeStatusTab={activeStatusTab}
+                          activeStatusTabs={activeStatusTabs}
+                          showAllProjects={showAllProjectsInBoard}
+                        />
+                      )}
+                    </div>
+                  </div>
+                </Panel>
+              )}
+
+              {/* Resize Handle between Kanban and Agent Chat - with VS Code-style double-click snapping */}
+              {!isKanbanPanelCollapsed && !isAgentChatPanelCollapsed && (
+                <PanelResizeHandle
+                  className="w-2 group relative flex items-center justify-center hover:bg-brand-500/10 transition-colors data-[resize-handle-active]:bg-brand-500/20"
+                  title="Drag to resize • Double-click to snap (25%, 50%, 75%)"
+                  onDragging={(isDragging) => {
+                    // Commit panel sizes to Zustand only when dragging ends
+                    // This prevents lag from excessive state updates during resize
+                    if (!isDragging && pendingPanelSizesRef.current) {
+                      setKanbanPanelSize(pendingPanelSizesRef.current.kanban);
+                      setAgentChatPanelSize(pendingPanelSizesRef.current.agentChat);
+                      setDeployPanelSize(pendingPanelSizesRef.current.deploy);
+                      pendingPanelSizesRef.current = null;
+                    }
+                  }}
+                  onDoubleClick={() => {
+                    // VS Code-style snap: cycle between 25%, 50%, 75%
+                    const snapPoints = [25, 50, 75];
+                    const currentIndex = snapPoints.findIndex(
+                      (p) => Math.abs(kanbanPanelSize - p) < 10
+                    );
+                    const nextIndex = (currentIndex + 1) % snapPoints.length;
+                    setKanbanPanelSize(snapPoints[nextIndex]);
+                  }}
+                >
+                  <div className="absolute inset-y-0 flex items-center">
+                    <div className="h-8 w-1 rounded-full bg-border group-hover:bg-brand-500/50 group-data-[resize-handle-active]:bg-brand-500 transition-colors" />
+                  </div>
+                </PanelResizeHandle>
+              )}
+
+              {/* Agent Chat Panel */}
+              {!isAgentChatPanelCollapsed && (
+                <Panel
+                  defaultSize={agentChatPanelSize}
+                  minSize={25}
+                  maxSize={60}
+                  className="overflow-hidden"
+                >
+                  <AgentChatPanel
+                    project={agentPanelProject}
+                    isCollapsed={false}
+                    onCollapseChange={handleAgentChatPanelCollapseChange}
+                    onProjectChange={handleAgentPanelProjectChange}
+                    showProjectSelector
+                    compact
+                    className="h-full"
+                  />
+                </Panel>
+              )}
+
+              {/* Resize Handle between Agent Chat and Deploy - with VS Code-style double-click snapping */}
+              {!isAgentChatPanelCollapsed && !isDeployPanelCollapsed && (
+                <PanelResizeHandle
+                  className="w-2 group relative flex items-center justify-center hover:bg-brand-500/10 transition-colors data-[resize-handle-active]:bg-brand-500/20"
+                  title="Drag to resize • Double-click to snap (25%, 50%, 75%)"
+                  onDragging={(isDragging) => {
+                    // Commit panel sizes to Zustand only when dragging ends
+                    if (!isDragging && pendingPanelSizesRef.current) {
+                      setKanbanPanelSize(pendingPanelSizesRef.current.kanban);
+                      setAgentChatPanelSize(pendingPanelSizesRef.current.agentChat);
+                      setDeployPanelSize(pendingPanelSizesRef.current.deploy);
+                      pendingPanelSizesRef.current = null;
+                    }
+                  }}
+                  onDoubleClick={() => {
+                    // VS Code-style snap: cycle between 25%, 50%, 75% for deploy panel
+                    const snapPoints = [25, 50, 75];
+                    const currentIndex = snapPoints.findIndex(
+                      (p) => Math.abs(deployPanelSize - p) < 10
+                    );
+                    const nextIndex = (currentIndex + 1) % snapPoints.length;
+                    setDeployPanelSize(snapPoints[nextIndex]);
+                  }}
+                >
+                  <div className="absolute inset-y-0 flex items-center">
+                    <div className="h-8 w-1 rounded-full bg-border group-hover:bg-brand-500/50 group-data-[resize-handle-active]:bg-brand-500 transition-colors" />
+                  </div>
+                </PanelResizeHandle>
+              )}
+
+              {/* Deploy Panel */}
+              {!isDeployPanelCollapsed && (
+                <Panel
+                  defaultSize={deployPanelSize}
+                  minSize={15}
+                  maxSize={40}
+                  className="overflow-hidden"
+                >
+                  <DeployPanel
+                    project={agentPanelProject}
+                    isCollapsed={false}
+                    onCollapseChange={handleDeployPanelCollapseChange}
+                    onProjectChange={handleAgentPanelProjectChange}
+                    showProjectSelector
+                    compact
+                    className="h-full"
+                  />
+                </Panel>
+              )}
+            </PanelGroup>
+
+            {/* Collapsed agent chat panel - show expand button (outside PanelGroup) */}
+            {isAgentChatPanelCollapsed && (
+              <div className="flex items-center justify-center w-10 border-l border-border bg-muted/30 shrink-0">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-full w-full rounded-none hover:bg-brand-500/10"
+                  onClick={() => setAgentChatPanelCollapsed(false)}
+                  title="Expand Agent Chat Panel"
+                >
+                  <div className="flex flex-col items-center gap-2">
+                    <div className="p-1 rounded bg-brand-500/10">
+                      <Bot className="h-3.5 w-3.5 text-brand-500" />
+                    </div>
+                    <span
+                      className="text-xs font-medium text-muted-foreground"
+                      style={{ writingMode: 'vertical-rl', textOrientation: 'mixed' }}
+                    >
+                      Chat
+                    </span>
+                  </div>
+                </Button>
+              </div>
+            )}
+
+            {/* Collapsed deploy panel - show expand button (outside PanelGroup) */}
+            {isDeployPanelCollapsed && (
+              <div className="flex items-center justify-center w-10 border-l border-border bg-muted/30 shrink-0">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-full w-full rounded-none hover:bg-brand-500/10"
+                  onClick={() => setDeployPanelCollapsed(false)}
+                  title="Expand Deploy Panel"
+                >
+                  <div className="flex flex-col items-center gap-2">
+                    <div className="p-1 rounded bg-brand-500/10">
+                      <Rocket className="h-3.5 w-3.5 text-brand-500" />
+                    </div>
+                    <span
+                      className="text-xs font-medium text-muted-foreground"
+                      style={{ writingMode: 'vertical-rl', textOrientation: 'mixed' }}
+                    >
+                      Deploy
+                    </span>
+                  </div>
+                </Button>
+              </div>
+            )}
+          </div>
         )}
       </div>
 
@@ -1560,7 +2675,7 @@ export function BoardView() {
           }
           onEdit={selectionTarget === 'backlog' ? () => setShowMassEditDialog(true) : undefined}
           onDelete={selectionTarget === 'backlog' ? handleBulkDelete : undefined}
-          onVerify={selectionTarget === 'waiting_approval' ? handleBulkVerify : undefined}
+          onVerify={selectionTarget === 'waiting_approval' ? handleBulkComplete : undefined}
           onClear={clearSelection}
           onSelectAll={() =>
             selectAll(
@@ -1576,38 +2691,31 @@ export function BoardView() {
       {/* Mass Edit Dialog */}
       <MassEditDialog
         open={showMassEditDialog}
-        onClose={() => setShowMassEditDialog(false)}
-        selectedFeatures={selectedFeatures}
-        onApply={handleBulkUpdate}
-        branchSuggestions={branchSuggestions}
-        branchCardCounts={branchCardCounts}
-        currentBranch={currentWorktreeBranch || undefined}
+        onOpenChange={(open) => !open && setShowMassEditDialog(false)}
+        componentProps={{
+          onClose: () => setShowMassEditDialog(false),
+          selectedFeatures,
+          onApply: handleBulkUpdate,
+          branchSuggestions,
+          branchCardCounts,
+          currentBranch: currentWorktreeBranch || undefined,
+        }}
       />
 
-      {/* Board Background Modal */}
+      {/* Board Background Modal (lazy-loaded) */}
       <BoardBackgroundModal
         open={showBoardBackgroundModal}
         onOpenChange={setShowBoardBackgroundModal}
       />
 
-      {/* Completed Features Modal */}
-      <CompletedFeaturesModal
-        open={showCompletedModal}
-        onOpenChange={setShowCompletedModal}
-        completedFeatures={completedFeatures}
-        onUnarchive={handleUnarchiveFeature}
-        onDelete={(feature) => setDeleteCompletedFeature(feature)}
-      />
-
-      {/* Delete Completed Feature Confirmation Dialog */}
-      <DeleteCompletedFeatureDialog
-        feature={deleteCompletedFeature}
-        onClose={() => setDeleteCompletedFeature(null)}
-        onConfirm={async () => {
-          if (deleteCompletedFeature) {
-            await handleDeleteFeature(deleteCompletedFeature.id);
-            setDeleteCompletedFeature(null);
-          }
+      {/* Delete Project Confirmation Dialog (lazy-loaded) */}
+      <DeleteProjectDialog
+        open={deleteProjectDialogOpen}
+        onOpenChange={setDeleteProjectDialogOpen}
+        componentProps={{
+          project: projectToDelete,
+          onSoftDelete: handleSoftDelete,
+          onHardDelete: handleHardDelete,
         }}
       />
 
@@ -1620,74 +2728,104 @@ export function BoardView() {
             setSpawnParentFeature(null);
           }
         }}
-        onAdd={handleAddFeature}
-        onAddAndStart={handleAddAndStartFeature}
-        categorySuggestions={categorySuggestions}
-        branchSuggestions={branchSuggestions}
-        branchCardCounts={branchCardCounts}
-        defaultSkipTests={defaultSkipTests}
-        defaultBranch={selectedWorktreeBranch}
-        currentBranch={currentWorktreeBranch || undefined}
-        isMaximized={isMaximized}
-        parentFeature={spawnParentFeature}
-        allFeatures={hookFeatures}
-        // When setting is enabled and a non-main worktree is selected, pass its branch to default to 'custom' work mode
-        selectedNonMainWorktreeBranch={
-          addFeatureUseSelectedWorktreeBranch && currentWorktreePath !== null
-            ? currentWorktreeBranch || undefined
-            : undefined
-        }
-        // When the worktree setting is disabled, force 'current' branch mode
-        forceCurrentBranchMode={!addFeatureUseSelectedWorktreeBranch}
+        componentProps={{
+          onAdd: handleAddFeature,
+          onAddAndStart: handleAddAndStartFeature,
+          categorySuggestions,
+          branchSuggestions,
+          branchCardCounts,
+          defaultSkipTests,
+          defaultBranch: selectedWorktreeBranch,
+          currentBranch: currentWorktreeBranch || undefined,
+          isMaximized,
+          parentFeature: spawnParentFeature,
+          allFeatures: hookFeatures,
+          // When setting is enabled and a non-main worktree is selected, pass its branch to default to 'custom' work mode
+          selectedNonMainWorktreeBranch:
+            addFeatureUseSelectedWorktreeBranch && currentWorktreePath !== null
+              ? currentWorktreeBranch || undefined
+              : undefined,
+          // When the worktree setting is disabled, force 'current' branch mode
+          forceCurrentBranchMode: !addFeatureUseSelectedWorktreeBranch,
+          // Project selection support for multi-project mode
+          projects,
+          selectedProject: boardSelectedProject,
+          showAllProjectsMode: showAllProjectsInBoard,
+        }}
       />
 
       {/* Edit Feature Dialog */}
       <EditFeatureDialog
-        feature={editingFeature}
-        onClose={() => setEditingFeature(null)}
-        onUpdate={handleUpdateFeature}
-        categorySuggestions={categorySuggestions}
-        branchSuggestions={branchSuggestions}
-        branchCardCounts={branchCardCounts}
-        currentBranch={currentWorktreeBranch || undefined}
-        isMaximized={isMaximized}
-        allFeatures={hookFeatures}
+        open={!!editingFeature}
+        onOpenChange={(open) => !open && setEditingFeature(null)}
+        componentProps={{
+          feature: editingFeature,
+          onClose: () => setEditingFeature(null),
+          onUpdate: handleUpdateFeature,
+          categorySuggestions,
+          branchSuggestions,
+          branchCardCounts,
+          currentBranch: currentWorktreeBranch || undefined,
+          isMaximized,
+          allFeatures: hookFeatures,
+        }}
       />
 
       {/* Agent Output Modal */}
       <AgentOutputModal
         open={showOutputModal}
-        onClose={() => setShowOutputModal(false)}
-        featureDescription={outputFeature?.description || ''}
-        featureId={outputFeature?.id || ''}
-        featureStatus={outputFeature?.status}
-        onNumberKeyPress={handleOutputModalNumberKeyPress}
+        onOpenChange={(open) => !open && setShowOutputModal(false)}
+        componentProps={{
+          onClose: () => setShowOutputModal(false),
+          featureDescription: outputFeature?.description || '',
+          featureId: outputFeature?.id || '',
+          featureStatus: outputFeature?.status,
+          onNumberKeyPress: handleOutputModalNumberKeyPress,
+          projectPath: currentProject?.path,
+          feature: outputFeature || undefined,
+        }}
       />
 
-      {/* Archive All Verified Dialog */}
-      <ArchiveAllVerifiedDialog
-        open={showArchiveAllVerifiedDialog}
-        onOpenChange={setShowArchiveAllVerifiedDialog}
-        verifiedCount={getColumnFeatures('verified').length}
-        onConfirm={async () => {
-          await handleArchiveAllVerified();
-          setShowArchiveAllVerifiedDialog(false);
+      {/* Complete All Waiting Dialog */}
+      <CompleteAllWaitingDialog
+        open={showCompleteAllWaitingDialog}
+        onOpenChange={setShowCompleteAllWaitingDialog}
+        componentProps={{
+          waitingCount: getColumnFeatures('waiting_approval').length,
+          onConfirm: async () => {
+            await handleCompleteAllWaiting();
+            setShowCompleteAllWaitingDialog(false);
+          },
+        }}
+      />
+
+      {/* Unsatisfied Dependencies Confirmation Dialog */}
+      <UnsatisfiedDependenciesDialog
+        open={unsatisfiedDepsDialog.open}
+        onOpenChange={handleUnsatisfiedDepsDialogOpenChange}
+        componentProps={{
+          feature: unsatisfiedDepsDialog.feature,
+          blockingDependencies: unsatisfiedDepsDialog.blockingDependencies,
+          onConfirm: handleConfirmStartWithUnsatisfiedDeps,
+          onCancel: handleCancelStartWithUnsatisfiedDeps,
         }}
       />
 
       {/* Pipeline Settings Dialog */}
       <PipelineSettingsDialog
         open={showPipelineSettings}
-        onClose={() => setShowPipelineSettings(false)}
-        projectPath={currentProject.path}
-        pipelineConfig={pipelineConfig}
-        onSave={async (config) => {
-          const api = getHttpApiClient();
-          const result = await api.pipeline.saveConfig(currentProject.path, config);
-          if (!result.success) {
-            throw new Error(result.error || 'Failed to save pipeline config');
-          }
-          setPipelineConfig(currentProject.path, config);
+        onOpenChange={(open) => !open && setShowPipelineSettings(false)}
+        componentProps={{
+          projectPath: currentProject.path,
+          pipelineConfig,
+          onSave: async (config) => {
+            const api = getHttpApiClient();
+            const result = await api.pipeline.saveConfig(currentProject.path, config);
+            if (!result.success) {
+              throw new Error(result.error || 'Failed to save pipeline config');
+            }
+            setPipelineConfig(currentProject.path, config);
+          },
         }}
       />
 
@@ -1695,30 +2833,35 @@ export function BoardView() {
       <FollowUpDialog
         open={showFollowUpDialog}
         onOpenChange={handleFollowUpDialogChange}
-        feature={followUpFeature}
-        prompt={followUpPrompt}
-        imagePaths={followUpImagePaths}
-        previewMap={followUpPreviewMap}
-        onPromptChange={setFollowUpPrompt}
-        onImagePathsChange={setFollowUpImagePaths}
-        onPreviewMapChange={setFollowUpPreviewMap}
-        onSend={handleSendFollowUp}
-        isMaximized={isMaximized}
-        promptHistory={followUpPromptHistory}
-        onHistoryAdd={addToPromptHistory}
+        componentProps={{
+          feature: followUpFeature,
+          prompt: followUpPrompt,
+          imagePaths: followUpImagePaths,
+          previewMap: followUpPreviewMap,
+          onPromptChange: setFollowUpPrompt,
+          onImagePathsChange: setFollowUpImagePaths,
+          onPreviewMapChange: setFollowUpPreviewMap,
+          onSend: handleSendFollowUp,
+          isMaximized,
+          promptHistory: followUpPromptHistory,
+          onHistoryAdd: addToPromptHistory,
+        }}
       />
 
       {/* Backlog Plan Dialog */}
       <BacklogPlanDialog
         open={showPlanDialog}
-        onClose={() => setShowPlanDialog(false)}
-        projectPath={currentProject.path}
-        onPlanApplied={loadFeatures}
-        pendingPlanResult={pendingBacklogPlan}
-        setPendingPlanResult={setPendingBacklogPlan}
-        isGeneratingPlan={isGeneratingPlan}
-        setIsGeneratingPlan={setIsGeneratingPlan}
-        currentBranch={planUseSelectedWorktreeBranch ? selectedWorktreeBranch : undefined}
+        onOpenChange={(open) => !open && setShowPlanDialog(false)}
+        componentProps={{
+          onClose: () => setShowPlanDialog(false),
+          projectPath: currentProject.path,
+          onPlanApplied: loadFeatures,
+          pendingPlanResult: pendingBacklogPlan,
+          setPendingPlanResult: setPendingBacklogPlan,
+          isGeneratingPlan,
+          setIsGeneratingPlan,
+          currentBranch: planUseSelectedWorktreeBranch ? selectedWorktreeBranch : undefined,
+        }}
       />
 
       {/* Plan Approval Dialog */}
@@ -1729,49 +2872,53 @@ export function BoardView() {
             setPendingPlanApproval(null);
           }
         }}
-        feature={pendingApprovalFeature}
-        planContent={pendingPlanApproval?.planContent || ''}
-        onApprove={handlePlanApprove}
-        onReject={handlePlanReject}
-        isLoading={isPlanApprovalLoading}
+        componentProps={{
+          feature: pendingApprovalFeature,
+          planContent: pendingPlanApproval?.planContent || '',
+          onApprove: handlePlanApprove,
+          onReject: handlePlanReject,
+          isLoading: isPlanApprovalLoading,
+        }}
       />
 
       {/* View Plan Dialog (read-only) */}
-      {viewPlanFeature && viewPlanFeature.planSpec?.content && (
-        <PlanApprovalDialog
-          open={true}
-          onOpenChange={(open) => !open && setViewPlanFeature(null)}
-          feature={viewPlanFeature}
-          planContent={viewPlanFeature.planSpec.content}
-          onApprove={() => setViewPlanFeature(null)}
-          onReject={() => setViewPlanFeature(null)}
-          viewOnly={true}
-        />
-      )}
+      <PlanApprovalDialog
+        open={!!(viewPlanFeature && viewPlanFeature.planSpec?.content)}
+        onOpenChange={(open) => !open && setViewPlanFeature(null)}
+        componentProps={{
+          feature: viewPlanFeature,
+          planContent: viewPlanFeature?.planSpec?.content || '',
+          onApprove: () => setViewPlanFeature(null),
+          onReject: () => setViewPlanFeature(null),
+          viewOnly: true,
+        }}
+      />
 
       {/* Create Worktree Dialog */}
       <CreateWorktreeDialog
         open={showCreateWorktreeDialog}
         onOpenChange={setShowCreateWorktreeDialog}
-        projectPath={currentProject.path}
-        onCreated={(newWorktree) => {
-          // Add the new worktree to the store immediately to avoid race condition
-          // when deriving currentWorktreeBranch for filtering
-          const currentWorktrees = getWorktrees(currentProject.path);
-          const newWorktreeInfo = {
-            path: newWorktree.path,
-            branch: newWorktree.branch,
-            isMain: false,
-            isCurrent: false,
-            hasWorktree: true,
-          };
-          setWorktrees(currentProject.path, [...currentWorktrees, newWorktreeInfo]);
+        componentProps={{
+          projectPath: currentProject.path,
+          onCreated: (newWorktree) => {
+            // Add the new worktree to the store immediately to avoid race condition
+            // when deriving currentWorktreeBranch for filtering
+            const currentWorktrees = getWorktrees(currentProject.path);
+            const newWorktreeInfo = {
+              path: newWorktree.path,
+              branch: newWorktree.branch,
+              isMain: false,
+              isCurrent: false,
+              hasWorktree: true,
+            };
+            setWorktrees(currentProject.path, [...currentWorktrees, newWorktreeInfo]);
 
-          // Now set the current worktree with both path and branch
-          setCurrentWorktree(currentProject.path, newWorktree.path, newWorktree.branch);
+            // Now set the current worktree with both path and branch
+            setCurrentWorktree(currentProject.path, newWorktree.path, newWorktree.branch);
 
-          // Trigger refresh to get full worktree details (hasChanges, etc.)
-          setWorktreeRefreshKey((k) => k + 1);
+            // Trigger refresh to get full worktree details (hasChanges, etc.)
+            setWorktreeRefreshKey((k) => k + 1);
+          },
         }}
       />
 
@@ -1779,30 +2926,30 @@ export function BoardView() {
       <DeleteWorktreeDialog
         open={showDeleteWorktreeDialog}
         onOpenChange={setShowDeleteWorktreeDialog}
-        projectPath={currentProject.path}
-        worktree={selectedWorktreeForAction}
-        affectedFeatureCount={
-          selectedWorktreeForAction
+        componentProps={{
+          projectPath: currentProject.path,
+          worktree: selectedWorktreeForAction,
+          affectedFeatureCount: selectedWorktreeForAction
             ? hookFeatures.filter((f) => f.branchName === selectedWorktreeForAction.branch).length
-            : 0
-        }
-        defaultDeleteBranch={getDefaultDeleteBranch(currentProject.path)}
-        onDeleted={(deletedWorktree, _deletedBranch) => {
-          // Reset features that were assigned to the deleted worktree (by branch)
-          hookFeatures.forEach((feature) => {
-            // Match by branch name since worktreePath is no longer stored
-            if (feature.branchName === deletedWorktree.branch) {
-              // Reset the feature's branch assignment - update both local state and persist
-              const updates = {
-                branchName: null as unknown as string | undefined,
-              };
-              updateFeature(feature.id, updates);
-              persistFeatureUpdate(feature.id, updates);
-            }
-          });
+            : 0,
+          defaultDeleteBranch: getDefaultDeleteBranch(currentProject.path),
+          onDeleted: (deletedWorktree, _deletedBranch) => {
+            // Reset features that were assigned to the deleted worktree (by branch)
+            hookFeatures.forEach((feature) => {
+              // Match by branch name since worktreePath is no longer stored
+              if (feature.branchName === deletedWorktree.branch) {
+                // Reset the feature's branch assignment - update both local state and persist
+                const updates = {
+                  branchName: null as unknown as string | undefined,
+                };
+                updateFeature(feature.id, updates);
+                persistFeatureUpdate(feature.id, updates);
+              }
+            });
 
-          setWorktreeRefreshKey((k) => k + 1);
-          setSelectedWorktreeForAction(null);
+            setWorktreeRefreshKey((k) => k + 1);
+            setSelectedWorktreeForAction(null);
+          },
         }}
       />
 
@@ -1810,28 +2957,28 @@ export function BoardView() {
       <MergeWorktreeDialog
         open={showMergeWorktreeDialog}
         onOpenChange={setShowMergeWorktreeDialog}
-        projectPath={currentProject.path}
-        worktree={selectedWorktreeForAction}
-        affectedFeatureCount={
-          selectedWorktreeForAction
+        componentProps={{
+          projectPath: currentProject.path,
+          worktree: selectedWorktreeForAction,
+          affectedFeatureCount: selectedWorktreeForAction
             ? hookFeatures.filter((f) => f.branchName === selectedWorktreeForAction.branch).length
-            : 0
-        }
-        onMerged={(mergedWorktree) => {
-          // Reset features that were assigned to the merged worktree (by branch)
-          hookFeatures.forEach((feature) => {
-            if (feature.branchName === mergedWorktree.branch) {
-              // Reset the feature's branch assignment - update both local state and persist
-              const updates = {
-                branchName: null as unknown as string | undefined,
-              };
-              updateFeature(feature.id, updates);
-              persistFeatureUpdate(feature.id, updates);
-            }
-          });
+            : 0,
+          onMerged: (mergedWorktree) => {
+            // Reset features that were assigned to the merged worktree (by branch)
+            hookFeatures.forEach((feature) => {
+              if (feature.branchName === mergedWorktree.branch) {
+                // Reset the feature's branch assignment - update both local state and persist
+                const updates = {
+                  branchName: null as unknown as string | undefined,
+                };
+                updateFeature(feature.id, updates);
+                persistFeatureUpdate(feature.id, updates);
+              }
+            });
 
-          setWorktreeRefreshKey((k) => k + 1);
-          setSelectedWorktreeForAction(null);
+            setWorktreeRefreshKey((k) => k + 1);
+            setSelectedWorktreeForAction(null);
+          },
         }}
       />
 
@@ -1839,10 +2986,12 @@ export function BoardView() {
       <CommitWorktreeDialog
         open={showCommitWorktreeDialog}
         onOpenChange={setShowCommitWorktreeDialog}
-        worktree={selectedWorktreeForAction}
-        onCommitted={() => {
-          setWorktreeRefreshKey((k) => k + 1);
-          setSelectedWorktreeForAction(null);
+        componentProps={{
+          worktree: selectedWorktreeForAction,
+          onCommitted: () => {
+            setWorktreeRefreshKey((k) => k + 1);
+            setSelectedWorktreeForAction(null);
+          },
         }}
       />
 
@@ -1850,27 +2999,29 @@ export function BoardView() {
       <CreatePRDialog
         open={showCreatePRDialog}
         onOpenChange={setShowCreatePRDialog}
-        worktree={selectedWorktreeForAction}
-        projectPath={currentProject?.path || null}
-        defaultBaseBranch={selectedWorktreeBranch}
-        onCreated={(prUrl) => {
-          // If a PR was created and we have the worktree branch, update all features on that branch with the PR URL
-          if (prUrl && selectedWorktreeForAction?.branch) {
-            const branchName = selectedWorktreeForAction.branch;
-            const featuresToUpdate = hookFeatures.filter((f) => f.branchName === branchName);
+        componentProps={{
+          worktree: selectedWorktreeForAction,
+          projectPath: currentProject?.path || null,
+          defaultBaseBranch: selectedWorktreeBranch,
+          onCreated: (prUrl) => {
+            // If a PR was created and we have the worktree branch, update all features on that branch with the PR URL
+            if (prUrl && selectedWorktreeForAction?.branch) {
+              const branchName = selectedWorktreeForAction.branch;
+              const featuresToUpdate = hookFeatures.filter((f) => f.branchName === branchName);
 
-            // Update local state synchronously
-            featuresToUpdate.forEach((feature) => {
-              updateFeature(feature.id, { prUrl });
-            });
+              // Update local state synchronously
+              featuresToUpdate.forEach((feature) => {
+                updateFeature(feature.id, { prUrl });
+              });
 
-            // Persist changes asynchronously and in parallel
-            Promise.all(
-              featuresToUpdate.map((feature) => persistFeatureUpdate(feature.id, { prUrl }))
-            ).catch((err) => logger.error('Error in handleMove:', err));
-          }
-          setWorktreeRefreshKey((k) => k + 1);
-          setSelectedWorktreeForAction(null);
+              // Persist changes asynchronously and in parallel
+              Promise.all(
+                featuresToUpdate.map((feature) => persistFeatureUpdate(feature.id, { prUrl }))
+              ).catch((err) => logger.error('Error in handleMove:', err));
+            }
+            setWorktreeRefreshKey((k) => k + 1);
+            setSelectedWorktreeForAction(null);
+          },
         }}
       />
 
@@ -1878,10 +3029,22 @@ export function BoardView() {
       <CreateBranchDialog
         open={showCreateBranchDialog}
         onOpenChange={setShowCreateBranchDialog}
-        worktree={selectedWorktreeForAction}
-        onCreated={() => {
-          setWorktreeRefreshKey((k) => k + 1);
-          setSelectedWorktreeForAction(null);
+        componentProps={{
+          worktree: selectedWorktreeForAction,
+          onCreated: () => {
+            setWorktreeRefreshKey((k) => k + 1);
+            setSelectedWorktreeForAction(null);
+          },
+        }}
+      />
+
+      {/* Code Editor Window - popout file editor with syntax highlighting */}
+      <CodeEditorWindow
+        open={showCodeEditor}
+        onOpenChange={setShowCodeEditor}
+        componentProps={{
+          initialFilePath: codeEditorFilePath,
+          projectPath: currentProject?.path || null,
         }}
       />
 

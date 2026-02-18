@@ -12,6 +12,7 @@ export function createAvailableHandler() {
       // Get all models from all registered providers (Claude + Cursor)
       const models = ProviderFactory.getAllAvailableModels();
 
+      res.set('Cache-Control', 'public, max-age=300'); // 5 minutes
       res.json({ success: true, models });
     } catch (error) {
       logError(error, 'Get available models failed');

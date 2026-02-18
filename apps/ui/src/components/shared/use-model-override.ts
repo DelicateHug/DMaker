@@ -8,6 +8,8 @@ export interface UseModelOverrideOptions {
   phase: PhaseModelKey;
   /** Initial override value (optional) */
   initialOverride?: PhaseModelEntry | null;
+  /** Test ID prefix for data-testid attributes (passed through to ModelOverrideTrigger) */
+  testIdPrefix?: string;
 }
 
 export interface UseModelOverrideResult {
@@ -25,6 +27,8 @@ export interface UseModelOverrideResult {
   globalDefault: PhaseModelEntry;
   /** The current override value (null if not overridden) */
   override: PhaseModelEntry | null;
+  /** Test ID prefix for data-testid attributes (for use with ModelOverrideTrigger) */
+  testIdPrefix: string;
 }
 
 /**
@@ -56,8 +60,9 @@ function extractModel(entry: PhaseModelEntry | string): ModelId {
  * @example
  * ```tsx
  * function EnhanceDialog() {
- *   const { effectiveModelEntry, isOverridden, setOverride, clearOverride } = useModelOverride({
+ *   const { effectiveModelEntry, isOverridden, setOverride, testIdPrefix } = useModelOverride({
  *     phase: 'enhancementModel',
+ *     testIdPrefix: 'enhance-model-override',
  *   });
  *
  *   return (
@@ -66,6 +71,7 @@ function extractModel(entry: PhaseModelEntry | string): ModelId {
  *       onModelChange={setOverride}
  *       phase="enhancementModel"
  *       isOverridden={isOverridden}
+ *       testIdPrefix={testIdPrefix}
  *     />
  *   );
  * }
@@ -74,6 +80,7 @@ function extractModel(entry: PhaseModelEntry | string): ModelId {
 export function useModelOverride({
   phase,
   initialOverride = null,
+  testIdPrefix = 'model-override',
 }: UseModelOverrideOptions): UseModelOverrideResult {
   const { phaseModels } = useAppStore();
   const [override, setOverrideState] = useState<PhaseModelEntry | null>(
@@ -110,5 +117,6 @@ export function useModelOverride({
     clearOverride,
     globalDefault,
     override,
+    testIdPrefix,
   };
 }

@@ -5,6 +5,7 @@ import {
   getBlockingDependencies,
   wouldCreateCircularDependency,
   dependencyExists,
+  shouldBlockOnDependencies,
 } from '../src/resolver';
 import type { Feature } from '@automaker/types';
 
@@ -15,6 +16,7 @@ function createFeature(
     dependencies?: string[];
     status?: string;
     priority?: number;
+    waitForDependencies?: boolean;
   } = {}
 ): Feature {
   return {
@@ -24,6 +26,7 @@ function createFeature(
     dependencies: options.dependencies,
     status: options.status || 'pending',
     priority: options.priority,
+    waitForDependencies: options.waitForDependencies,
   };
 }
 
@@ -258,7 +261,7 @@ describe('resolver.ts', () => {
 
     it('should return false when any dependency is pending', () => {
       const dep = createFeature('Dep', { status: 'pending' });
-      const feature = createFeature('A', { dependencies: ['Dep'] });
+      const feature = createFeature('A', { dependencies: ['Dep'], waitForDependencies: true });
       const allFeatures = [dep, feature];
 
       expect(areDependenciesSatisfied(feature, allFeatures)).toBe(false);
@@ -266,14 +269,17 @@ describe('resolver.ts', () => {
 
     it('should return false when any dependency is running', () => {
       const dep = createFeature('Dep', { status: 'running' });
-      const feature = createFeature('A', { dependencies: ['Dep'] });
+      const feature = createFeature('A', { dependencies: ['Dep'], waitForDependencies: true });
       const allFeatures = [dep, feature];
 
       expect(areDependenciesSatisfied(feature, allFeatures)).toBe(false);
     });
 
     it('should return false when dependency is missing', () => {
-      const feature = createFeature('A', { dependencies: ['NonExistent'] });
+      const feature = createFeature('A', {
+        dependencies: ['NonExistent'],
+        waitForDependencies: true,
+      });
       const allFeatures = [feature];
 
       expect(areDependenciesSatisfied(feature, allFeatures)).toBe(false);
@@ -282,10 +288,97 @@ describe('resolver.ts', () => {
     it('should check all dependencies', () => {
       const dep1 = createFeature('Dep1', { status: 'completed' });
       const dep2 = createFeature('Dep2', { status: 'pending' });
-      const feature = createFeature('A', { dependencies: ['Dep1', 'Dep2'] });
+      const feature = createFeature('A', {
+        dependencies: ['Dep1', 'Dep2'],
+        waitForDependencies: true,
+      });
       const allFeatures = [dep1, dep2, feature];
 
       expect(areDependenciesSatisfied(feature, allFeatures)).toBe(false);
+    });
+
+    describe('waitForDependencies behavior', () => {
+      it('should return true when waitForDependencies is false, even with pending deps', () => {
+        const dep = createFeature('Dep', { status: 'pending' });
+        const feature = createFeature('A', { dependencies: ['Dep'], waitForDependencies: false });
+        const allFeatures = [dep, feature];
+
+        expect(areDependenciesSatisfied(feature, allFeatures)).toBe(true);
+      });
+
+      it('should return true when waitForDependencies is undefined, even with pending deps', () => {
+        const dep = createFeature('Dep', { status: 'pending' });
+        const feature = createFeature('A', { dependencies: ['Dep'] }); // waitForDependencies undefined
+        const allFeatures = [dep, feature];
+
+        expect(areDependenciesSatisfied(feature, allFeatures)).toBe(true);
+      });
+
+      it('should return false when waitForDependencies is true and deps are pending', () => {
+        const dep = createFeature('Dep', { status: 'pending' });
+        const feature = createFeature('A', { dependencies: ['Dep'], waitForDependencies: true });
+        const allFeatures = [dep, feature];
+
+        expect(areDependenciesSatisfied(feature, allFeatures)).toBe(false);
+      });
+
+      it('should return true when waitForDependencies is true and all deps are completed', () => {
+        const dep1 = createFeature('Dep1', { status: 'completed' });
+        const dep2 = createFeature('Dep2', { status: 'verified' });
+        const feature = createFeature('A', {
+          dependencies: ['Dep1', 'Dep2'],
+          waitForDependencies: true,
+        });
+        const allFeatures = [dep1, dep2, feature];
+
+        expect(areDependenciesSatisfied(feature, allFeatures)).toBe(true);
+      });
+
+      it('should return false when waitForDependencies is true and any dep is failed', () => {
+        const dep = createFeature('Dep', { status: 'failed' });
+        const feature = createFeature('A', { dependencies: ['Dep'], waitForDependencies: true });
+        const allFeatures = [dep, feature];
+
+        expect(areDependenciesSatisfied(feature, allFeatures)).toBe(false);
+      });
+
+      it('should ignore dependency status when waitForDependencies is explicitly false', () => {
+        const dep1 = createFeature('Dep1', { status: 'failed' });
+        const dep2 = createFeature('Dep2', { status: 'running' });
+        const dep3 = createFeature('Dep3', { status: 'pending' });
+        const feature = createFeature('A', {
+          dependencies: ['Dep1', 'Dep2', 'Dep3'],
+          waitForDependencies: false,
+        });
+        const allFeatures = [dep1, dep2, dep3, feature];
+
+        expect(areDependenciesSatisfied(feature, allFeatures)).toBe(true);
+      });
+
+      it('should handle skipVerification option with waitForDependencies true', () => {
+        const dep = createFeature('Dep', { status: 'running' });
+        const feature = createFeature('A', { dependencies: ['Dep'], waitForDependencies: true });
+        const allFeatures = [dep, feature];
+
+        // Without skipVerification, running should not satisfy
+        expect(areDependenciesSatisfied(feature, allFeatures)).toBe(false);
+
+        // With skipVerification, running should block
+        expect(areDependenciesSatisfied(feature, allFeatures, { skipVerification: true })).toBe(
+          false
+        );
+      });
+
+      it('should handle skipVerification option - pending does not block when skipVerification is true', () => {
+        const dep = createFeature('Dep', { status: 'pending' });
+        const feature = createFeature('A', { dependencies: ['Dep'], waitForDependencies: true });
+        const allFeatures = [dep, feature];
+
+        // With skipVerification, only 'running' blocks, pending is OK
+        expect(areDependenciesSatisfied(feature, allFeatures, { skipVerification: true })).toBe(
+          true
+        );
+      });
     });
   });
 
@@ -315,7 +408,7 @@ describe('resolver.ts', () => {
 
     it('should return pending dependencies', () => {
       const dep = createFeature('Dep', { status: 'pending' });
-      const feature = createFeature('A', { dependencies: ['Dep'] });
+      const feature = createFeature('A', { dependencies: ['Dep'], waitForDependencies: true });
       const allFeatures = [dep, feature];
 
       expect(getBlockingDependencies(feature, allFeatures)).toEqual(['Dep']);
@@ -323,7 +416,7 @@ describe('resolver.ts', () => {
 
     it('should return running dependencies', () => {
       const dep = createFeature('Dep', { status: 'running' });
-      const feature = createFeature('A', { dependencies: ['Dep'] });
+      const feature = createFeature('A', { dependencies: ['Dep'], waitForDependencies: true });
       const allFeatures = [dep, feature];
 
       expect(getBlockingDependencies(feature, allFeatures)).toEqual(['Dep']);
@@ -331,7 +424,7 @@ describe('resolver.ts', () => {
 
     it('should return failed dependencies', () => {
       const dep = createFeature('Dep', { status: 'failed' });
-      const feature = createFeature('A', { dependencies: ['Dep'] });
+      const feature = createFeature('A', { dependencies: ['Dep'], waitForDependencies: true });
       const allFeatures = [dep, feature];
 
       expect(getBlockingDependencies(feature, allFeatures)).toEqual(['Dep']);
@@ -341,13 +434,115 @@ describe('resolver.ts', () => {
       const dep1 = createFeature('Dep1', { status: 'pending' });
       const dep2 = createFeature('Dep2', { status: 'completed' });
       const dep3 = createFeature('Dep3', { status: 'running' });
-      const feature = createFeature('A', { dependencies: ['Dep1', 'Dep2', 'Dep3'] });
+      const feature = createFeature('A', {
+        dependencies: ['Dep1', 'Dep2', 'Dep3'],
+        waitForDependencies: true,
+      });
       const allFeatures = [dep1, dep2, dep3, feature];
 
       const blocking = getBlockingDependencies(feature, allFeatures);
       expect(blocking).toContain('Dep1');
       expect(blocking).toContain('Dep3');
       expect(blocking).not.toContain('Dep2');
+    });
+
+    describe('waitForDependencies behavior', () => {
+      it('should return empty array when waitForDependencies is false', () => {
+        const dep = createFeature('Dep', { status: 'pending' });
+        const feature = createFeature('A', { dependencies: ['Dep'], waitForDependencies: false });
+        const allFeatures = [dep, feature];
+
+        expect(getBlockingDependencies(feature, allFeatures)).toEqual([]);
+      });
+
+      it('should return empty array when waitForDependencies is undefined', () => {
+        const dep = createFeature('Dep', { status: 'pending' });
+        const feature = createFeature('A', { dependencies: ['Dep'] }); // waitForDependencies undefined
+        const allFeatures = [dep, feature];
+
+        expect(getBlockingDependencies(feature, allFeatures)).toEqual([]);
+      });
+
+      it('should return blocking deps when waitForDependencies is true', () => {
+        const dep = createFeature('Dep', { status: 'pending' });
+        const feature = createFeature('A', { dependencies: ['Dep'], waitForDependencies: true });
+        const allFeatures = [dep, feature];
+
+        expect(getBlockingDependencies(feature, allFeatures)).toEqual(['Dep']);
+      });
+
+      it('should return all non-completed/verified deps when waitForDependencies is true', () => {
+        const dep1 = createFeature('Dep1', { status: 'pending' });
+        const dep2 = createFeature('Dep2', { status: 'running' });
+        const dep3 = createFeature('Dep3', { status: 'failed' });
+        const dep4 = createFeature('Dep4', { status: 'completed' });
+        const dep5 = createFeature('Dep5', { status: 'verified' });
+        const feature = createFeature('A', {
+          dependencies: ['Dep1', 'Dep2', 'Dep3', 'Dep4', 'Dep5'],
+          waitForDependencies: true,
+        });
+        const allFeatures = [dep1, dep2, dep3, dep4, dep5, feature];
+
+        const blocking = getBlockingDependencies(feature, allFeatures);
+        expect(blocking).toContain('Dep1');
+        expect(blocking).toContain('Dep2');
+        expect(blocking).toContain('Dep3');
+        expect(blocking).not.toContain('Dep4');
+        expect(blocking).not.toContain('Dep5');
+        expect(blocking).toHaveLength(3);
+      });
+
+      it('should ignore incomplete deps when waitForDependencies is false', () => {
+        const dep1 = createFeature('Dep1', { status: 'pending' });
+        const dep2 = createFeature('Dep2', { status: 'failed' });
+        const feature = createFeature('A', {
+          dependencies: ['Dep1', 'Dep2'],
+          waitForDependencies: false,
+        });
+        const allFeatures = [dep1, dep2, feature];
+
+        expect(getBlockingDependencies(feature, allFeatures)).toEqual([]);
+      });
+    });
+  });
+
+  describe('shouldBlockOnDependencies', () => {
+    it('should return false when global enableDependencyBlocking is false', () => {
+      const feature = createFeature('A', { dependencies: ['Dep'], waitForDependencies: true });
+
+      expect(shouldBlockOnDependencies(feature, { enableDependencyBlocking: false })).toBe(false);
+    });
+
+    it('should return false when global is enabled but feature waitForDependencies is false', () => {
+      const feature = createFeature('A', { dependencies: ['Dep'], waitForDependencies: false });
+
+      expect(shouldBlockOnDependencies(feature, { enableDependencyBlocking: true })).toBe(false);
+    });
+
+    it('should return false when global is enabled but feature waitForDependencies is undefined', () => {
+      const feature = createFeature('A', { dependencies: ['Dep'] }); // waitForDependencies undefined
+
+      expect(shouldBlockOnDependencies(feature, { enableDependencyBlocking: true })).toBe(false);
+    });
+
+    it('should return true when global is enabled and feature waitForDependencies is true', () => {
+      const feature = createFeature('A', { dependencies: ['Dep'], waitForDependencies: true });
+
+      expect(shouldBlockOnDependencies(feature, { enableDependencyBlocking: true })).toBe(true);
+    });
+
+    it('should return false for feature without dependencies when global and per-feature are enabled', () => {
+      const feature = createFeature('A', { waitForDependencies: true }); // no dependencies
+
+      // The function only checks settings, not whether dependencies exist
+      expect(shouldBlockOnDependencies(feature, { enableDependencyBlocking: true })).toBe(true);
+    });
+
+    it('should ignore per-feature setting when global is disabled', () => {
+      const feature = createFeature('A', { dependencies: ['Dep'], waitForDependencies: true });
+
+      // Global disabled overrides per-feature setting
+      expect(shouldBlockOnDependencies(feature, { enableDependencyBlocking: false })).toBe(false);
     });
   });
 

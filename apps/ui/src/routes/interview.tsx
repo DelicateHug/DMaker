@@ -1,6 +1,11 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { InterviewView } from '@/components/views/interview-view';
+import { lazyRouteComponent } from '@/components/ui/route-error-boundary';
+
+const LazyInterviewView = lazyRouteComponent(
+  () => import('@/components/views/interview-view'),
+  'InterviewView'
+);
 
 export const Route = createFileRoute('/interview')({
-  component: InterviewView,
+  component: LazyInterviewView,
 });

@@ -2,6 +2,7 @@
 import { useMemo, useCallback } from 'react';
 import { Feature, useAppStore } from '@/store/app-store';
 import { resolveDependencies, getBlockingDependencies } from '@automaker/dependency-resolver';
+import type { StatusTabId } from './use-board-status-tabs';
 
 type ColumnId = Feature['status'];
 
@@ -9,18 +10,48 @@ interface UseBoardColumnFeaturesProps {
   features: Feature[];
   runningAutoTasks: string[];
   searchQuery: string;
+  showFavoritesOnly: boolean;
   currentWorktreePath: string | null; // Currently selected worktree path
   currentWorktreeBranch: string | null; // Branch name of the selected worktree (null = main)
   projectPath: string | null; // Main project path (for main worktree)
+  /**
+   * Optional: When in single-column mode, specify the active tab to optimize feature retrieval.
+   * This enables returning just the active column's features directly.
+   * @deprecated Prefer using `activeStatusTabs` for multi-select support.
+   */
+  activeStatusTab?: StatusTabId;
+  /**
+   * Optional: Active status tab IDs for multi-select filtering.
+   * When in single-column mode, only columns matching these tabs are shown.
+   * Falls back to `activeStatusTab` if not provided for backward compatibility.
+   */
+  activeStatusTabs?: StatusTabId[];
+  /**
+   * Optional: Whether the board is in single-column mode.
+   * When true, provides optimized access to the active column(s) features.
+   * @default false
+   */
+  singleColumnMode?: boolean;
+  /**
+   * Optional: Whether the board is showing features from all/multiple projects.
+   * When true, worktree-based filtering is skipped since worktrees are project-specific.
+   * @default false
+   */
+  showAllProjects?: boolean;
 }
 
 export function useBoardColumnFeatures({
   features,
   runningAutoTasks,
   searchQuery,
+  showFavoritesOnly,
   currentWorktreePath,
   currentWorktreeBranch,
   projectPath,
+  activeStatusTab,
+  activeStatusTabs,
+  singleColumnMode = false,
+  showAllProjects = false,
 }: UseBoardColumnFeaturesProps) {
   // Memoize column features to prevent unnecessary re-renders
   const columnFeaturesMap = useMemo(() => {
@@ -30,18 +61,26 @@ export function useBoardColumnFeatures({
       in_progress: [],
       waiting_approval: [],
       verified: [],
-      completed: [], // Completed features are shown in the archive modal, not as a column
     };
 
-    // Filter features by search query (case-insensitive)
+    // Filter features by search query (case-insensitive) and favorites
     const normalizedQuery = searchQuery.toLowerCase().trim();
-    const filteredFeatures = normalizedQuery
-      ? features.filter(
-          (f) =>
-            f.description.toLowerCase().includes(normalizedQuery) ||
-            f.category?.toLowerCase().includes(normalizedQuery)
-        )
-      : features;
+    let filteredFeatures = features;
+
+    // Apply search query filter
+    if (normalizedQuery) {
+      filteredFeatures = filteredFeatures.filter(
+        (f) =>
+          (f.title || '').toLowerCase().includes(normalizedQuery) ||
+          (f.description || '').toLowerCase().includes(normalizedQuery) ||
+          f.category?.toLowerCase().includes(normalizedQuery)
+      );
+    }
+
+    // Apply favorites filter
+    if (showFavoritesOnly) {
+      filteredFeatures = filteredFeatures.filter((f) => f.isFavorite);
+    }
 
     // Determine the effective worktree path and branch for filtering
     // If currentWorktreePath is null, we're on the main worktree
@@ -53,16 +92,30 @@ export function useBoardColumnFeatures({
     // In that case, we can't do branch-based filtering, so we'll handle it specially below
     const effectiveBranch = currentWorktreeBranch;
 
-    filteredFeatures.forEach((f) => {
+    // Deduplicate features by ID to prevent the same feature appearing in multiple columns
+    // This can happen during status transitions when polling returns stale data
+    const seenFeatureIds = new Set<string>();
+    const uniqueFilteredFeatures = filteredFeatures.filter((f) => {
+      if (seenFeatureIds.has(f.id)) return false;
+      seenFeatureIds.add(f.id);
+      return true;
+    });
+
+    uniqueFilteredFeatures.forEach((f) => {
       // If feature has a running agent, always show it in "in_progress"
       const isRunning = runningAutoTasks.includes(f.id);
 
       // Check if feature matches the current worktree by branchName
       // Features without branchName are considered unassigned (show only on primary worktree)
+      // When showing all/multiple projects, skip worktree filtering entirely since
+      // worktrees are project-specific and don't apply across projects
       const featureBranch = f.branchName;
 
       let matchesWorktree: boolean;
-      if (!featureBranch) {
+      if (showAllProjects) {
+        // In multi-project mode, show all features regardless of worktree
+        matchesWorktree = true;
+      } else if (!featureBranch) {
         // No branch assigned - show only on primary worktree
         const isViewingPrimary = currentWorktreePath === null;
         matchesWorktree = isViewingPrimary;
@@ -179,9 +232,11 @@ export function useBoardColumnFeatures({
     features,
     runningAutoTasks,
     searchQuery,
+    showFavoritesOnly,
     currentWorktreePath,
     currentWorktreeBranch,
     projectPath,
+    showAllProjects,
   ]);
 
   const getColumnFeatures = useCallback(
@@ -191,14 +246,78 @@ export function useBoardColumnFeatures({
     [columnFeaturesMap]
   );
 
-  // Memoize completed features for the archive modal
-  const completedFeatures = useMemo(() => {
-    return features.filter((f) => f.status === 'completed');
-  }, [features]);
+  // Calculate feature counts per column for tab badges
+  // This is useful for showing counts in the status tabs UI
+  const columnCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const [columnId, columnFeatures] of Object.entries(columnFeaturesMap)) {
+      counts[columnId] = columnFeatures.length;
+    }
+    return counts;
+  }, [columnFeaturesMap]);
+
+  // Get count for a specific column (for tab badges)
+  const getColumnCount = useCallback(
+    (columnId: ColumnId): number => {
+      return columnCounts[columnId] ?? 0;
+    },
+    [columnCounts]
+  );
+
+  // In single-column mode, provide direct access to the active column(s) features.
+  // Supports multi-select: returns features from all active tabs combined.
+  // Falls back to single activeStatusTab for backward compatibility.
+  const activeColumnFeatures = useMemo(() => {
+    if (!singleColumnMode) {
+      return [];
+    }
+    // Multi-select: combine features from all active tabs
+    const tabs =
+      activeStatusTabs && activeStatusTabs.length > 0
+        ? activeStatusTabs
+        : activeStatusTab
+          ? [activeStatusTab]
+          : [];
+    if (tabs.length === 0) return [];
+    if (tabs.length === 1) return columnFeaturesMap[tabs[0]] || [];
+    // Multiple tabs selected: combine features from each
+    const combined: Feature[] = [];
+    for (const tabId of tabs) {
+      const tabFeatures = columnFeaturesMap[tabId];
+      if (tabFeatures) {
+        combined.push(...tabFeatures);
+      }
+    }
+    return combined;
+  }, [singleColumnMode, activeStatusTab, activeStatusTabs, columnFeaturesMap]);
+
+  // Total count of features across all visible columns (excluding completed)
+  const totalVisibleCount = useMemo(() => {
+    return Object.values(columnFeaturesMap).reduce((sum, features) => {
+      // Don't count completed features in the total
+      if (features.length > 0 && features[0]?.status !== 'completed') {
+        return sum + features.length;
+      }
+      return sum;
+    }, 0);
+  }, [columnFeaturesMap]);
 
   return {
+    /** Map of all features organized by column ID */
     columnFeaturesMap,
+    /** Get features for a specific column */
     getColumnFeatures,
-    completedFeatures,
+    /** Feature counts per column (for tab badges) */
+    columnCounts,
+    /** Get count for a specific column */
+    getColumnCount,
+    /** Features in the active column (when in single-column mode) */
+    activeColumnFeatures,
+    /** Total count of features across all visible columns */
+    totalVisibleCount,
+    /** Currently active tab ID (when in single-column mode) */
+    activeTab: activeStatusTab,
+    /** Whether in single-column mode */
+    isSingleColumnMode: singleColumnMode,
   };
 }

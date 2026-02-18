@@ -182,6 +182,10 @@ export interface DependencySatisfactionOptions {
 /**
  * Checks if a feature's dependencies are satisfied (all complete or verified)
  *
+ * This function respects the per-feature `waitForDependencies` setting:
+ * - If `waitForDependencies` is false/undefined, dependencies are always considered satisfied
+ * - If `waitForDependencies` is true, all dependencies must be 'completed' or 'verified'
+ *
  * @param feature - Feature to check
  * @param allFeatures - All features in the project
  * @param options - Optional configuration for dependency checking
@@ -194,6 +198,11 @@ export function areDependenciesSatisfied(
 ): boolean {
   if (!feature.dependencies || feature.dependencies.length === 0) {
     return true; // No dependencies = always ready
+  }
+
+  // If feature doesn't require waiting for dependencies, always consider them satisfied
+  if (!feature.waitForDependencies) {
+    return true;
   }
 
   const skipVerification = options?.skipVerification ?? false;
@@ -214,6 +223,10 @@ export function areDependenciesSatisfied(
 /**
  * Gets the blocking dependencies for a feature (dependencies that are incomplete)
  *
+ * This function respects the per-feature `waitForDependencies` setting:
+ * - If `waitForDependencies` is false/undefined, returns empty array (nothing blocks)
+ * - If `waitForDependencies` is true, returns dependencies that aren't 'completed' or 'verified'
+ *
  * @param feature - Feature to check
  * @param allFeatures - All features in the project
  * @returns Array of feature IDs that are blocking this feature
@@ -223,10 +236,47 @@ export function getBlockingDependencies(feature: Feature, allFeatures: Feature[]
     return [];
   }
 
+  // If feature doesn't require waiting for dependencies, nothing is blocking
+  if (!feature.waitForDependencies) {
+    return [];
+  }
+
   return feature.dependencies.filter((depId: string) => {
     const dep = allFeatures.find((f) => f.id === depId);
     return dep && dep.status !== 'completed' && dep.status !== 'verified';
   });
+}
+
+/**
+ * Options for determining if a feature should block on dependencies
+ */
+export interface ShouldBlockOptions {
+  /** Global setting: whether dependency blocking is enabled at the application level */
+  enableDependencyBlocking: boolean;
+}
+
+/**
+ * Determines if a feature should block on its dependencies.
+ *
+ * This helper combines global and per-feature settings to determine if a feature
+ * should wait for its dependencies before starting:
+ *
+ * - If global `enableDependencyBlocking` is false, no blocking occurs (returns false)
+ * - If global `enableDependencyBlocking` is true, use the per-feature `waitForDependencies` setting
+ * - The per-feature setting defaults to false if not specified
+ *
+ * @param feature - Feature to check
+ * @param options - Global settings that affect dependency blocking
+ * @returns true if the feature should block on its dependencies, false otherwise
+ */
+export function shouldBlockOnDependencies(feature: Feature, options: ShouldBlockOptions): boolean {
+  // If global dependency blocking is disabled, never block
+  if (!options.enableDependencyBlocking) {
+    return false;
+  }
+
+  // Use per-feature setting (defaults to false)
+  return feature.waitForDependencies === true;
 }
 
 /**

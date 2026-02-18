@@ -1,12 +1,19 @@
 import { useState } from 'react';
 import { createLogger } from '@automaker/utils/logger';
 import { useAppStore } from '@/store/app-store';
+import { useShallow } from 'zustand/react/shallow';
 
 const logger = createLogger('SpecSave');
 import { getElectronAPI } from '@/lib/electron';
 
 export function useSpecSave() {
-  const { currentProject, appSpec, setAppSpec } = useAppStore();
+  const { currentProject, appSpec } = useAppStore(
+    useShallow((state) => ({
+      currentProject: state.currentProject,
+      appSpec: state.appSpec,
+    }))
+  );
+  const setAppSpec = useAppStore((state) => state.setAppSpec);
   const [isSaving, setIsSaving] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
 

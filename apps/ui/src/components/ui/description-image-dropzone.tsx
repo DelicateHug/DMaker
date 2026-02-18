@@ -7,7 +7,9 @@ import { ImageIcon, X, Loader2, FileText } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { getElectronAPI } from '@/lib/electron';
 import { getAuthenticatedImageUrl } from '@/lib/api-fetch';
+import { LazyImage } from '@/components/ui/lazy-image';
 import { useAppStore, type FeatureImagePath, type FeatureTextFilePath } from '@/store/app-store';
+import { ImagePreviewDialog } from '@/components/ui/image-preview-dialog';
 import {
   sanitizeFilename,
   fileToBase64,
@@ -68,6 +70,10 @@ export function DescriptionImageDropZone({
 }: DescriptionImageDropZoneProps) {
   const [isDragOver, setIsDragOver] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [previewDialogOpen, setPreviewDialogOpen] = useState(false);
+  const [previewImageSrc, setPreviewImageSrc] = useState('');
+  const [previewImageAlt, setPreviewImageAlt] = useState('');
+  const [previewImageFilename, setPreviewImageFilename] = useState('');
   // Use parent-provided preview map if available, otherwise use local state
   const [localPreviewImages, setLocalPreviewImages] = useState<Map<string, string>>(
     () => new Map()
@@ -320,6 +326,20 @@ export function DescriptionImageDropZone({
     [textFiles, onTextFilesChange]
   );
 
+  const handleImageClick = useCallback(
+    (image: FeatureImagePath) => {
+      const imageSrc = previewImages.has(image.id)
+        ? previewImages.get(image.id)!
+        : getImageServerUrl(image.path);
+
+      setPreviewImageSrc(imageSrc);
+      setPreviewImageAlt(image.filename);
+      setPreviewImageFilename(image.filename);
+      setPreviewDialogOpen(true);
+    },
+    [previewImages, getImageServerUrl]
+  );
+
   // Handle paste events to detect and process images from clipboard
   // Works across all OS (Windows, Linux, macOS)
   const handlePaste = useCallback(
@@ -365,7 +385,7 @@ export function DescriptionImageDropZone({
   );
 
   return (
-    <div className={cn('relative', className)}>
+    <div className={cn('relative', className)} data-testid="description-image-dropzone">
       {/* Hidden file input */}
       <input
         ref={fileInputRef}
@@ -422,6 +442,7 @@ export function DescriptionImageDropZone({
           onClick={handleBrowseClick}
           className="text-primary hover:text-primary/80 underline"
           disabled={disabled || isProcessing}
+          data-testid="description-browse-button"
         >
           browse
         </button>{' '}
@@ -430,7 +451,10 @@ export function DescriptionImageDropZone({
 
       {/* Processing indicator */}
       {isProcessing && (
-        <div className="flex items-center gap-2 mt-2 text-sm text-muted-foreground">
+        <div
+          className="flex items-center gap-2 mt-2 text-sm text-muted-foreground"
+          data-testid="description-processing-indicator"
+        >
           <Loader2 className="w-4 h-4 animate-spin" />
           <span>Processing files...</span>
         </div>
@@ -455,6 +479,7 @@ export function DescriptionImageDropZone({
               }}
               className="text-xs text-muted-foreground hover:text-foreground"
               disabled={disabled}
+              data-testid="description-clear-all-files"
             >
               Clear all
             </button>
@@ -464,26 +489,27 @@ export function DescriptionImageDropZone({
             {images.map((image) => (
               <div
                 key={image.id}
-                className="relative group rounded-md border border-muted bg-muted/50 overflow-hidden"
+                className="relative group rounded-md border border-muted bg-muted/50 overflow-hidden cursor-pointer hover:border-primary/50 transition-colors"
                 data-testid={`description-image-preview-${image.id}`}
+                onClick={() => handleImageClick(image)}
               >
                 {/* Image thumbnail or placeholder */}
                 <div className="w-16 h-16 flex items-center justify-center bg-zinc-800">
                   {previewImages.has(image.id) ? (
-                    <img
+                    <LazyImage
                       src={previewImages.get(image.id)}
                       alt={image.filename}
                       className="max-w-full max-h-full object-contain"
+                      containerClassName="w-full h-full flex items-center justify-center"
+                      errorIconSize="w-4 h-4"
                     />
                   ) : (
-                    <img
+                    <LazyImage
                       src={getImageServerUrl(image.path)}
                       alt={image.filename}
                       className="max-w-full max-h-full object-contain"
-                      onError={(e) => {
-                        // If image fails to load, hide it
-                        (e.target as HTMLImageElement).style.display = 'none';
-                      }}
+                      containerClassName="w-full h-full flex items-center justify-center"
+                      errorIconSize="w-4 h-4"
                     />
                   )}
                 </div>
@@ -542,6 +568,15 @@ export function DescriptionImageDropZone({
           </div>
         </div>
       )}
+
+      {/* Image preview dialog */}
+      <ImagePreviewDialog
+        open={previewDialogOpen}
+        onOpenChange={setPreviewDialogOpen}
+        imageSrc={previewImageSrc}
+        imageAlt={previewImageAlt}
+        imageFilename={previewImageFilename}
+      />
     </div>
   );
 }

@@ -1,6 +1,11 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { IdeationView } from '@/components/views/ideation-view';
+import { lazyRouteComponent } from '@/components/ui/route-error-boundary';
+
+const LazyIdeationView = lazyRouteComponent(
+  () => import('@/components/views/ideation-view'),
+  'IdeationView'
+);
 
 export const Route = createFileRoute('/ideation')({
-  component: IdeationView,
+  component: LazyIdeationView,
 });

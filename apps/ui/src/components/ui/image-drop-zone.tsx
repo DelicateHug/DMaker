@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils';
 const logger = createLogger('ImageDropZone');
 import { ImageIcon, X, Upload } from 'lucide-react';
 import type { ImageAttachment } from '@/store/app-store';
+import { LazyImage } from '@/components/ui/lazy-image';
 import {
   fileToBase64,
   generateImageId,
@@ -254,10 +255,12 @@ export function ImageDropZone({
               >
                 {/* Image thumbnail */}
                 <div className="w-8 h-8 rounded overflow-hidden bg-muted shrink-0">
-                  <img
+                  <LazyImage
                     src={image.data}
                     alt={image.filename}
                     className="w-full h-full object-cover"
+                    containerClassName="w-full h-full"
+                    errorIconSize="w-3 h-3"
                   />
                 </div>
                 {/* Image info */}

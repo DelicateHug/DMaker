@@ -18,6 +18,7 @@ export type {
   McpSSEServerConfig,
   McpHttpServerConfig,
   AgentDefinition,
+  SystemPromptPreset,
   ReasoningEffort,
 } from './provider.js';
 
@@ -32,6 +33,9 @@ export {
 export type {
   CodexSandboxMode,
   CodexApprovalPolicy,
+  CodexEventType,
+  CodexItemType,
+  CodexEvent,
   CodexCliConfig,
   CodexAuthStatus,
 } from './codex.js';
@@ -54,10 +58,23 @@ export type {
 // Feature types
 export type {
   Feature,
+  FeatureOwner,
   FeatureImagePath,
   FeatureTextFilePath,
   FeatureStatus,
   DescriptionHistoryEntry,
+  SummaryHistoryEntry,
+  // Summary file API types
+  ListSummariesRequest,
+  ListSummariesResponse,
+  GetSummaryRequest,
+  GetSummaryResponse,
+  SummaryErrorResponse,
+  SaveSummaryRequest,
+  // Feature list summary types
+  FeatureListSummary,
+  ListFeatureSummariesRequest,
+  ListFeatureSummariesResponse,
 } from './feature.js';
 
 // Session types
@@ -87,6 +104,9 @@ export {
   type CodexModelId,
   type AgentModel,
   type ModelId,
+  type DynamicModelId,
+  type PrefixedCursorModelId,
+  type PrefixedOpencodeModelId,
 } from './model.js';
 
 // Event types
@@ -133,6 +153,7 @@ export { DEFAULT_PROMPT_CUSTOMIZATION } from './prompts.js';
 // Settings types and constants
 export type {
   ThemeMode,
+  SyntaxTheme,
   PlanningMode,
   ThinkingLevel,
   ServerLogLevel,
@@ -140,6 +161,7 @@ export type {
   PhaseModelEntry,
   PhaseModelConfig,
   PhaseModelKey,
+  WindowBounds,
   KeyboardShortcuts,
   MCPToolInfo,
   MCPServerConfig,
@@ -158,6 +180,13 @@ export type {
   EventHookHttpAction,
   EventHookAction,
   EventHook,
+  // Claude account types
+  ClaudeAccountRef,
+  // Deploy script types
+  DeployScriptType,
+  DeployFolderScript,
+  DeployRunStatus,
+  DeployRun,
 } from './settings.js';
 export {
   DEFAULT_KEYBOARD_SHORTCUTS,
@@ -178,6 +207,7 @@ export {
 export type { ModelOption, ThinkingLevelOption, ReasoningEffortOption } from './model-display.js';
 export {
   CLAUDE_MODELS,
+  CODEX_MODELS,
   THINKING_LEVELS,
   THINKING_LEVEL_LABELS,
   REASONING_EFFORT_LEVELS,
@@ -292,3 +322,40 @@ export type {
   EventReplayHookResult,
 } from './event-history.js';
 export { EVENT_HISTORY_VERSION, DEFAULT_EVENT_HISTORY_INDEX } from './event-history.js';
+
+// Voice types
+export type {
+  VoiceInputMode,
+  VoiceOutputMode,
+  VoiceSettings,
+  VoiceSessionStatus,
+  VoiceMessage,
+  VoiceSession,
+  CreateVoiceSessionParams,
+  VoiceCommandResult,
+  VoiceEventType,
+  VoiceSessionEvent,
+  VoiceRecordingEvent,
+  VoiceTranscriptionEvent,
+  VoiceCommandEvent,
+  VoiceResponseEvent,
+  VoiceSpeakingEvent,
+  VoiceErrorEvent,
+  VoiceErrorCode,
+  VoiceEvent,
+  ProcessVoiceCommandRequest,
+  ProcessVoiceCommandResponse,
+  VoiceSessionStatusResponse,
+} from './voice.js';
+export { DEFAULT_VOICE_SETTINGS } from './voice.js';
+
+// Cache types and constants
+export type { EndpointCategory, CacheOptions } from './cache.js';
+export {
+  HEALTH_CACHE_TTL_MS,
+  MODELS_CACHE_TTL_MS,
+  SETTINGS_CACHE_TTL_MS,
+  FEATURES_CACHE_TTL_MS,
+  USAGE_CACHE_TTL_MS,
+  DEFAULT_CACHE_OPTIONS,
+} from './cache.js';

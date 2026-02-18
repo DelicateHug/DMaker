@@ -1,4 +1,5 @@
 // @ts-nocheck
+import { memo } from 'react';
 import { Feature } from '@/store/app-store';
 import { Button } from '@/components/ui/button';
 import {
@@ -10,8 +11,15 @@ import {
   FileText,
   Eye,
   Wand2,
-  Archive,
 } from 'lucide-react';
+
+const RECENTLY_STARTED_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
+
+function isRecentlyStarted(feature: Feature): boolean {
+  if (!feature.startedAt) return false;
+  const elapsed = Date.now() - new Date(feature.startedAt).getTime();
+  return elapsed < RECENTLY_STARTED_THRESHOLD_MS;
+}
 
 interface CardActionsProps {
   feature: Feature;
@@ -27,12 +35,11 @@ interface CardActionsProps {
   onManualVerify?: () => void;
   onFollowUp?: () => void;
   onImplement?: () => void;
-  onComplete?: () => void;
   onViewPlan?: () => void;
   onApprovePlan?: () => void;
 }
 
-export function CardActions({
+export const CardActions = memo(function CardActions({
   feature,
   isCurrentAutoTask,
   hasContext,
@@ -46,7 +53,6 @@ export function CardActions({
   onManualVerify,
   onFollowUp,
   onImplement,
-  onComplete,
   onViewPlan,
   onApprovePlan,
 }: CardActionsProps) {
@@ -56,7 +62,7 @@ export function CardActions({
   }
 
   return (
-    <div className="flex flex-wrap gap-1.5 -mx-3 -mb-3 px-3 pb-3">
+    <div className="flex flex-wrap gap-1.5 -mx-2.5 px-2.5 pt-1 pb-2">
       {isCurrentAutoTask && (
         <>
           {/* Approve Plan button - PRIORITY: shows even when agent is "running" (paused for approval) */}
@@ -151,9 +157,9 @@ export function CardActions({
                 data-testid={`manual-verify-${feature.id}`}
               >
                 <CheckCircle2 className="w-3 h-3 mr-1" />
-                Verify
+                Complete
               </Button>
-            ) : onResume ? (
+            ) : onResume && !isRecentlyStarted(feature) ? (
               <Button
                 variant="default"
                 size="sm"
@@ -181,7 +187,7 @@ export function CardActions({
                 data-testid={`verify-feature-${feature.id}`}
               >
                 <CheckCircle2 className="w-3 h-3 mr-1" />
-                Verify
+                Complete
               </Button>
             ) : null}
             {onViewOutput && !feature.skipTests && (
@@ -201,44 +207,6 @@ export function CardActions({
             )}
           </>
         )}
-      {!isCurrentAutoTask && feature.status === 'verified' && (
-        <>
-          {/* Logs button */}
-          {onViewOutput && (
-            <Button
-              variant="secondary"
-              size="sm"
-              className="flex-1 h-7 text-xs min-w-0"
-              onClick={(e) => {
-                e.stopPropagation();
-                onViewOutput();
-              }}
-              onPointerDown={(e) => e.stopPropagation()}
-              data-testid={`view-output-verified-${feature.id}`}
-            >
-              <FileText className="w-3 h-3 mr-1 shrink-0" />
-              <span className="truncate">Logs</span>
-            </Button>
-          )}
-          {/* Complete button */}
-          {onComplete && (
-            <Button
-              variant="default"
-              size="sm"
-              className="flex-1 h-7 text-xs min-w-0 bg-brand-500 hover:bg-brand-600"
-              onClick={(e) => {
-                e.stopPropagation();
-                onComplete();
-              }}
-              onPointerDown={(e) => e.stopPropagation()}
-              data-testid={`complete-${feature.id}`}
-            >
-              <Archive className="w-3 h-3 mr-1 shrink-0" />
-              <span className="truncate">Complete</span>
-            </Button>
-          )}
-        </>
-      )}
       {!isCurrentAutoTask && feature.status === 'waiting_approval' && (
         <>
           {/* Refine prompt button */}
@@ -258,8 +226,8 @@ export function CardActions({
               <span className="truncate">Refine</span>
             </Button>
           )}
-          {/* Show Verify button if PR was created (changes are committed), otherwise show Mark as Verified button */}
-          {feature.prUrl && onManualVerify ? (
+          {/* Show Complete button to mark feature as done */}
+          {onManualVerify ? (
             <Button
               variant="default"
               size="sm"
@@ -269,25 +237,10 @@ export function CardActions({
                 onManualVerify();
               }}
               onPointerDown={(e) => e.stopPropagation()}
-              data-testid={`verify-${feature.id}`}
+              data-testid={`mark-as-complete-${feature.id}`}
             >
               <CheckCircle2 className="w-3 h-3 mr-1" />
-              Verify
-            </Button>
-          ) : onManualVerify ? (
-            <Button
-              variant="default"
-              size="sm"
-              className="flex-1 h-7 text-[11px]"
-              onClick={(e) => {
-                e.stopPropagation();
-                onManualVerify();
-              }}
-              onPointerDown={(e) => e.stopPropagation()}
-              data-testid={`mark-as-verified-${feature.id}`}
-            >
-              <CheckCircle2 className="w-3 h-3 mr-1" />
-              Mark as Verified
+              Complete
             </Button>
           ) : null}
         </>
@@ -344,4 +297,4 @@ export function CardActions({
       )}
     </div>
   );
-}
+});

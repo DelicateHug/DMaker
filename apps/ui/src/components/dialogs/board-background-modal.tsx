@@ -18,6 +18,7 @@ import { cn } from '@/lib/utils';
 import { useAppStore, defaultBackgroundSettings } from '@/store/app-store';
 import { getHttpApiClient } from '@/lib/http-api-client';
 import { getAuthenticatedImageUrl } from '@/lib/api-fetch';
+import { LazyImage } from '@/components/ui/lazy-image';
 import { useBoardBackgroundSettings } from '@/hooks/use-board-background-settings';
 import { toast } from 'sonner';
 import {
@@ -260,7 +261,11 @@ export function BoardBackgroundModal({ open, onOpenChange }: BoardBackgroundModa
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full sm:max-w-md overflow-y-auto">
+      <SheetContent
+        side="right"
+        className="w-full sm:max-w-md overflow-y-auto"
+        data-testid="board-background-modal"
+      >
         <SheetHeader className="px-6 pt-6">
           <SheetTitle className="flex items-center gap-2">
             <ImageIcon className="w-5 h-5 text-brand-500" />
@@ -291,6 +296,7 @@ export function BoardBackgroundModal({ open, onOpenChange }: BoardBackgroundModa
               onDrop={handleDrop}
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
+              data-testid="board-background-drop-zone"
               className={cn(
                 'relative rounded-lg border-2 border-dashed transition-all duration-200',
                 {
@@ -306,10 +312,12 @@ export function BoardBackgroundModal({ open, onOpenChange }: BoardBackgroundModa
               {previewImage ? (
                 <div className="relative p-4">
                   <div className="relative w-full h-48 rounded-md overflow-hidden border border-border bg-muted">
-                    <img
+                    <LazyImage
                       src={previewImage}
                       alt="Background preview"
                       className="w-full h-full object-cover"
+                      containerClassName="w-full h-full"
+                      errorIconSize="w-6 h-6"
                     />
                     {isProcessing && (
                       <div className="absolute inset-0 flex items-center justify-center bg-background/80">
@@ -324,6 +332,7 @@ export function BoardBackgroundModal({ open, onOpenChange }: BoardBackgroundModa
                       onClick={handleBrowseClick}
                       disabled={isProcessing}
                       className="flex-1"
+                      data-testid="board-background-change-image-button"
                     >
                       <Upload className="w-4 h-4 mr-2" />
                       Change Image
@@ -333,6 +342,7 @@ export function BoardBackgroundModal({ open, onOpenChange }: BoardBackgroundModa
                       size="sm"
                       onClick={handleClear}
                       disabled={isProcessing}
+                      data-testid="board-background-clear-button"
                     >
                       <Trash2 className="w-4 h-4 mr-2" />
                       Clear
@@ -386,6 +396,7 @@ export function BoardBackgroundModal({ open, onOpenChange }: BoardBackgroundModa
                 max={100}
                 step={1}
                 className="w-full"
+                data-testid="board-background-card-opacity-slider"
               />
             </div>
 
@@ -401,6 +412,7 @@ export function BoardBackgroundModal({ open, onOpenChange }: BoardBackgroundModa
                 max={100}
                 step={1}
                 className="w-full"
+                data-testid="board-background-column-opacity-slider"
               />
             </div>
 
@@ -410,6 +422,7 @@ export function BoardBackgroundModal({ open, onOpenChange }: BoardBackgroundModa
                 id="column-border-toggle"
                 checked={columnBorderEnabled}
                 onCheckedChange={handleColumnBorderToggle}
+                data-testid="board-background-column-border-toggle"
               />
               <Label htmlFor="column-border-toggle" className="cursor-pointer">
                 Show Column Borders
@@ -422,6 +435,7 @@ export function BoardBackgroundModal({ open, onOpenChange }: BoardBackgroundModa
                 id="card-glassmorphism-toggle"
                 checked={cardGlassmorphism}
                 onCheckedChange={handleCardGlassmorphismToggle}
+                data-testid="board-background-card-glassmorphism-toggle"
               />
               <Label htmlFor="card-glassmorphism-toggle" className="cursor-pointer">
                 Card Glassmorphism (blur effect)
@@ -434,6 +448,7 @@ export function BoardBackgroundModal({ open, onOpenChange }: BoardBackgroundModa
                 id="card-border-toggle"
                 checked={cardBorderEnabled}
                 onCheckedChange={handleCardBorderToggle}
+                data-testid="board-background-card-border-toggle"
               />
               <Label htmlFor="card-border-toggle" className="cursor-pointer">
                 Show Card Borders
@@ -464,6 +479,7 @@ export function BoardBackgroundModal({ open, onOpenChange }: BoardBackgroundModa
                 id="hide-scrollbar-toggle"
                 checked={hideScrollbar}
                 onCheckedChange={handleHideScrollbarToggle}
+                data-testid="board-background-hide-scrollbar-toggle"
               />
               <Label htmlFor="hide-scrollbar-toggle" className="cursor-pointer">
                 Hide Board Scrollbar

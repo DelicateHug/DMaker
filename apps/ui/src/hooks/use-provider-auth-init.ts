@@ -97,6 +97,12 @@ export function useProviderAuthInit() {
     }
     initialized.current = true;
 
-    void refreshStatuses();
+    // Defer provider auth check to avoid blocking initial render.
+    // This data is only needed for the usage display in the board header.
+    const timeoutId = setTimeout(() => {
+      void refreshStatuses();
+    }, 2000); // Defer by 2 seconds to let critical startup complete first
+
+    return () => clearTimeout(timeoutId);
   }, [refreshStatuses, claudeAuthStatus, codexAuthStatus]);
 }

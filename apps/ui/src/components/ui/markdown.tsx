@@ -1,7 +1,14 @@
-import ReactMarkdown from 'react-markdown';
-import rehypeRaw from 'rehype-raw';
-import rehypeSanitize from 'rehype-sanitize';
+import { lazy, Suspense } from 'react';
 import { cn } from '@/lib/utils';
+
+/**
+ * Lazy-load the heavy MarkdownRenderer (react-markdown + rehype plugins)
+ * so they are code-split into a separate chunk and only fetched when
+ * the Markdown component is first rendered.
+ */
+const MarkdownRenderer = lazy(() =>
+  import('./markdown-renderer').then((m) => ({ default: m.MarkdownRenderer }))
+);
 
 interface MarkdownProps {
   children: string;
@@ -9,43 +16,41 @@ interface MarkdownProps {
 }
 
 /**
- * Reusable Markdown component for rendering markdown content
- * Theme-aware styling that adapts to all predefined themes
- * Supports raw HTML elements including images
+ * Markdown loading fallback – renders lightweight placeholder lines
+ * that approximate a block of rendered markdown while the heavy
+ * MarkdownRenderer chunk is being fetched.
+ */
+function MarkdownFallback({ className }: { className?: string }) {
+  return (
+    <div
+      className={cn('animate-pulse space-y-2', className)}
+      role="status"
+      aria-label="Loading markdown content"
+    >
+      {/* Simulated heading */}
+      <div className="h-4 w-3/4 rounded bg-muted" />
+      {/* Simulated paragraph lines */}
+      <div className="h-3 w-full rounded bg-muted" />
+      <div className="h-3 w-full rounded bg-muted" />
+      <div className="h-3 w-5/6 rounded bg-muted" />
+    </div>
+  );
+}
+
+/**
+ * Reusable Markdown component for rendering markdown content.
+ *
+ * This is a thin wrapper that lazy-loads the heavy `MarkdownRenderer`
+ * (which bundles `react-markdown`, `rehype-raw`, and `rehype-sanitize`)
+ * behind a `<Suspense>` boundary with a skeleton fallback.
+ *
+ * All existing call-sites can continue to `import { Markdown }` from this
+ * module – no consumer changes are required.
  */
 export function Markdown({ children, className }: MarkdownProps) {
   return (
-    <div
-      className={cn(
-        'prose prose-sm prose-invert max-w-none',
-        // Headings
-        '[&_h1]:text-xl [&_h1]:text-foreground [&_h1]:font-semibold [&_h1]:mt-4 [&_h1]:mb-2',
-        '[&_h2]:text-lg [&_h2]:text-foreground [&_h2]:font-semibold [&_h2]:mt-4 [&_h2]:mb-2',
-        '[&_h3]:text-base [&_h3]:text-foreground [&_h3]:font-semibold [&_h3]:mt-3 [&_h3]:mb-2',
-        '[&_h4]:text-sm [&_h4]:text-foreground [&_h4]:font-semibold [&_h4]:mt-2 [&_h4]:mb-1',
-        // Paragraphs
-        '[&_p]:text-foreground-secondary [&_p]:leading-relaxed [&_p]:my-2',
-        // Lists
-        '[&_ul]:my-2 [&_ul]:pl-4 [&_ol]:my-2 [&_ol]:pl-4',
-        '[&_li]:text-foreground-secondary [&_li]:my-0.5',
-        // Code
-        '[&_code]:text-chart-2 [&_code]:bg-muted [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-sm',
-        '[&_pre]:bg-card [&_pre]:border [&_pre]:border-border [&_pre]:rounded-lg [&_pre]:my-2 [&_pre]:p-3 [&_pre]:overflow-x-auto',
-        '[&_pre_code]:bg-transparent [&_pre_code]:p-0',
-        // Strong/Bold
-        '[&_strong]:text-foreground [&_strong]:font-semibold',
-        // Links
-        '[&_a]:text-brand-500 [&_a]:no-underline hover:[&_a]:underline',
-        // Blockquotes
-        '[&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-4 [&_blockquote]:text-muted-foreground [&_blockquote]:italic [&_blockquote]:my-2',
-        // Horizontal rules
-        '[&_hr]:border-border [&_hr]:my-4',
-        // Images
-        '[&_img]:max-w-full [&_img]:h-auto [&_img]:rounded-lg [&_img]:my-2 [&_img]:border [&_img]:border-border',
-        className
-      )}
-    >
-      <ReactMarkdown rehypePlugins={[rehypeRaw, rehypeSanitize]}>{children}</ReactMarkdown>
-    </div>
+    <Suspense fallback={<MarkdownFallback className={className} />}>
+      <MarkdownRenderer className={className}>{children}</MarkdownRenderer>
+    </Suspense>
   );
 }

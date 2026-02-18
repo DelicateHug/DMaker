@@ -44,8 +44,7 @@ export interface TerminalTheme {
  * Terminal font options for user selection
  *
  * Uses the same fonts as UI_MONO_FONT_OPTIONS for consistency across the app.
- * All fonts listed here are bundled with the app via @fontsource packages
- * or are system fonts with appropriate fallbacks.
+ * Only Zed Mono is bundled; others are system fonts with appropriate fallbacks.
  */
 
 // Re-export for backwards compatibility

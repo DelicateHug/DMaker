@@ -9,7 +9,7 @@ import { WorktreeActionsDropdown } from './worktree-actions-dropdown';
 
 interface WorktreeTabProps {
   worktree: WorktreeInfo;
-  cardCount?: number; // Number of unarchived cards for this branch
+  cardCount?: number; // Number of active cards for this branch
   hasChanges?: boolean; // Whether the worktree has uncommitted changes
   changedFilesCount?: number; // Number of files with uncommitted changes
   isSelected: boolean;

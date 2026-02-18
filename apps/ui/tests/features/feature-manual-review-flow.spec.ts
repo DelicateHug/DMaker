@@ -123,15 +123,9 @@ test.describe('Feature Manual Review Flow', () => {
     await waitForNetworkIdle(page);
     await expect(page.locator('[data-testid="board-view"]')).toBeVisible({ timeout: 10000 });
 
-    // Expand sidebar if collapsed to see project name
-    const expandSidebarButton = page.locator('button:has-text("Expand sidebar")');
-    if (await expandSidebarButton.isVisible()) {
-      await expandSidebarButton.click();
-      await page.waitForTimeout(300);
-    }
-
-    // Verify we're on the correct project (project switcher button shows project name)
-    await expect(page.getByTestId(`project-switcher-project-${projectName}`)).toBeVisible({
+    // Verify we're on the correct project (project dropdown trigger shows project name)
+    await expect(page.getByTestId('project-dropdown-trigger')).toBeVisible({ timeout: 10000 });
+    await expect(page.getByTestId('project-dropdown-trigger')).toContainText(projectName, {
       timeout: 10000,
     });
 

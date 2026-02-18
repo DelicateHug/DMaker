@@ -1,5 +1,6 @@
 import { User } from 'lucide-react';
 import { Markdown } from '@/components/ui/markdown';
+import { LazyImage } from '@/components/ui/lazy-image';
 import type { GitHubComment } from '@/lib/electron';
 import { formatDate } from '../utils';
 
@@ -13,10 +14,12 @@ export function CommentItem({ comment }: CommentItemProps) {
       {/* Comment Header */}
       <div className="flex items-center gap-2 mb-2">
         {comment.author.avatarUrl ? (
-          <img
+          <LazyImage
             src={comment.author.avatarUrl}
             alt={comment.author.login}
             className="h-6 w-6 rounded-full"
+            containerClassName="h-6 w-6"
+            errorIconSize="w-3 h-3"
           />
         ) : (
           <div className="h-6 w-6 rounded-full bg-muted flex items-center justify-center">

@@ -33,6 +33,11 @@ const QUICK_TASKS: PhaseConfig[] = [
     label: 'Commit Messages',
     description: 'Generates git commit messages from diffs',
   },
+  {
+    key: 'sessionTitleModel',
+    label: 'Agent Session Titles',
+    description: 'Generates titles for agent chat sessions',
+  },
 ];
 
 const VALIDATION_TASKS: PhaseConfig[] = [

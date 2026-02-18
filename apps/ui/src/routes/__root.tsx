@@ -1,13 +1,15 @@
 import { createRootRoute, Outlet, useLocation, useNavigate } from '@tanstack/react-router';
-import { useEffect, useState, useCallback, useDeferredValue, useRef } from 'react';
+import { lazy, Suspense, useEffect, useState, useCallback, useDeferredValue, useRef } from 'react';
 import { createLogger } from '@automaker/utils/logger';
-import { Sidebar } from '@/components/layout/sidebar';
-import { ProjectSwitcher } from '@/components/layout/project-switcher';
+import { loadFontByFamily } from '@/lib/font-loader';
+import { loadTheme } from '@/lib/theme-loader';
+import { TopNavigationBar } from '@/components/layout/top-nav-bar';
 import {
   FileBrowserProvider,
   useFileBrowser,
   setGlobalFileBrowser,
 } from '@/contexts/file-browser-context';
+import { useShallow } from 'zustand/react/shallow';
 import { useAppStore, getStoredTheme, type ThemeMode } from '@/store/app-store';
 import { useSetupStore } from '@/store/setup-store';
 import { useAuthStore } from '@/store/auth-store';
@@ -29,12 +31,29 @@ import {
 } from '@/hooks/use-settings-migration';
 import { Toaster } from 'sonner';
 import { ThemeOption, themeOptions } from '@/config/theme-options';
-import { SandboxRiskDialog } from '@/components/dialogs/sandbox-risk-dialog';
-import { SandboxRejectionScreen } from '@/components/dialogs/sandbox-rejection-screen';
 import { LoadingState } from '@/components/ui/loading-state';
 import { useProjectSettingsLoader } from '@/hooks/use-project-settings-loader';
-import { useIsCompact } from '@/hooks/use-media-query';
+import {
+  useVoiceMode,
+  useGlobalVoiceModeShortcut,
+  useGlobalRecordingToggleShortcut,
+} from '@/hooks/use-voice-mode';
 import type { Project } from '@/lib/electron';
+
+// Lazy-load heavy, conditionally-rendered components to reduce initial bundle size.
+// VoiceWidget is only shown when voice mode is enabled in settings.
+// Sandbox dialogs are only shown on first run or when not containerized.
+const VoiceWidget = lazy(() =>
+  import('@/components/voice/voice-widget').then((m) => ({ default: m.VoiceWidget }))
+);
+const SandboxRiskDialog = lazy(() =>
+  import('@/components/dialogs/sandbox-risk-dialog').then((m) => ({ default: m.SandboxRiskDialog }))
+);
+const SandboxRejectionScreen = lazy(() =>
+  import('@/components/dialogs/sandbox-rejection-screen').then((m) => ({
+    default: m.SandboxRejectionScreen,
+  }))
+);
 
 const logger = createLogger('RootLayout');
 const SERVER_READY_MAX_ATTEMPTS = 8;
@@ -45,6 +64,55 @@ const NO_STORE_CACHE_MODE: RequestCache = 'no-store';
 const AUTO_OPEN_HISTORY_INDEX = 0;
 const SINGLE_PROJECT_COUNT = 1;
 const DEFAULT_LAST_OPENED_TIME_MS = 0;
+
+// --- Optimistic Auth Cache ---
+// Caches successful auth+settings state so subsequent app loads can skip
+// the "Loading..." screens and render the app immediately while verifying
+// in the background. The cache is invalidated on logout or auth failure.
+const AUTH_CACHE_KEY = 'automaker:auth-cached';
+const SETUP_COMPLETE_CACHE_KEY = 'automaker:setup-complete-cached';
+
+function getCachedAuthState(): boolean {
+  try {
+    return localStorage.getItem(AUTH_CACHE_KEY) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+function getCachedSetupComplete(): boolean {
+  try {
+    return localStorage.getItem(SETUP_COMPLETE_CACHE_KEY) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+function setCachedAuthState(authenticated: boolean, setupComplete: boolean): void {
+  try {
+    if (authenticated) {
+      localStorage.setItem(AUTH_CACHE_KEY, 'true');
+    } else {
+      localStorage.removeItem(AUTH_CACHE_KEY);
+    }
+    if (setupComplete) {
+      localStorage.setItem(SETUP_COMPLETE_CACHE_KEY, 'true');
+    } else {
+      localStorage.removeItem(SETUP_COMPLETE_CACHE_KEY);
+    }
+  } catch {
+    // localStorage unavailable — ignore
+  }
+}
+
+function clearCachedAuthState(): void {
+  try {
+    localStorage.removeItem(AUTH_CACHE_KEY);
+    localStorage.removeItem(SETUP_COMPLETE_CACHE_KEY);
+  } catch {
+    // ignore
+  }
+}
 const AUTO_OPEN_STATUS = {
   idle: 'idle',
   opening: 'opening',
@@ -167,9 +235,30 @@ function RootLayoutContent() {
     skipSandboxWarning,
     setSkipSandboxWarning,
     fetchCodexModels,
-    sidebarOpen,
-    toggleSidebar,
-  } = useAppStore();
+    voiceSettings,
+    voiceWidgetPosition,
+    setVoiceWidgetPosition,
+  } = useAppStore(
+    useShallow((state) => ({
+      setIpcConnected: state.setIpcConnected,
+      projects: state.projects,
+      currentProject: state.currentProject,
+      projectHistory: state.projectHistory,
+      upsertAndSetCurrentProject: state.upsertAndSetCurrentProject,
+      getEffectiveTheme: state.getEffectiveTheme,
+      getEffectiveFontSans: state.getEffectiveFontSans,
+      getEffectiveFontMono: state.getEffectiveFontMono,
+      theme: state.theme,
+      fontFamilySans: state.fontFamilySans,
+      fontFamilyMono: state.fontFamilyMono,
+      skipSandboxWarning: state.skipSandboxWarning,
+      setSkipSandboxWarning: state.setSkipSandboxWarning,
+      fetchCodexModels: state.fetchCodexModels,
+      voiceSettings: state.voiceSettings,
+      voiceWidgetPosition: state.voiceWidgetPosition,
+      setVoiceWidgetPosition: state.setVoiceWidgetPosition,
+    }))
+  );
   const { setupComplete, codexCliStatus } = useSetupStore();
   const navigate = useNavigate();
   const [isMounted, setIsMounted] = useState(false);
@@ -182,8 +271,17 @@ function RootLayoutContent() {
   // Load project settings when switching projects
   useProjectSettingsLoader();
 
-  // Check if we're in compact mode (< 1240px) to hide project switcher
-  const isCompact = useIsCompact();
+  // Voice mode hook - provides voice session state and controls
+  const voiceMode = useVoiceMode();
+
+  // Register global Alt+M keyboard shortcut for voice mode toggle
+  // This shortcut bypasses input focus check for hands-free voice control
+  useGlobalVoiceModeShortcut(voiceMode);
+
+  // Register global Alt+N keyboard shortcut for recording toggle
+  // This shortcut only works when voice mode is visible (per acceptance criteria:
+  // "GIVEN voice mode is closed, WHEN user presses Alt+N, THEN nothing happens")
+  useGlobalRecordingToggleShortcut(voiceMode);
 
   const isSetupRoute = location.pathname === '/setup';
   const isLoginRoute = location.pathname === '/login';
@@ -358,11 +456,14 @@ function RootLayoutContent() {
   useEffect(() => {
     const handleLoggedOut = () => {
       logger.warn('automaker:logged-out event received!');
+      clearCachedAuthState();
       useAuthStore.getState().setAuthState({ isAuthenticated: false, authChecked: true });
 
-      if (location.pathname !== '/logged-out') {
-        logger.warn('Navigating to /logged-out due to logged-out event');
-        navigate({ to: '/logged-out' });
+      // Navigate directly to /login instead of /logged-out
+      // This removes the unnecessary intermediate screen
+      if (location.pathname !== '/login' && location.pathname !== '/logged-out') {
+        logger.warn('Navigating to /login due to logged-out event');
+        navigate({ to: '/login' });
       }
     };
 
@@ -378,6 +479,7 @@ function RootLayoutContent() {
   useEffect(() => {
     const handleServerOffline = () => {
       logger.warn('automaker:server-offline event received!');
+      clearCachedAuthState();
       useAuthStore.getState().setAuthState({ isAuthenticated: false, authChecked: true });
 
       // Navigate to login - the login page will detect server is offline and show appropriate UI
@@ -395,6 +497,11 @@ function RootLayoutContent() {
   // Initialize authentication
   // - Electron mode: Uses API key from IPC (header-based auth)
   // - Web mode: Uses HTTP-only session cookie
+  //
+  // OPTIMIZATION: If we have a cached auth state from a previous successful session,
+  // we optimistically mark auth as checked so the app renders immediately.
+  // The actual verification still runs in the background and will redirect
+  // to login if the session has expired.
   useEffect(() => {
     // Prevent concurrent auth checks
     if (authCheckRunning.current) {
@@ -404,12 +511,32 @@ function RootLayoutContent() {
     const initAuth = async () => {
       authCheckRunning.current = true;
 
+      // --- Optimistic fast path ---
+      // If we previously completed auth+settings successfully, use cached state
+      // to immediately mark auth as checked so the app doesn't show a blank
+      // "Loading..." screen while we wait for the server readiness check.
+      // We still need to verify the session and load settings, but at least
+      // the auth check gate is lifted instantly.
+      const hasCachedAuth = getCachedAuthState();
+      const hasCachedSetup = getCachedSetupComplete();
+
+      if (hasCachedAuth && hasCachedSetup) {
+        logger.info('Using cached auth state for instant render');
+        // Mark authChecked + isAuthenticated so the router doesn't show "Loading..."
+        // settingsLoaded stays false — the settings will be hydrated below.
+        useAuthStore.getState().setAuthState({
+          authChecked: true,
+          isAuthenticated: true,
+        });
+      }
+
       try {
         // Initialize API key for Electron mode
         await initApiKey();
 
         const serverReady = await waitForServerReady();
         if (!serverReady) {
+          clearCachedAuthState();
           handleServerOffline();
           return;
         }
@@ -472,6 +599,9 @@ function RootLayoutContent() {
                     settingsLoaded: true,
                   });
 
+                  // Cache successful auth state for next startup
+                  setCachedAuthState(true, true);
+
                   return;
                 }
 
@@ -493,32 +623,35 @@ function RootLayoutContent() {
             logger.error('Failed to fetch settings after valid session:', error);
             // If we can't load settings, we must NOT start syncing defaults to the server.
             // Treat as not authenticated for now (backend likely unavailable) and unblock sync hook.
+            clearCachedAuthState();
             useAuthStore.getState().setAuthState({ isAuthenticated: false, authChecked: true });
             signalMigrationComplete();
-            if (location.pathname !== '/logged-out' && location.pathname !== '/login') {
-              navigate({ to: '/logged-out' });
+            if (location.pathname !== '/login') {
+              navigate({ to: '/login' });
             }
             return;
           }
         } else {
           // Session is invalid or expired - treat as not authenticated
+          clearCachedAuthState();
           useAuthStore.getState().setAuthState({ isAuthenticated: false, authChecked: true });
           // Signal migration complete so sync hook doesn't hang (nothing to sync when not authenticated)
           signalMigrationComplete();
 
-          // Redirect to logged-out if not already there or login
-          if (location.pathname !== '/logged-out' && location.pathname !== '/login') {
-            navigate({ to: '/logged-out' });
+          // Redirect to login
+          if (location.pathname !== '/login') {
+            navigate({ to: '/login' });
           }
         }
       } catch (error) {
         logger.error('Failed to initialize auth:', error);
         // On error, treat as not authenticated
+        clearCachedAuthState();
         useAuthStore.getState().setAuthState({ isAuthenticated: false, authChecked: true });
         // Signal migration complete so sync hook doesn't hang
         signalMigrationComplete();
-        if (location.pathname !== '/logged-out' && location.pathname !== '/login') {
-          navigate({ to: '/logged-out' });
+        if (location.pathname !== '/login') {
+          navigate({ to: '/login' });
         }
       } finally {
         authCheckRunning.current = false;
@@ -550,16 +683,16 @@ function RootLayoutContent() {
       return;
     }
 
-    // Unauthenticated -> force /logged-out (but allow /login so user can authenticate)
+    // Unauthenticated -> force /login
     if (!isAuthenticated) {
-      logger.warn('Not authenticated, redirecting to /logged-out. Auth state:', {
+      logger.warn('Not authenticated, redirecting to /login. Auth state:', {
         authChecked,
         isAuthenticated,
         settingsLoaded,
         currentPath: location.pathname,
       });
-      if (location.pathname !== '/logged-out' && location.pathname !== '/login') {
-        navigate({ to: '/logged-out' });
+      if (location.pathname !== '/login') {
+        navigate({ to: '/login' });
       }
       return;
     }
@@ -732,46 +865,87 @@ function RootLayoutContent() {
   }, [authChecked, isAuthenticated, codexCliStatus, fetchCodexModels]);
 
   // Apply theme class to document - use deferred value to avoid blocking UI
+  // Dynamically loads the theme CSS on demand before applying the class.
   useEffect(() => {
     const root = document.documentElement;
     // Remove all theme classes dynamically from themeOptions
     const themeClasses = themeOptions
       .map((option) => option.value)
       .filter((theme) => theme !== ('system' as ThemeOption['value']));
-    root.classList.remove(...themeClasses);
+
+    const applyClass = (className: string) => {
+      root.classList.remove(...themeClasses);
+      root.classList.add(className);
+    };
 
     if (deferredTheme === 'dark') {
-      root.classList.add('dark');
+      applyClass('dark');
     } else if (deferredTheme === 'system') {
       const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      root.classList.add(isDark ? 'dark' : 'light');
+      applyClass(isDark ? 'dark' : 'light');
     } else if (deferredTheme && deferredTheme !== 'light') {
-      root.classList.add(deferredTheme);
+      // Dynamically load the theme CSS, then apply the class
+      void loadTheme(deferredTheme).then(() => {
+        applyClass(deferredTheme);
+      });
+      return; // Don't apply synchronously — loadTheme callback will do it
     } else {
-      root.classList.add('light');
+      applyClass('light');
     }
   }, [deferredTheme]);
 
-  // Apply font CSS variables for project-specific font overrides
+  // Load font assets and apply CSS variables when effective fonts change.
+  // This ensures bundled fonts (e.g. Zed Sans/Mono) have their CSS loaded
+  // before being applied, while system fonts are applied immediately.
   useEffect(() => {
     const root = document.documentElement;
 
-    if (effectiveFontSans) {
-      root.style.setProperty('--font-sans', effectiveFontSans);
-    } else {
-      root.style.removeProperty('--font-sans');
-    }
+    const applyFonts = async () => {
+      // Load font assets in parallel for any bundled fonts that need it.
+      // loadFontByFamily is a no-op for already-loaded or system fonts.
+      await Promise.all([
+        effectiveFontSans ? loadFontByFamily(effectiveFontSans) : null,
+        effectiveFontMono ? loadFontByFamily(effectiveFontMono) : null,
+      ]);
 
-    if (effectiveFontMono) {
-      root.style.setProperty('--font-mono', effectiveFontMono);
-    } else {
-      root.style.removeProperty('--font-mono');
-    }
+      if (effectiveFontSans) {
+        root.style.setProperty('--font-sans', effectiveFontSans);
+      } else {
+        root.style.removeProperty('--font-sans');
+      }
+
+      if (effectiveFontMono) {
+        root.style.setProperty('--font-mono', effectiveFontMono);
+      } else {
+        root.style.removeProperty('--font-mono');
+      }
+    };
+
+    applyFonts().catch((error) => {
+      logger.error('Failed to load fonts:', error);
+      // Still apply the CSS variables even if loading fails — the browser
+      // will fall back to the next font in the font-family stack.
+      if (effectiveFontSans) {
+        root.style.setProperty('--font-sans', effectiveFontSans);
+      } else {
+        root.style.removeProperty('--font-sans');
+      }
+
+      if (effectiveFontMono) {
+        root.style.setProperty('--font-mono', effectiveFontMono);
+      } else {
+        root.style.removeProperty('--font-mono');
+      }
+    });
   }, [effectiveFontSans, effectiveFontMono]);
 
   // Show sandbox rejection screen if user denied the risk warning
   if (sandboxStatus === 'denied') {
-    return <SandboxRejectionScreen />;
+    return (
+      <Suspense fallback={null}>
+        <SandboxRejectionScreen />
+      </Suspense>
+    );
   }
 
   // Show sandbox risk dialog if not containerized and user hasn't confirmed
@@ -840,23 +1014,22 @@ function RootLayoutContent() {
           <Outlet />
           <Toaster richColors position="bottom-right" />
         </main>
-        <SandboxRiskDialog
-          open={showSandboxDialog}
-          onConfirm={handleSandboxConfirm}
-          onDeny={handleSandboxDeny}
-        />
+        {showSandboxDialog && (
+          <Suspense fallback={null}>
+            <SandboxRiskDialog
+              open={showSandboxDialog}
+              onConfirm={handleSandboxConfirm}
+              onDeny={handleSandboxDeny}
+            />
+          </Suspense>
+        )}
       </>
     );
   }
 
-  // Show project switcher on all app pages (not on dashboard, setup, or login)
-  // Also hide on compact screens (< 1240px) - the sidebar will show a logo instead
-  const showProjectSwitcher =
-    !isDashboardRoute && !isSetupRoute && !isLoginRoute && !isLoggedOutRoute && !isCompact;
-
   return (
     <>
-      <main className="flex h-screen overflow-hidden" data-testid="app-container">
+      <main className="flex flex-col h-screen overflow-hidden" data-testid="app-container">
         {/* Full-width titlebar drag region for Electron window dragging */}
         {isElectron() && (
           <div
@@ -864,8 +1037,10 @@ function RootLayoutContent() {
             aria-hidden="true"
           />
         )}
-        {showProjectSwitcher && <ProjectSwitcher />}
-        <Sidebar />
+        {/* Top Navigation Bar - replaces sidebar, relative for mobile dropdown positioning */}
+        <div className="relative z-50 shrink-0">
+          <TopNavigationBar />
+        </div>
         <div
           className="flex-1 flex flex-col overflow-hidden transition-all duration-300"
           style={{ marginRight: streamerPanelOpen ? '250px' : '0' }}
@@ -880,12 +1055,45 @@ function RootLayoutContent() {
           }`}
         />
         <Toaster richColors position="bottom-right" />
+
+        {/* Voice Widget - Floating voice chat widget for hands-free voice commands
+            Rendered when voice mode is enabled in settings.
+            Uses Alt+M shortcut to toggle recording (bypasses input focus check) */}
+        {voiceSettings.enabled && (
+          <Suspense fallback={null}>
+            <VoiceWidget
+              isVisible={voiceMode.isSessionActive}
+              messages={voiceMode.messages}
+              isProcessing={voiceMode.isProcessing}
+              statusText={
+                voiceMode.sessionStatus === 'transcribing'
+                  ? 'Transcribing...'
+                  : voiceMode.sessionStatus === 'responding'
+                    ? 'Thinking...'
+                    : 'Processing...'
+              }
+              isRecording={voiceMode.isRecording}
+              audioLevel={voiceMode.audioLevel}
+              recordingDurationMs={voiceMode.recordingDuration}
+              sessionStatus={voiceMode.sessionStatus}
+              onToggleRecording={voiceMode.toggleRecording}
+              error={voiceMode.error}
+              onClearError={voiceMode.clearError}
+              position={voiceWidgetPosition}
+              onPositionChange={setVoiceWidgetPosition}
+            />
+          </Suspense>
+        )}
       </main>
-      <SandboxRiskDialog
-        open={showSandboxDialog}
-        onConfirm={handleSandboxConfirm}
-        onDeny={handleSandboxDeny}
-      />
+      {showSandboxDialog && (
+        <Suspense fallback={null}>
+          <SandboxRiskDialog
+            open={showSandboxDialog}
+            onConfirm={handleSandboxConfirm}
+            onDeny={handleSandboxDeny}
+          />
+        </Suspense>
+      )}
     </>
   );
 }

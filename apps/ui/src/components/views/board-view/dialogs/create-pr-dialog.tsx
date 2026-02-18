@@ -255,7 +255,7 @@ export function CreatePRDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-[550px]">
+      <DialogContent className="sm:max-w-[550px]" data-testid="create-pr-dialog">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <GitPullRequest className="w-5 h-5" />

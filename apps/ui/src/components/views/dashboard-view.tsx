@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { createLogger } from '@automaker/utils/logger';
 import { useNavigate } from '@tanstack/react-router';
+import { useShallow } from 'zustand/react/shallow';
 import { useAppStore, type ThemeMode } from '@/store/app-store';
 import { useOSDetection } from '@/hooks/use-os-detection';
 import { getElectronAPI, isElectron } from '@/lib/electron';
@@ -15,7 +16,6 @@ import type { StarterTemplate } from '@/lib/templates';
 import {
   FolderOpen,
   Plus,
-  Folder,
   Star,
   Clock,
   Loader2,
@@ -25,11 +25,11 @@ import {
   Trash2,
   Search,
   X,
-  type LucideIcon,
 } from 'lucide-react';
-import * as LucideIcons from 'lucide-react';
+import { getProjectIcon } from '@/lib/icon-registry';
 import { Input } from '@/components/ui/input';
 import { getAuthenticatedImageUrl } from '@/lib/api-fetch';
+import { LazyImage } from '@/components/ui/lazy-image';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -60,13 +60,6 @@ function getOSAbbreviation(os: string): string {
   }
 }
 
-function getIconComponent(iconName?: string): LucideIcon {
-  if (iconName && iconName in LucideIcons) {
-    return (LucideIcons as unknown as Record<string, LucideIcon>)[iconName];
-  }
-  return Folder;
-}
-
 export function DashboardView() {
   const navigate = useNavigate();
   const { os } = useOSDetection();
@@ -84,7 +77,19 @@ export function DashboardView() {
     toggleProjectFavorite,
     moveProjectToTrash,
     theme: globalTheme,
-  } = useAppStore();
+  } = useAppStore(
+    useShallow((state) => ({
+      projects: state.projects,
+      trashedProjects: state.trashedProjects,
+      currentProject: state.currentProject,
+      upsertAndSetCurrentProject: state.upsertAndSetCurrentProject,
+      addProject: state.addProject,
+      setCurrentProject: state.setCurrentProject,
+      toggleProjectFavorite: state.toggleProjectFavorite,
+      moveProjectToTrash: state.moveProjectToTrash,
+      theme: state.theme,
+    }))
+  );
 
   const [showNewProjectModal, setShowNewProjectModal] = useState(false);
   const [showWorkspacePicker, setShowWorkspacePicker] = useState(false);
@@ -501,7 +506,7 @@ export function DashboardView() {
               xmlns="http://www.w3.org/2000/svg"
               viewBox="0 0 256 256"
               role="img"
-              aria-label="Automaker Logo"
+              aria-label="DMaker Logo"
               className="size-8 sm:size-10 group-hover:rotate-12 transition-transform duration-300 ease-out"
             >
               <defs>
@@ -589,7 +594,7 @@ export function DashboardView() {
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
               <div className="text-center mb-8 sm:mb-12">
                 <h2 className="text-2xl sm:text-3xl font-bold text-foreground mb-3">
-                  Welcome to Automaker
+                  Welcome to DMaker
                 </h2>
                 <p className="text-base sm:text-lg text-muted-foreground max-w-xl mx-auto px-2">
                   Your autonomous AI development studio. Get started by creating a new project or
@@ -763,17 +768,19 @@ export function DashboardView() {
                           <div className="flex items-start gap-2.5 sm:gap-3">
                             <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg bg-yellow-500/10 border border-yellow-500/30 flex items-center justify-center group-hover:bg-yellow-500/20 transition-all duration-300 shrink-0 overflow-hidden">
                               {project.customIconPath ? (
-                                <img
+                                <LazyImage
                                   src={getAuthenticatedImageUrl(
                                     project.customIconPath,
                                     project.path
                                   )}
                                   alt={project.name}
                                   className="w-full h-full object-cover"
+                                  containerClassName="w-full h-full"
+                                  errorIconSize="w-3 h-3"
                                 />
                               ) : (
                                 (() => {
-                                  const IconComponent = getIconComponent(project.icon);
+                                  const IconComponent = getProjectIcon(project.icon);
                                   return (
                                     <IconComponent className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-500" />
                                   );
@@ -817,7 +824,7 @@ export function DashboardView() {
                                     className="text-destructive focus:text-destructive"
                                   >
                                     <Trash2 className="w-4 h-4 mr-2" />
-                                    Remove from Automaker
+                                    Remove from DMaker
                                   </DropdownMenuItem>
                                 </DropdownMenuContent>
                               </DropdownMenu>
@@ -854,17 +861,19 @@ export function DashboardView() {
                           <div className="flex items-start gap-2.5 sm:gap-3">
                             <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg bg-muted/80 border border-border flex items-center justify-center group-hover:bg-brand-500/10 group-hover:border-brand-500/30 transition-all duration-300 shrink-0 overflow-hidden">
                               {project.customIconPath ? (
-                                <img
+                                <LazyImage
                                   src={getAuthenticatedImageUrl(
                                     project.customIconPath,
                                     project.path
                                   )}
                                   alt={project.name}
                                   className="w-full h-full object-cover"
+                                  containerClassName="w-full h-full"
+                                  errorIconSize="w-3 h-3"
                                 />
                               ) : (
                                 (() => {
-                                  const IconComponent = getIconComponent(project.icon);
+                                  const IconComponent = getProjectIcon(project.icon);
                                   return (
                                     <IconComponent className="w-4 h-4 sm:w-5 sm:h-5 text-muted-foreground group-hover:text-brand-500 transition-colors duration-300" />
                                   );
@@ -908,7 +917,7 @@ export function DashboardView() {
                                     className="text-destructive focus:text-destructive"
                                   >
                                     <Trash2 className="w-4 h-4 mr-2" />
-                                    Remove from Automaker
+                                    Remove from DMaker
                                   </DropdownMenuItem>
                                 </DropdownMenuContent>
                               </DropdownMenu>
@@ -963,14 +972,13 @@ export function DashboardView() {
           <DialogHeader>
             <DialogTitle>Remove Project</DialogTitle>
             <DialogDescription>
-              Are you sure you want to remove <strong>{projectToRemove?.name}</strong> from
-              Automaker?
+              Are you sure you want to remove <strong>{projectToRemove?.name}</strong> from DMaker?
             </DialogDescription>
           </DialogHeader>
           <div className="py-4">
             <p className="text-sm text-muted-foreground">
-              This will only remove the project from your Automaker projects list. The project files
-              on your computer will not be deleted.
+              This will only remove the project from your DMaker projects list. The project files on
+              your computer will not be deleted.
             </p>
           </div>
           <DialogFooter>

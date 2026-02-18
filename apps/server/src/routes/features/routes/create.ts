@@ -6,7 +6,7 @@ import type { Request, Response } from 'express';
 import { FeatureLoader } from '../../../services/feature-loader.js';
 import type { EventEmitter } from '../../../lib/events.js';
 import type { Feature } from '@automaker/types';
-import { getErrorMessage, logError } from '../common.js';
+import { getErrorMessage, logError, invalidateFeaturesCache } from '../common.js';
 
 export function createCreateHandler(featureLoader: FeatureLoader, events?: EventEmitter) {
   return async (req: Request, res: Response): Promise<void> => {
@@ -38,6 +38,9 @@ export function createCreateHandler(featureLoader: FeatureLoader, events?: Event
       }
 
       const created = await featureLoader.create(projectPath, feature);
+
+      // Invalidate cached feature lists so subsequent reads return fresh data
+      invalidateFeaturesCache(projectPath);
 
       // Emit feature_created event for hooks
       if (events) {

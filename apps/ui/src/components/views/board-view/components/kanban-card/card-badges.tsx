@@ -1,9 +1,10 @@
 // @ts-nocheck
-import { useEffect, useMemo, useState } from 'react';
+import { memo, useEffect, useMemo, useState } from 'react';
 import { Feature, useAppStore } from '@/store/app-store';
+import { useShallow } from 'zustand/react/shallow';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { AlertCircle, Lock, Hand, Sparkles } from 'lucide-react';
+import { AlertCircle, Lock, Hand, Sparkles, Cloud, User, Clock, GitBranch } from 'lucide-react';
 import { getBlockingDependencies } from '@automaker/dependency-resolver';
 
 /** Uniform badge style for all card badges */
@@ -18,7 +19,7 @@ interface CardBadgesProps {
  * CardBadges - Shows error badges below the card header
  * Note: Blocked/Lock badges are now shown in PriorityBadges for visual consistency
  */
-export function CardBadges({ feature }: CardBadgesProps) {
+export const CardBadges = memo(function CardBadges({ feature }: CardBadgesProps) {
   if (!feature.error) {
     return null;
   }
@@ -46,14 +47,19 @@ export function CardBadges({ feature }: CardBadgesProps) {
       </TooltipProvider>
     </div>
   );
-}
+});
 
 interface PriorityBadgesProps {
   feature: Feature;
 }
 
-export function PriorityBadges({ feature }: PriorityBadgesProps) {
-  const { enableDependencyBlocking, features } = useAppStore();
+export const PriorityBadges = memo(function PriorityBadges({ feature }: PriorityBadgesProps) {
+  const { enableDependencyBlocking, features } = useAppStore(
+    useShallow((state) => ({
+      enableDependencyBlocking: state.enableDependencyBlocking,
+      features: state.features,
+    }))
+  );
   const [currentTime, setCurrentTime] = useState(() => Date.now());
 
   // Calculate blocking dependencies (if feature is in backlog and has incomplete dependencies)
@@ -102,7 +108,24 @@ export function PriorityBadges({ feature }: PriorityBadgesProps) {
   const showManualVerification =
     feature.skipTests && !feature.error && feature.status === 'backlog';
 
-  const showBadges = feature.priority || showManualVerification || isBlocked || isJustFinished;
+  // Show "waiting for dependencies" badge when feature has waitForDependencies enabled
+  // This indicates the feature is configured to wait, even if not currently blocked
+  const showWaitingForDependencies =
+    feature.waitForDependencies === true &&
+    feature.status === 'backlog' &&
+    !feature.error &&
+    (feature.dependencies?.length ?? 0) > 0;
+
+  // Show remote modified badge when feature was modified by another team member
+  const showRemoteModified = feature.remoteModified && feature.remoteModifiedBy;
+
+  const showBadges =
+    feature.priority ||
+    showManualVerification ||
+    isBlocked ||
+    showWaitingForDependencies ||
+    isJustFinished ||
+    showRemoteModified;
 
   if (!showBadges) {
     return null;
@@ -200,6 +223,33 @@ export function PriorityBadges({ feature }: PriorityBadgesProps) {
         </TooltipProvider>
       )}
 
+      {/* Waiting for dependencies badge */}
+      {showWaitingForDependencies && !isBlocked && (
+        <TooltipProvider delayDuration={200}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div
+                className={cn(
+                  uniformBadgeClass,
+                  'bg-amber-500/20 border-amber-500/50 text-amber-500'
+                )}
+                data-testid={`waiting-dependencies-badge-${feature.id}`}
+              >
+                <Clock className="w-3.5 h-3.5" />
+              </div>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="text-xs max-w-[250px]">
+              <p className="font-medium mb-1">Waiting for dependencies</p>
+              <p className="text-muted-foreground">
+                This feature will only start after its {feature.dependencies?.length}{' '}
+                {feature.dependencies?.length === 1 ? 'dependency is' : 'dependencies are'}{' '}
+                completed
+              </p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      )}
+
       {/* Just Finished badge */}
       {isJustFinished && (
         <TooltipProvider delayDuration={200}>
@@ -221,6 +271,91 @@ export function PriorityBadges({ feature }: PriorityBadgesProps) {
           </Tooltip>
         </TooltipProvider>
       )}
+
+      {/* Remote Modified badge */}
+      {showRemoteModified && (
+        <TooltipProvider delayDuration={200}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div
+                className={cn(
+                  uniformBadgeClass,
+                  'bg-blue-500/20 border-blue-500/50 text-blue-500 animate-pulse'
+                )}
+                data-testid={`remote-modified-badge-${feature.id}`}
+              >
+                <Cloud className="w-3.5 h-3.5" />
+              </div>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="text-xs max-w-[200px]">
+              <p className="font-medium mb-0.5">Modified by team member</p>
+              <p className="text-muted-foreground">
+                {feature.remoteModifiedBy?.name || feature.remoteModifiedBy?.email}
+                {feature.remoteModifiedAt && (
+                  <span className="block text-[10px]">
+                    {new Date(feature.remoteModifiedAt).toLocaleString()}
+                  </span>
+                )}
+              </p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      )}
     </div>
   );
+});
+
+interface BranchBadgeProps {
+  feature: Feature;
+  showAllProjects: boolean;
+  projectDefaultBranch?: string;
 }
+
+/**
+ * BranchBadge - Shows the feature branch when in all-projects mode
+ *
+ * This badge is displayed in the card header area when viewing features across
+ * all projects to help identify which branch each feature belongs to.
+ */
+export const BranchBadge = memo(function BranchBadge({
+  feature,
+  showAllProjects,
+  projectDefaultBranch,
+}: BranchBadgeProps) {
+  // Only show in all-projects mode when there's a branch to display
+  if (!showAllProjects) {
+    return null;
+  }
+
+  // Determine the branch name to display
+  // Priority: feature's branchName > project's defaultBranch > 'main'
+  const branchName = feature.branchName || projectDefaultBranch || 'main';
+
+  // Don't show badge if it's just the default 'main' with no explicit branch set
+  if (!feature.branchName && !projectDefaultBranch) {
+    return null;
+  }
+
+  return (
+    <TooltipProvider delayDuration={200}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <div
+            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] text-muted-foreground bg-muted/50 border border-border/50 max-w-[120px]"
+            data-testid={`branch-badge-${feature.id}`}
+          >
+            <GitBranch className="w-3 h-3 shrink-0 text-muted-foreground/70" />
+            <span className="font-mono truncate">{branchName}</span>
+          </div>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" className="text-xs">
+          <p>
+            {feature.branchName
+              ? `Feature branch: ${branchName}`
+              : `Project default branch: ${branchName}`}
+          </p>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+});

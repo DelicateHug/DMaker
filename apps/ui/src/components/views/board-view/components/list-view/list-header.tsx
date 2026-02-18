@@ -248,7 +248,7 @@ export const ListHeader = memo(function ListHeader({
       {/* Actions column (placeholder for row action buttons) */}
       <div
         role="columnheader"
-        className="w-[80px] px-3 py-2 text-xs font-medium text-muted-foreground shrink-0"
+        className="w-[120px] px-3 py-2 text-xs font-medium text-muted-foreground shrink-0"
         aria-label="Actions"
         data-testid="list-header-actions"
       >

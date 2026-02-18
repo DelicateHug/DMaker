@@ -1,6 +1,11 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { DashboardView } from '@/components/views/dashboard-view';
+import { lazyRouteComponent } from '@/components/ui/route-error-boundary';
+
+const LazyDashboardView = lazyRouteComponent(
+  () => import('@/components/views/dashboard-view'),
+  'DashboardView'
+);
 
 export const Route = createFileRoute('/dashboard')({
-  component: DashboardView,
+  component: LazyDashboardView,
 });

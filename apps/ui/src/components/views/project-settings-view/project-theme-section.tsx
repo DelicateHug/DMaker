@@ -10,6 +10,7 @@ import {
 } from '@/config/ui-font-options';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/store/app-store';
+import { preloadTheme } from '@/lib/theme-loader';
 import { FontSelector } from '@/components/shared';
 import type { Project } from '@/lib/electron';
 
@@ -145,6 +146,7 @@ export function ProjectThemeSection({ project }: ProjectThemeSectionProps) {
         'bg-gradient-to-br from-card/90 via-card/70 to-card/80 backdrop-blur-xl',
         'shadow-sm shadow-black/5'
       )}
+      data-testid="project-theme-section"
     >
       <div className="p-6 border-b border-border/50 bg-gradient-to-r from-transparent via-accent/5 to-transparent">
         <div className="flex items-center gap-3 mb-2">
@@ -197,6 +199,7 @@ export function ProjectThemeSection({ project }: ProjectThemeSectionProps) {
                       ? 'bg-brand-500 text-white shadow-sm'
                       : 'text-muted-foreground hover:text-foreground'
                   )}
+                  data-testid="project-theme-dark-tab"
                 >
                   <Moon className="w-3.5 h-3.5" />
                   Dark
@@ -209,6 +212,7 @@ export function ProjectThemeSection({ project }: ProjectThemeSectionProps) {
                       ? 'bg-brand-500 text-white shadow-sm'
                       : 'text-muted-foreground hover:text-foreground'
                   )}
+                  data-testid="project-theme-light-tab"
                 >
                   <Sun className="w-3.5 h-3.5" />
                   Light
@@ -222,6 +226,7 @@ export function ProjectThemeSection({ project }: ProjectThemeSectionProps) {
                   <button
                     key={value}
                     onClick={() => handleThemeChange(value)}
+                    onMouseEnter={() => preloadTheme(value)}
                     className={cn(
                       'group flex items-center justify-center gap-2.5 px-4 py-3.5 rounded-xl',
                       'text-sm font-medium transition-all duration-200 ease-out',
@@ -277,6 +282,7 @@ export function ProjectThemeSection({ project }: ProjectThemeSectionProps) {
                   checked={!hasCustomFontSans}
                   onCheckedChange={handleUseGlobalFontSans}
                   className="mt-1"
+                  data-testid="project-use-global-font-sans-checkbox"
                 />
                 <div className="flex-1 space-y-1.5">
                   <Label
@@ -318,6 +324,7 @@ export function ProjectThemeSection({ project }: ProjectThemeSectionProps) {
                   checked={!hasCustomFontMono}
                   onCheckedChange={handleUseGlobalFontMono}
                   className="mt-1"
+                  data-testid="project-use-global-font-mono-checkbox"
                 />
                 <div className="flex-1 space-y-1.5">
                   <Label

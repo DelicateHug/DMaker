@@ -2,11 +2,12 @@ import { useState, useRef, useEffect } from 'react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Palette, Upload, X, ImageIcon } from 'lucide-react';
+import { Palette, Upload, X, ImageIcon, GitBranch } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/store/app-store';
-import { IconPicker } from '@/components/layout/project-switcher/components/icon-picker';
+import { IconPicker } from '@/components/ui/icon-picker';
 import { getAuthenticatedImageUrl } from '@/lib/api-fetch';
+import { LazyImage } from '@/components/ui/lazy-image';
 import { getHttpApiClient } from '@/lib/http-api-client';
 import { toast } from 'sonner';
 import type { Project } from '@/lib/electron';
@@ -16,12 +17,14 @@ interface ProjectIdentitySectionProps {
 }
 
 export function ProjectIdentitySection({ project }: ProjectIdentitySectionProps) {
-  const { setProjectIcon, setProjectName, setProjectCustomIcon } = useAppStore();
+  const { setProjectIcon, setProjectName, setProjectCustomIcon, setProjectDefaultBranch } =
+    useAppStore();
   const [projectName, setProjectNameLocal] = useState(project.name || '');
   const [projectIcon, setProjectIconLocal] = useState<string | null>(project.icon || null);
   const [customIconPath, setCustomIconPathLocal] = useState<string | null>(
     project.customIconPath || null
   );
+  const [defaultBranch, setDefaultBranchLocal] = useState(project.defaultBranch || '');
   const [isUploadingIcon, setIsUploadingIcon] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -30,6 +33,7 @@ export function ProjectIdentitySection({ project }: ProjectIdentitySectionProps)
     setProjectNameLocal(project.name || '');
     setProjectIconLocal(project.icon || null);
     setCustomIconPathLocal(project.customIconPath || null);
+    setDefaultBranchLocal(project.defaultBranch || '');
   }, [project]);
 
   // Auto-save when values change
@@ -37,6 +41,15 @@ export function ProjectIdentitySection({ project }: ProjectIdentitySectionProps)
     setProjectNameLocal(name);
     if (name.trim() && name.trim() !== project.name) {
       setProjectName(project.id, name.trim());
+    }
+  };
+
+  const handleDefaultBranchChange = (branch: string) => {
+    setDefaultBranchLocal(branch);
+    // Save branch (empty string becomes null to clear)
+    const branchValue = branch.trim() || null;
+    if (branchValue !== (project.defaultBranch || null)) {
+      setProjectDefaultBranch(project.id, branchValue);
     }
   };
 
@@ -133,6 +146,7 @@ export function ProjectIdentitySection({ project }: ProjectIdentitySectionProps)
         'bg-gradient-to-br from-card/90 via-card/70 to-card/80 backdrop-blur-xl',
         'shadow-sm shadow-black/5'
       )}
+      data-testid="project-identity-section"
     >
       <div className="p-6 border-b border-border/50 bg-gradient-to-r from-transparent via-accent/5 to-transparent">
         <div className="flex items-center gap-3 mb-2">
@@ -154,7 +168,26 @@ export function ProjectIdentitySection({ project }: ProjectIdentitySectionProps)
             value={projectName}
             onChange={(e) => handleNameChange(e.target.value)}
             placeholder="Enter project name"
+            data-testid="project-name-input"
           />
+        </div>
+
+        {/* Default Branch */}
+        <div className="space-y-2">
+          <Label htmlFor="project-default-branch" className="flex items-center gap-2">
+            <GitBranch className="w-4 h-4 text-muted-foreground" />
+            Default Branch
+          </Label>
+          <Input
+            id="project-default-branch"
+            value={defaultBranch}
+            onChange={(e) => handleDefaultBranchChange(e.target.value)}
+            placeholder="e.g., main, master, develop"
+            data-testid="project-default-branch-input"
+          />
+          <p className="text-xs text-muted-foreground">
+            The primary branch for this project. Used for display in All Projects view.
+          </p>
         </div>
 
         {/* Project Icon */}
@@ -169,15 +202,18 @@ export function ProjectIdentitySection({ project }: ProjectIdentitySectionProps)
             <div className="flex items-center gap-3">
               {customIconPath ? (
                 <div className="relative">
-                  <img
+                  <LazyImage
                     src={getAuthenticatedImageUrl(customIconPath, project.path)}
                     alt="Custom project icon"
                     className="w-12 h-12 rounded-lg object-cover border border-border"
+                    containerClassName="w-12 h-12"
+                    errorIconSize="w-4 h-4"
                   />
                   <button
                     type="button"
                     onClick={handleRemoveCustomIcon}
                     className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center hover:bg-destructive/90"
+                    data-testid="project-remove-custom-icon"
                   >
                     <X className="w-3 h-3" />
                   </button>
@@ -203,6 +239,7 @@ export function ProjectIdentitySection({ project }: ProjectIdentitySectionProps)
                   onClick={() => fileInputRef.current?.click()}
                   disabled={isUploadingIcon}
                   className="gap-1.5"
+                  data-testid="project-upload-icon-button"
                 >
                   <Upload className="w-3.5 h-3.5" />
                   {isUploadingIcon ? 'Uploading...' : 'Upload Custom Icon'}

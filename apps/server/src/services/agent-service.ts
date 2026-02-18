@@ -30,6 +30,8 @@ import {
   getSubagentsConfiguration,
   getCustomSubagents,
 } from '../lib/settings-helpers.js';
+import { simpleQuery } from '../providers/simple-query-service.js';
+import { resolveModelString } from '@automaker/model-resolver';
 
 interface Message {
   id: string;
@@ -76,6 +78,161 @@ interface SessionMetadata {
   tags?: string[];
   model?: string;
   sdkSessionId?: string; // Claude SDK session ID for conversation continuity
+}
+
+/**
+ * Check if a session name is a placeholder/auto-generated name that should be replaced
+ */
+function shouldAutoRename(sessionName: string): boolean {
+  // Check for "New Session" placeholder
+  if (sessionName === 'New Session') {
+    return true;
+  }
+
+  // Check for old random pattern: "Adjective Noun Number" (e.g., "Vibrant Voyage 23")
+  // Pattern: word(s) + space + word(s) + space + number(s)
+  const randomPattern = /^[A-Z][a-z]+\s+[A-Z][a-z]+\s+\d+$/;
+  if (randomPattern.test(sessionName)) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Generate a session name from the first user message using AI
+ * Uses the configurable sessionTitleModel from settings (defaults to Haiku)
+ */
+async function generateSessionNameFromMessage(
+  message: string,
+  settingsService: SettingsService | null,
+  logger: ReturnType<typeof createLogger>
+): Promise<string> {
+  try {
+    // Get the configured model for session titles
+    const settings = settingsService ? await settingsService.getGlobalSettings() : null;
+
+    const sessionTitleModelEntry = settings?.phaseModels.sessionTitleModel;
+    const modelId = sessionTitleModelEntry?.model || 'haiku';
+    const thinkingLevel = sessionTitleModelEntry?.thinkingLevel;
+    const reasoningEffort = sessionTitleModelEntry?.reasoningEffort;
+
+    // Resolve model alias to full model ID
+    const resolvedModel = resolveModelString(modelId);
+
+    // Get customized prompts from settings
+    const prompts = await getPromptCustomization(settingsService, '[AgentService]');
+    const systemPrompt = prompts.titleGeneration.systemPrompt;
+
+    // Limit message to first 500 chars to avoid token overflow
+    const truncatedMessage = message.substring(0, 500);
+    const userPrompt = `Generate a concise title for this chat session:\n\n${truncatedMessage}`;
+
+    // Use simpleQuery to generate the title
+    const result = await simpleQuery({
+      prompt: `${systemPrompt}\n\n${userPrompt}`,
+      model: resolvedModel,
+      cwd: process.cwd(),
+      maxTurns: 1,
+      allowedTools: [],
+      thinkingLevel,
+      reasoningEffort,
+    });
+
+    const title = result.text.trim();
+
+    if (!title || title.length === 0) {
+      logger.warn('AI returned empty session title, using fallback');
+      return generateFallbackSessionName(message);
+    }
+
+    // Ensure title is not too long
+    return title.substring(0, 50);
+  } catch (error) {
+    logger.error('Failed to generate AI session title, using fallback:', error);
+    return generateFallbackSessionName(message);
+  }
+}
+
+/**
+ * Fallback session name generation using simple text parsing
+ * Used when AI generation fails or settings are unavailable
+ */
+function generateFallbackSessionName(message: string): string {
+  // Clean up the message
+  const cleaned = message
+    .trim()
+    .replace(/\n+/g, ' ') // Replace newlines with spaces
+    .replace(/\s+/g, ' ') // Normalize whitespace
+    .substring(0, 200); // Limit to first 200 chars
+
+  // Common stop words to filter out
+  const stopWords = new Set([
+    'a',
+    'an',
+    'and',
+    'are',
+    'as',
+    'at',
+    'be',
+    'by',
+    'for',
+    'from',
+    'has',
+    'he',
+    'in',
+    'is',
+    'it',
+    'its',
+    'of',
+    'on',
+    'that',
+    'the',
+    'to',
+    'was',
+    'will',
+    'with',
+    'can',
+    'could',
+    'should',
+    'would',
+    'i',
+    'you',
+    'me',
+    'my',
+    'we',
+    'our',
+    'this',
+    'please',
+    'help',
+  ]);
+
+  // Extract meaningful words (alphanumeric sequences)
+  const words = cleaned
+    .toLowerCase()
+    .split(/\s+/)
+    .filter((word) => {
+      // Keep words that are:
+      // - At least 2 characters
+      // - Not stop words
+      // - Alphanumeric (allows hyphens and underscores)
+      return word.length >= 2 && !stopWords.has(word) && /^[a-z0-9_-]+$/.test(word);
+    });
+
+  // Take the first 3-4 meaningful words
+  const keyWords = words.slice(0, 4);
+
+  if (keyWords.length === 0) {
+    // Fallback to first few words of the original message
+    const fallbackWords = cleaned.split(/\s+/).slice(0, 3);
+    return fallbackWords.join(' ').substring(0, 50);
+  }
+
+  // Capitalize first letter of each word and join
+  const name = keyWords.map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+
+  // Ensure it's not too long
+  return name.substring(0, 50);
 }
 
 export class AgentService {
@@ -230,6 +387,45 @@ export class AgentService {
     session.messages.push(userMessage);
     session.isRunning = true;
     session.abortController = new AbortController();
+
+    // Emit session state change for push-based UI updates
+    this.events.emit('session:state-changed', {
+      sessionId,
+      isRunning: true,
+    });
+
+    // Auto-rename session if this is the first user message and name is still auto-generated
+    const userMessageCount = session.messages.filter((m) => m.role === 'user').length;
+    if (userMessageCount === 1) {
+      // Get the current session metadata to check the name
+      const metadata = await this.loadMetadata();
+      const currentName = metadata[sessionId]?.name;
+
+      // Only rename if the current name is a placeholder or auto-generated
+      if (currentName && shouldAutoRename(currentName)) {
+        const generatedName = await generateSessionNameFromMessage(
+          message,
+          this.settingsService,
+          this.logger
+        );
+        this.logger.debug(
+          `Auto-renaming session ${sessionId} from "${currentName}" to "${generatedName}"`
+        );
+        const updatedSession = await this.updateSession(sessionId, { name: generatedName });
+
+        // Emit session updated event so UI can refresh
+        if (updatedSession) {
+          this.emitAgentEvent(sessionId, {
+            type: 'session-updated',
+            session: updatedSession,
+          });
+        }
+      } else if (currentName) {
+        this.logger.debug(
+          `Skipping auto-rename for session ${sessionId} - name "${currentName}" is not auto-generated`
+        );
+      }
+    }
 
     // Emit started event so UI can show thinking indicator
     this.emitAgentEvent(sessionId, {
@@ -484,6 +680,12 @@ export class AgentService {
           session.isRunning = false;
           session.abortController = null;
 
+          // Emit session state change for push-based UI updates
+          this.events.emit('session:state-changed', {
+            sessionId,
+            isRunning: false,
+          });
+
           const errorMessage: Message = {
             id: this.generateId(),
             role: 'assistant',
@@ -513,6 +715,12 @@ export class AgentService {
       session.isRunning = false;
       session.abortController = null;
 
+      // Emit session state change for push-based UI updates
+      this.events.emit('session:state-changed', {
+        sessionId,
+        isRunning: false,
+      });
+
       // Process next item in queue after completion
       setImmediate(() => this.processNextInQueue(sessionId));
 
@@ -524,6 +732,10 @@ export class AgentService {
       if (isAbortError(error)) {
         session.isRunning = false;
         session.abortController = null;
+        this.events.emit('session:state-changed', {
+          sessionId,
+          isRunning: false,
+        });
         return { success: false, aborted: true };
       }
 
@@ -531,6 +743,12 @@ export class AgentService {
 
       session.isRunning = false;
       session.abortController = null;
+
+      // Emit session state change for push-based UI updates
+      this.events.emit('session:state-changed', {
+        sessionId,
+        isRunning: false,
+      });
 
       const errorMessage: Message = {
         id: this.generateId(),

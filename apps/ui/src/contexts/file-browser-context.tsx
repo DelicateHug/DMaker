@@ -1,10 +1,12 @@
 import { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
-import { FileBrowserDialog } from '@/components/dialogs/file-browser-dialog';
+import { FileBrowserDialog, type FileBrowserMode } from '@/components/dialogs/file-browser-dialog';
 
 interface FileBrowserOptions {
   title?: string;
   description?: string;
   initialPath?: string;
+  mode?: FileBrowserMode;
+  fileExtensions?: string[];
 }
 
 interface FileBrowserContextValue {
@@ -62,6 +64,8 @@ export function FileBrowserProvider({ children }: { children: ReactNode }) {
         title={dialogOptions.title}
         description={dialogOptions.description}
         initialPath={dialogOptions.initialPath}
+        mode={dialogOptions.mode}
+        fileExtensions={dialogOptions.fileExtensions}
       />
     </FileBrowserContext.Provider>
   );

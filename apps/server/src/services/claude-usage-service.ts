@@ -3,6 +3,7 @@ import * as os from 'os';
 import * as pty from 'node-pty';
 import { ClaudeUsage } from '../routes/claude/types.js';
 import { createLogger } from '@automaker/utils';
+import type { EventEmitter } from '../lib/events.js';
 
 /**
  * Claude Usage Service
@@ -20,6 +21,7 @@ const logger = createLogger('ClaudeUsage');
 export class ClaudeUsageService {
   private claudeBinary = 'claude';
   private timeout = 30000; // 30 second timeout
+  private events: EventEmitter | null = null;
   private isWindows = os.platform() === 'win32';
   private isLinux = os.platform() === 'linux';
   // On Windows, ConPTY requires AttachConsole which fails in Electron/service mode
@@ -47,6 +49,13 @@ export class ClaudeUsageService {
   }
 
   /**
+   * Set the event emitter for broadcasting usage updates
+   */
+  setEventEmitter(events: EventEmitter): void {
+    this.events = events;
+  }
+
+  /**
    * Check if Claude CLI is available on the system
    */
   async isAvailable(): Promise<boolean> {
@@ -67,7 +76,17 @@ export class ClaudeUsageService {
    */
   async fetchUsageData(): Promise<ClaudeUsage> {
     const output = await this.executeClaudeUsageCommand();
-    return this.parseUsageOutput(output);
+    const usage = this.parseUsageOutput(output);
+
+    // Emit usage:updated event for push-based UI updates
+    if (this.events) {
+      this.events.emit('usage:updated', {
+        provider: 'claude',
+        usage,
+      });
+    }
+
+    return usage;
   }
 
   /**
@@ -311,10 +330,12 @@ export class ClaudeUsageService {
             );
           }
         }
-      }, 45000); // 45 second timeout
+      }, 60000); // 60 second timeout (increased for /status + /usage flow)
 
-      let hasSentCommand = false;
+      let hasSentStatusCommand = false;
+      let hasSentUsageCommand = false;
       let hasApprovedTrust = false;
+      let hasSeenStatusData = false;
 
       ptyProcess.onData((data: string) => {
         output += data;
@@ -379,6 +400,31 @@ export class ClaudeUsageService {
           }, 3000);
         }
 
+        // Check if /status output has been received (contains "Email:" or "Login method:")
+        if (!hasSeenStatusData && hasSentStatusCommand && !hasSentUsageCommand) {
+          if (cleanOutput.includes('Email:') || cleanOutput.includes('Login method:')) {
+            hasSeenStatusData = true;
+            // Dismiss the status dialog, then send /usage
+            setTimeout(() => {
+              if (!settled && ptyProcess && !ptyProcess.killed) {
+                ptyProcess.write('\x1b'); // Send ESC to dismiss status
+                // After dismissing status, send /usage
+                setTimeout(() => {
+                  if (!settled && ptyProcess && !ptyProcess.killed) {
+                    hasSentUsageCommand = true;
+                    ptyProcess.write('/usage\r');
+                    setTimeout(() => {
+                      if (!settled && ptyProcess && !ptyProcess.killed) {
+                        ptyProcess.write('\r');
+                      }
+                    }, 1200);
+                  }
+                }, 1500);
+              }
+            }, 1500);
+          }
+        }
+
         // Handle Trust Dialog - multiple variants:
         // - "Do you want to work in this folder?"
         // - "Ready to code here?" / "I'll need permission to work with your files"
@@ -399,7 +445,7 @@ export class ClaudeUsageService {
           }, 1000);
         }
 
-        // Detect REPL prompt and send /usage command
+        // Detect REPL prompt and send /status first (to capture email), then /usage
         // On Windows with winpty, Unicode prompt char ❯ gets garbled, so also check for ASCII indicators
         const isReplReady =
           cleanOutput.includes('❯') ||
@@ -411,20 +457,40 @@ export class ClaudeUsageService {
           (cleanOutput.includes('Opus') && cleanOutput.includes('Claude API')) ||
           (cleanOutput.includes('Sonnet') && cleanOutput.includes('Claude API'));
 
-        if (!hasSentCommand && isReplReady) {
-          hasSentCommand = true;
-          // Wait for REPL to fully settle
+        if (!hasSentStatusCommand && isReplReady) {
+          hasSentStatusCommand = true;
+          // Wait for REPL to fully settle, then send /status first to capture account email
           setTimeout(() => {
             if (!settled && ptyProcess && !ptyProcess.killed) {
-              // Send command with carriage return
-              ptyProcess.write('/usage\r');
+              ptyProcess.write('/status\r');
 
-              // Send another enter after 1 second to confirm selection if autocomplete menu appeared
+              // Send enter after 1 second to confirm if autocomplete menu appeared
               setTimeout(() => {
                 if (!settled && ptyProcess && !ptyProcess.killed) {
                   ptyProcess.write('\r');
                 }
               }, 1200);
+
+              // Fallback: if /status doesn't produce expected output, skip to /usage after 8s
+              setTimeout(() => {
+                if (!settled && !hasSentUsageCommand && ptyProcess && !ptyProcess.killed) {
+                  logger.info(
+                    '[executeClaudeUsageCommandPty] /status fallback - skipping to /usage'
+                  );
+                  hasSentUsageCommand = true;
+                  ptyProcess.write('\x1b'); // dismiss whatever is showing
+                  setTimeout(() => {
+                    if (!settled && ptyProcess && !ptyProcess.killed) {
+                      ptyProcess.write('/usage\r');
+                      setTimeout(() => {
+                        if (!settled && ptyProcess && !ptyProcess.killed) {
+                          ptyProcess.write('\r');
+                        }
+                      }, 1200);
+                    }
+                  }, 1500);
+                }
+              }, 8000);
             }
           }, 1500);
         }
@@ -432,6 +498,7 @@ export class ClaudeUsageService {
         // Fallback: if we see "Esc to cancel" but haven't seen usage data yet
         if (
           !hasSeenUsageData &&
+          hasSentUsageCommand &&
           cleanOutput.includes('Esc to cancel') &&
           !cleanOutput.includes('Do you want to work in this folder?')
         ) {
@@ -516,6 +583,9 @@ export class ClaudeUsageService {
       sonnetData = this.parseSection(lines, 'Current week (Opus)', 'sonnet');
     }
 
+    // Try to extract account email from output if present
+    const accountEmail = this.parseAccountEmail(output);
+
     return {
       sessionTokensUsed: 0, // Not available from CLI
       sessionLimit: 0, // Not available from CLI
@@ -539,6 +609,8 @@ export class ClaudeUsageService {
 
       lastUpdated: new Date().toISOString(),
       userTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+
+      accountEmail, // Account email if available from CLI output
     };
   }
 
@@ -596,6 +668,34 @@ export class ClaudeUsageService {
     }
 
     return { percentage, resetTime, resetText };
+  }
+
+  /**
+   * Try to extract account email from CLI output
+   * Looks for the "Email: user@example.com" line from /status output,
+   * and falls back to any email pattern found in the output.
+   */
+  private parseAccountEmail(rawOutput: string): string | null {
+    const output = this.stripAnsiCodes(rawOutput);
+
+    // First try: look for explicit "Email: xxx" from /status output
+    const statusEmailMatch = output.match(
+      /Email:\s*([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})/
+    );
+    if (statusEmailMatch && statusEmailMatch[1]) {
+      logger.info(`[parseAccountEmail] Found email from /status: ${statusEmailMatch[1]}`);
+      return statusEmailMatch[1];
+    }
+
+    // Fallback: find any email pattern in output
+    const emailMatch = output.match(/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/);
+    if (emailMatch && emailMatch[0]) {
+      logger.info(`[parseAccountEmail] Found account email: ${emailMatch[0]}`);
+      return emailMatch[0];
+    }
+
+    logger.info('[parseAccountEmail] No account email found in CLI output');
+    return null;
   }
 
   /**

@@ -21,6 +21,7 @@ import {
   type TerminalTab,
   type PersistedTerminalPanel,
 } from '@/store/app-store';
+import { useShallow } from 'zustand/react/shallow';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -217,34 +218,39 @@ function NewTabDropZone({ isDropTarget }: { isDropTarget: boolean }) {
 }
 
 export function TerminalView() {
-  const {
-    terminalState,
-    setTerminalUnlocked,
-    addTerminalToLayout,
-    removeTerminalFromLayout,
-    setActiveTerminalSession,
-    swapTerminals,
-    currentProject,
-    addTerminalTab,
-    removeTerminalTab,
-    setActiveTerminalTab,
-    renameTerminalTab,
-    reorderTerminalTabs,
-    moveTerminalToTab,
-    setTerminalPanelFontSize,
-    setTerminalTabLayout,
-    toggleTerminalMaximized,
-    saveTerminalLayout,
-    getPersistedTerminalLayout,
-    clearTerminalState,
-    setTerminalDefaultFontSize,
-    setTerminalDefaultRunScript,
-    setTerminalFontFamily,
-    setTerminalLineHeight,
-    setTerminalScrollbackLines,
-    setTerminalScreenReaderMode,
-    updateTerminalPanelSizes,
-  } = useAppStore();
+  // State values - grouped with shallow comparison to reduce re-renders
+  const { terminalState, currentProject } = useAppStore(
+    useShallow((state) => ({
+      terminalState: state.terminalState,
+      currentProject: state.currentProject,
+    }))
+  );
+
+  // Action setters are stable references, can use individual selectors
+  const setTerminalUnlocked = useAppStore((state) => state.setTerminalUnlocked);
+  const addTerminalToLayout = useAppStore((state) => state.addTerminalToLayout);
+  const removeTerminalFromLayout = useAppStore((state) => state.removeTerminalFromLayout);
+  const setActiveTerminalSession = useAppStore((state) => state.setActiveTerminalSession);
+  const swapTerminals = useAppStore((state) => state.swapTerminals);
+  const addTerminalTab = useAppStore((state) => state.addTerminalTab);
+  const removeTerminalTab = useAppStore((state) => state.removeTerminalTab);
+  const setActiveTerminalTab = useAppStore((state) => state.setActiveTerminalTab);
+  const renameTerminalTab = useAppStore((state) => state.renameTerminalTab);
+  const reorderTerminalTabs = useAppStore((state) => state.reorderTerminalTabs);
+  const moveTerminalToTab = useAppStore((state) => state.moveTerminalToTab);
+  const setTerminalPanelFontSize = useAppStore((state) => state.setTerminalPanelFontSize);
+  const setTerminalTabLayout = useAppStore((state) => state.setTerminalTabLayout);
+  const toggleTerminalMaximized = useAppStore((state) => state.toggleTerminalMaximized);
+  const saveTerminalLayout = useAppStore((state) => state.saveTerminalLayout);
+  const getPersistedTerminalLayout = useAppStore((state) => state.getPersistedTerminalLayout);
+  const clearTerminalState = useAppStore((state) => state.clearTerminalState);
+  const setTerminalDefaultFontSize = useAppStore((state) => state.setTerminalDefaultFontSize);
+  const setTerminalDefaultRunScript = useAppStore((state) => state.setTerminalDefaultRunScript);
+  const setTerminalFontFamily = useAppStore((state) => state.setTerminalFontFamily);
+  const setTerminalLineHeight = useAppStore((state) => state.setTerminalLineHeight);
+  const setTerminalScrollbackLines = useAppStore((state) => state.setTerminalScrollbackLines);
+  const setTerminalScreenReaderMode = useAppStore((state) => state.setTerminalScreenReaderMode);
+  const updateTerminalPanelSizes = useAppStore((state) => state.updateTerminalPanelSizes);
 
   const [status, setStatus] = useState<TerminalStatus | null>(null);
   const [loading, setLoading] = useState(true);
@@ -283,9 +289,6 @@ export function TerminalView() {
       hasShownHighRamWarningRef.current = false;
     }
   }, [serverSessionInfo]);
-
-  // Get the default run script from terminal settings
-  const defaultRunScript = useAppStore((state) => state.terminalState.defaultRunScript);
 
   const serverUrl = import.meta.env.VITE_SERVER_URL || getServerUrlSync();
 
@@ -851,7 +854,7 @@ export function TerminalView() {
       if (data.success) {
         addTerminalToLayout(data.data.id, direction, targetSessionId);
         // Mark this session as new for running initial command
-        if (defaultRunScript) {
+        if (terminalState.defaultRunScript) {
           setNewSessionIds((prev) => new Set(prev).add(data.data.id));
         }
         // Refresh session count
@@ -905,7 +908,7 @@ export function TerminalView() {
         const { addTerminalToTab } = useAppStore.getState();
         addTerminalToTab(data.data.id, tabId);
         // Mark this session as new for running initial command
-        if (defaultRunScript) {
+        if (terminalState.defaultRunScript) {
           setNewSessionIds((prev) => new Set(prev).add(data.data.id));
         }
         // Refresh session count
@@ -1228,7 +1231,7 @@ export function TerminalView() {
             isDropTarget={activeDragId !== null && activeDragId !== content.sessionId}
             fontSize={terminalFontSize}
             onFontSizeChange={(size) => setTerminalPanelFontSize(content.sessionId, size)}
-            runCommandOnConnect={isNewSession ? defaultRunScript : undefined}
+            runCommandOnConnect={isNewSession ? terminalState.defaultRunScript : undefined}
             onCommandRan={() => handleCommandRan(content.sessionId)}
             isMaximized={terminalState.maximizedSessionId === content.sessionId}
             onToggleMaximize={() => toggleTerminalMaximized(content.sessionId)}

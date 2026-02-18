@@ -1,3 +1,11 @@
+/**
+ * Context/Memory file management utilities
+ *
+ * Note: The context view has been removed (T001, T005), but context files still exist
+ * and are managed through the memory view or project settings. These utilities are kept
+ * for backward compatibility and for use with memory view tests.
+ */
+
 import { Page, Locator } from '@playwright/test';
 import { clickElement, fillInput } from '../core/interactions';
 import { waitForElement, waitForElementHidden } from '../core/waiting';
@@ -5,7 +13,7 @@ import { getByTestId } from '../core/elements';
 import { expect } from '@playwright/test';
 
 /**
- * Get the context file list element
+ * Get the context/memory file list element
  */
 export async function getContextFileList(page: Page): Promise<Locator> {
   return page.locator('[data-testid="context-file-list"]');

@@ -2,7 +2,29 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { RefreshCw, AlertTriangle, CheckCircle, XCircle, Clock, ExternalLink } from 'lucide-react';
+import {
+  RefreshCw,
+  AlertTriangle,
+  CheckCircle,
+  XCircle,
+  Clock,
+  ExternalLink,
+  LogIn,
+  ChevronDown,
+  Check,
+  X,
+  UserPlus,
+} from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuLabel,
+} from '@/components/ui/dropdown-menu';
+import type { ClaudeAccountRef } from '@automaker/types';
+import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { getElectronAPI } from '@/lib/electron';
 import { useAppStore } from '@/store/app-store';
@@ -25,8 +47,8 @@ type UsageError = {
   message: string;
 };
 
-// Fixed refresh interval (45 seconds)
-const REFRESH_INTERVAL_SECONDS = 45;
+// Fixed refresh interval (30 seconds)
+const REFRESH_INTERVAL_SECONDS = 30;
 
 // Helper to format reset time for Codex
 function formatCodexResetTime(unixTimestamp: number): string {
@@ -60,7 +82,13 @@ function getCodexWindowLabel(durationMins: number): { title: string; subtitle: s
 }
 
 export function UsagePopover() {
-  const { claudeUsage, claudeUsageLastUpdated, setClaudeUsage } = useAppStore();
+  const {
+    claudeUsage,
+    claudeUsageLastUpdated,
+    setClaudeUsage,
+    claudeAccounts,
+    removeClaudeAccount,
+  } = useAppStore();
   const { codexUsage, codexUsageLastUpdated, setCodexUsage } = useAppStore();
   const claudeAuthStatus = useSetupStore((state) => state.claudeAuthStatus);
   const codexAuthStatus = useSetupStore((state) => state.codexAuthStatus);
@@ -71,6 +99,7 @@ export function UsagePopover() {
   const [codexLoading, setCodexLoading] = useState(false);
   const [claudeError, setClaudeError] = useState<UsageError | null>(null);
   const [codexError, setCodexError] = useState<UsageError | null>(null);
+  const [isRelogging, setIsRelogging] = useState(false);
 
   // Check authentication status
   const isClaudeAuthenticated = !!claudeAuthStatus?.authenticated;
@@ -176,6 +205,89 @@ export function UsagePopover() {
     [setCodexUsage]
   );
 
+  // Re-login handler for Claude with authClaude + verifyClaudeAuth flow
+  const setClaudeAuthStatus = useSetupStore((state) => state.setClaudeAuthStatus);
+
+  const handleRelogin = useCallback(async () => {
+    setIsRelogging(true);
+    try {
+      const api = getElectronAPI();
+      const authResult = await api.setup.authClaude();
+
+      if (!authResult.success) {
+        toast.error('Authentication Failed', {
+          description: authResult.error || 'Could not initiate authentication',
+        });
+        return;
+      }
+
+      // Verify the authentication actually worked
+      if (!api.setup?.verifyClaudeAuth) {
+        // Fallback: if verify not available, trust authClaude result
+        toast.success('Signed In', {
+          description: 'Successfully re-authenticated Claude CLI',
+        });
+        fetchClaudeUsage(false);
+        return;
+      }
+
+      const verifyResult = await api.setup.verifyClaudeAuth('cli');
+
+      const hasLimitReachedError =
+        verifyResult.error?.toLowerCase().includes('limit reached') ||
+        verifyResult.error?.toLowerCase().includes('rate limit');
+
+      if (verifyResult.authenticated && !hasLimitReachedError) {
+        // Update auth status in the store
+        const currentAuthStatus = useSetupStore.getState().claudeAuthStatus;
+        setClaudeAuthStatus({
+          authenticated: true,
+          method: 'cli_authenticated',
+          hasCredentialsFile: currentAuthStatus?.hasCredentialsFile || false,
+        });
+        toast.success('Signed In', {
+          description: 'Successfully re-authenticated Claude CLI',
+        });
+        // Refresh usage data after successful re-login
+        fetchClaudeUsage(false);
+      } else if (hasLimitReachedError) {
+        toast.error('Rate Limited', {
+          description:
+            'Authentication succeeded but rate limit reached. Usage will update shortly.',
+        });
+        // Still update auth status since auth itself succeeded
+        const currentAuthStatus = useSetupStore.getState().claudeAuthStatus;
+        setClaudeAuthStatus({
+          authenticated: true,
+          method: 'cli_authenticated',
+          hasCredentialsFile: currentAuthStatus?.hasCredentialsFile || false,
+        });
+      } else {
+        toast.error('Verification Failed', {
+          description: verifyResult.error || 'Authentication could not be verified',
+        });
+      }
+    } catch (error) {
+      toast.error('Authentication Failed', {
+        description: error instanceof Error ? error.message : 'Unknown error',
+      });
+    } finally {
+      setIsRelogging(false);
+    }
+  }, [fetchClaudeUsage, setClaudeAuthStatus]);
+
+  // Account switch handler - instructs user to switch in CLI, then re-verifies
+  const handleAccountSwitch = useCallback(
+    (email: string) => {
+      toast.info('Switch Account', {
+        description: `To switch to ${email}, run "claude login" in your terminal and sign in with that account. Then click Re-login to verify.`,
+        duration: 8000,
+      });
+      handleRelogin();
+    },
+    [handleRelogin]
+  );
+
   // Auto-fetch on mount if data is stale
   useEffect(() => {
     if (isClaudeStale && isClaudeAuthenticated) {
@@ -189,7 +301,10 @@ export function UsagePopover() {
     }
   }, [isCodexStale, isCodexAuthenticated, fetchCodexUsage]);
 
-  // Auto-refresh when popover is open
+  // Countdown timer for next refresh
+  const [refreshCountdown, setRefreshCountdown] = useState(REFRESH_INTERVAL_SECONDS);
+
+  // Auto-refresh with countdown when popover is open
   useEffect(() => {
     if (!open) return;
 
@@ -198,21 +313,29 @@ export function UsagePopover() {
       if (!claudeUsage || isClaudeStale) {
         fetchClaudeUsage();
       }
-      const intervalId = setInterval(() => {
-        fetchClaudeUsage(true);
-      }, REFRESH_INTERVAL_SECONDS * 1000);
-      return () => clearInterval(intervalId);
-    }
-
-    if (activeTab === 'codex' && isCodexAuthenticated) {
+    } else if (activeTab === 'codex' && isCodexAuthenticated) {
       if (!codexUsage || isCodexStale) {
         fetchCodexUsage();
       }
-      const intervalId = setInterval(() => {
-        fetchCodexUsage(true);
-      }, REFRESH_INTERVAL_SECONDS * 1000);
-      return () => clearInterval(intervalId);
     }
+
+    setRefreshCountdown(REFRESH_INTERVAL_SECONDS);
+
+    const countdownId = setInterval(() => {
+      setRefreshCountdown((prev) => {
+        if (prev <= 1) {
+          if (activeTab === 'claude' && isClaudeAuthenticated) {
+            fetchClaudeUsage(true);
+          } else if (activeTab === 'codex' && isCodexAuthenticated) {
+            fetchCodexUsage(true);
+          }
+          return REFRESH_INTERVAL_SECONDS;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(countdownId);
   }, [
     open,
     activeTab,
@@ -354,9 +477,14 @@ export function UsagePopover() {
   const ProviderIcon = tabInfo.icon;
 
   const trigger = (
-    <Button variant="ghost" size="sm" className="h-9 gap-2 bg-secondary border border-border px-3">
-      {(claudeUsage || codexUsage) && <ProviderIcon className={cn('w-4 h-4', statusColor)} />}
-      <span className="text-sm font-medium">Usage</span>
+    <Button
+      variant="ghost"
+      size="sm"
+      className="h-9 gap-2 bg-secondary border border-border px-3"
+      title="Usage"
+      data-testid="usage-popover-trigger"
+    >
+      <ProviderIcon className={cn('w-4 h-4', statusColor)} />
       {(claudeUsage || codexUsage) && (
         <div
           className={cn(
@@ -387,16 +515,17 @@ export function UsagePopover() {
         className="w-80 p-0 overflow-hidden bg-background/95 backdrop-blur-xl border-border shadow-2xl"
         align="end"
         sideOffset={8}
+        data-testid="usage-popover"
       >
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'claude' | 'codex')}>
           {/* Tabs Header */}
           {showClaudeTab && showCodexTab && (
             <TabsList className="grid w-full grid-cols-2 rounded-none border-b border-border/50">
-              <TabsTrigger value="claude" className="gap-2">
+              <TabsTrigger value="claude" className="gap-2" data-testid="usage-popover-claude-tab">
                 <AnthropicIcon className="w-3.5 h-3.5" />
                 Claude
               </TabsTrigger>
-              <TabsTrigger value="codex" className="gap-2">
+              <TabsTrigger value="codex" className="gap-2" data-testid="usage-popover-codex-tab">
                 <OpenAIIcon className="w-3.5 h-3.5" />
                 Codex
               </TabsTrigger>
@@ -404,23 +533,45 @@ export function UsagePopover() {
           )}
 
           {/* Claude Tab Content */}
-          <TabsContent value="claude" className="m-0">
+          <TabsContent value="claude" className="m-0" data-testid="usage-popover-claude-content">
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-border/50 bg-secondary/10">
-              <div className="flex items-center gap-2">
-                <AnthropicIcon className="w-4 h-4" />
-                <span className="text-sm font-semibold">Claude Usage</span>
+              <div className="flex flex-col gap-0.5">
+                <div className="flex items-center gap-2">
+                  <AnthropicIcon className="w-4 h-4" />
+                  <span className="text-sm font-semibold">Claude Usage</span>
+                </div>
+                {claudeUsage?.accountEmail && (
+                  <AccountSwitcherDropdown
+                    currentEmail={claudeUsage.accountEmail}
+                    accounts={claudeAccounts}
+                    onSwitch={handleAccountSwitch}
+                    onRemove={removeClaudeAccount}
+                    onAddNew={handleRelogin}
+                    isRelogging={isRelogging}
+                  />
+                )}
               </div>
-              {claudeError && (
+              <div className="flex items-center gap-2">
+                {open && claudeUsage && !claudeError && (
+                  <span className="text-[10px] text-muted-foreground font-mono tabular-nums">
+                    {refreshCountdown}s
+                  </span>
+                )}
                 <Button
                   variant="ghost"
                   size="icon"
                   className={cn('h-6 w-6', claudeLoading && 'opacity-80')}
-                  onClick={() => !claudeLoading && fetchClaudeUsage(false)}
+                  onClick={() => {
+                    if (!claudeLoading) {
+                      fetchClaudeUsage(false);
+                      setRefreshCountdown(REFRESH_INTERVAL_SECONDS);
+                    }
+                  }}
                 >
-                  <RefreshCw className="w-3.5 h-3.5" />
+                  <RefreshCw className={cn('w-3.5 h-3.5', claudeLoading && 'animate-spin')} />
                 </Button>
-              )}
+              </div>
             </div>
 
             {/* Content */}
@@ -506,28 +657,58 @@ export function UsagePopover() {
               >
                 Claude Status <ExternalLink className="w-2.5 h-2.5" />
               </a>
-              <span className="text-[10px] text-muted-foreground">Updates every minute</span>
+              <div className="flex items-center gap-3">
+                {open && claudeUsage && !claudeError && (
+                  <span className="text-[10px] text-muted-foreground font-mono tabular-nums flex items-center gap-1">
+                    <RefreshCw className="w-2.5 h-2.5" />
+                    {refreshCountdown}s
+                  </span>
+                )}
+                <button
+                  onClick={handleRelogin}
+                  disabled={isRelogging}
+                  className={cn(
+                    'text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors',
+                    isRelogging && 'opacity-50 cursor-not-allowed'
+                  )}
+                  title="Re-authenticate Claude CLI"
+                  data-testid="usage-popover-relogin-button"
+                >
+                  <LogIn className={cn('w-2.5 h-2.5', isRelogging && 'animate-pulse')} />
+                  {isRelogging ? 'Re-logging in...' : 'Re-login'}
+                </button>
+              </div>
             </div>
           </TabsContent>
 
           {/* Codex Tab Content */}
-          <TabsContent value="codex" className="m-0">
+          <TabsContent value="codex" className="m-0" data-testid="usage-popover-codex-content">
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-border/50 bg-secondary/10">
               <div className="flex items-center gap-2">
                 <OpenAIIcon className="w-4 h-4" />
                 <span className="text-sm font-semibold">Codex Usage</span>
               </div>
-              {codexError && codexError.code !== ERROR_CODES.NOT_AVAILABLE && (
+              <div className="flex items-center gap-2">
+                {open && codexUsage && !codexError && (
+                  <span className="text-[10px] text-muted-foreground font-mono tabular-nums">
+                    {refreshCountdown}s
+                  </span>
+                )}
                 <Button
                   variant="ghost"
                   size="icon"
                   className={cn('h-6 w-6', codexLoading && 'opacity-80')}
-                  onClick={() => !codexLoading && fetchCodexUsage(false)}
+                  onClick={() => {
+                    if (!codexLoading) {
+                      fetchCodexUsage(false);
+                      setRefreshCountdown(REFRESH_INTERVAL_SECONDS);
+                    }
+                  }}
                 >
-                  <RefreshCw className="w-3.5 h-3.5" />
+                  <RefreshCw className={cn('w-3.5 h-3.5', codexLoading && 'animate-spin')} />
                 </Button>
-              )}
+              </div>
             </div>
 
             {/* Content */}
@@ -635,11 +816,112 @@ export function UsagePopover() {
               >
                 OpenAI Dashboard <ExternalLink className="w-2.5 h-2.5" />
               </a>
-              <span className="text-[10px] text-muted-foreground">Updates every minute</span>
+              <span className="text-[10px] text-muted-foreground font-mono tabular-nums flex items-center gap-1">
+                <RefreshCw className="w-2.5 h-2.5" />
+                {refreshCountdown}s
+              </span>
             </div>
           </TabsContent>
         </Tabs>
       </PopoverContent>
     </Popover>
+  );
+}
+
+/**
+ * Dropdown for switching between saved Claude accounts.
+ * Shows current account with checkmark, other accounts with delete buttons,
+ * and an "Add new account" action at the bottom.
+ */
+function AccountSwitcherDropdown({
+  currentEmail,
+  accounts,
+  onSwitch,
+  onRemove,
+  onAddNew,
+  isRelogging,
+}: {
+  currentEmail: string;
+  accounts: ClaudeAccountRef[];
+  onSwitch: (email: string) => void;
+  onRemove: (email: string) => void;
+  onAddNew: () => void;
+  isRelogging: boolean;
+}) {
+  const sortedAccounts = [...accounts].sort((a, b) => {
+    if (a.email === currentEmail) return -1;
+    if (b.email === currentEmail) return 1;
+    return new Date(b.lastSeenAt).getTime() - new Date(a.lastSeenAt).getTime();
+  });
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          className="text-[10px] text-muted-foreground hover:text-foreground truncate max-w-[140px] flex items-center gap-0.5 transition-colors cursor-pointer ml-6"
+          title="Switch Claude account"
+        >
+          {currentEmail}
+          <ChevronDown className="w-2.5 h-2.5 shrink-0" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" sideOffset={4} className="w-64">
+        <DropdownMenuLabel className="text-[10px] text-muted-foreground font-normal">
+          Claude Accounts
+        </DropdownMenuLabel>
+        {sortedAccounts.length > 0 ? (
+          sortedAccounts.map((account) => {
+            const isCurrent = account.email === currentEmail;
+            return (
+              <DropdownMenuItem
+                key={account.email}
+                className="flex items-center justify-between gap-2 text-xs"
+                onSelect={(e) => {
+                  if (isCurrent) {
+                    e.preventDefault();
+                    return;
+                  }
+                  onSwitch(account.email);
+                }}
+              >
+                <div className="flex items-center gap-2 min-w-0 flex-1">
+                  {isCurrent ? (
+                    <Check className="w-3 h-3 text-green-500 shrink-0" />
+                  ) : (
+                    <div className="w-3 h-3 shrink-0" />
+                  )}
+                  <span className={cn('truncate', isCurrent && 'font-medium')}>
+                    {account.email}
+                  </span>
+                </div>
+                {!isCurrent && (
+                  <button
+                    className="p-0.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors shrink-0"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onRemove(account.email);
+                    }}
+                    title={`Remove ${account.email}`}
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
+              </DropdownMenuItem>
+            );
+          })
+        ) : (
+          <div className="px-2 py-1.5 text-[10px] text-muted-foreground">No saved accounts</div>
+        )}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          className="text-xs gap-2"
+          onSelect={() => onAddNew()}
+          disabled={isRelogging}
+        >
+          <UserPlus className="w-3 h-3" />
+          {isRelogging ? 'Logging in...' : 'Add new account'}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }

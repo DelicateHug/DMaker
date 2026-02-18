@@ -136,7 +136,10 @@ export function WorktreeActionsDropdown({
           <MoreHorizontal className="w-3.5 h-3.5" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-56">
+      <DropdownMenuContent
+        align="start"
+        className="w-56 max-w-[calc(100vw-2rem)] max-h-[min(28rem,70vh)] overflow-y-auto"
+      >
         {/* Warning label when git operations are not available */}
         {!canPerformGitOps && (
           <>

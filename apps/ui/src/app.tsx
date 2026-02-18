@@ -1,26 +1,24 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useEffect } from 'react';
 import { RouterProvider } from '@tanstack/react-router';
 import { createLogger } from '@automaker/utils/logger';
 import { router } from './utils/router';
-import { SplashScreen } from './components/splash-screen';
 import { useSettingsSync } from './hooks/use-settings-sync';
 import { useCursorStatusInit } from './hooks/use-cursor-status-init';
 import { useProviderAuthInit } from './hooks/use-provider-auth-init';
+import { TooltipProvider } from './components/ui/tooltip';
+import { getStoredTheme } from './store/app-store';
+import { loadStoredTheme } from './lib/theme-loader';
 import './styles/global.css';
 import './styles/theme-imports';
 import './styles/font-imports';
 
+// Eagerly load the stored theme CSS before React renders.
+// This runs at module evaluation time so the CSS is fetched as early as possible.
+void loadStoredTheme(getStoredTheme());
+
 const logger = createLogger('App');
 
 export default function App() {
-  const [showSplash, setShowSplash] = useState(() => {
-    // Only show splash once per session
-    if (sessionStorage.getItem('automaker-splash-shown')) {
-      return false;
-    }
-    return true;
-  });
-
   // Clear accumulated PerformanceMeasure entries to prevent memory leak in dev mode
   // React's internal scheduler creates performance marks/measures that accumulate without cleanup
   useEffect(() => {
@@ -47,21 +45,15 @@ export default function App() {
     logger.error('Settings sync error:', settingsSyncState.error);
   }
 
-  // Initialize Cursor CLI status at startup
+  // Initialize Cursor CLI status at startup (deferred - non-blocking)
   useCursorStatusInit();
 
-  // Initialize Provider auth status at startup (for Claude/Codex usage display)
+  // Initialize Provider auth status at startup (deferred - non-blocking)
   useProviderAuthInit();
 
-  const handleSplashComplete = useCallback(() => {
-    sessionStorage.setItem('automaker-splash-shown', 'true');
-    setShowSplash(false);
-  }, []);
-
   return (
-    <>
+    <TooltipProvider>
       <RouterProvider router={router} />
-      {showSplash && <SplashScreen onComplete={handleSplashComplete} />}
-    </>
+    </TooltipProvider>
   );
 }
