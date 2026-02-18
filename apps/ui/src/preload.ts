@@ -59,6 +59,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // App control
   quit: (): Promise<void> => ipcRenderer.invoke('app:quit'),
+
+  // Tray icon control
+  updateTrayCount: (count: number): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke('tray:updateCount', count),
 });
 
 logger.info('Electron API exposed (TypeScript)');

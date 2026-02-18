@@ -37,30 +37,34 @@ import {
 interface LogViewerProps {
   output: string;
   className?: string;
+  /** Ref to the scroll container that wraps this component. When provided, LogViewer will
+   *  auto-scroll the container to the bottom as new log entries arrive (unless the user
+   *  has scrolled away from the bottom). */
+  scrollContainerRef?: React.RefObject<HTMLElement | null>;
 }
 
 const getLogIcon = (type: LogEntryType) => {
   switch (type) {
     case 'prompt':
-      return <MessageSquare className="w-4 h-4" />;
+      return <MessageSquare className="w-3.5 h-3.5" />;
     case 'tool_call':
-      return <Wrench className="w-4 h-4" />;
+      return <Wrench className="w-3.5 h-3.5" />;
     case 'tool_result':
-      return <FileOutput className="w-4 h-4" />;
+      return <FileOutput className="w-3.5 h-3.5" />;
     case 'phase':
-      return <Zap className="w-4 h-4" />;
+      return <Zap className="w-3.5 h-3.5" />;
     case 'error':
-      return <AlertCircle className="w-4 h-4" />;
+      return <AlertCircle className="w-3.5 h-3.5" />;
     case 'success':
-      return <CheckCircle2 className="w-4 h-4" />;
+      return <CheckCircle2 className="w-3.5 h-3.5" />;
     case 'warning':
-      return <AlertTriangle className="w-4 h-4" />;
+      return <AlertTriangle className="w-3.5 h-3.5" />;
     case 'thinking':
-      return <Brain className="w-4 h-4" />;
+      return <Brain className="w-3.5 h-3.5" />;
     case 'debug':
-      return <Bug className="w-4 h-4" />;
+      return <Bug className="w-3.5 h-3.5" />;
     default:
-      return <Info className="w-4 h-4" />;
+      return <Info className="w-3.5 h-3.5" />;
   }
 };
 
@@ -70,21 +74,21 @@ const getLogIcon = (type: LogEntryType) => {
 const getToolCategoryIcon = (category: ToolCategory | undefined) => {
   switch (category) {
     case 'read':
-      return <Eye className="w-4 h-4" />;
+      return <Eye className="w-3.5 h-3.5" />;
     case 'edit':
-      return <Pencil className="w-4 h-4" />;
+      return <Pencil className="w-3.5 h-3.5" />;
     case 'write':
-      return <FileOutput className="w-4 h-4" />;
+      return <FileOutput className="w-3.5 h-3.5" />;
     case 'bash':
-      return <Terminal className="w-4 h-4" />;
+      return <Terminal className="w-3.5 h-3.5" />;
     case 'search':
-      return <Search className="w-4 h-4" />;
+      return <Search className="w-3.5 h-3.5" />;
     case 'todo':
-      return <ListTodo className="w-4 h-4" />;
+      return <ListTodo className="w-3.5 h-3.5" />;
     case 'task':
-      return <Layers className="w-4 h-4" />;
+      return <Layers className="w-3.5 h-3.5" />;
     default:
-      return <Wrench className="w-4 h-4" />;
+      return <Wrench className="w-3.5 h-3.5" />;
   }
 };
 
@@ -146,13 +150,13 @@ function TodoListRenderer({ todos }: { todos: TodoItem[] }) {
   const getStatusIcon = (status: TodoItem['status']) => {
     switch (status) {
       case 'completed':
-        return <CheckCircle2 className="w-4 h-4 text-emerald-400" />;
+        return <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />;
       case 'in_progress':
-        return <Loader2 className="w-4 h-4 text-amber-400 animate-spin" />;
+        return <Loader2 className="w-3.5 h-3.5 text-amber-400 animate-spin" />;
       case 'pending':
-        return <Circle className="w-4 h-4 text-muted-foreground/70" />;
+        return <Circle className="w-3.5 h-3.5 text-muted-foreground/70" />;
       default:
-        return <Circle className="w-4 h-4 text-muted-foreground/70" />;
+        return <Circle className="w-3.5 h-3.5 text-muted-foreground/70" />;
     }
   };
 
@@ -189,12 +193,12 @@ function TodoListRenderer({ todos }: { todos: TodoItem[] }) {
   };
 
   return (
-    <div className="space-y-1">
+    <div className="space-y-0.5">
       {todos.map((todo, index) => (
         <div
           key={index}
           className={cn(
-            'flex items-start gap-2 p-2 rounded-md transition-colors',
+            'flex items-start gap-1.5 px-1.5 py-1 rounded transition-colors',
             todo.status === 'in_progress' && 'bg-amber-500/5 border border-amber-500/20',
             todo.status === 'completed' && 'bg-emerald-500/5',
             todo.status === 'pending' && 'bg-muted/30'
@@ -202,9 +206,13 @@ function TodoListRenderer({ todos }: { todos: TodoItem[] }) {
         >
           <div className="mt-0.5 flex-shrink-0">{getStatusIcon(todo.status)}</div>
           <div className="flex-1 min-w-0">
-            <p className={cn('text-sm', getStatusColor(todo.status))}>{todo.content}</p>
+            <p className={cn('text-xs leading-tight', getStatusColor(todo.status))}>
+              {todo.content}
+            </p>
             {todo.status === 'in_progress' && todo.activeForm && (
-              <p className="text-xs text-amber-400/70 mt-0.5 italic">{todo.activeForm}</p>
+              <p className="text-[10px] text-amber-400/70 mt-0.5 italic leading-tight">
+                {todo.activeForm}
+              </p>
             )}
           </div>
           {getStatusBadge(todo.status)}
@@ -218,9 +226,10 @@ interface LogEntryItemProps {
   entry: LogEntry;
   isExpanded: boolean;
   onToggle: () => void;
+  isEven?: boolean;
 }
 
-function LogEntryItem({ entry, isExpanded, onToggle }: LogEntryItemProps) {
+function LogEntryItem({ entry, isExpanded, onToggle, isEven = false }: LogEntryItemProps) {
   const colors = getLogTypeColors(entry.type);
   const hasContent = entry.content.length > 100;
 
@@ -239,9 +248,23 @@ function LogEntryItem({ entry, isExpanded, onToggle }: LogEntryItemProps) {
   // Get the appropriate icon based on entry type and tool category
   const icon = isToolCall ? getToolCategoryIcon(toolCategory) : getLogIcon(entry.type);
 
-  // Get collapsed preview text - prefer smart summary for tool calls
+  // Get the summary text - always available for tool calls
+  const summaryText = useMemo(() => {
+    // Use smart summary if available
+    if (entry.metadata?.summary) {
+      return entry.metadata.summary;
+    }
+    return null;
+  }, [entry.metadata?.summary]);
+
+  // Get collapsed preview text - only used for non-tool entries when collapsed
   const collapsedPreview = useMemo(() => {
     if (isExpanded) return '';
+
+    // For tool calls, we show the summary separately so don't duplicate it here
+    if (isToolCall && summaryText) {
+      return '';
+    }
 
     // Use smart summary if available
     if (entry.metadata?.summary) {
@@ -250,7 +273,7 @@ function LogEntryItem({ entry, isExpanded, onToggle }: LogEntryItemProps) {
 
     // Fallback to truncated content
     return entry.content.slice(0, 80) + (entry.content.length > 80 ? '...' : '');
-  }, [isExpanded, entry.metadata?.summary, entry.content]);
+  }, [isExpanded, entry.metadata?.summary, entry.content, isToolCall, summaryText]);
 
   // Format content - detect and highlight JSON
   const formattedContent = useMemo(() => {
@@ -320,26 +343,40 @@ function LogEntryItem({ entry, isExpanded, onToggle }: LogEntryItemProps) {
   return (
     <div
       className={cn(
-        'rounded-lg border transition-all duration-200',
+        'rounded-md border transition-all duration-150',
         bgColor,
         borderColor,
-        'hover:brightness-110'
+        'hover:brightness-110',
+        // Subtle alternating row background for better scanability
+        isEven ? 'shadow-[inset_0_0_0_100px_rgba(255,255,255,0.015)]' : ''
       )}
       data-testid={`log-entry-${entry.type}`}
     >
       <button
         onClick={onToggle}
-        className="w-full px-3 py-2 flex items-center gap-2 text-left"
+        className="w-full px-2.5 py-1.5 flex items-center gap-1.5 text-left"
         data-testid={`log-entry-toggle-${entry.id}`}
       >
+        {/* Timestamp display - moved to far left */}
+        {entry.timestamp && (
+          <span className="text-[10px] text-muted-foreground/50 flex-shrink-0 font-mono">
+            {new Date(entry.timestamp).toLocaleTimeString('en-US', {
+              hour: '2-digit',
+              minute: '2-digit',
+              second: '2-digit',
+              hour12: false,
+            })}
+          </span>
+        )}
+
         {hasContent ? (
           isExpanded ? (
-            <ChevronDown className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+            <ChevronDown className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
           ) : (
-            <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+            <ChevronRight className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
           )
         ) : (
-          <span className="w-4 flex-shrink-0" />
+          <span className="w-3.5 flex-shrink-0" />
         )}
 
         <span
@@ -353,7 +390,7 @@ function LogEntryItem({ entry, isExpanded, onToggle }: LogEntryItemProps) {
 
         <span
           className={cn(
-            'text-xs font-medium px-2 py-0.5 rounded-full flex-shrink-0',
+            'text-[11px] font-medium px-1.5 py-0.5 rounded flex-shrink-0',
             isToolCall ? toolCategoryColors : colors.badge
           )}
           data-testid="log-entry-badge"
@@ -361,26 +398,57 @@ function LogEntryItem({ entry, isExpanded, onToggle }: LogEntryItemProps) {
           {entry.title}
         </span>
 
-        <span className="text-xs text-muted-foreground truncate flex-1 ml-2">
-          {collapsedPreview}
-        </span>
+        {/* Tool call summary - always visible and prominent */}
+        {isToolCall && summaryText && (
+          <span
+            className={cn(
+              'text-xs font-medium truncate ml-1.5 px-2 py-0.5 rounded-sm',
+              'bg-foreground/5 text-foreground/80'
+            )}
+            data-testid="log-entry-summary"
+          >
+            {summaryText}
+          </span>
+        )}
+
+        {/* File path indicator for tool calls - only shown when not already in summary */}
+        {isToolCall &&
+          entry.metadata?.filePath &&
+          summaryText &&
+          !summaryText.includes(entry.metadata.filePath.split(/[/\\]/).pop() || '') && (
+            <span className="text-[10px] text-muted-foreground/60 truncate max-w-[200px] ml-1.5 font-mono">
+              {entry.metadata.filePath.split(/[/\\]/).pop()}
+            </span>
+          )}
+
+        {/* Non-tool entries show truncated preview when collapsed */}
+        {!isToolCall && collapsedPreview && (
+          <span className="text-xs text-muted-foreground truncate flex-1 ml-2">
+            {collapsedPreview}
+          </span>
+        )}
+
+        {/* Spacer for proper alignment when no preview */}
+        {!summaryText && !collapsedPreview && <span className="flex-1" />}
       </button>
 
       {(isExpanded || !hasContent) && (
-        <div className="px-4 pb-3 pt-1" data-testid={`log-entry-content-${entry.id}`}>
+        <div className="px-2.5 pb-2 pt-0.5" data-testid={`log-entry-content-${entry.id}`}>
           {/* Render TodoWrite entries with special formatting */}
           {parsedTodos ? (
             <TodoListRenderer todos={parsedTodos} />
           ) : (
-            <div className="font-mono text-xs space-y-1">
+            <div className="font-mono text-xs space-y-0.5">
               {formattedContent.map((part, index) => (
                 <div key={index}>
                   {part.type === 'json' ? (
-                    <pre className="bg-muted/50 rounded p-2 overflow-x-auto scrollbar-styled text-xs text-primary">
+                    <pre className="bg-muted/50 rounded px-1.5 py-1 overflow-x-auto scrollbar-styled text-xs text-primary leading-relaxed">
                       {part.content}
                     </pre>
                   ) : (
-                    <pre className={cn('whitespace-pre-wrap break-words', textColor)}>
+                    <pre
+                      className={cn('whitespace-pre-wrap break-words leading-relaxed', textColor)}
+                    >
                       {part.content}
                     </pre>
                   )}
@@ -405,13 +473,21 @@ interface ToolCategoryStats {
   other: number;
 }
 
-export function LogViewer({ output, className }: LogViewerProps) {
+/** Threshold in pixels – if the user is within this distance of the bottom, auto-scroll stays active */
+const AUTO_SCROLL_THRESHOLD = 50;
+
+export function LogViewer({ output, className, scrollContainerRef }: LogViewerProps) {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
   const [hiddenTypes, setHiddenTypes] = useState<Set<LogEntryType>>(new Set());
   const [hiddenCategories, setHiddenCategories] = useState<Set<ToolCategory>>(new Set());
   // Track if user has "Expand All" mode active - new entries will auto-expand when this is true
   const [expandAllMode, setExpandAllMode] = useState(false);
+
+  // --- Auto-scroll logic --------------------------------------------------
+  // We keep a ref so scroll-event handlers don't cause re-renders.
+  const autoScrollEnabledRef = useRef(true);
+  const prevEntryCountRef = useRef(0);
 
   // Parse entries and compute initial expanded state together
   const { entries, initialExpandedIds } = useMemo(() => {
@@ -571,6 +647,35 @@ export function LogViewer({ output, className }: LogViewerProps) {
 
   const hasActiveFilters = searchQuery || hiddenTypes.size > 0 || hiddenCategories.size > 0;
 
+  // --- Auto-scroll: monitor scroll position on the external scroll container ---
+  useEffect(() => {
+    const container = scrollContainerRef?.current;
+    if (!container) return;
+
+    const handleScroll = () => {
+      const { scrollTop, scrollHeight, clientHeight } = container;
+      const isAtBottom = scrollHeight - scrollTop - clientHeight <= AUTO_SCROLL_THRESHOLD;
+      autoScrollEnabledRef.current = isAtBottom;
+    };
+
+    container.addEventListener('scroll', handleScroll, { passive: true });
+    return () => container.removeEventListener('scroll', handleScroll);
+  }, [scrollContainerRef]);
+
+  // --- Auto-scroll: scroll to bottom when new entries arrive ---
+  useEffect(() => {
+    const container = scrollContainerRef?.current;
+    if (!container) return;
+
+    // Only auto-scroll when the entry count actually increased (new entries added)
+    if (entries.length > prevEntryCountRef.current && autoScrollEnabledRef.current) {
+      requestAnimationFrame(() => {
+        container.scrollTop = container.scrollHeight;
+      });
+    }
+    prevEntryCountRef.current = entries.length;
+  }, [entries.length, scrollContainerRef]);
+
   if (entries.length === 0) {
     return (
       <div className="flex items-center justify-center p-8 text-muted-foreground">
@@ -647,40 +752,76 @@ export function LogViewer({ output, className }: LogViewerProps) {
           )}
         </div>
 
-        {/* Tool category stats bar */}
+        {/* Tool category stats bar - cleaner visual design */}
         {stats.total > 0 && (
-          <div className="flex items-center gap-1 px-1 flex-wrap" data-testid="log-stats-bar">
-            <span className="text-xs text-muted-foreground/70 mr-1">
-              <Wrench className="w-3 h-3 inline mr-1" />
-              {stats.total} tools:
-            </span>
-            {toolCategoryLabels.map(({ key, label }) => {
-              const count = stats.byCategory[key];
-              if (count === 0) return null;
-              const isHidden = hiddenCategories.has(key);
-              const colorClasses = getToolCategoryColor(key);
-              return (
-                <button
-                  key={key}
-                  onClick={() => toggleCategoryFilter(key)}
-                  className={cn(
-                    'text-xs px-2 py-0.5 rounded-full border transition-all flex items-center gap-1',
-                    colorClasses,
-                    isHidden && 'opacity-40 line-through'
-                  )}
-                  title={isHidden ? `Show ${label} tools` : `Hide ${label} tools`}
-                  data-testid={`log-category-filter-${key}`}
-                >
-                  {getToolCategoryIcon(key)}
-                  <span>{count}</span>
-                </button>
-              );
-            })}
+          <div
+            className="flex items-center gap-2 px-2.5 py-1.5 bg-muted/30 rounded-lg border border-border/50"
+            data-testid="log-stats-bar"
+          >
+            {/* Total tools count */}
+            <div className="flex items-center gap-1.5 pr-2.5 border-r border-border/50">
+              <Wrench className="w-3.5 h-3.5 text-muted-foreground" />
+              <span className="text-xs font-medium text-foreground/90">{stats.total}</span>
+              <span className="text-xs text-muted-foreground">tools</span>
+            </div>
+
+            {/* Category breakdown */}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {toolCategoryLabels.map(({ key, label }) => {
+                const count = stats.byCategory[key];
+                if (count === 0) return null;
+                const isHidden = hiddenCategories.has(key);
+                const colorClasses = getToolCategoryColor(key);
+                const colorParts = colorClasses.split(' ');
+                const textColor = colorParts[0] || 'text-muted-foreground';
+                return (
+                  <button
+                    key={key}
+                    onClick={() => toggleCategoryFilter(key)}
+                    className={cn(
+                      'group flex items-center gap-1 px-1.5 py-0.5 rounded transition-all',
+                      'hover:bg-foreground/5',
+                      isHidden && 'opacity-40'
+                    )}
+                    title={isHidden ? `Show ${label} tools` : `Hide ${label} tools`}
+                    data-testid={`log-category-filter-${key}`}
+                  >
+                    <span className={cn('transition-colors', textColor)}>
+                      {getToolCategoryIcon(key)}
+                    </span>
+                    <span
+                      className={cn(
+                        'text-xs tabular-nums font-medium transition-colors',
+                        textColor,
+                        isHidden && 'line-through'
+                      )}
+                    >
+                      {count}
+                    </span>
+                    <span
+                      className={cn(
+                        'text-[10px] text-muted-foreground/70 hidden group-hover:inline transition-colors',
+                        isHidden && 'line-through'
+                      )}
+                    >
+                      {label}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Error indicator - separated for emphasis */}
             {stats.errors > 0 && (
-              <span className="text-xs px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 border border-red-500/30 flex items-center gap-1">
-                <AlertCircle className="w-3 h-3" />
-                {stats.errors}
-              </span>
+              <div className="flex items-center gap-1.5 pl-2.5 ml-auto border-l border-border/50">
+                <AlertCircle className="w-3.5 h-3.5 text-red-400" />
+                <span className="text-xs font-medium text-red-400 tabular-nums">
+                  {stats.errors}
+                </span>
+                <span className="text-xs text-red-400/70">
+                  {stats.errors === 1 ? 'error' : 'errors'}
+                </span>
+              </div>
             )}
           </div>
         )}
@@ -740,7 +881,7 @@ export function LogViewer({ output, className }: LogViewerProps) {
       </div>
 
       {/* Log entries */}
-      <div className="space-y-2 mt-2" data-testid="log-entries-container">
+      <div className="space-y-1 mt-1.5" data-testid="log-entries-container">
         {filteredEntries.length === 0 ? (
           <div className="text-center py-4 text-muted-foreground text-sm">
             No entries match your filters.
@@ -751,12 +892,13 @@ export function LogViewer({ output, className }: LogViewerProps) {
             )}
           </div>
         ) : (
-          filteredEntries.map((entry) => (
+          filteredEntries.map((entry, index) => (
             <LogEntryItem
               key={entry.id}
               entry={entry}
               isExpanded={effectiveExpandedIds.has(entry.id)}
               onToggle={() => toggleEntry(entry.id)}
+              isEven={index % 2 === 0}
             />
           ))
         )}

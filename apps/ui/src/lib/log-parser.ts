@@ -29,6 +29,83 @@ function cleanFragmentedText(content: string): string {
   return cleaned;
 }
 
+/**
+ * Regex pattern for extracting embedded timestamp markers from agent output
+ * Format: [timestamp:2024-01-15T10:30:00.000Z]
+ */
+const TIMESTAMP_MARKER_REGEX =
+  /^\[timestamp:(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z?)\]\s*/;
+
+/**
+ * Regex pattern for extracting embedded timestamp markers from anywhere in a content line
+ * This handles cases where timestamps appear mid-line or in continuation lines
+ * Uses the global flag so it can find multiple occurrences
+ */
+const INLINE_TIMESTAMP_MARKER_REGEX =
+  /\[timestamp:(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z?)\]\s*/g;
+
+/**
+ * Extracts an embedded timestamp marker from the beginning of a line
+ * Returns the timestamp string and the remaining content after the marker
+ */
+export function extractTimestampMarker(line: string): {
+  timestamp: string | null;
+  content: string;
+} {
+  const match = line.match(TIMESTAMP_MARKER_REGEX);
+  if (match) {
+    return {
+      timestamp: match[1],
+      content: line.slice(match[0].length),
+    };
+  }
+  return { timestamp: null, content: line };
+}
+
+/**
+ * Extracts embedded timestamp markers from anywhere within a content line
+ * Returns the last timestamp found (most recent) and the content with all markers stripped
+ * This is used for continuation lines that may contain inline timestamps
+ */
+export function extractInlineTimestamp(line: string): {
+  timestamp: string | null;
+  content: string;
+} {
+  // Reset lastIndex since we're reusing a global regex
+  INLINE_TIMESTAMP_MARKER_REGEX.lastIndex = 0;
+
+  let lastTimestamp: string | null = null;
+  let match;
+
+  // Find all timestamp markers in the line, keeping the last one
+  while ((match = INLINE_TIMESTAMP_MARKER_REGEX.exec(line)) !== null) {
+    lastTimestamp = match[1];
+  }
+
+  // Strip all timestamp markers from the content for cleaner display
+  INLINE_TIMESTAMP_MARKER_REGEX.lastIndex = 0;
+  const content = line.replace(INLINE_TIMESTAMP_MARKER_REGEX, '');
+
+  return { timestamp: lastTimestamp, content };
+}
+
+/**
+ * Strips timestamp markers from a line for pattern matching
+ * Returns the content without the [timestamp:...] prefix
+ */
+function stripTimestampMarker(line: string): string {
+  return line.replace(TIMESTAMP_MARKER_REGEX, '');
+}
+
+/**
+ * Strips all timestamp markers (both start-of-line and inline) from content
+ * Returns the content with all [timestamp:...] markers removed
+ */
+function stripAllTimestampMarkers(line: string): string {
+  INLINE_TIMESTAMP_MARKER_REGEX.lastIndex = 0;
+  return line.replace(INLINE_TIMESTAMP_MARKER_REGEX, '');
+}
+
 export type LogEntryType =
   | 'prompt'
   | 'tool_call'
@@ -90,7 +167,7 @@ export interface LogEntry {
   type: LogEntryType;
   title: string;
   content: string;
-  timestamp?: string;
+  timestamp?: string | null;
   collapsed?: boolean;
   metadata?: LogEntryMetadata;
 }
@@ -122,11 +199,18 @@ const generateDeterministicId = (content: string, lineIndex: number): string => 
  */
 function detectEntryType(content: string): LogEntryType {
   const trimmed = content.trim();
+  // Strip timestamp markers before pattern matching
+  const strippedTrimmed = stripTimestampMarker(trimmed);
   // Clean fragmented text for pattern matching
-  const cleaned = cleanFragmentedText(trimmed);
+  const cleaned = cleanFragmentedText(strippedTrimmed);
 
-  // Tool calls
-  if (trimmed.startsWith('🔧 Tool:') || trimmed.match(/^Tool:\s*/)) {
+  // Tool calls (check both with and without timestamp prefix)
+  if (
+    trimmed.startsWith('🔧 Tool:') ||
+    trimmed.match(/^Tool:\s*/) ||
+    strippedTrimmed.startsWith('🔧 Tool:') ||
+    strippedTrimmed.match(/^Tool:\s*/)
+  ) {
     return 'tool_call';
   }
 
@@ -139,14 +223,20 @@ function detectEntryType(content: string): LogEntryType {
     return 'tool_result';
   }
 
-  // Phase changes
+  // Phase changes (check both with and without timestamp prefix)
   if (
     trimmed.startsWith('📋') ||
     trimmed.startsWith('⚡') ||
     trimmed.startsWith('✅') ||
     trimmed.match(/^(Planning|Action|Verification)/i) ||
     trimmed.match(/\[Phase:\s*([^\]]+)\]/) ||
-    trimmed.match(/Phase:\s*\w+/i)
+    trimmed.match(/Phase:\s*\w+/i) ||
+    strippedTrimmed.startsWith('📋') ||
+    strippedTrimmed.startsWith('⚡') ||
+    strippedTrimmed.startsWith('✅') ||
+    strippedTrimmed.match(/^(Planning|Action|Verification)/i) ||
+    strippedTrimmed.match(/\[Phase:\s*([^\]]+)\]/) ||
+    strippedTrimmed.match(/Phase:\s*\w+/i)
   ) {
     return 'phase';
   }
@@ -219,8 +309,10 @@ function detectEntryType(content: string): LogEntryType {
  * Matches both "🔧 Tool: Name" and "Tool: Name" formats
  */
 function extractToolName(content: string): string | undefined {
+  // Strip timestamp marker before matching
+  const stripped = stripTimestampMarker(content.trim());
   // Try emoji format first, then plain format
-  const match = content.match(/(?:🔧\s*)?Tool:\s*(\S+)/);
+  const match = stripped.match(/(?:🔧\s*)?Tool:\s*(\S+)/);
   return match?.[1];
 }
 
@@ -228,17 +320,20 @@ function extractToolName(content: string): string | undefined {
  * Extracts phase name from a phase entry
  */
 function extractPhase(content: string): string | undefined {
-  if (content.includes('📋')) return 'planning';
-  if (content.includes('⚡')) return 'action';
-  if (content.includes('✅')) return 'verification';
+  // Strip timestamp marker for cleaner matching
+  const stripped = stripTimestampMarker(content.trim());
+
+  if (stripped.includes('📋')) return 'planning';
+  if (stripped.includes('⚡')) return 'action';
+  if (stripped.includes('✅')) return 'verification';
 
   // Extract from [Phase: ...] format
-  const phaseMatch = content.match(/\[Phase:\s*([^\]]+)\]/);
+  const phaseMatch = stripped.match(/\[Phase:\s*([^\]]+)\]/);
   if (phaseMatch) {
     return phaseMatch[1].toLowerCase();
   }
 
-  const match = content.match(/^(Planning|Action|Verification)/i);
+  const match = stripped.match(/^(Planning|Action|Verification)/i);
   return match?.[1]?.toLowerCase();
 }
 
@@ -758,7 +853,7 @@ export function parseLogLine(line: string): LogEntry | null {
       type: 'debug',
       title: 'Debug Info',
       content: line,
-      timestamp: new Date().toISOString(),
+      timestamp: null,
       collapsed: true,
     };
   } catch {
@@ -768,7 +863,7 @@ export function parseLogLine(line: string): LogEntry | null {
       type: 'info',
       title: 'Output',
       content: line,
-      timestamp: new Date().toISOString(),
+      timestamp: null,
       collapsed: false,
     };
   }
@@ -951,7 +1046,9 @@ export function parseLogOutput(rawOutput: string): LogEntry[] {
 
   const finalizeEntry = () => {
     if (currentEntry && currentContent.length > 0) {
-      currentEntry.content = currentContent.join('\n').trim();
+      // Join content and strip any remaining inline timestamp markers for clean display
+      const rawContent = currentContent.join('\n').trim();
+      currentEntry.content = stripAllTimestampMarkers(rawContent).trim();
       if (currentEntry.content) {
         // Populate enhanced metadata for tool calls
         const toolName = currentEntry.metadata?.toolName;
@@ -1015,8 +1112,14 @@ export function parseLogOutput(rawOutput: string): LogEntry[] {
 
     // If we're in JSON accumulation mode, keep accumulating until depth returns to 0
     if (inJsonAccumulation) {
-      currentContent.push(line);
-      const { braceChange, bracketChange } = calculateBracketDepth(trimmedLine);
+      // Extract inline timestamps from JSON content lines (timestamps may wrap JSON blocks)
+      const { timestamp: jsonLineTs, content: cleanedJsonLine } = extractInlineTimestamp(line);
+      if (jsonLineTs && currentEntry) {
+        currentEntry.timestamp = jsonLineTs;
+      }
+      currentContent.push(jsonLineTs ? cleanedJsonLine : line);
+      const bracketLine = (jsonLineTs ? cleanedJsonLine : trimmedLine).trim();
+      const { braceChange, bracketChange } = calculateBracketDepth(bracketLine);
       jsonBraceDepth += braceChange;
       jsonBracketDepth += bracketChange;
 
@@ -1032,9 +1135,16 @@ export function parseLogOutput(rawOutput: string): LogEntry[] {
 
     // If we're in summary accumulation mode, keep accumulating until </summary>
     if (inSummaryAccumulation) {
-      currentContent.push(line);
-      // Summary is complete when we see closing tag
-      if (trimmedLine.includes('</summary>')) {
+      // Extract inline timestamps from summary content lines
+      const { timestamp: summaryLineTs, content: cleanedSummaryLine } =
+        extractInlineTimestamp(line);
+      if (summaryLineTs && currentEntry) {
+        currentEntry.timestamp = summaryLineTs;
+      }
+      currentContent.push(summaryLineTs ? cleanedSummaryLine : line);
+      // Summary is complete when we see closing tag (check cleaned line too)
+      const checkSummaryLine = (summaryLineTs ? cleanedSummaryLine : trimmedLine).trim();
+      if (checkSummaryLine.includes('</summary>')) {
         inSummaryAccumulation = false;
         // Don't finalize here - let normal flow handle it
       }
@@ -1042,34 +1152,42 @@ export function parseLogOutput(rawOutput: string): LogEntry[] {
       continue;
     }
 
+    // Extract embedded timestamp marker if present
+    const { timestamp: embeddedTimestamp, content: strippedLine } =
+      extractTimestampMarker(trimmedLine);
+    // Use the stripped line (without timestamp prefix) for pattern detection
+    const detectLine = strippedLine || trimmedLine;
+
     // Detect if this line starts a new entry
     const lineType = detectEntryType(trimmedLine);
     const isNewEntry =
-      trimmedLine.startsWith('🔧') ||
-      trimmedLine.startsWith('📋') ||
-      trimmedLine.startsWith('⚡') ||
-      trimmedLine.startsWith('✅') ||
-      trimmedLine.startsWith('❌') ||
-      trimmedLine.startsWith('⚠️') ||
-      trimmedLine.startsWith('🧠') ||
-      trimmedLine.match(/\[Phase:\s*([^\]]+)\]/) ||
-      trimmedLine.match(/\[Feature Creation\]/i) ||
-      trimmedLine.match(/\[Tool\]/i) ||
-      trimmedLine.match(/\[Agent\]/i) ||
-      trimmedLine.match(/\[Complete\]/i) ||
-      trimmedLine.match(/\[ERROR\]/i) ||
-      trimmedLine.match(/\[Status\]/i) ||
-      trimmedLine.toLowerCase().includes('ultrathink preparation') ||
-      trimmedLine.match(/thinking level[:\s]*(low|medium|high|none|\d)/i) ||
+      detectLine.startsWith('🔧') ||
+      detectLine.startsWith('📋') ||
+      detectLine.startsWith('⚡') ||
+      detectLine.startsWith('✅') ||
+      detectLine.startsWith('❌') ||
+      detectLine.startsWith('⚠️') ||
+      detectLine.startsWith('🧠') ||
+      detectLine.match(/\[Phase:\s*([^\]]+)\]/) ||
+      detectLine.match(/\[Feature Creation\]/i) ||
+      detectLine.match(/\[Tool\]/i) ||
+      detectLine.match(/\[Agent\]/i) ||
+      detectLine.match(/\[Complete\]/i) ||
+      detectLine.match(/\[ERROR\]/i) ||
+      detectLine.match(/\[Status\]/i) ||
+      detectLine.toLowerCase().includes('ultrathink preparation') ||
+      detectLine.match(/thinking level[:\s]*(low|medium|high|none|\d)/i) ||
       // Summary tags (preferred format from agent) - check both raw and cleaned for fragmented streaming
-      trimmedLine.startsWith('<summary>') ||
-      cleanFragmentedText(trimmedLine).startsWith('<summary>') ||
+      detectLine.startsWith('<summary>') ||
+      cleanFragmentedText(detectLine).startsWith('<summary>') ||
       // Agent summary sections (markdown headers - fallback)
-      trimmedLine.match(/^##\s+(Summary|Feature|Changes|Implementation)/i) ||
-      cleanFragmentedText(trimmedLine).match(/^##\s+(Summary|Feature|Changes|Implementation)/i) ||
+      detectLine.match(/^##\s+(Summary|Feature|Changes|Implementation)/i) ||
+      cleanFragmentedText(detectLine).match(/^##\s+(Summary|Feature|Changes|Implementation)/i) ||
       // Summary introduction lines
-      trimmedLine.match(/^All tasks completed/i) ||
-      trimmedLine.match(/^(I've|I have) (successfully |now )?(completed|finished|implemented)/i);
+      detectLine.match(/^All tasks completed/i) ||
+      detectLine.match(/^(I've|I have) (successfully |now )?(completed|finished|implemented)/i) ||
+      // Lines starting with a timestamp marker are always new entries
+      !!embeddedTimestamp;
 
     // Check if this is an Input: line that should trigger JSON accumulation
     const isInputLine = trimmedLine.startsWith('Input:') && currentEntry?.type === 'tool_call';
@@ -1081,25 +1199,30 @@ export function parseLogOutput(rawOutput: string): LogEntry[] {
       // Track starting line for deterministic ID
       entryStartLine = lineIndex;
 
+      // Use embedded timestamp if available, otherwise leave as null
+      const entryTimestamp = embeddedTimestamp || null;
+
       // Start new entry (ID will be generated when finalizing)
       currentEntry = {
         type: lineType,
-        title: generateTitle(lineType, trimmedLine),
+        title: generateTitle(lineType, detectLine),
         content: '',
+        timestamp: entryTimestamp,
         metadata: {
-          toolName: extractToolName(trimmedLine),
-          phase: extractPhase(trimmedLine),
+          toolName: extractToolName(detectLine),
+          phase: extractPhase(detectLine),
         },
       };
-      currentContent.push(trimmedLine);
+      // Store the content without the timestamp prefix for cleaner display
+      currentContent.push(detectLine);
 
       // If this is a <summary> tag, start summary accumulation mode
       // Check both raw and cleaned for fragmented streaming
-      const cleanedTrimmed = cleanFragmentedText(trimmedLine);
+      const cleanedDetectLine = cleanFragmentedText(detectLine);
       if (
-        (trimmedLine.startsWith('<summary>') || cleanedTrimmed.startsWith('<summary>')) &&
-        !trimmedLine.includes('</summary>') &&
-        !cleanedTrimmed.includes('</summary>')
+        (detectLine.startsWith('<summary>') || cleanedDetectLine.startsWith('<summary>')) &&
+        !detectLine.includes('</summary>') &&
+        !cleanedDetectLine.includes('</summary>')
       ) {
         inSummaryAccumulation = true;
       }
@@ -1123,12 +1246,22 @@ export function parseLogOutput(rawOutput: string): LogEntry[] {
         inJsonAccumulation = true;
       }
     } else if (currentEntry) {
-      // Continue current entry
-      currentContent.push(line);
+      // Continue current entry - extract any inline timestamps from content lines
+      const { timestamp: inlineTs, content: cleanedLine } = extractInlineTimestamp(line);
 
-      // Check if this line starts a JSON block
-      if (trimmedLine.startsWith('{') || trimmedLine.startsWith('[')) {
-        const { braceChange, bracketChange } = calculateBracketDepth(trimmedLine);
+      // If this content line has an embedded timestamp, update the entry's timestamp
+      // This ensures entries get the most accurate timestamp from their content
+      if (inlineTs && currentEntry) {
+        currentEntry.timestamp = inlineTs;
+      }
+
+      // Push the cleaned content (with timestamp markers stripped) for cleaner display
+      currentContent.push(inlineTs ? cleanedLine : line);
+
+      // Check if this line starts a JSON block (use cleaned line for detection)
+      const checkLine = (inlineTs ? cleanedLine : line).trim();
+      if (checkLine.startsWith('{') || checkLine.startsWith('[')) {
+        const { braceChange, bracketChange } = calculateBracketDepth(checkLine);
         if (braceChange > 0 || bracketChange > 0) {
           jsonBraceDepth = braceChange;
           jsonBracketDepth = bracketChange;
@@ -1141,13 +1274,18 @@ export function parseLogOutput(rawOutput: string): LogEntry[] {
       // Track starting line for deterministic ID
       entryStartLine = lineIndex;
 
-      // No current entry, create a default info entry
+      // No current entry - extract any inline timestamps before creating default entry
+      const { timestamp: inlineTs, content: cleanedLine } = extractInlineTimestamp(line);
+
+      // Create a default info entry, using inline timestamp if available
       currentEntry = {
         type: 'info',
         title: 'Info',
         content: '',
+        ...(inlineTs ? { timestamp: inlineTs } : {}),
       };
-      currentContent.push(line);
+      // Push cleaned content (with timestamp markers stripped) for cleaner display
+      currentContent.push(inlineTs ? cleanedLine : line);
     }
     lineIndex++;
   }
@@ -1197,6 +1335,90 @@ function mergeConsecutiveEntries(entries: LogEntry[]): LogEntry[] {
 }
 
 /**
+ * Represents a single summary entry with timestamp metadata
+ */
+export interface SummaryEntry {
+  /** The summary content (markdown) */
+  content: string;
+  /** The timestamp when this summary was created (extracted from log) */
+  timestamp: Date | null;
+  /** Index of this summary (0 = first/oldest) */
+  index: number;
+}
+
+/**
+ * Extracts all summaries from raw log output
+ * Returns an array of summary entries with timestamps, ordered from oldest to newest
+ */
+export function extractAllSummaries(rawOutput: string): SummaryEntry[] {
+  if (!rawOutput || !rawOutput.trim()) {
+    return [];
+  }
+
+  const summaries: SummaryEntry[] = [];
+
+  // Find all <summary> tags with optional timestamps
+  const summaryTagRegex = /<summary>([\s\S]*?)<\/summary>/g;
+  let match;
+  let index = 0;
+
+  while ((match = summaryTagRegex.exec(rawOutput)) !== null) {
+    const content = match[1].trim();
+    // Try to extract timestamp from embedded marker or surrounding context
+    // Look for [timestamp:...] marker or bare ISO timestamp before the summary tag
+    const beforeSummary = rawOutput.substring(0, match.index);
+    const embeddedTimestampMatch = beforeSummary.match(
+      /\[timestamp:(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z?)\]\s*$/
+    );
+    const bareTimestampMatch = beforeSummary.match(
+      /(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?)\s*$/
+    );
+    const timestampStr = embeddedTimestampMatch?.[1] || bareTimestampMatch?.[1];
+    const timestamp = timestampStr ? new Date(timestampStr) : null;
+
+    summaries.push({
+      content,
+      timestamp,
+      index,
+    });
+    index++;
+  }
+
+  // If no <summary> tags found, try to find markdown ## Summary sections
+  // Supports both "## Summary\n..." and "## Summary: ...\n..." formats
+  if (summaries.length === 0) {
+    // First try: "## Summary:" with content on the same line (includes the header)
+    const summaryColonRegex =
+      /^(##\s+Summary:[^\n]*(?:\n[\s\S]*?)?)(?=\n##\s+Summary[:\s]|\n##\s+[A-Z]|$)/gm;
+    while ((match = summaryColonRegex.exec(rawOutput)) !== null) {
+      const content = match[1].trim();
+      if (content) {
+        summaries.push({
+          content,
+          timestamp: null,
+          index: summaries.length,
+        });
+      }
+    }
+
+    // Second try: "## Summary" with content on the next line (original format)
+    if (summaries.length === 0) {
+      const summaryHeaderRegex =
+        /^##\s+Summary\s*\n([\s\S]*?)(?=\n##\s+Summary\s*\n|\n##\s+[A-Z]|$)/gm;
+      while ((match = summaryHeaderRegex.exec(rawOutput)) !== null) {
+        summaries.push({
+          content: match[1].trim(),
+          timestamp: null,
+          index: summaries.length,
+        });
+      }
+    }
+  }
+
+  return summaries;
+}
+
+/**
  * Extracts summary content from raw log output
  * Returns the summary text if found, or null if no summary exists
  */
@@ -1211,7 +1433,13 @@ export function extractSummary(rawOutput: string): string | null {
     return summaryTagMatch[1].trim();
   }
 
-  // Try to find markdown ## Summary section
+  // Try to find markdown "## Summary:" with content on the same line (includes the header)
+  const summaryColonMatch = rawOutput.match(/^(##\s+Summary:[^\n]*(?:\n[\s\S]*?)?)(?=\n##\s+|$)/m);
+  if (summaryColonMatch) {
+    return summaryColonMatch[1].trim();
+  }
+
+  // Try to find markdown ## Summary section (content on next line)
   const summaryHeaderMatch = rawOutput.match(/^##\s+Summary\s*\n([\s\S]*?)(?=\n##\s+|$)/m);
   if (summaryHeaderMatch) {
     return summaryHeaderMatch[1].trim();

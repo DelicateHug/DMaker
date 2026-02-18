@@ -3,22 +3,26 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Slider } from '@/components/ui/slider';
 import { FastForward, Bot, Settings2 } from 'lucide-react';
+import { useAppStore } from '@/store/app-store';
 
 interface AutoModeSettingsPopoverProps {
   skipVerificationInAutoMode: boolean;
   onSkipVerificationChange: (value: boolean) => void;
-  maxConcurrency: number;
   runningAgentsCount: number;
-  onConcurrencyChange: (value: number) => void;
 }
 
 export function AutoModeSettingsPopover({
   skipVerificationInAutoMode,
   onSkipVerificationChange,
-  maxConcurrency,
   runningAgentsCount,
-  onConcurrencyChange,
 }: AutoModeSettingsPopoverProps) {
+  const agentMultiplier = useAppStore((state) => state.agentMultiplier);
+  const setAgentMultiplier = useAppStore((state) => state.setAgentMultiplier);
+
+  const handleMaxAgentsChange = (value: number[]) => {
+    setAgentMultiplier(value[0]);
+  };
+
   return (
     <Popover>
       <PopoverTrigger asChild>
@@ -43,25 +47,25 @@ export function AutoModeSettingsPopover({
           <div className="space-y-2 p-2 rounded-md bg-secondary/50">
             <div className="flex items-center gap-2">
               <Bot className="w-4 h-4 text-brand-500 shrink-0" />
-              <Label className="text-xs font-medium">Max Concurrent Agents</Label>
+              <Label className="text-xs font-medium">Max Agents</Label>
               <span className="ml-auto text-xs text-muted-foreground">
-                {runningAgentsCount}/{maxConcurrency}
+                {runningAgentsCount}/{agentMultiplier}
               </span>
             </div>
             <div className="flex items-center gap-3">
               <Slider
-                value={[maxConcurrency]}
-                onValueChange={(value) => onConcurrencyChange(value[0])}
+                value={[agentMultiplier]}
+                onValueChange={handleMaxAgentsChange}
                 min={1}
-                max={10}
+                max={20}
                 step={1}
                 className="flex-1"
                 data-testid="concurrency-slider"
               />
-              <span className="text-xs font-medium min-w-[2ch] text-right">{maxConcurrency}</span>
+              <span className="text-xs font-medium min-w-[2ch] text-right">{agentMultiplier}</span>
             </div>
-            <p className="text-[10px] text-muted-foreground">
-              Higher values process more features in parallel but use more API resources.
+            <p className="text-[10px] text-muted-foreground leading-relaxed">
+              Maximum number of concurrent agents across all projects.
             </p>
           </div>
 

@@ -15,13 +15,15 @@ export type SettingsViewId =
   | 'terminal'
   | 'keyboard'
   | 'audio'
+  | 'voice'
   | 'event-hooks'
   | 'defaults'
   | 'worktrees'
   | 'account'
   | 'security'
   | 'developer'
-  | 'danger';
+  | 'danger'
+  | 'projects';
 
 interface UseSettingsViewOptions {
   initialView?: SettingsViewId;

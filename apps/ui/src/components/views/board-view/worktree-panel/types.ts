@@ -77,6 +77,6 @@ export interface WorktreePanelProps {
   onRemovedWorktrees?: (removedWorktrees: Array<{ path: string; branch: string }>) => void;
   runningFeatureIds?: string[];
   features?: FeatureInfo[];
-  branchCardCounts?: Record<string, number>; // Map of branch name to unarchived card count
+  branchCardCounts?: Record<string, number>; // Map of branch name to active card count
   refreshTrigger?: number;
 }

@@ -16,6 +16,7 @@ function createFeature(
     dependencies?: string[];
     category?: string;
     description?: string;
+    waitForDependencies?: boolean;
   } = {}
 ): Feature {
   return {
@@ -25,6 +26,7 @@ function createFeature(
     status: options.status || 'backlog',
     priority: options.priority,
     dependencies: options.dependencies,
+    waitForDependencies: options.waitForDependencies,
   };
 }
 
@@ -132,9 +134,9 @@ describe('dependency-resolver.ts', () => {
       expect(result.blockedFeatures.has('f4')).toBe(false); // f3 is completed
     });
 
-    it('should not block features whose dependencies are verified', () => {
+    it('should not block features whose dependencies are completed', () => {
       const features = [
-        createFeature('f1', { status: 'verified' }),
+        createFeature('f1', { status: 'completed' }),
         createFeature('f2', { status: 'backlog', dependencies: ['f1'] }),
       ];
 
@@ -267,58 +269,79 @@ describe('dependency-resolver.ts', () => {
       expect(areDependenciesSatisfied(allFeatures[2], allFeatures)).toBe(true);
     });
 
-    it('should return true when all dependencies are verified', () => {
-      const allFeatures = [
-        createFeature('f1', { status: 'verified' }),
-        createFeature('f2', { status: 'verified' }),
-        createFeature('f3', { status: 'backlog', dependencies: ['f1', 'f2'] }),
-      ];
-
-      expect(areDependenciesSatisfied(allFeatures[2], allFeatures)).toBe(true);
-    });
-
-    it('should return true when dependencies are mix of completed and verified', () => {
+    it('should return true when all dependencies are completed (with waitForDependencies)', () => {
       const allFeatures = [
         createFeature('f1', { status: 'completed' }),
-        createFeature('f2', { status: 'verified' }),
-        createFeature('f3', { status: 'backlog', dependencies: ['f1', 'f2'] }),
+        createFeature('f2', { status: 'completed' }),
+        createFeature('f3', {
+          status: 'backlog',
+          dependencies: ['f1', 'f2'],
+          waitForDependencies: true,
+        }),
       ];
 
       expect(areDependenciesSatisfied(allFeatures[2], allFeatures)).toBe(true);
     });
 
-    it('should return false when any dependency is in_progress', () => {
+    it('should return true when waitForDependencies is not set (always satisfied)', () => {
+      const allFeatures = [
+        createFeature('f1', { status: 'in_progress' }),
+        createFeature('f2', { status: 'backlog', dependencies: ['f1'] }),
+      ];
+
+      expect(areDependenciesSatisfied(allFeatures[1], allFeatures)).toBe(true);
+    });
+
+    it('should return false when any dependency is in_progress (with waitForDependencies)', () => {
       const allFeatures = [
         createFeature('f1', { status: 'completed' }),
         createFeature('f2', { status: 'in_progress' }),
-        createFeature('f3', { status: 'backlog', dependencies: ['f1', 'f2'] }),
+        createFeature('f3', {
+          status: 'backlog',
+          dependencies: ['f1', 'f2'],
+          waitForDependencies: true,
+        }),
       ];
 
       expect(areDependenciesSatisfied(allFeatures[2], allFeatures)).toBe(false);
     });
 
-    it('should return false when any dependency is in backlog', () => {
+    it('should return false when any dependency is in backlog (with waitForDependencies)', () => {
       const allFeatures = [
         createFeature('f1', { status: 'completed' }),
         createFeature('f2', { status: 'backlog' }),
-        createFeature('f3', { status: 'backlog', dependencies: ['f1', 'f2'] }),
+        createFeature('f3', {
+          status: 'backlog',
+          dependencies: ['f1', 'f2'],
+          waitForDependencies: true,
+        }),
       ];
 
       expect(areDependenciesSatisfied(allFeatures[2], allFeatures)).toBe(false);
     });
 
-    it('should return false when dependency is missing', () => {
-      const allFeatures = [createFeature('f1', { status: 'backlog', dependencies: ['missing'] })];
+    it('should return false when dependency is missing (with waitForDependencies)', () => {
+      const allFeatures = [
+        createFeature('f1', {
+          status: 'backlog',
+          dependencies: ['missing'],
+          waitForDependencies: true,
+        }),
+      ];
 
       expect(areDependenciesSatisfied(allFeatures[0], allFeatures)).toBe(false);
     });
 
-    it('should return false when multiple dependencies are incomplete', () => {
+    it('should return false when multiple dependencies are incomplete (with waitForDependencies)', () => {
       const allFeatures = [
         createFeature('f1', { status: 'backlog' }),
         createFeature('f2', { status: 'in_progress' }),
         createFeature('f3', { status: 'waiting_approval' }),
-        createFeature('f4', { status: 'backlog', dependencies: ['f1', 'f2', 'f3'] }),
+        createFeature('f4', {
+          status: 'backlog',
+          dependencies: ['f1', 'f2', 'f3'],
+          waitForDependencies: true,
+        }),
       ];
 
       expect(areDependenciesSatisfied(allFeatures[3], allFeatures)).toBe(false);
@@ -350,53 +373,68 @@ describe('dependency-resolver.ts', () => {
       expect(getBlockingDependencies(allFeatures[2], allFeatures)).toEqual([]);
     });
 
-    it('should return empty array when all dependencies are verified', () => {
+    it('should return empty array when waitForDependencies is not set', () => {
       const allFeatures = [
-        createFeature('f1', { status: 'verified' }),
-        createFeature('f2', { status: 'verified' }),
-        createFeature('f3', { status: 'backlog', dependencies: ['f1', 'f2'] }),
+        createFeature('f1', { status: 'backlog' }),
+        createFeature('f2', { status: 'backlog', dependencies: ['f1'] }),
       ];
 
-      expect(getBlockingDependencies(allFeatures[2], allFeatures)).toEqual([]);
+      expect(getBlockingDependencies(allFeatures[1], allFeatures)).toEqual([]);
     });
 
-    it('should return blocking dependencies in backlog status', () => {
+    it('should return blocking dependencies in backlog status (with waitForDependencies)', () => {
       const allFeatures = [
         createFeature('f1', { status: 'backlog' }),
         createFeature('f2', { status: 'completed' }),
-        createFeature('f3', { status: 'backlog', dependencies: ['f1', 'f2'] }),
+        createFeature('f3', {
+          status: 'backlog',
+          dependencies: ['f1', 'f2'],
+          waitForDependencies: true,
+        }),
       ];
 
       expect(getBlockingDependencies(allFeatures[2], allFeatures)).toEqual(['f1']);
     });
 
-    it('should return blocking dependencies in in_progress status', () => {
+    it('should return blocking dependencies in in_progress status (with waitForDependencies)', () => {
       const allFeatures = [
         createFeature('f1', { status: 'in_progress' }),
-        createFeature('f2', { status: 'verified' }),
-        createFeature('f3', { status: 'backlog', dependencies: ['f1', 'f2'] }),
+        createFeature('f2', { status: 'completed' }),
+        createFeature('f3', {
+          status: 'backlog',
+          dependencies: ['f1', 'f2'],
+          waitForDependencies: true,
+        }),
       ];
 
       expect(getBlockingDependencies(allFeatures[2], allFeatures)).toEqual(['f1']);
     });
 
-    it('should return blocking dependencies in waiting_approval status', () => {
+    it('should return blocking dependencies in waiting_approval status (with waitForDependencies)', () => {
       const allFeatures = [
         createFeature('f1', { status: 'waiting_approval' }),
         createFeature('f2', { status: 'completed' }),
-        createFeature('f3', { status: 'backlog', dependencies: ['f1', 'f2'] }),
+        createFeature('f3', {
+          status: 'backlog',
+          dependencies: ['f1', 'f2'],
+          waitForDependencies: true,
+        }),
       ];
 
       expect(getBlockingDependencies(allFeatures[2], allFeatures)).toEqual(['f1']);
     });
 
-    it('should return all blocking dependencies', () => {
+    it('should return all blocking dependencies (with waitForDependencies)', () => {
       const allFeatures = [
         createFeature('f1', { status: 'backlog' }),
         createFeature('f2', { status: 'in_progress' }),
         createFeature('f3', { status: 'waiting_approval' }),
         createFeature('f4', { status: 'completed' }),
-        createFeature('f5', { status: 'backlog', dependencies: ['f1', 'f2', 'f3', 'f4'] }),
+        createFeature('f5', {
+          status: 'backlog',
+          dependencies: ['f1', 'f2', 'f3', 'f4'],
+          waitForDependencies: true,
+        }),
       ];
 
       const blocking = getBlockingDependencies(allFeatures[4], allFeatures);
@@ -407,20 +445,30 @@ describe('dependency-resolver.ts', () => {
       expect(blocking).not.toContain('f4');
     });
 
-    it('should handle missing dependencies', () => {
-      const allFeatures = [createFeature('f1', { status: 'backlog', dependencies: ['missing'] })];
+    it('should handle missing dependencies (with waitForDependencies)', () => {
+      const allFeatures = [
+        createFeature('f1', {
+          status: 'backlog',
+          dependencies: ['missing'],
+          waitForDependencies: true,
+        }),
+      ];
 
       // Missing dependencies won't be in the blocking list since they don't exist
       expect(getBlockingDependencies(allFeatures[0], allFeatures)).toEqual([]);
     });
 
-    it('should handle mix of completed, verified, and incomplete dependencies', () => {
+    it('should handle mix of completed and incomplete dependencies (with waitForDependencies)', () => {
       const allFeatures = [
         createFeature('f1', { status: 'completed' }),
-        createFeature('f2', { status: 'verified' }),
+        createFeature('f2', { status: 'completed' }),
         createFeature('f3', { status: 'in_progress' }),
         createFeature('f4', { status: 'backlog' }),
-        createFeature('f5', { status: 'backlog', dependencies: ['f1', 'f2', 'f3', 'f4'] }),
+        createFeature('f5', {
+          status: 'backlog',
+          dependencies: ['f1', 'f2', 'f3', 'f4'],
+          waitForDependencies: true,
+        }),
       ];
 
       const blocking = getBlockingDependencies(allFeatures[4], allFeatures);

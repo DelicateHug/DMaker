@@ -3,6 +3,7 @@
  */
 
 import type { ClaudeUsageResponse, CodexUsageResponse } from '@/store/app-store';
+import type { VoiceSettings, VoiceSession, VoiceSessionStatus, VoiceEvent } from '@automaker/types';
 
 export interface ImageAttachment {
   id?: string; // Optional - may not be present in messages loaded from server
@@ -162,156 +163,165 @@ export interface SessionsAPI {
   }>;
 }
 
-export type AutoModeEvent =
-  | {
-      type: 'auto_mode_feature_start';
-      featureId: string;
-      projectId?: string;
-      projectPath?: string;
-      feature: unknown;
-    }
-  | {
-      type: 'auto_mode_progress';
-      featureId: string;
-      projectId?: string;
-      projectPath?: string;
-      content: string;
-    }
-  | {
-      type: 'auto_mode_tool';
-      featureId: string;
-      projectId?: string;
-      projectPath?: string;
-      tool: string;
-      input: unknown;
-    }
-  | {
-      type: 'auto_mode_feature_complete';
-      featureId: string;
-      projectId?: string;
-      projectPath?: string;
-      passes: boolean;
-      message: string;
-    }
-  | {
-      type: 'pipeline_step_started';
-      featureId: string;
-      projectPath?: string;
-      stepId: string;
-      stepName: string;
-      stepIndex: number;
-      totalSteps: number;
-    }
-  | {
-      type: 'pipeline_step_complete';
-      featureId: string;
-      projectPath?: string;
-      stepId: string;
-      stepName: string;
-      stepIndex: number;
-      totalSteps: number;
-    }
-  | {
-      type: 'auto_mode_error';
-      error: string;
-      errorType?: 'authentication' | 'cancellation' | 'abort' | 'execution';
-      featureId?: string;
-      projectId?: string;
-      projectPath?: string;
-    }
-  | {
-      type: 'auto_mode_phase';
-      featureId: string;
-      projectId?: string;
-      projectPath?: string;
-      phase: 'planning' | 'action' | 'verification';
-      message: string;
-    }
-  | {
-      type: 'auto_mode_ultrathink_preparation';
-      featureId: string;
-      projectPath?: string;
-      warnings: string[];
-      recommendations: string[];
-      estimatedCost?: number;
-      estimatedTime?: string;
-    }
-  | {
-      type: 'plan_approval_required';
-      featureId: string;
-      projectPath?: string;
-      planContent: string;
-      planningMode: 'lite' | 'spec' | 'full';
-      planVersion?: number;
-    }
-  | {
-      type: 'plan_auto_approved';
-      featureId: string;
-      projectPath?: string;
-      planContent: string;
-      planningMode: 'lite' | 'spec' | 'full';
-    }
-  | {
-      type: 'plan_approved';
-      featureId: string;
-      projectPath?: string;
-      hasEdits: boolean;
-      planVersion?: number;
-    }
-  | {
-      type: 'plan_rejected';
-      featureId: string;
-      projectPath?: string;
-      feedback?: string;
-    }
-  | {
-      type: 'plan_revision_requested';
-      featureId: string;
-      projectPath?: string;
-      feedback?: string;
-      hasEdits?: boolean;
-      planVersion?: number;
-    }
-  | {
-      type: 'planning_started';
-      featureId: string;
-      mode: 'lite' | 'spec' | 'full';
-      message: string;
-    }
-  | {
-      type: 'auto_mode_task_started';
-      featureId: string;
-      projectPath?: string;
-      taskId: string;
-      taskDescription: string;
-      taskIndex: number;
-      tasksTotal: number;
-    }
-  | {
-      type: 'auto_mode_task_complete';
-      featureId: string;
-      projectPath?: string;
-      taskId: string;
-      tasksCompleted: number;
-      tasksTotal: number;
-    }
-  | {
-      type: 'auto_mode_phase_complete';
-      featureId: string;
-      projectPath?: string;
-      phaseNumber: number;
-    }
-  | {
-      type: 'auto_mode_resuming_features';
-      message: string;
-      projectPath?: string;
-      featureIds: string[];
-      features: Array<{
-        id: string;
-        title?: string;
-        status?: string;
-      }>;
-    };
+/** Base fields included in all auto mode events */
+interface AutoModeEventBase {
+  /** ISO 8601 timestamp of when the event was emitted */
+  timestamp: string;
+}
+
+export type AutoModeEvent = AutoModeEventBase &
+  (
+    | {
+        type: 'auto_mode_feature_start';
+        featureId: string;
+        projectId?: string;
+        projectPath?: string;
+        feature: unknown;
+      }
+    | {
+        type: 'auto_mode_progress';
+        featureId: string;
+        projectId?: string;
+        projectPath?: string;
+        content: string;
+      }
+    | {
+        type: 'auto_mode_tool';
+        featureId: string;
+        projectId?: string;
+        projectPath?: string;
+        tool: string;
+        input: unknown;
+      }
+    | {
+        type: 'auto_mode_feature_complete';
+        featureId: string;
+        featureTitle?: string;
+        projectId?: string;
+        projectPath?: string;
+        passes: boolean;
+        message: string;
+      }
+    | {
+        type: 'pipeline_step_started';
+        featureId: string;
+        projectPath?: string;
+        stepId: string;
+        stepName: string;
+        stepIndex: number;
+        totalSteps: number;
+      }
+    | {
+        type: 'pipeline_step_complete';
+        featureId: string;
+        projectPath?: string;
+        stepId: string;
+        stepName: string;
+        stepIndex: number;
+        totalSteps: number;
+      }
+    | {
+        type: 'auto_mode_error';
+        error: string;
+        errorType?: 'authentication' | 'cancellation' | 'abort' | 'execution' | 'feature_not_found';
+        featureId?: string;
+        projectId?: string;
+        projectPath?: string;
+      }
+    | {
+        type: 'auto_mode_phase';
+        featureId: string;
+        projectId?: string;
+        projectPath?: string;
+        phase: 'planning' | 'action' | 'verification';
+        message: string;
+      }
+    | {
+        type: 'auto_mode_ultrathink_preparation';
+        featureId: string;
+        projectPath?: string;
+        warnings: string[];
+        recommendations: string[];
+        estimatedCost?: number;
+        estimatedTime?: string;
+      }
+    | {
+        type: 'plan_approval_required';
+        featureId: string;
+        projectPath?: string;
+        planContent: string;
+        planningMode: 'lite' | 'spec' | 'full';
+        planVersion?: number;
+      }
+    | {
+        type: 'plan_auto_approved';
+        featureId: string;
+        projectPath?: string;
+        planContent: string;
+        planningMode: 'lite' | 'spec' | 'full';
+      }
+    | {
+        type: 'plan_approved';
+        featureId: string;
+        projectPath?: string;
+        hasEdits: boolean;
+        planVersion?: number;
+      }
+    | {
+        type: 'plan_rejected';
+        featureId: string;
+        projectPath?: string;
+        feedback?: string;
+      }
+    | {
+        type: 'plan_revision_requested';
+        featureId: string;
+        projectPath?: string;
+        feedback?: string;
+        hasEdits?: boolean;
+        planVersion?: number;
+      }
+    | {
+        type: 'planning_started';
+        featureId: string;
+        mode: 'lite' | 'spec' | 'full';
+        message: string;
+      }
+    | {
+        type: 'auto_mode_task_started';
+        featureId: string;
+        projectPath?: string;
+        taskId: string;
+        taskDescription: string;
+        taskIndex: number;
+        tasksTotal: number;
+      }
+    | {
+        type: 'auto_mode_task_complete';
+        featureId: string;
+        projectPath?: string;
+        taskId: string;
+        tasksCompleted: number;
+        tasksTotal: number;
+      }
+    | {
+        type: 'auto_mode_phase_complete';
+        featureId: string;
+        projectPath?: string;
+        phaseNumber: number;
+      }
+    | {
+        type: 'auto_mode_resuming_features';
+        message: string;
+        projectPath?: string;
+        featureIds: string[];
+        features: Array<{
+          id: string;
+          title?: string;
+          status?: string;
+        }>;
+      }
+  );
 
 export type SpecRegenerationEvent =
   | {
@@ -388,6 +398,101 @@ export interface SpecRegenerationAPI {
   onEvent: (callback: (event: SpecRegenerationEvent) => void) => () => void;
 }
 
+export interface VoiceAPI {
+  // Start a new voice session
+  startSession: (
+    projectPath: string,
+    settings?: Partial<VoiceSettings>
+  ) => Promise<{
+    success: boolean;
+    session?: VoiceSession;
+    error?: string;
+  }>;
+
+  // Stop an active voice session
+  stopSession: (sessionId: string) => Promise<{
+    success: boolean;
+    error?: string;
+  }>;
+
+  // Get a specific voice session
+  getSession: (sessionId: string) => Promise<{
+    success: boolean;
+    session?: VoiceSession;
+    error?: string;
+  }>;
+
+  // List all voice sessions
+  listSessions: (projectPath?: string) => Promise<{
+    success: boolean;
+    sessions?: VoiceSession[];
+    count?: number;
+    error?: string;
+  }>;
+
+  // Delete a voice session
+  deleteSession: (sessionId: string) => Promise<{
+    success: boolean;
+    error?: string;
+  }>;
+
+  // Process a voice command
+  processCommand: (
+    sessionId: string,
+    text: string,
+    audioDurationMs?: number,
+    confidence?: number
+  ) => Promise<{
+    success: boolean;
+    response?: string;
+    messageId?: string;
+    commandExecuted?: boolean;
+    commandResult?: {
+      success: boolean;
+      response: string;
+      commandName?: string;
+      data?: unknown;
+      error?: string;
+    };
+    error?: string;
+  }>;
+
+  // Stop processing a command
+  stopProcessing: (sessionId: string) => Promise<{
+    success: boolean;
+    error?: string;
+  }>;
+
+  // Get session status
+  getStatus: (sessionId: string) => Promise<{
+    success: boolean;
+    status?: VoiceSessionStatus;
+    session?: VoiceSession;
+    error?: string;
+  }>;
+
+  // Update session status
+  updateStatus: (
+    sessionId: string,
+    status: VoiceSessionStatus
+  ) => Promise<{
+    success: boolean;
+    error?: string;
+  }>;
+
+  // Update voice settings
+  updateSettings: (
+    sessionId: string,
+    settings: Partial<VoiceSettings>
+  ) => Promise<{
+    success: boolean;
+    error?: string;
+  }>;
+
+  // Subscribe to voice events
+  onEvent: (callback: (event: VoiceEvent) => void) => () => void;
+}
+
 export interface AutoModeAPI {
   stopFeature: (featureId: string) => Promise<{
     success: boolean;
@@ -407,11 +512,23 @@ export interface AutoModeAPI {
   runFeature: (
     projectPath: string,
     featureId: string,
-    useWorktrees?: boolean
+    useWorktrees?: boolean,
+    forceRun?: boolean
   ) => Promise<{
     success: boolean;
     passes?: boolean;
     error?: string;
+    /** Warning type when feature has unsatisfied dependencies */
+    warning?: 'unsatisfied_dependencies';
+    /** Human-readable warning message */
+    message?: string;
+    /** Details of blocking dependencies when warning is 'unsatisfied_dependencies' */
+    blockingDependencies?: Array<{
+      id: string;
+      title?: string;
+      description?: string;
+      status?: string;
+    }>;
   }>;
 
   verifyFeature: (
@@ -491,13 +608,19 @@ export interface ElectronAPI {
   getApiKey?: () => Promise<string | null>;
   quit?: () => Promise<void>;
   openExternalLink: (url: string) => Promise<{ success: boolean; error?: string }>;
+  updateTrayCount?: (count: number) => Promise<{ success: boolean; error?: string }>;
 
   // Dialog APIs
   openDirectory: () => Promise<{
     canceled: boolean;
     filePaths: string[];
   }>;
-  openFile: (options?: unknown) => Promise<{
+  openFile: (options?: {
+    title?: string;
+    defaultPath?: string;
+    filters?: Array<{ name: string; extensions: string[] }>;
+    properties?: string[];
+  }) => Promise<{
     canceled: boolean;
     filePaths: string[];
   }>;
@@ -625,6 +748,9 @@ export interface ElectronAPI {
 
   // Spec Regeneration APIs
   specRegeneration: SpecRegenerationAPI;
+
+  // Voice Mode APIs
+  voice: VoiceAPI;
 }
 
 export interface WorktreeInfo {

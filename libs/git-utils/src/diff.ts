@@ -16,6 +16,24 @@ const logger = createLogger('GitUtils');
 // Max file size for generating synthetic diffs (1MB)
 const MAX_SYNTHETIC_DIFF_SIZE = 1024 * 1024;
 
+// ---------------------------------------------------------------------------
+// Short-lived TTL cache for getGitRepositoryDiffs results
+// Prevents redundant child process spawning during rapid polling (3s TTL)
+// ---------------------------------------------------------------------------
+const GIT_DIFF_CACHE_TTL_MS = 3_000;
+
+interface GitDiffCacheEntry {
+  result: { diff: string; files: FileStatus[]; hasChanges: boolean };
+  cachedAt: number;
+}
+
+/** Per-repoPath cache with in-flight deduplication */
+const gitDiffCache = new Map<string, GitDiffCacheEntry>();
+const gitDiffInFlight = new Map<
+  string,
+  Promise<{ diff: string; files: FileStatus[]; hasChanges: boolean }>
+>();
+
 /**
  * Check if a file is likely binary based on extension
  */
@@ -244,8 +262,42 @@ export async function generateDiffsForNonGitDirectory(
 /**
  * Get git repository diffs for a given path
  * Handles both git repos and non-git directories
+ *
+ * Results are cached for 3 seconds per repoPath to avoid redundant child
+ * process spawning during rapid polling. Concurrent requests for the same
+ * repoPath share a single in-flight fetch.
  */
 export async function getGitRepositoryDiffs(
+  repoPath: string
+): Promise<{ diff: string; files: FileStatus[]; hasChanges: boolean }> {
+  // Check TTL cache first
+  const cached = gitDiffCache.get(repoPath);
+  if (cached && Date.now() - cached.cachedAt < GIT_DIFF_CACHE_TTL_MS) {
+    return cached.result;
+  }
+
+  // Deduplicate concurrent requests for the same repoPath
+  const inFlight = gitDiffInFlight.get(repoPath);
+  if (inFlight) {
+    return inFlight;
+  }
+
+  const promise = fetchGitRepositoryDiffs(repoPath);
+  gitDiffInFlight.set(repoPath, promise);
+
+  try {
+    const result = await promise;
+    gitDiffCache.set(repoPath, { result, cachedAt: Date.now() });
+    return result;
+  } finally {
+    gitDiffInFlight.delete(repoPath);
+  }
+}
+
+/**
+ * Internal: Actually fetch git diffs (uncached)
+ */
+async function fetchGitRepositoryDiffs(
   repoPath: string
 ): Promise<{ diff: string; files: FileStatus[]; hasChanges: boolean }> {
   // Check if it's a git repository

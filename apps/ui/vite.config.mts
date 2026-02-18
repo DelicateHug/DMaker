@@ -66,7 +66,8 @@ export default defineConfig(({ command }) => {
     },
     server: {
       host: process.env.HOST || '0.0.0.0',
-      port: parseInt(process.env.TEST_PORT || '3007', 10),
+      // Dev mode uses port 3017 to avoid conflicts with production on 3007
+      port: parseInt(process.env.TEST_PORT || '3017', 10),
       allowedHosts: true,
     },
     build: {
@@ -92,6 +93,7 @@ export default defineConfig(({ command }) => {
     },
     define: {
       __APP_VERSION__: JSON.stringify(appVersion),
+      __DEV_MODE__: JSON.stringify(command === 'serve'),
     },
   };
 });

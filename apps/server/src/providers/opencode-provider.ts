@@ -732,19 +732,21 @@ export class OpencodeProvider extends CliProvider {
         // NPX strategy: execute npx with opencode-ai package
         command = process.platform === 'win32' ? 'npx.cmd' : 'npx';
         args = ['opencode-ai@latest', 'models'];
-        opencodeLogger.debug(`Executing: ${command} ${args.join(' ')}`);
+        opencodeLogger.debug(
+          `Executing via NPX strategy (platform: ${process.platform}): ${command} ${args.join(' ')}`
+        );
       } else if (this.useWsl && this.wslCliPath) {
         // WSL strategy: execute via wsl.exe
         command = 'wsl.exe';
         args = this.wslDistribution
           ? ['-d', this.wslDistribution, this.wslCliPath, 'models']
           : [this.wslCliPath, 'models'];
-        opencodeLogger.debug(`Executing: ${command} ${args.join(' ')}`);
+        opencodeLogger.debug(`Executing via WSL strategy: ${command} ${args.join(' ')}`);
       } else {
         // Direct CLI execution
         command = this.cliPath;
         args = ['models'];
-        opencodeLogger.debug(`Executing: ${command} ${args.join(' ')}`);
+        opencodeLogger.debug(`Executing via direct CLI strategy: ${command} ${args.join(' ')}`);
       }
 
       const { stdout } = await execFileAsync(command, args, {
@@ -760,7 +762,31 @@ export class OpencodeProvider extends CliProvider {
       );
       return this.parseModelsOutput(stdout);
     } catch (error) {
-      opencodeLogger.error(`Failed to fetch models from CLI: ${error}`);
+      // Extract detailed error information
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const stderr = (error as { stderr?: string })?.stderr;
+      const stdout = (error as { stdout?: string })?.stdout;
+      const exitCode = (error as { code?: number | string })?.code;
+
+      // Build detailed error message
+      let detailedError = `Failed to fetch models from CLI (strategy: ${this.detectedStrategy}): ${errorMessage}`;
+      if (exitCode !== undefined) {
+        detailedError += `\nExit code: ${exitCode}`;
+      }
+      if (stderr) {
+        detailedError += `\nStderr: ${stderr.trim()}`;
+      }
+      if (stdout) {
+        detailedError += `\nStdout: ${stdout.trim()}`;
+      }
+
+      // Add helpful hints based on strategy
+      if (this.detectedStrategy === 'npx') {
+        detailedError +=
+          '\nNote: Using NPX strategy. Ensure npm/npx is available and network connection is working.';
+      }
+
+      opencodeLogger.error(detailedError);
       return [];
     }
   }
@@ -967,19 +993,21 @@ export class OpencodeProvider extends CliProvider {
         // NPX strategy
         command = process.platform === 'win32' ? 'npx.cmd' : 'npx';
         args = ['opencode-ai@latest', 'auth', 'list'];
-        opencodeLogger.debug(`Executing: ${command} ${args.join(' ')}`);
+        opencodeLogger.debug(
+          `Executing via NPX strategy (platform: ${process.platform}): ${command} ${args.join(' ')}`
+        );
       } else if (this.useWsl && this.wslCliPath) {
         // WSL strategy
         command = 'wsl.exe';
         args = this.wslDistribution
           ? ['-d', this.wslDistribution, this.wslCliPath, 'auth', 'list']
           : [this.wslCliPath, 'auth', 'list'];
-        opencodeLogger.debug(`Executing: ${command} ${args.join(' ')}`);
+        opencodeLogger.debug(`Executing via WSL strategy: ${command} ${args.join(' ')}`);
       } else {
         // Direct CLI execution
         command = this.cliPath;
         args = ['auth', 'list'];
-        opencodeLogger.debug(`Executing: ${command} ${args.join(' ')}`);
+        opencodeLogger.debug(`Executing via direct CLI strategy: ${command} ${args.join(' ')}`);
       }
 
       const { stdout } = await execFileAsync(command, args, {
@@ -997,7 +1025,31 @@ export class OpencodeProvider extends CliProvider {
       this.cachedProviders = providers;
       return providers;
     } catch (error) {
-      opencodeLogger.error(`Failed to fetch providers from CLI: ${error}`);
+      // Extract detailed error information
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const stderr = (error as { stderr?: string })?.stderr;
+      const stdout = (error as { stdout?: string })?.stdout;
+      const exitCode = (error as { code?: number | string })?.code;
+
+      // Build detailed error message
+      let detailedError = `Failed to fetch providers from CLI (strategy: ${this.detectedStrategy}): ${errorMessage}`;
+      if (exitCode !== undefined) {
+        detailedError += `\nExit code: ${exitCode}`;
+      }
+      if (stderr) {
+        detailedError += `\nStderr: ${stderr.trim()}`;
+      }
+      if (stdout) {
+        detailedError += `\nStdout: ${stdout.trim()}`;
+      }
+
+      // Add helpful hints based on strategy
+      if (this.detectedStrategy === 'npx') {
+        detailedError +=
+          '\nNote: Using NPX strategy. Ensure npm/npx is available and network connection is working.';
+      }
+
+      opencodeLogger.error(detailedError);
       return this.cachedProviders || [];
     }
   }

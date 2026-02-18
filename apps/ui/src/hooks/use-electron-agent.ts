@@ -197,7 +197,15 @@ export function useElectronAgent({
 
       try {
         logger.info('Starting session:', sessionId);
-        const result = await api.agent!.start(sessionId, workingDirectory);
+
+        // Run start and getHistory in parallel to avoid a gap where
+        // isProcessing is false while we wait for the running state check.
+        // This fixes the "frozen UI" issue when switching back to a session
+        // where the AI is still thinking.
+        const [result, historyResult] = await Promise.all([
+          api.agent!.start(sessionId, workingDirectory),
+          api.agent!.getHistory(sessionId),
+        ]);
 
         if (!mounted) return;
 
@@ -206,13 +214,10 @@ export function useElectronAgent({
           setMessages(result.messages);
           setIsConnected(true);
 
-          // Check if the agent is currently running for this session
-          const historyResult = await api.agent!.getHistory(sessionId);
-          if (mounted && historyResult.success) {
-            const isRunning = historyResult.isRunning || false;
-            logger.info('Session running state:', isRunning);
-            setIsProcessing(isRunning);
-          }
+          // Apply the running state from getHistory immediately
+          const isRunning = historyResult.success ? historyResult.isRunning || false : false;
+          logger.info('Session running state:', isRunning);
+          setIsProcessing(isRunning);
         } else {
           setError(result.error || 'Failed to start session');
           setIsProcessing(false);
@@ -248,6 +253,35 @@ export function useElectronAgent({
 
     logger.info('Subscribing to stream events for session:', sessionId);
 
+    // rAF-based throttle for streaming updates to cap at ~60fps
+    let pendingStreamEvent: StreamEvent | null = null;
+    let rafId: number | null = null;
+
+    const flushStreamUpdate = () => {
+      rafId = null;
+      const event = pendingStreamEvent;
+      if (!event) return;
+      pendingStreamEvent = null;
+
+      setMessages((prev) => {
+        const existingIndex = prev.findIndex((m) => m.id === event.messageId);
+        if (existingIndex >= 0) {
+          return prev.map((msg) =>
+            msg.id === event.messageId ? { ...msg, content: event.content } : msg
+          );
+        } else {
+          const newMessage: Message = {
+            id: event.messageId,
+            role: 'assistant',
+            content: event.content,
+            timestamp: new Date().toISOString(),
+          };
+          currentMessageRef.current = newMessage;
+          return [...prev, newMessage];
+        }
+      });
+    };
+
     const handleStream = (event: StreamEvent) => {
       // CRITICAL: Only process events for our specific session
       if (event.sessionId !== sessionId) {
@@ -272,7 +306,12 @@ export function useElectronAgent({
         case 'stream':
           // Assistant message streaming
           if (event.isComplete) {
-            // Final update
+            // Final update — always apply immediately, cancel any pending rAF
+            if (rafId !== null) {
+              cancelAnimationFrame(rafId);
+              rafId = null;
+              pendingStreamEvent = null;
+            }
             setMessages((prev) =>
               prev.map((msg) =>
                 msg.id === event.messageId ? { ...msg, content: event.content } : msg
@@ -280,26 +319,11 @@ export function useElectronAgent({
             );
             currentMessageRef.current = null;
           } else {
-            // Streaming update
-            setMessages((prev) => {
-              const existingIndex = prev.findIndex((m) => m.id === event.messageId);
-              if (existingIndex >= 0) {
-                // Update existing message
-                return prev.map((msg) =>
-                  msg.id === event.messageId ? { ...msg, content: event.content } : msg
-                );
-              } else {
-                // Create new message
-                const newMessage: Message = {
-                  id: event.messageId,
-                  role: 'assistant',
-                  content: event.content,
-                  timestamp: new Date().toISOString(),
-                };
-                currentMessageRef.current = newMessage;
-                return [...prev, newMessage];
-              }
-            });
+            // Intermediate streaming update — throttle via rAF (~60fps cap)
+            pendingStreamEvent = event;
+            if (rafId === null) {
+              rafId = requestAnimationFrame(flushStreamUpdate);
+            }
           }
           break;
 
@@ -361,6 +385,10 @@ export function useElectronAgent({
     unsubscribeRef.current = api.agent!.onStream(handleStream as (data: unknown) => void);
 
     return () => {
+      // Cancel any pending rAF stream update
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId);
+      }
       if (unsubscribeRef.current) {
         logger.info('Unsubscribing from stream events for session:', sessionId);
         unsubscribeRef.current();

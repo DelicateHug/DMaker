@@ -11,7 +11,13 @@
 import type { Request, Response } from 'express';
 import type { SettingsService } from '../../../services/settings-service.js';
 import type { GlobalSettings } from '../../../types/settings.js';
-import { getErrorMessage, logError, logger } from '../common.js';
+import {
+  getErrorMessage,
+  logError,
+  logger,
+  globalSettingsCache,
+  GLOBAL_SETTINGS_CACHE_KEY,
+} from '../common.js';
 import { setLogLevel, LogLevel } from '@automaker/utils';
 import { setRequestLoggingEnabled } from '../../../index.js';
 
@@ -57,6 +63,10 @@ export function createUpdateGlobalHandler(settingsService: SettingsService) {
       }
 
       const settings = await settingsService.updateGlobalSettings(updates);
+
+      // Invalidate cached global settings and seed with fresh value
+      globalSettingsCache.delete(GLOBAL_SETTINGS_CACHE_KEY);
+      globalSettingsCache.set(GLOBAL_SETTINGS_CACHE_KEY, settings);
 
       // Apply server log level if it was updated
       if ('serverLogLevel' in updates && updates.serverLogLevel) {

@@ -80,7 +80,7 @@ export function GitHubSetupStep({ onNext, onBack, onSkip }: GitHubSetupStepProps
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" data-testid="setup-github-step">
       <div className="text-center mb-8">
         <div className="w-16 h-16 rounded-xl bg-zinc-800 flex items-center justify-center mx-auto mb-4">
           <Github className="w-8 h-8 text-white" />
@@ -115,7 +115,13 @@ export function GitHubSetupStep({ onNext, onBack, onSkip }: GitHubSetupStepProps
             </CardTitle>
             <div className="flex items-center gap-2">
               {getStatusBadge()}
-              <Button variant="ghost" size="sm" onClick={checkStatus} disabled={isChecking}>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={checkStatus}
+                disabled={isChecking}
+                data-testid="github-refresh-button"
+              >
                 <RefreshCw className={`w-4 h-4 ${isChecking ? 'animate-spin' : ''}`} />
               </Button>
             </div>
@@ -263,12 +269,22 @@ export function GitHubSetupStep({ onNext, onBack, onSkip }: GitHubSetupStepProps
 
       {/* Navigation */}
       <div className="flex justify-between pt-4">
-        <Button variant="ghost" onClick={onBack} className="text-muted-foreground">
+        <Button
+          variant="ghost"
+          onClick={onBack}
+          className="text-muted-foreground"
+          data-testid="github-back-button"
+        >
           <ArrowLeft className="w-4 h-4 mr-2" />
           Back
         </Button>
         <div className="flex gap-2">
-          <Button variant="ghost" onClick={onSkip} className="text-muted-foreground">
+          <Button
+            variant="ghost"
+            onClick={onSkip}
+            className="text-muted-foreground"
+            data-testid="github-skip-button"
+          >
             {isReady ? 'Skip' : 'Skip for now'}
           </Button>
           <Button

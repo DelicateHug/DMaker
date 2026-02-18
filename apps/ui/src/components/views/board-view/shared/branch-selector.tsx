@@ -10,7 +10,7 @@ interface BranchSelectorProps {
   branchName: string;
   onBranchNameChange: (branchName: string) => void;
   branchSuggestions: string[];
-  branchCardCounts?: Record<string, number>; // Map of branch name to unarchived card count
+  branchCardCounts?: Record<string, number>; // Map of branch name to active card count
   currentBranch?: string;
   disabled?: boolean;
   testIdPrefix?: string;

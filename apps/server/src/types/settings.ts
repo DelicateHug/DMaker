@@ -23,6 +23,11 @@ export type {
   PhaseModelConfig,
   PhaseModelKey,
   PhaseModelEntry,
+  // Deploy types
+  DeployScriptType,
+  DeployFolderScript,
+  DeployRunStatus,
+  DeployRun,
 } from '@automaker/types';
 
 export {

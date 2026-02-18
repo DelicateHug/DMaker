@@ -1,6 +1,11 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { GitHubPRsView } from '@/components/views/github-prs-view';
+import { lazyRouteComponent } from '@/components/ui/route-error-boundary';
+
+const LazyGitHubPRsView = lazyRouteComponent(
+  () => import('@/components/views/github-prs-view'),
+  'GitHubPRsView'
+);
 
 export const Route = createFileRoute('/github-prs')({
-  component: GitHubPRsView,
+  component: LazyGitHubPRsView,
 });

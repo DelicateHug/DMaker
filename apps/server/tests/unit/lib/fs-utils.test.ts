@@ -54,15 +54,18 @@ describe('fs-utils.ts', () => {
       await expect(mkdirSafe(filePath)).rejects.toThrow('Path exists and is not a directory');
     });
 
-    it('should succeed if path is a symlink to a directory', async () => {
-      const realDir = path.join(testDir, 'real-dir');
-      const symlinkPath = path.join(testDir, 'link-to-dir');
-      await fs.mkdir(realDir);
-      await fs.symlink(realDir, symlinkPath);
+    it.skipIf(process.platform === 'win32')(
+      'should succeed if path is a symlink to a directory',
+      async () => {
+        const realDir = path.join(testDir, 'real-dir');
+        const symlinkPath = path.join(testDir, 'link-to-dir');
+        await fs.mkdir(realDir);
+        await fs.symlink(realDir, symlinkPath);
 
-      // Should not throw
-      await expect(mkdirSafe(symlinkPath)).resolves.toBeUndefined();
-    });
+        // Should not throw
+        await expect(mkdirSafe(symlinkPath)).resolves.toBeUndefined();
+      }
+    );
 
     it('should handle ELOOP error gracefully when checking path', async () => {
       // Mock lstat to throw ELOOP error
@@ -130,7 +133,7 @@ describe('fs-utils.ts', () => {
       expect(exists).toBe(false);
     });
 
-    it('should return true for symlink', async () => {
+    it.skipIf(process.platform === 'win32')('should return true for symlink', async () => {
       const realFile = path.join(testDir, 'real-file.txt');
       const symlinkPath = path.join(testDir, 'link-to-file');
       await fs.writeFile(realFile, 'content');
@@ -140,14 +143,17 @@ describe('fs-utils.ts', () => {
       expect(exists).toBe(true);
     });
 
-    it("should return true for broken symlink (symlink exists even if target doesn't)", async () => {
-      const symlinkPath = path.join(testDir, 'broken-link');
-      const nonExistent = path.join(testDir, 'non-existent-target');
-      await fs.symlink(nonExistent, symlinkPath);
+    it.skipIf(process.platform === 'win32')(
+      "should return true for broken symlink (symlink exists even if target doesn't)",
+      async () => {
+        const symlinkPath = path.join(testDir, 'broken-link');
+        const nonExistent = path.join(testDir, 'non-existent-target');
+        await fs.symlink(nonExistent, symlinkPath);
 
-      const exists = await existsSafe(symlinkPath);
-      expect(exists).toBe(true);
-    });
+        const exists = await existsSafe(symlinkPath);
+        expect(exists).toBe(true);
+      }
+    );
 
     it('should return true for ELOOP error (symlink loop)', async () => {
       // Mock lstat to throw ELOOP error

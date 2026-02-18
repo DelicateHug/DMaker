@@ -1,5 +1,6 @@
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Slider } from '@/components/ui/slider';
 import {
   FlaskConical,
   TestTube,
@@ -12,6 +13,8 @@ import {
   FastForward,
   Sparkles,
   Cpu,
+  Rocket,
+  Bot,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
@@ -21,7 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import type { PhaseModelEntry } from '@automaker/types';
+import type { PhaseModelEntry, DeployEnvironment } from '@automaker/types';
 import { PhaseModelSelector } from '../model-defaults/phase-model-selector';
 
 type PlanningMode = 'skip' | 'lite' | 'spec' | 'full';
@@ -34,6 +37,9 @@ interface FeatureDefaultsSectionProps {
   defaultRequirePlanApproval: boolean;
   enableAiCommitMessages: boolean;
   defaultFeatureModel: PhaseModelEntry;
+  defaultAutoDeploy: boolean;
+  defaultDeployEnvironment: DeployEnvironment;
+  agentMultiplier: number;
   onDefaultSkipTestsChange: (value: boolean) => void;
   onEnableDependencyBlockingChange: (value: boolean) => void;
   onSkipVerificationInAutoModeChange: (value: boolean) => void;
@@ -41,6 +47,9 @@ interface FeatureDefaultsSectionProps {
   onDefaultRequirePlanApprovalChange: (value: boolean) => void;
   onEnableAiCommitMessagesChange: (value: boolean) => void;
   onDefaultFeatureModelChange: (value: PhaseModelEntry) => void;
+  onDefaultAutoDeployChange: (value: boolean) => void;
+  onDefaultDeployEnvironmentChange: (value: DeployEnvironment) => void;
+  onAgentMultiplierChange: (value: number) => void;
 }
 
 export function FeatureDefaultsSection({
@@ -51,6 +60,9 @@ export function FeatureDefaultsSection({
   defaultRequirePlanApproval,
   enableAiCommitMessages,
   defaultFeatureModel,
+  defaultAutoDeploy,
+  defaultDeployEnvironment,
+  agentMultiplier,
   onDefaultSkipTestsChange,
   onEnableDependencyBlockingChange,
   onSkipVerificationInAutoModeChange,
@@ -58,6 +70,9 @@ export function FeatureDefaultsSection({
   onDefaultRequirePlanApprovalChange,
   onEnableAiCommitMessagesChange,
   onDefaultFeatureModelChange,
+  onDefaultAutoDeployChange,
+  onDefaultDeployEnvironmentChange,
+  onAgentMultiplierChange,
 }: FeatureDefaultsSectionProps) {
   return (
     <div
@@ -97,6 +112,38 @@ export function FeatureDefaultsSection({
             </div>
             <p className="text-xs text-muted-foreground/80 leading-relaxed">
               The default AI model and thinking level used when creating new feature cards.
+            </p>
+          </div>
+        </div>
+
+        {/* Separator */}
+        <div className="border-t border-border/30" />
+
+        {/* Global Agent Multiplier */}
+        <div className="group flex items-start space-x-3 p-3 rounded-xl hover:bg-accent/30 transition-colors duration-200 -mx-3">
+          <div className="w-10 h-10 mt-0.5 rounded-xl flex items-center justify-center shrink-0 bg-brand-500/10">
+            <Bot className="w-5 h-5 text-brand-500" />
+          </div>
+          <div className="flex-1 space-y-2">
+            <div className="flex items-center justify-between">
+              <Label className="text-foreground font-medium">Global Agent Multiplier</Label>
+              <span className="text-xs font-medium min-w-[2ch] text-right">{agentMultiplier}</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <Slider
+                value={[agentMultiplier]}
+                onValueChange={(value) => onAgentMultiplierChange(value[0])}
+                min={1}
+                max={10}
+                step={1}
+                className="flex-1"
+                data-testid="agent-multiplier-slider"
+              />
+            </div>
+            <p className="text-xs text-muted-foreground/80 leading-relaxed">
+              Base number of concurrent agents for all projects. Each project can add additional
+              agents in Project Settings. Example: If set to 3, all projects get 3 agents.
+              Incrementing by 1 gives all projects +1 agent.
             </p>
           </div>
         </div>
@@ -312,6 +359,60 @@ export function FeatureDefaultsSection({
               using AI based on your staged or unstaged changes. You can configure the model used in
               Model Defaults.
             </p>
+          </div>
+        </div>
+
+        {/* Separator */}
+        <div className="border-t border-border/30" />
+
+        {/* Auto-Deploy Setting */}
+        <div className="group flex items-start space-x-3 p-3 rounded-xl hover:bg-accent/30 transition-colors duration-200 -mx-3">
+          <Checkbox
+            id="default-auto-deploy"
+            checked={defaultAutoDeploy}
+            onCheckedChange={(checked) => onDefaultAutoDeployChange(checked === true)}
+            className="mt-1"
+            data-testid="default-auto-deploy-checkbox"
+          />
+          <div className="flex-1 space-y-1.5">
+            <Label
+              htmlFor="default-auto-deploy"
+              className="text-foreground cursor-pointer font-medium flex items-center gap-2"
+            >
+              <Rocket className="w-4 h-4 text-brand-500" />
+              Enable auto-deploy by default
+            </Label>
+            <p className="text-xs text-muted-foreground/80 leading-relaxed">
+              When enabled, new features will automatically trigger deployment when completed
+              successfully. Configure deploy scripts in the Deploy Scripts settings section.
+            </p>
+            {/* Environment selector - only show when auto-deploy is enabled */}
+            {defaultAutoDeploy && (
+              <div className="mt-3 flex items-center gap-2">
+                <Label className="text-xs text-muted-foreground">Default environment:</Label>
+                <Select
+                  value={defaultDeployEnvironment}
+                  onValueChange={(v: string) =>
+                    onDefaultDeployEnvironmentChange(v as DeployEnvironment)
+                  }
+                >
+                  <SelectTrigger
+                    className="w-[140px] h-7 text-xs"
+                    data-testid="default-deploy-environment-select"
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="development">
+                      <span className="text-xs">Development</span>
+                    </SelectItem>
+                    <SelectItem value="production">
+                      <span className="text-xs">Production</span>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </div>
         </div>
       </div>

@@ -13,6 +13,100 @@ import * as secureFs from './secure-fs.js';
 import path from 'path';
 
 /**
+ * Month names indexed 0-11 for mapping numeric months to lowercase strings.
+ */
+const MONTH_NAMES = [
+  'january',
+  'february',
+  'march',
+  'april',
+  'may',
+  'june',
+  'july',
+  'august',
+  'september',
+  'october',
+  'november',
+  'december',
+] as const;
+
+/**
+ * Regex matching the new feature-ID format: dd-MM-YYYY-<slug>
+ *
+ * Captures:
+ *   [1] MM   - two-digit month (01-12)
+ *   [2] YYYY - four-digit year
+ */
+const NEW_ID_RE = /^\d{2}-(\d{2})-(\d{4})-.+$/;
+
+/**
+ * Valid status directory names for the status-based folder layout.
+ * Features are organized under features/{status}/{featureId}/.
+ */
+const STATUS_DIR_NAMES = new Set([
+  'backlog',
+  'in_progress',
+  'waiting_approval',
+  'completed',
+  'verified',
+]);
+
+/**
+ * Check whether a directory name is a valid status directory for the
+ * status-based feature layout.
+ *
+ * @param dirName - Directory name to check (e.g. "backlog", "in_progress")
+ * @returns true if the name is a recognised feature status
+ */
+export function isStatusDir(dirName: string): boolean {
+  // Accept exact matches or pipeline_* prefixed names
+  return STATUS_DIR_NAMES.has(dirName) || dirName.startsWith('pipeline_');
+}
+
+/**
+ * Regex matching month-based directory names produced by getFeatureMonthDir().
+ * Format: {YYYY}-{lowercase_month_name} (e.g. "2026-february", "2025-december")
+ */
+const MONTH_DIR_RE =
+  /^\d{4}-(january|february|march|april|may|june|july|august|september|october|november|december)$/;
+
+/**
+ * Get the lowercase English month name for a 1-based month number.
+ *
+ * @param month - Month number, 1-based (1 = January, 12 = December)
+ * @returns Lowercase month name (e.g. "january", "february")
+ * @throws RangeError if month is outside 1-12
+ *
+ * @example
+ * getMonthName(1)  // => "january"
+ * getMonthName(12) // => "december"
+ */
+export function getMonthName(month: number): string {
+  if (month < 1 || month > 12) {
+    throw new RangeError(`month must be between 1 and 12, got ${month}`);
+  }
+  return MONTH_NAMES[month - 1];
+}
+
+/**
+ * Check whether a directory name is a month-based feature subdirectory.
+ *
+ * Useful when scanning the features directory to distinguish month
+ * subdirectories (which contain feature directories) from legacy flat
+ * feature directories.
+ *
+ * @param dirName - Directory name to check (e.g. "2026-february")
+ * @returns true if the name matches the {YYYY}-{monthname} pattern
+ *
+ * @example
+ * isMonthDir('2026-february') // => true
+ * isMonthDir('auth-feature')  // => false
+ */
+export function isMonthDir(dirName: string): boolean {
+  return MONTH_DIR_RE.test(dirName);
+}
+
+/**
  * Get the automaker data directory root for a project
  *
  * All project-specific automaker data is stored under {projectPath}/.automaker/
@@ -28,7 +122,8 @@ export function getAutomakerDir(projectPath: string): string {
 /**
  * Get the features directory for a project
  *
- * Contains subdirectories for each feature, keyed by featureId.
+ * Contains month-based subdirectories (e.g. "2026-february") for new-format
+ * feature IDs, as well as flat feature directories for legacy IDs.
  *
  * @param projectPath - Absolute path to project directory
  * @returns Absolute path to {projectPath}/.automaker/features
@@ -38,16 +133,90 @@ export function getFeaturesDir(projectPath: string): string {
 }
 
 /**
- * Get the directory for a specific feature
+ * Get the month-based subdirectory for a feature inside the features directory.
  *
- * Contains feature-specific data like generated code, tests, and logs.
+ * For new-format IDs (dd-MM-YYYY-slug), returns the month subdirectory:
+ *   {projectPath}/.automaker/features/{YYYY}-{monthname}
+ *
+ * For old-format IDs or IDs that don't match the new pattern, returns null
+ * (meaning the feature lives directly inside the features directory).
  *
  * @param projectPath - Absolute path to project directory
  * @param featureId - Feature identifier
- * @returns Absolute path to {projectPath}/.automaker/features/{featureId}
+ * @returns Absolute path to the month directory, or null for legacy/flat IDs
+ *
+ * @example
+ * // New-format ID -> month directory
+ * getFeatureMonthDir('/proj', '17-02-2026-add_dark_mode')
+ * // => "/proj/.automaker/features/2026-february"
+ *
+ * // Old-format ID -> null (flat layout)
+ * getFeatureMonthDir('/proj', 'auth-feature')
+ * // => null
+ */
+export function getFeatureMonthDir(projectPath: string, featureId: string): string | null {
+  const match = NEW_ID_RE.exec(featureId);
+  if (match) {
+    const monthNum = parseInt(match[1], 10);
+    const year = match[2];
+    // Only use month-based path when the month value is valid (01-12)
+    if (monthNum >= 1 && monthNum <= 12) {
+      const monthDir = `${year}-${getMonthName(monthNum)}`;
+      return path.join(getFeaturesDir(projectPath), monthDir);
+    }
+  }
+  return null;
+}
+
+/**
+ * Get the directory for a specific feature
+ *
+ * For new-format IDs (dd-MM-YYYY-slug), features are organized into
+ * month-based subdirectories:
+ *   {projectPath}/.automaker/features/{YYYY}-{monthname}/{featureId}
+ *
+ * For old-format IDs or IDs that don't match the new pattern, falls back
+ * to the flat structure for backward compatibility:
+ *   {projectPath}/.automaker/features/{featureId}
+ *
+ * @param projectPath - Absolute path to project directory
+ * @param featureId - Feature identifier
+ * @returns Absolute path to the feature directory
+ *
+ * @example
+ * // New-format ID -> month-based directory
+ * getFeatureDir('/proj', '17-02-2026-add_dark_mode')
+ * // => "/proj/.automaker/features/2026-february/17-02-2026-add_dark_mode"
+ *
+ * // Old-format ID -> flat fallback
+ * getFeatureDir('/proj', 'auth-feature')
+ * // => "/proj/.automaker/features/auth-feature"
  */
 export function getFeatureDir(projectPath: string, featureId: string): string {
+  const monthDir = getFeatureMonthDir(projectPath, featureId);
+  if (monthDir) {
+    return path.join(monthDir, featureId);
+  }
+  // Fallback: flat structure for old IDs or invalid month values
   return path.join(getFeaturesDir(projectPath), featureId);
+}
+
+/**
+ * Get the status-based subdirectory for a feature.
+ *
+ * Returns the path: {projectPath}/.automaker/features/{status}/{featureId}
+ *
+ * @param projectPath - Absolute path to project directory
+ * @param status - Feature status (e.g. "backlog", "in_progress", "completed")
+ * @param featureId - Feature identifier
+ * @returns Absolute path to the feature directory inside its status folder
+ */
+export function getFeatureStatusDir(
+  projectPath: string,
+  status: string,
+  featureId: string
+): string {
+  return path.join(getFeaturesDir(projectPath), status, featureId);
 }
 
 /**
@@ -61,6 +230,46 @@ export function getFeatureDir(projectPath: string, featureId: string): string {
  */
 export function getFeatureImagesDir(projectPath: string, featureId: string): string {
   return path.join(getFeatureDir(projectPath, featureId), 'images');
+}
+
+/**
+ * Get the summaries directory for a feature
+ *
+ * Stores individual summary markdown files with timestamps for tracking
+ * agent output summaries over time.
+ *
+ * @param projectPath - Absolute path to project directory
+ * @param featureId - Feature identifier
+ * @returns Absolute path to {projectPath}/.automaker/features/{featureId}/summaries
+ */
+export function getFeatureSummariesDir(projectPath: string, featureId: string): string {
+  return path.join(getFeatureDir(projectPath, featureId), 'summaries');
+}
+
+/**
+ * Get the logs directory for a feature
+ *
+ * Stores agent output logs such as agent-output.md and raw-output.jsonl.
+ *
+ * @param projectPath - Absolute path to project directory
+ * @param featureId - Feature identifier
+ * @returns Absolute path to {featureDir}/logs
+ */
+export function getFeatureLogsDir(projectPath: string, featureId: string): string {
+  return path.join(getFeatureDir(projectPath, featureId), 'logs');
+}
+
+/**
+ * Get the backups directory for a feature
+ *
+ * Stores backup copies of feature data (e.g. feature.json backups).
+ *
+ * @param projectPath - Absolute path to project directory
+ * @param featureId - Feature identifier
+ * @returns Absolute path to {featureDir}/backups
+ */
+export function getFeatureBackupsDir(projectPath: string, featureId: string): string {
+  return path.join(getFeatureDir(projectPath, featureId), 'backups');
 }
 
 /**

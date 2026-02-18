@@ -1,5 +1,6 @@
 import { useEffect, useCallback, useState, type ComponentType, type ReactNode } from 'react';
 import { RefreshCw } from 'lucide-react';
+import { useShallow } from 'zustand/react/shallow';
 import { cn } from '@/lib/utils';
 import { getElectronAPI } from '@/lib/electron';
 import { useAppStore } from '@/store/app-store';
@@ -101,8 +102,23 @@ function UsageItem({
 }
 
 export function MobileUsageBar({ showClaudeUsage, showCodexUsage }: MobileUsageBarProps) {
-  const { claudeUsage, claudeUsageLastUpdated, setClaudeUsage } = useAppStore();
-  const { codexUsage, codexUsageLastUpdated, setCodexUsage } = useAppStore();
+  const {
+    claudeUsage,
+    claudeUsageLastUpdated,
+    setClaudeUsage,
+    codexUsage,
+    codexUsageLastUpdated,
+    setCodexUsage,
+  } = useAppStore(
+    useShallow((state) => ({
+      claudeUsage: state.claudeUsage,
+      claudeUsageLastUpdated: state.claudeUsageLastUpdated,
+      setClaudeUsage: state.setClaudeUsage,
+      codexUsage: state.codexUsage,
+      codexUsageLastUpdated: state.codexUsageLastUpdated,
+      setCodexUsage: state.setCodexUsage,
+    }))
+  );
   const [isClaudeLoading, setIsClaudeLoading] = useState(false);
   const [isCodexLoading, setIsCodexLoading] = useState(false);
 

@@ -1,4 +1,5 @@
 import { useCallback } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { createLogger } from '@automaker/utils/logger';
 import { useAppStore } from '@/store/app-store';
 import { getHttpApiClient } from '@/lib/http-api-client';
@@ -7,10 +8,26 @@ import { toast } from 'sonner';
 const logger = createLogger('BoardBackground');
 
 /**
+ * Selector for board background settings state and actions
+ */
+const selectBoardBackgroundSettings = (state: ReturnType<typeof useAppStore.getState>) => ({
+  boardBackgroundByProject: state.boardBackgroundByProject,
+  setBoardBackground: state.setBoardBackground,
+  setCardOpacity: state.setCardOpacity,
+  setColumnOpacity: state.setColumnOpacity,
+  setColumnBorderEnabled: state.setColumnBorderEnabled,
+  setCardGlassmorphism: state.setCardGlassmorphism,
+  setCardBorderEnabled: state.setCardBorderEnabled,
+  setCardBorderOpacity: state.setCardBorderOpacity,
+  setHideScrollbar: state.setHideScrollbar,
+  clearBoardBackground: state.clearBoardBackground,
+});
+
+/**
  * Hook for managing board background settings with automatic persistence to server
  */
 export function useBoardBackgroundSettings() {
-  const store = useAppStore();
+  const store = useAppStore(useShallow(selectBoardBackgroundSettings));
   const httpClient = getHttpApiClient();
 
   // Helper to persist settings to server

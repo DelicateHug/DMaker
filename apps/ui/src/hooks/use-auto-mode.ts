@@ -56,8 +56,13 @@ export function useAutoMode() {
     currentProject,
     addAutoModeActivity,
     maxConcurrency,
+    agentMultiplier,
     projects,
     setPendingPlanApproval,
+    addPendingPlanApproval,
+    removePendingPlanApproval,
+    pendingPlanApprovals,
+    addRecentlyCompletedFeature,
   } = useAppStore(
     useShallow((state) => ({
       autoModeByProject: state.autoModeByProject,
@@ -67,8 +72,13 @@ export function useAutoMode() {
       currentProject: state.currentProject,
       addAutoModeActivity: state.addAutoModeActivity,
       maxConcurrency: state.maxConcurrency,
+      agentMultiplier: state.agentMultiplier,
       projects: state.projects,
       setPendingPlanApproval: state.setPendingPlanApproval,
+      addPendingPlanApproval: state.addPendingPlanApproval,
+      removePendingPlanApproval: state.removePendingPlanApproval,
+      pendingPlanApprovals: state.pendingPlanApprovals,
+      addRecentlyCompletedFeature: state.addRecentlyCompletedFeature,
     }))
   );
 
@@ -91,8 +101,35 @@ export function useAutoMode() {
   const isAutoModeRunning = projectAutoModeState.isRunning;
   const runningAutoTasks = projectAutoModeState.runningTasks;
 
+  // Use global agentMultiplier as the max agents limit
+  const effectiveMaxAgents = agentMultiplier;
+
   // Check if we can start a new task based on concurrency limit
-  const canStartNewTask = runningAutoTasks.length < maxConcurrency;
+  const canStartNewTask = runningAutoTasks.length < effectiveMaxAgents;
+
+  // Calculate waiting approval counts
+  const waitingApprovalCount = useMemo(() => {
+    return Object.keys(pendingPlanApprovals).length;
+  }, [pendingPlanApprovals]);
+
+  const waitingApprovalCountForProject = useMemo(() => {
+    if (!currentProject?.path) return 0;
+    return Object.values(pendingPlanApprovals).filter((a) => a.projectPath === currentProject.path)
+      .length;
+  }, [pendingPlanApprovals, currentProject?.path]);
+
+  // Get list of feature IDs waiting for approval
+  const featuresWaitingApproval = useMemo(() => {
+    return Object.keys(pendingPlanApprovals);
+  }, [pendingPlanApprovals]);
+
+  // Get list of feature IDs waiting for approval for current project
+  const featuresWaitingApprovalForProject = useMemo(() => {
+    if (!currentProject?.path) return [];
+    return Object.values(pendingPlanApprovals)
+      .filter((a) => a.projectPath === currentProject.path)
+      .map((a) => a.featureId);
+  }, [pendingPlanApprovals, currentProject?.path]);
 
   // Restore auto-mode toggle after a renderer refresh (e.g. dev HMR reload).
   // This is intentionally session-scoped to avoid auto-running features after a full app restart.
@@ -115,6 +152,27 @@ export function useAutoMode() {
   useEffect(() => {
     const api = getElectronAPI();
     if (!api?.autoMode) return;
+
+    // Debounce high-frequency addAutoModeActivity calls (progress/tool events)
+    // Buffers the latest activity per featureId and flushes after 200ms of inactivity
+    const ACTIVITY_DEBOUNCE_MS = 200;
+    const pendingActivities = new Map<
+      string,
+      { activity: Parameters<typeof addAutoModeActivity>[0]; timer: ReturnType<typeof setTimeout> }
+    >();
+
+    const debouncedAddActivity = (activity: Parameters<typeof addAutoModeActivity>[0]) => {
+      const key = `${activity.featureId}:${activity.type}`;
+      const existing = pendingActivities.get(key);
+      if (existing) {
+        clearTimeout(existing.timer);
+      }
+      const timer = setTimeout(() => {
+        pendingActivities.delete(key);
+        addAutoModeActivity(activity);
+      }, ACTIVITY_DEBOUNCE_MS);
+      pendingActivities.set(key, { activity, timer });
+    };
 
     const unsubscribe = api.autoMode.onEvent((event: AutoModeEvent) => {
       logger.info('Event:', event);
@@ -155,6 +213,8 @@ export function useAutoMode() {
           if (event.featureId) {
             logger.info('Feature completed:', event.featureId, 'passes:', event.passes);
             removeRunningTask(eventProjectId, event.featureId);
+            // Clean up any pending approval tracking for this feature
+            removePendingPlanApproval(event.featureId);
             addAutoModeActivity({
               featureId: event.featureId,
               type: 'complete',
@@ -163,6 +223,17 @@ export function useAutoMode() {
                 : 'Feature completed with failures',
               passes: event.passes,
             });
+            // Track as recently completed feature for running agents panel notification
+            // Feature is now in waiting_approval status and should be shown until dismissed or 30 mins pass
+            if (event.projectPath) {
+              const project = projects.find((p) => p.path === event.projectPath);
+              addRecentlyCompletedFeature({
+                featureId: event.featureId,
+                projectPath: event.projectPath,
+                projectName: project?.name || event.projectPath.split(/[/\\]/).pop() || 'Unknown',
+                title: event.featureTitle || 'Untitled Feature',
+              });
+            }
           }
           break;
 
@@ -172,10 +243,11 @@ export function useAutoMode() {
             if (event.errorType === 'cancellation' || event.errorType === 'abort') {
               // User cancelled/aborted the feature - just log as info, not an error
               logger.info('Feature cancelled/aborted:', event.error);
-              // Remove from running tasks
+              // Remove from running tasks and clean up pending approvals
               if (eventProjectId) {
                 removeRunningTask(eventProjectId, event.featureId);
               }
+              removePendingPlanApproval(event.featureId);
               break;
             }
 
@@ -199,17 +271,18 @@ export function useAutoMode() {
               errorType: isAuthError ? 'authentication' : 'execution',
             });
 
-            // Remove the task from running since it failed
+            // Remove the task from running since it failed and clean up pending approvals
             if (eventProjectId) {
               removeRunningTask(eventProjectId, event.featureId);
             }
+            removePendingPlanApproval(event.featureId);
           }
           break;
 
         case 'auto_mode_progress':
-          // Log progress updates (throttle to avoid spam)
+          // Log progress updates — debounced to avoid UI thrashing
           if (event.featureId && event.content && event.content.length > 10) {
-            addAutoModeActivity({
+            debouncedAddActivity({
               featureId: event.featureId,
               type: 'progress',
               message: event.content.substring(0, 200), // Limit message length
@@ -218,9 +291,9 @@ export function useAutoMode() {
           break;
 
         case 'auto_mode_tool':
-          // Log tool usage
+          // Log tool usage — debounced to avoid UI thrashing
           if (event.featureId && event.tool) {
-            addAutoModeActivity({
+            debouncedAddActivity({
               featureId: event.featureId,
               type: 'tool',
               message: `Using tool: ${event.tool}`,
@@ -246,12 +319,16 @@ export function useAutoMode() {
           // Plan requires user approval before proceeding
           if (isPlanApprovalEvent(event)) {
             logger.debug(`[AutoMode] Plan approval required for ${event.featureId}`);
-            setPendingPlanApproval({
+            const approvalData = {
               featureId: event.featureId,
               projectPath: event.projectPath || currentProject?.path || '',
               planContent: event.planContent,
               planningMode: event.planningMode,
-            });
+            };
+            // Set single pending approval for backwards compatibility
+            setPendingPlanApproval(approvalData);
+            // Also add to multi-agent tracking
+            addPendingPlanApproval(approvalData);
           }
           break;
 
@@ -272,6 +349,8 @@ export function useAutoMode() {
           // Log when plan is approved by user
           if (event.featureId) {
             logger.debug(`[AutoMode] Plan approved for ${event.featureId}`);
+            // Remove from waiting approval tracking
+            removePendingPlanApproval(event.featureId);
             addAutoModeActivity({
               featureId: event.featureId,
               type: 'action',
@@ -287,6 +366,8 @@ export function useAutoMode() {
           // Log when plan is auto-approved (requirePlanApproval=false)
           if (event.featureId) {
             logger.debug(`[AutoMode] Plan auto-approved for ${event.featureId}`);
+            // Remove from waiting approval tracking (in case it was briefly added)
+            removePendingPlanApproval(event.featureId);
             addAutoModeActivity({
               featureId: event.featureId,
               type: 'action',
@@ -366,7 +447,14 @@ export function useAutoMode() {
       }
     });
 
-    return unsubscribe;
+    return () => {
+      unsubscribe();
+      // Clear any pending debounced activity timers
+      for (const { timer } of pendingActivities.values()) {
+        clearTimeout(timer);
+      }
+      pendingActivities.clear();
+    };
   }, [
     projectId,
     addRunningTask,
@@ -374,6 +462,8 @@ export function useAutoMode() {
     addAutoModeActivity,
     getProjectIdFromPath,
     setPendingPlanApproval,
+    addPendingPlanApproval,
+    removePendingPlanApproval,
     currentProject?.path,
   ]);
 
@@ -386,8 +476,8 @@ export function useAutoMode() {
 
     setAutoModeSessionForProjectPath(currentProject.path, true);
     setAutoModeRunning(currentProject.id, true);
-    logger.debug(`[AutoMode] Started with maxConcurrency: ${maxConcurrency}`);
-  }, [currentProject, setAutoModeRunning, maxConcurrency]);
+    logger.debug(`[AutoMode] Started with maxAgents: ${agentMultiplier}`);
+  }, [currentProject, setAutoModeRunning, agentMultiplier]);
 
   // Stop auto mode - UI only, running tasks continue until natural completion
   const stop = useCallback(() => {
@@ -445,10 +535,17 @@ export function useAutoMode() {
   return {
     isRunning: isAutoModeRunning,
     runningTasks: runningAutoTasks,
-    maxConcurrency,
+    maxConcurrency, // Deprecated - use effectiveMaxAgents
+    effectiveMaxAgents, // Global max concurrent agents
     canStartNewTask,
     start,
     stop,
     stopFeature,
+    // Approval status tracking
+    waitingApprovalCount,
+    waitingApprovalCountForProject,
+    featuresWaitingApproval,
+    featuresWaitingApprovalForProject,
+    pendingPlanApprovals,
   };
 }

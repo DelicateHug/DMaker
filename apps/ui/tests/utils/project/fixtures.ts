@@ -88,7 +88,6 @@ export async function setupProjectWithFixture(
         currentProject: mockProject,
         currentView: 'board',
         theme: 'dark',
-        sidebarOpen: true,
         skipSandboxWarning: true,
         apiKeys: { anthropic: '', google: '' },
         chatSessions: [],

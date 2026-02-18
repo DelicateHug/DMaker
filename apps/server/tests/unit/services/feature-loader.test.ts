@@ -12,6 +12,9 @@ describe('feature-loader.ts', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     loader = new FeatureLoader();
+    // Skip status-based migration in most tests — migration is tested separately.
+    // This prevents extra readdir/access calls from confusing mock chains.
+    vi.spyOn(loader, 'migrateToStatusLayout').mockResolvedValue(undefined);
   });
 
   describe('getFeaturesDir', () => {
@@ -34,10 +37,45 @@ describe('feature-loader.ts', () => {
   });
 
   describe('getFeatureDir', () => {
-    it('should return feature directory path', () => {
+    it('should return flat path for old-format feature IDs', () => {
       const result = loader.getFeatureDir(testProjectPath, 'feature-123');
-      expect(result).toContain('features');
-      expect(result).toContain('feature-123');
+      expect(result).toBe(path.join(testProjectPath, '.automaker', 'features', 'feature-123'));
+    });
+
+    it('should return month-based path for new-format feature IDs (dd-MM-YYYY-slug)', () => {
+      const featureId = '17-02-2026-add_dark_mode';
+      const result = loader.getFeatureDir(testProjectPath, featureId);
+      expect(result).toBe(
+        path.join(testProjectPath, '.automaker', 'features', '2026-february', featureId)
+      );
+    });
+
+    it('should return month-based path for January new-format IDs', () => {
+      const featureId = '01-01-2026-new_feature';
+      const result = loader.getFeatureDir(testProjectPath, featureId);
+      expect(result).toBe(
+        path.join(testProjectPath, '.automaker', 'features', '2026-january', featureId)
+      );
+    });
+
+    it('should return month-based path for December new-format IDs', () => {
+      const featureId = '25-12-2025-holiday_update';
+      const result = loader.getFeatureDir(testProjectPath, featureId);
+      expect(result).toBe(
+        path.join(testProjectPath, '.automaker', 'features', '2025-december', featureId)
+      );
+    });
+
+    it('should return flat path for arbitrary string IDs', () => {
+      const result = loader.getFeatureDir(testProjectPath, 'auth-feature');
+      expect(result).toBe(path.join(testProjectPath, '.automaker', 'features', 'auth-feature'));
+    });
+
+    it('should return flat path for legacy timestamp IDs', () => {
+      const result = loader.getFeatureDir(testProjectPath, 'feature-1708300000000-abc');
+      expect(result).toBe(
+        path.join(testProjectPath, '.automaker', 'features', 'feature-1708300000000-abc')
+      );
     });
   });
 
@@ -51,27 +89,84 @@ describe('feature-loader.ts', () => {
   });
 
   describe('getAgentOutputPath', () => {
-    it('should return agent-output.md path', () => {
+    it('should return agent-output.md path inside logs/ subdirectory', () => {
       const result = loader.getAgentOutputPath(testProjectPath, 'feature-123');
       expect(result).toContain('features');
       expect(result).toContain('feature-123');
+      expect(result).toContain('logs');
       expect(result).toContain('agent-output.md');
     });
   });
 
+  describe('getRawOutputPath', () => {
+    it('should return raw-output.jsonl path inside logs/ subdirectory', () => {
+      const result = loader.getRawOutputPath(testProjectPath, 'feature-123');
+      expect(result).toContain('features');
+      expect(result).toContain('feature-123');
+      expect(result).toContain('logs');
+      expect(result).toContain('raw-output.jsonl');
+    });
+  });
+
   describe('generateFeatureId', () => {
-    it('should generate unique feature ID with timestamp', () => {
+    it('should generate unique feature ID with dd-MM-YYYY-random format when no description', () => {
       const id1 = loader.generateFeatureId();
       const id2 = loader.generateFeatureId();
 
-      expect(id1).toMatch(/^feature-\d+-[a-z0-9]+$/);
-      expect(id2).toMatch(/^feature-\d+-[a-z0-9]+$/);
+      expect(id1).toMatch(/^\d{2}-\d{2}-\d{4}-[a-z0-9]+$/);
+      expect(id2).toMatch(/^\d{2}-\d{2}-\d{4}-[a-z0-9]+$/);
       expect(id1).not.toBe(id2);
     });
 
-    it("should start with 'feature-'", () => {
+    it('should contain valid date components', () => {
       const id = loader.generateFeatureId();
-      expect(id).toMatch(/^feature-/);
+      const parts = id.split('-');
+      const dd = parseInt(parts[0]);
+      const MM = parseInt(parts[1]);
+      const YYYY = parseInt(parts[2]);
+
+      expect(dd).toBeGreaterThanOrEqual(1);
+      expect(dd).toBeLessThanOrEqual(31);
+      expect(MM).toBeGreaterThanOrEqual(1);
+      expect(MM).toBeLessThanOrEqual(12);
+      expect(YYYY).toBeGreaterThanOrEqual(2020);
+    });
+
+    it('should derive slug from description', () => {
+      const id = loader.generateFeatureId('Add dark mode toggle button');
+      const parts = id.split('-');
+      // dd-MM-YYYY-slug
+      const slug = parts.slice(3).join('-');
+      expect(slug).toBe('add_dark_mode_toggle');
+    });
+
+    it('should limit slug to first 4 words', () => {
+      const id = loader.generateFeatureId('one two three four five six');
+      const parts = id.split('-');
+      const slug = parts.slice(3).join('-');
+      expect(slug).toBe('one_two_three_four');
+    });
+
+    it('should strip non-alphanumeric characters from slug words', () => {
+      const id = loader.generateFeatureId('Hello, World! How are you?');
+      const parts = id.split('-');
+      const slug = parts.slice(3).join('-');
+      expect(slug).toBe('hello_world_how_are');
+    });
+
+    it('should fall back to random suffix for empty description', () => {
+      const id = loader.generateFeatureId('');
+      expect(id).toMatch(/^\d{2}-\d{2}-\d{4}-[a-z0-9]+$/);
+    });
+
+    it('should fall back to random suffix for whitespace-only description', () => {
+      const id = loader.generateFeatureId('   ');
+      expect(id).toMatch(/^\d{2}-\d{2}-\d{4}-[a-z0-9]+$/);
+    });
+
+    it('should fall back to random suffix for description with only special chars', () => {
+      const id = loader.generateFeatureId('!!! @@@');
+      expect(id).toMatch(/^\d{2}-\d{2}-\d{4}-[a-z0-9]+$/);
     });
   });
 
@@ -199,6 +294,97 @@ describe('feature-loader.ts', () => {
       consoleSpy.mockRestore();
     });
 
+    it('should load features from month subdirectories', async () => {
+      vi.mocked(fs.access).mockResolvedValue(undefined);
+
+      // First readdir: features root contains a month dir and a legacy flat dir
+      vi.mocked(fs.readdir)
+        .mockResolvedValueOnce([
+          { name: '2026-february', isDirectory: () => true } as any,
+          { name: 'feature-legacy', isDirectory: () => true } as any,
+        ])
+        // Second readdir: inside the month directory, two feature dirs
+        .mockResolvedValueOnce([
+          { name: '17-02-2026-dark_mode', isDirectory: () => true } as any,
+          { name: '18-02-2026-login_page', isDirectory: () => true } as any,
+        ]);
+
+      vi.mocked(fs.readFile)
+        .mockResolvedValueOnce(
+          JSON.stringify({
+            id: '17-02-2026-dark_mode',
+            category: 'ui',
+            description: 'Dark mode',
+          })
+        )
+        .mockResolvedValueOnce(
+          JSON.stringify({
+            id: '18-02-2026-login_page',
+            category: 'auth',
+            description: 'Login page',
+          })
+        )
+        .mockResolvedValueOnce(
+          JSON.stringify({
+            id: 'feature-legacy',
+            category: 'misc',
+            description: 'Legacy feature',
+          })
+        );
+
+      const result = await loader.getAll(testProjectPath);
+
+      expect(result).toHaveLength(3);
+      // All three features should be loaded
+      const ids = result.map((f) => f.id);
+      expect(ids).toContain('17-02-2026-dark_mode');
+      expect(ids).toContain('18-02-2026-login_page');
+      expect(ids).toContain('feature-legacy');
+    });
+
+    it('should handle empty month subdirectories gracefully', async () => {
+      vi.mocked(fs.access).mockResolvedValue(undefined);
+
+      vi.mocked(fs.readdir)
+        .mockResolvedValueOnce([{ name: '2026-january', isDirectory: () => true } as any])
+        // Empty month directory
+        .mockResolvedValueOnce([]);
+
+      const result = await loader.getAll(testProjectPath);
+
+      expect(result).toHaveLength(0);
+    });
+
+    it('should handle errors reading month subdirectory gracefully', async () => {
+      vi.mocked(fs.access).mockResolvedValue(undefined);
+
+      vi.mocked(fs.readdir)
+        .mockResolvedValueOnce([
+          { name: '2026-march', isDirectory: () => true } as any,
+          { name: 'feature-ok', isDirectory: () => true } as any,
+        ])
+        // Month dir read fails
+        .mockRejectedValueOnce(new Error('Permission denied'));
+
+      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+      vi.mocked(fs.readFile).mockResolvedValueOnce(
+        JSON.stringify({
+          id: 'feature-ok',
+          category: 'ui',
+          description: 'OK feature',
+        })
+      );
+
+      const result = await loader.getAll(testProjectPath);
+
+      // Should still load the flat feature
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toBe('feature-ok');
+
+      consoleSpy.mockRestore();
+    });
+
     it('should sort features by creation order (timestamp)', async () => {
       vi.mocked(fs.access).mockResolvedValue(undefined);
       vi.mocked(fs.readdir).mockResolvedValue([
@@ -244,6 +430,8 @@ describe('feature-loader.ts', () => {
         description: 'Test feature',
       };
 
+      // resolveFeatureDir scans status dirs; return null so get() falls back to legacy path
+      vi.spyOn(loader, 'resolveFeatureDir').mockResolvedValue(null);
       vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify(featureData));
 
       const result = await loader.get(testProjectPath, 'feature-123');
@@ -254,6 +442,7 @@ describe('feature-loader.ts', () => {
     it("should return null when feature doesn't exist", async () => {
       const error: any = new Error('File not found');
       error.code = 'ENOENT';
+      vi.spyOn(loader, 'resolveFeatureDir').mockResolvedValue(null);
       vi.mocked(fs.readFile).mockRejectedValue(error);
 
       const result = await loader.get(testProjectPath, 'feature-123');
@@ -264,6 +453,7 @@ describe('feature-loader.ts', () => {
     it('should return null on other errors (with recovery attempt)', async () => {
       // With recovery-enabled reads, get() returns null instead of throwing
       // because it attempts to recover from backups before giving up
+      vi.spyOn(loader, 'resolveFeatureDir').mockResolvedValue(null);
       vi.mocked(fs.readFile).mockRejectedValue(new Error('Permission denied'));
 
       const result = await loader.get(testProjectPath, 'feature-123');
@@ -286,7 +476,7 @@ describe('feature-loader.ts', () => {
       expect(result).toMatchObject({
         category: 'ui',
         description: 'New feature',
-        id: expect.stringMatching(/^feature-/),
+        id: expect.stringMatching(/^\d{2}-\d{2}-\d{4}-new_feature$/),
       });
       expect(fs.writeFile).toHaveBeenCalled();
     });
@@ -314,9 +504,31 @@ describe('feature-loader.ts', () => {
 
       expect(result.category).toBe('Uncategorized');
     });
+
+    it('should create all 4 subfolders (images, summaries, logs, backups) on feature creation', async () => {
+      vi.mocked(fs.mkdir).mockResolvedValue(undefined);
+      vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+
+      await loader.create(testProjectPath, {
+        id: 'custom-id',
+        category: 'ui',
+        description: 'Test subfolder creation',
+      });
+
+      const mkdirCalls = vi.mocked(fs.mkdir).mock.calls.map((call) => call[0] as string);
+      expect(mkdirCalls.some((p) => p.includes('images'))).toBe(true);
+      expect(mkdirCalls.some((p) => p.includes('summaries'))).toBe(true);
+      expect(mkdirCalls.some((p) => p.includes('logs'))).toBe(true);
+      expect(mkdirCalls.some((p) => p.includes('backups'))).toBe(true);
+    });
   });
 
   describe('update', () => {
+    beforeEach(() => {
+      // update() calls get() which calls resolveFeatureDir
+      vi.spyOn(loader, 'resolveFeatureDir').mockResolvedValue(null);
+    });
+
     it('should update existing feature', async () => {
       vi.mocked(fs.readFile).mockResolvedValue(
         JSON.stringify({
@@ -346,6 +558,11 @@ describe('feature-loader.ts', () => {
   });
 
   describe('delete', () => {
+    beforeEach(() => {
+      // delete() calls resolveFeatureDir to find the actual path
+      vi.spyOn(loader, 'resolveFeatureDir').mockResolvedValue(null);
+    });
+
     it('should delete feature directory', async () => {
       vi.mocked(fs.rm).mockResolvedValue(undefined);
 
@@ -404,12 +621,13 @@ describe('feature-loader.ts', () => {
   });
 
   describe('saveAgentOutput', () => {
-    it('should save agent output to file', async () => {
+    it('should create logs directory and save agent output to file', async () => {
       vi.mocked(fs.mkdir).mockResolvedValue(undefined);
       vi.mocked(fs.writeFile).mockResolvedValue(undefined);
 
       await loader.saveAgentOutput(testProjectPath, 'feature-123', 'Output content');
 
+      expect(fs.mkdir).toHaveBeenCalledWith(expect.stringContaining('logs'), { recursive: true });
       expect(fs.writeFile).toHaveBeenCalledWith(
         expect.stringContaining('agent-output.md'),
         'Output content',
@@ -911,6 +1129,397 @@ describe('feature-loader.ts', () => {
       // Count occurrences of file_locations - should only have the one from Existing Feature if any
       // The new feature should not add file_locations
       expect(writtenContent).toContain('Feature Without Locations');
+    });
+  });
+
+  describe('getSummariesDir', () => {
+    it('should return summaries directory path', () => {
+      const result = loader.getSummariesDir(testProjectPath, 'feature-123');
+      expect(result).toContain('features');
+      expect(result).toContain('feature-123');
+      expect(result).toContain('summaries');
+    });
+  });
+
+  describe('saveSummaryFile', () => {
+    it('should save summary to a markdown file with sanitized timestamp', async () => {
+      vi.mocked(fs.mkdir).mockResolvedValue(undefined);
+      vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+
+      const timestamp = '2024-01-15T10:30:00.000Z';
+      const result = await loader.saveSummaryFile(
+        testProjectPath,
+        'feature-123',
+        '# Summary\nThis feature adds login.',
+        timestamp
+      );
+
+      expect(result).toBe(timestamp);
+      expect(fs.mkdir).toHaveBeenCalledWith(expect.stringContaining('summaries'), {
+        recursive: true,
+      });
+      expect(fs.writeFile).toHaveBeenCalledWith(
+        expect.stringContaining('2024-01-15T10-30-00.000Z.md'),
+        '# Summary\nThis feature adds login.',
+        'utf-8'
+      );
+    });
+
+    it('should generate timestamp when not provided', async () => {
+      vi.mocked(fs.mkdir).mockResolvedValue(undefined);
+      vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+
+      const result = await loader.saveSummaryFile(
+        testProjectPath,
+        'feature-123',
+        'Summary content'
+      );
+
+      // Should return a valid ISO timestamp
+      expect(new Date(result).toISOString()).toBe(result);
+      expect(fs.writeFile).toHaveBeenCalledWith(
+        expect.stringContaining('.md'),
+        'Summary content',
+        'utf-8'
+      );
+    });
+  });
+
+  describe('getSummaryFiles', () => {
+    it('should return empty array when summaries directory does not exist', async () => {
+      vi.mocked(fs.access).mockRejectedValue(new Error('ENOENT'));
+
+      const result = await loader.getSummaryFiles(testProjectPath, 'feature-123');
+
+      expect(result).toEqual([]);
+    });
+
+    it('should read and parse summary files sorted by timestamp (newest first)', async () => {
+      vi.mocked(fs.access).mockResolvedValue(undefined);
+      vi.mocked(fs.readdir).mockResolvedValue([
+        '2024-01-15T10-30-00.000Z.md',
+        '2024-01-16T12-00-00.000Z.md',
+        '2024-01-14T08-00-00.000Z.md',
+      ] as any);
+
+      vi.mocked(fs.readFile)
+        .mockResolvedValueOnce('Summary from Jan 15')
+        .mockResolvedValueOnce('Summary from Jan 16')
+        .mockResolvedValueOnce('Summary from Jan 14');
+
+      const result = await loader.getSummaryFiles(testProjectPath, 'feature-123');
+
+      expect(result).toHaveLength(3);
+      // Should be sorted newest first
+      expect(result[0].timestamp).toBe('2024-01-16T12:00:00.000Z');
+      expect(result[0].summary).toBe('Summary from Jan 16');
+      expect(result[1].timestamp).toBe('2024-01-15T10:30:00.000Z');
+      expect(result[1].summary).toBe('Summary from Jan 15');
+      expect(result[2].timestamp).toBe('2024-01-14T08:00:00.000Z');
+      expect(result[2].summary).toBe('Summary from Jan 14');
+    });
+
+    it('should filter to only .md files', async () => {
+      vi.mocked(fs.access).mockResolvedValue(undefined);
+      vi.mocked(fs.readdir).mockResolvedValue([
+        '2024-01-15T10-30-00.000Z.md',
+        '.DS_Store',
+        'readme.txt',
+      ] as any);
+
+      vi.mocked(fs.readFile).mockResolvedValueOnce('Summary content');
+
+      const result = await loader.getSummaryFiles(testProjectPath, 'feature-123');
+
+      expect(result).toHaveLength(1);
+      expect(result[0].summary).toBe('Summary content');
+    });
+
+    it('should skip files that fail to read', async () => {
+      vi.mocked(fs.access).mockResolvedValue(undefined);
+      vi.mocked(fs.readdir).mockResolvedValue([
+        '2024-01-15T10-30-00.000Z.md',
+        '2024-01-16T12-00-00.000Z.md',
+      ] as any);
+
+      vi.mocked(fs.readFile)
+        .mockRejectedValueOnce(new Error('Permission denied'))
+        .mockResolvedValueOnce('Summary from Jan 16');
+
+      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+      const result = await loader.getSummaryFiles(testProjectPath, 'feature-123');
+
+      expect(result).toHaveLength(1);
+      expect(result[0].summary).toBe('Summary from Jan 16');
+
+      consoleSpy.mockRestore();
+    });
+
+    it('should return empty array on readdir error', async () => {
+      vi.mocked(fs.access).mockResolvedValue(undefined);
+      vi.mocked(fs.readdir).mockRejectedValue(new Error('Permission denied'));
+
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      const result = await loader.getSummaryFiles(testProjectPath, 'feature-123');
+
+      expect(result).toEqual([]);
+
+      consoleSpy.mockRestore();
+    });
+  });
+
+  describe('getAllSummaries', () => {
+    it("should return empty array when features directory doesn't exist", async () => {
+      vi.mocked(fs.access).mockRejectedValue(new Error('ENOENT'));
+
+      const result = await loader.getAllSummaries(testProjectPath);
+
+      expect(result).toEqual([]);
+    });
+
+    it('should return lightweight summaries from feature.json files', async () => {
+      vi.mocked(fs.access).mockResolvedValue(undefined);
+      vi.mocked(fs.readdir).mockResolvedValue([
+        { name: 'feature-1', isDirectory: () => true } as any,
+        { name: 'feature-2', isDirectory: () => true } as any,
+        { name: 'file.txt', isDirectory: () => false } as any,
+      ]);
+
+      vi.mocked(fs.readFile)
+        .mockResolvedValueOnce(
+          JSON.stringify({
+            id: 'feature-1000-abc',
+            title: 'Login Feature',
+            category: 'auth',
+            description: 'Full login description that should not appear in summary',
+            status: 'completed',
+            priority: 1,
+            isFavorite: true,
+            model: 'gpt-4',
+            branchName: 'feature/login',
+            error: undefined,
+            startedAt: '2024-01-15T10:00:00.000Z',
+            imagePaths: ['img1.png', 'img2.png'],
+            spec: 'Heavy spec content that should not appear',
+            descriptionHistory: [
+              { description: 'old', timestamp: '2024-01-01', source: 'initial' },
+            ],
+            summaryHistory: [{ summary: 'old summary', timestamp: '2024-01-01' }],
+          })
+        )
+        .mockResolvedValueOnce(
+          JSON.stringify({
+            id: 'feature-2000-def',
+            category: 'backend',
+            description: 'Backend feature',
+            status: 'pending',
+          })
+        );
+
+      const result = await loader.getAllSummaries(testProjectPath);
+
+      expect(result).toHaveLength(2);
+
+      // First feature - verify lightweight fields are present
+      expect(result[0].id).toBe('feature-1000-abc');
+      expect(result[0].title).toBe('Login Feature');
+      expect(result[0].category).toBe('auth');
+      expect(result[0].status).toBe('completed');
+      expect(result[0].priority).toBe(1);
+      expect(result[0].isFavorite).toBe(true);
+      expect(result[0].model).toBe('gpt-4');
+      expect(result[0].branchName).toBe('feature/login');
+      expect(result[0].startedAt).toBe('2024-01-15T10:00:00.000Z');
+      expect(result[0].imagePathsCount).toBe(2);
+
+      // Verify heavy fields are NOT present
+      expect((result[0] as any).description).toBeUndefined();
+      expect((result[0] as any).spec).toBeUndefined();
+      expect((result[0] as any).descriptionHistory).toBeUndefined();
+      expect((result[0] as any).summaryHistory).toBeUndefined();
+      expect((result[0] as any).imagePaths).toBeUndefined();
+
+      // Second feature - verify defaults
+      expect(result[1].id).toBe('feature-2000-def');
+      expect(result[1].category).toBe('backend');
+      expect(result[1].status).toBe('pending');
+      expect(result[1].imagePathsCount).toBe(0);
+    });
+
+    it('should skip features without id field', async () => {
+      vi.mocked(fs.access).mockResolvedValue(undefined);
+      vi.mocked(fs.readdir).mockResolvedValue([
+        { name: 'feature-1', isDirectory: () => true } as any,
+        { name: 'feature-2', isDirectory: () => true } as any,
+      ]);
+
+      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+      vi.mocked(fs.readFile)
+        .mockResolvedValueOnce(
+          JSON.stringify({
+            category: 'ui',
+            description: 'Missing ID',
+          })
+        )
+        .mockResolvedValueOnce(
+          JSON.stringify({
+            id: 'feature-2000-def',
+            category: 'backend',
+            description: 'Feature 2',
+          })
+        );
+
+      const result = await loader.getAllSummaries(testProjectPath);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toBe('feature-2000-def');
+
+      consoleSpy.mockRestore();
+    });
+
+    it('should skip features with missing feature.json', async () => {
+      vi.mocked(fs.access).mockResolvedValue(undefined);
+      vi.mocked(fs.readdir).mockResolvedValue([
+        { name: 'feature-1', isDirectory: () => true } as any,
+        { name: 'feature-2', isDirectory: () => true } as any,
+      ]);
+
+      const error: any = new Error('File not found');
+      error.code = 'ENOENT';
+
+      vi.mocked(fs.readFile)
+        .mockRejectedValueOnce(error)
+        .mockResolvedValueOnce(
+          JSON.stringify({
+            id: 'feature-2000-def',
+            category: 'backend',
+            description: 'Feature 2',
+          })
+        );
+
+      const result = await loader.getAllSummaries(testProjectPath);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toBe('feature-2000-def');
+    });
+
+    it('should handle malformed JSON gracefully', async () => {
+      vi.mocked(fs.access).mockResolvedValue(undefined);
+      vi.mocked(fs.readdir).mockResolvedValue([
+        { name: 'feature-1', isDirectory: () => true } as any,
+      ]);
+
+      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+      vi.mocked(fs.readFile).mockResolvedValue('invalid json{');
+
+      const result = await loader.getAllSummaries(testProjectPath);
+
+      expect(result).toEqual([]);
+
+      consoleSpy.mockRestore();
+    });
+
+    it('should sort summaries by creation order (timestamp in ID)', async () => {
+      vi.mocked(fs.access).mockResolvedValue(undefined);
+      vi.mocked(fs.readdir).mockResolvedValue([
+        { name: 'feature-3', isDirectory: () => true } as any,
+        { name: 'feature-1', isDirectory: () => true } as any,
+        { name: 'feature-2', isDirectory: () => true } as any,
+      ]);
+
+      vi.mocked(fs.readFile)
+        .mockResolvedValueOnce(
+          JSON.stringify({
+            id: 'feature-3000-xyz',
+            category: 'ui',
+            description: 'Third',
+          })
+        )
+        .mockResolvedValueOnce(
+          JSON.stringify({
+            id: 'feature-1000-abc',
+            category: 'ui',
+            description: 'First',
+          })
+        )
+        .mockResolvedValueOnce(
+          JSON.stringify({
+            id: 'feature-2000-def',
+            category: 'ui',
+            description: 'Second',
+          })
+        );
+
+      const result = await loader.getAllSummaries(testProjectPath);
+
+      expect(result).toHaveLength(3);
+      expect(result[0].id).toBe('feature-1000-abc');
+      expect(result[1].id).toBe('feature-2000-def');
+      expect(result[2].id).toBe('feature-3000-xyz');
+    });
+
+    it('should load summaries from month subdirectories', async () => {
+      vi.mocked(fs.access).mockResolvedValue(undefined);
+
+      // First readdir: features root with a month dir and a legacy flat dir
+      vi.mocked(fs.readdir)
+        .mockResolvedValueOnce([
+          { name: '2026-february', isDirectory: () => true } as any,
+          { name: 'feature-legacy', isDirectory: () => true } as any,
+        ])
+        // Second readdir: inside the month directory
+        .mockResolvedValueOnce([{ name: '17-02-2026-dark_mode', isDirectory: () => true } as any]);
+
+      vi.mocked(fs.readFile)
+        .mockResolvedValueOnce(
+          JSON.stringify({
+            id: '17-02-2026-dark_mode',
+            title: 'Dark Mode',
+            category: 'ui',
+            description: 'Add dark mode',
+            status: 'pending',
+          })
+        )
+        .mockResolvedValueOnce(
+          JSON.stringify({
+            id: 'feature-legacy',
+            title: 'Legacy',
+            category: 'misc',
+            description: 'Legacy feature',
+            status: 'completed',
+          })
+        );
+
+      const result = await loader.getAllSummaries(testProjectPath);
+
+      expect(result).toHaveLength(2);
+      const ids = result.map((s) => s.id);
+      expect(ids).toContain('17-02-2026-dark_mode');
+      expect(ids).toContain('feature-legacy');
+    });
+
+    it('should return imagePathsCount as 0 when no images', async () => {
+      vi.mocked(fs.access).mockResolvedValue(undefined);
+      vi.mocked(fs.readdir).mockResolvedValue([
+        { name: 'feature-1', isDirectory: () => true } as any,
+      ]);
+
+      vi.mocked(fs.readFile).mockResolvedValueOnce(
+        JSON.stringify({
+          id: 'feature-1000-abc',
+          category: 'ui',
+          description: 'No images',
+        })
+      );
+
+      const result = await loader.getAllSummaries(testProjectPath);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].imagePathsCount).toBe(0);
     });
   });
 });

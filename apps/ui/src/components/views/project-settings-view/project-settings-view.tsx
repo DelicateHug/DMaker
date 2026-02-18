@@ -103,7 +103,10 @@ export function ProjectSettingsView() {
         className="flex-1 flex flex-col overflow-hidden content-bg"
         data-testid="project-settings-view"
       >
-        <div className="flex-1 flex items-center justify-center p-8">
+        <div
+          className="flex-1 flex items-center justify-center p-8"
+          data-testid="project-settings-no-project"
+        >
           <div className="text-center max-w-md">
             <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-muted/50 flex items-center justify-center">
               <FolderOpen className="w-8 h-8 text-muted-foreground/50" />
@@ -124,7 +127,10 @@ export function ProjectSettingsView() {
       data-testid="project-settings-view"
     >
       {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b border-border bg-glass backdrop-blur-md">
+      <div
+        className="flex items-center justify-between p-4 border-b border-border bg-glass backdrop-blur-md"
+        data-testid="project-settings-header"
+      >
         <div className="flex items-center gap-3">
           <Settings className="w-5 h-5 text-muted-foreground" />
           <div>
@@ -141,6 +147,7 @@ export function ProjectSettingsView() {
           onClick={() => setShowNavigation(!showNavigation)}
           className="lg:hidden h-8 w-8 p-0"
           aria-label={showNavigation ? 'Close navigation menu' : 'Open navigation menu'}
+          data-testid="project-settings-mobile-menu-button"
         >
           {showNavigation ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
         </Button>
@@ -157,7 +164,7 @@ export function ProjectSettingsView() {
         />
 
         {/* Content Panel - Shows only the active section */}
-        <div className="flex-1 overflow-y-auto p-4 lg:p-8">
+        <div className="flex-1 overflow-y-auto p-4 lg:p-8" data-testid="project-settings-content">
           <div className="max-w-4xl mx-auto">{renderActiveSection()}</div>
         </div>
       </div>

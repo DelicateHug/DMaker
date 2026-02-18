@@ -16,7 +16,7 @@ import { AddEditPipelineStepDialog } from './add-edit-pipeline-step-dialog';
 
 interface PipelineSettingsDialogProps {
   open: boolean;
-  onClose: () => void;
+  onOpenChange: (open: boolean) => void;
   projectPath: string;
   pipelineConfig: PipelineConfig | null;
   onSave: (config: PipelineConfig) => Promise<void>;
@@ -24,7 +24,7 @@ interface PipelineSettingsDialogProps {
 
 export function PipelineSettingsDialog({
   open,
-  onClose,
+  onOpenChange,
   projectPath: _projectPath,
   pipelineConfig,
   onSave,
@@ -141,7 +141,7 @@ export function PipelineSettingsDialog({
       };
       await onSave(config);
       toast.success('Pipeline configuration saved');
-      onClose();
+      onOpenChange(false);
     } catch {
       toast.error('Failed to save pipeline configuration');
     } finally {
@@ -151,8 +151,11 @@ export function PipelineSettingsDialog({
 
   return (
     <>
-      <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-        <DialogContent className="max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent
+          className="max-w-2xl max-h-[85vh] overflow-hidden flex flex-col"
+          data-testid="pipeline-settings-dialog"
+        >
           <DialogHeader>
             <DialogTitle>Pipeline Settings</DialogTitle>
             <DialogDescription>
@@ -244,7 +247,7 @@ export function PipelineSettingsDialog({
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={onClose}>
+            <Button variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
             <Button onClick={handleSaveConfig} disabled={isSubmitting}>

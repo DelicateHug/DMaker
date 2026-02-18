@@ -7,7 +7,7 @@ interface CompleteStepProps {
 
 export function CompleteStep({ onFinish }: CompleteStepProps) {
   return (
-    <div className="text-center space-y-6">
+    <div className="text-center space-y-6" data-testid="setup-complete-step">
       <div className="w-20 h-20 rounded-full bg-linear-to-br from-green-500 to-emerald-600 shadow-lg shadow-green-500/30 flex items-center justify-center mx-auto">
         <CheckCircle2 className="w-10 h-10 text-white" />
       </div>

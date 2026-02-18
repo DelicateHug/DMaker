@@ -288,6 +288,7 @@ export const XtermLogViewer = forwardRef<XtermLogViewerRef, XtermLogViewerProps>
       <div
         ref={containerRef}
         className={className}
+        data-testid="xterm-log-viewer"
         style={{
           minHeight,
           backgroundColor: terminalTheme.background,

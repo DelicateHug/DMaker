@@ -160,3 +160,44 @@ export function generateUUID(): string {
     return v.toString(16);
   });
 }
+
+/**
+ * Generate a feature ID in the format `{dd}-{MM}-{YYYY}-{First_4_Words}`.
+ *
+ * - dd   = day of the month (01–31)
+ * - MM   = two-digit month (01–12)
+ * - YYYY = four-digit year
+ * - First_4_Words = first four words of `description`, lowercased,
+ *   stripped of non-alphanumeric characters, and joined with underscores.
+ *   Falls back to a 9-char random alphanumeric suffix when no description
+ *   is provided or it contains no usable words.
+ *
+ * @param description - Optional feature description used to derive the slug.
+ *
+ * @example
+ * generateFeatureId('Restore Summary tab dropdown')
+ * // => "17-02-2026-restore_summary_tab_dropdown"
+ *
+ * generateFeatureId()
+ * // => "17-02-2026-k8f3a1b2c"
+ */
+export function generateFeatureId(description?: string): string {
+  const now = new Date();
+  const dd = String(now.getDate()).padStart(2, '0');
+  const MM = String(now.getMonth() + 1).padStart(2, '0');
+  const YYYY = String(now.getFullYear());
+
+  // Extract up to the first 4 words, lowercase & stripped of non-alphanumeric chars
+  const slug = (description ?? '')
+    .trim()
+    .split(/\s+/)
+    .slice(0, 4)
+    .map((w) => w.toLowerCase().replace(/[^a-z0-9]/g, ''))
+    .filter(Boolean)
+    .join('_');
+
+  // Fall back to a random suffix when there are no usable words
+  const suffix = slug || Math.random().toString(36).substring(2, 11);
+
+  return `${dd}-${MM}-${YYYY}-${suffix}`;
+}

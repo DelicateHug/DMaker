@@ -3,6 +3,8 @@
  * Extracts useful information from agent context files for display in kanban cards
  */
 
+import { CLAUDE_MODEL_MAP } from '@automaker/types';
+
 export interface AgentTaskInfo {
   // Task list extracted from TodoWrite tool calls
   todos: {
@@ -27,16 +29,41 @@ export interface AgentTaskInfo {
 /**
  * Default model used by the feature executor
  */
-export const DEFAULT_MODEL = 'claude-opus-4-5-20251101';
+export const DEFAULT_MODEL = 'claude-opus-4-6';
+
+/**
+ * Extracts version info from a Claude model string (e.g., 'claude-opus-4-6' -> '4.6')
+ */
+function extractClaudeVersion(modelString: string): string | null {
+  // Match patterns like 'claude-opus-4-6', 'claude-sonnet-4-5-20250929', 'claude-haiku-4-5-20251001'
+  const versionMatch = modelString.match(/claude-\w+-(\d+)-(\d+)/);
+  if (versionMatch) {
+    return `${versionMatch[1]}.${versionMatch[2]}`;
+  }
+  return null;
+}
 
 /**
  * Formats a model name for display
+ * Dynamically derives Claude model versions from CLAUDE_MODEL_MAP
  */
 export function formatModelName(model: string): string {
-  // Claude models
-  if (model.includes('opus')) return 'Opus 4.5';
-  if (model.includes('sonnet')) return 'Sonnet 4.5';
-  if (model.includes('haiku')) return 'Haiku 4.5';
+  // Check if model is a Claude alias (opus, sonnet, haiku) and resolve to actual model
+  const resolvedModel = CLAUDE_MODEL_MAP[model as keyof typeof CLAUDE_MODEL_MAP] || model;
+
+  // Claude models - extract version dynamically
+  if (resolvedModel.includes('opus') || model === 'opus') {
+    const version = extractClaudeVersion(resolvedModel);
+    return version ? `Opus ${version}` : 'Opus';
+  }
+  if (resolvedModel.includes('sonnet') || model === 'sonnet') {
+    const version = extractClaudeVersion(resolvedModel);
+    return version ? `Sonnet ${version}` : 'Sonnet';
+  }
+  if (resolvedModel.includes('haiku') || model === 'haiku') {
+    const version = extractClaudeVersion(resolvedModel);
+    return version ? `Haiku ${version}` : 'Haiku';
+  }
 
   // Codex/GPT models - specific formatting
   if (model === 'codex-gpt-5.2-codex') return 'GPT-5.2 Codex';

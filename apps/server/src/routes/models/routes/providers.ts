@@ -26,6 +26,7 @@ export function createProvidersHandler() {
         },
       };
 
+      res.set('Cache-Control', 'public, max-age=30'); // 30 seconds
       res.json({ success: true, providers });
     } catch (error) {
       logError(error, 'Get providers failed');

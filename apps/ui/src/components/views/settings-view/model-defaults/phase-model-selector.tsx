@@ -28,6 +28,14 @@ import {
   REASONING_EFFORT_LABELS,
   type ModelOption,
 } from '@/components/views/board-view/shared/model-constants';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import type { ThinkingLevel, ReasoningEffort } from '@automaker/types';
 import { Check, ChevronsUpDown, Star, ChevronRight } from 'lucide-react';
 import {
   AnthropicIcon,
@@ -152,12 +160,8 @@ export function PhaseModelSelector({
 }: PhaseModelSelectorProps) {
   const [open, setOpen] = useState(false);
   const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
-  const [expandedClaudeModel, setExpandedClaudeModel] = useState<ModelAlias | null>(null);
-  const [expandedCodexModel, setExpandedCodexModel] = useState<CodexModelId | null>(null);
   const commandListRef = useRef<HTMLDivElement>(null);
   const expandedTriggerRef = useRef<HTMLDivElement>(null);
-  const expandedClaudeTriggerRef = useRef<HTMLDivElement>(null);
-  const expandedCodexTriggerRef = useRef<HTMLDivElement>(null);
   const {
     enabledCursorModels,
     favoriteModels,
@@ -179,6 +183,27 @@ export function PhaseModelSelector({
   const selectedModel = value.model;
   const selectedThinkingLevel = value.thinkingLevel || 'none';
   const selectedReasoningEffort = value.reasoningEffort || 'none';
+
+  // Check if the selected model is a Claude model (supports thinking levels)
+  const isClaudeModel = useMemo(() => {
+    return CLAUDE_MODELS.some((m) => m.id === selectedModel);
+  }, [selectedModel]);
+
+  // Handle thinking level change for Claude models
+  const handleThinkingLevelChange = (level: ThinkingLevel) => {
+    onChange({
+      model: selectedModel,
+      thinkingLevel: level,
+    });
+  };
+
+  // Handle reasoning effort change for Codex models
+  const handleReasoningEffortChange = (effort: ReasoningEffort) => {
+    onChange({
+      model: selectedModel,
+      reasoningEffort: effort,
+    });
+  };
 
   // Fetch Codex models on mount
   useEffect(() => {
@@ -221,52 +246,6 @@ export function PhaseModelSelector({
     return () => observer.disconnect();
   }, [expandedGroup]);
 
-  // Close expanded Claude model popover when trigger scrolls out of view
-  useEffect(() => {
-    const triggerElement = expandedClaudeTriggerRef.current;
-    const listElement = commandListRef.current;
-    if (!triggerElement || !listElement || !expandedClaudeModel) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const entry = entries[0];
-        if (!entry.isIntersecting) {
-          setExpandedClaudeModel(null);
-        }
-      },
-      {
-        root: listElement,
-        threshold: 0.1,
-      }
-    );
-
-    observer.observe(triggerElement);
-    return () => observer.disconnect();
-  }, [expandedClaudeModel]);
-
-  // Close expanded Codex model popover when trigger scrolls out of view
-  useEffect(() => {
-    const triggerElement = expandedCodexTriggerRef.current;
-    const listElement = commandListRef.current;
-    if (!triggerElement || !listElement || !expandedCodexModel) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const entry = entries[0];
-        if (!entry.isIntersecting) {
-          setExpandedCodexModel(null);
-        }
-      },
-      {
-        root: listElement,
-        threshold: 0.1,
-      }
-    );
-
-    observer.observe(triggerElement);
-    return () => observer.disconnect();
-  }, [expandedCodexModel]);
-
   // Transform dynamic Codex models from store to component format
   const transformedCodexModels = useMemo(() => {
     return codexModels.map((model) => ({
@@ -277,6 +256,13 @@ export function PhaseModelSelector({
       badge: model.tier === 'premium' ? 'Premium' : model.tier === 'basic' ? 'Speed' : undefined,
     }));
   }, [codexModels]);
+
+  // Check if the selected model is a Codex model with reasoning support
+  const isCodexModelWithReasoning = useMemo(() => {
+    return transformedCodexModels.some(
+      (m) => m.id === selectedModel && codexModelHasThinking(m.id as CodexModelId)
+    );
+  }, [selectedModel, transformedCodexModels]);
 
   // Filter Cursor models to only show enabled ones
   const availableCursorModels = CURSOR_MODELS.filter((model) => {
@@ -563,284 +549,66 @@ export function PhaseModelSelector({
     return builtSections;
   }, [opencode, dynamicOpencodeModels]);
 
-  // Render Codex model item with secondary popover for reasoning effort (only for models that support it)
+  // Render Codex model item - selects directly without nested reasoning popover
+  // Reasoning effort is configured via a separate dropdown (see T004)
   const renderCodexModelItem = (model: (typeof transformedCodexModels)[0]) => {
     const isSelected = selectedModel === model.id;
     const isFavorite = favoriteModels.includes(model.id);
     const hasReasoning = codexModelHasThinking(model.id as CodexModelId);
-    const isExpanded = expandedCodexModel === model.id;
     const currentReasoning = isSelected ? selectedReasoningEffort : 'none';
 
-    // If model doesn't support reasoning, render as simple selector (like Cursor models)
-    if (!hasReasoning) {
-      return (
-        <CommandItem
-          key={model.id}
-          value={model.label}
-          onSelect={() => {
-            onChange({ model: model.id as CodexModelId });
-            setOpen(false);
-          }}
-          className="group flex items-center justify-between py-2"
-        >
-          <div className="flex items-center gap-3 overflow-hidden">
-            <OpenAIIcon
-              className={cn(
-                'h-4 w-4 shrink-0',
-                isSelected ? 'text-primary' : 'text-muted-foreground'
-              )}
-            />
-            <div className="flex flex-col truncate">
-              <span className={cn('truncate font-medium', isSelected && 'text-primary')}>
-                {model.label}
-              </span>
-              <span className="truncate text-xs text-muted-foreground">{model.description}</span>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-1 ml-2">
-            <Button
-              variant="ghost"
-              size="icon"
-              className={cn(
-                'h-6 w-6 hover:bg-transparent hover:text-yellow-500 focus:ring-0',
-                isFavorite
-                  ? 'text-yellow-500 opacity-100'
-                  : 'opacity-0 group-hover:opacity-100 text-muted-foreground'
-              )}
-              onClick={(e) => {
-                e.stopPropagation();
-                toggleFavoriteModel(model.id);
-              }}
-            >
-              <Star className={cn('h-3.5 w-3.5', isFavorite && 'fill-current')} />
-            </Button>
-            {isSelected && <Check className="h-4 w-4 text-primary shrink-0" />}
-          </div>
-        </CommandItem>
-      );
-    }
-
-    // Model supports reasoning - show popover with reasoning effort options
-    // On mobile, render inline expansion instead of nested popover
-    if (isMobile) {
-      return (
-        <div key={model.id}>
-          <CommandItem
-            value={model.label}
-            onSelect={() => setExpandedCodexModel(isExpanded ? null : (model.id as CodexModelId))}
-            className="group flex items-center justify-between py-2"
-          >
-            <div className="flex items-center gap-3 overflow-hidden">
-              <OpenAIIcon
-                className={cn(
-                  'h-4 w-4 shrink-0',
-                  isSelected ? 'text-primary' : 'text-muted-foreground'
-                )}
-              />
-              <div className="flex flex-col truncate">
-                <span className={cn('truncate font-medium', isSelected && 'text-primary')}>
-                  {model.label}
-                </span>
-                <span className="truncate text-xs text-muted-foreground">
-                  {isSelected && currentReasoning !== 'none'
-                    ? `Reasoning: ${REASONING_EFFORT_LABELS[currentReasoning]}`
-                    : model.description}
-                </span>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-1 ml-2">
-              <Button
-                variant="ghost"
-                size="icon"
-                className={cn(
-                  'h-6 w-6 hover:bg-transparent hover:text-yellow-500 focus:ring-0',
-                  isFavorite
-                    ? 'text-yellow-500 opacity-100'
-                    : 'opacity-0 group-hover:opacity-100 text-muted-foreground'
-                )}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  toggleFavoriteModel(model.id);
-                }}
-              >
-                <Star className={cn('h-3.5 w-3.5', isFavorite && 'fill-current')} />
-              </Button>
-              {isSelected && !isExpanded && <Check className="h-4 w-4 text-primary shrink-0" />}
-              <ChevronRight
-                className={cn(
-                  'h-4 w-4 text-muted-foreground transition-transform',
-                  isExpanded && 'rotate-90'
-                )}
-              />
-            </div>
-          </CommandItem>
-
-          {/* Inline reasoning effort options on mobile */}
-          {isExpanded && (
-            <div className="pl-6 pr-2 pb-2 space-y-1">
-              <div className="px-2 py-1 text-xs font-medium text-muted-foreground">
-                Reasoning Effort
-              </div>
-              {REASONING_EFFORT_LEVELS.map((effort) => (
-                <button
-                  key={effort}
-                  onClick={() => {
-                    onChange({
-                      model: model.id as CodexModelId,
-                      reasoningEffort: effort,
-                    });
-                    setExpandedCodexModel(null);
-                    setOpen(false);
-                  }}
-                  className={cn(
-                    'w-full flex items-center justify-between px-2 py-2 rounded-sm text-sm',
-                    'hover:bg-accent cursor-pointer transition-colors',
-                    isSelected && currentReasoning === effort && 'bg-accent text-accent-foreground'
-                  )}
-                >
-                  <div className="flex flex-col items-start">
-                    <span className="font-medium text-xs">{REASONING_EFFORT_LABELS[effort]}</span>
-                    <span className="text-[10px] text-muted-foreground">
-                      {effort === 'none' && 'No reasoning capability'}
-                      {effort === 'minimal' && 'Minimal reasoning'}
-                      {effort === 'low' && 'Light reasoning'}
-                      {effort === 'medium' && 'Moderate reasoning'}
-                      {effort === 'high' && 'Deep reasoning'}
-                      {effort === 'xhigh' && 'Maximum reasoning'}
-                    </span>
-                  </div>
-                  {isSelected && currentReasoning === effort && (
-                    <Check className="h-3.5 w-3.5 text-primary" />
-                  )}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      );
-    }
-
-    // Desktop: Use nested popover
     return (
       <CommandItem
         key={model.id}
         value={model.label}
-        onSelect={() => setExpandedCodexModel(isExpanded ? null : (model.id as CodexModelId))}
-        className="p-0 data-[selected=true]:bg-transparent"
+        onSelect={() => {
+          // Select model directly, preserving current reasoning effort if same model, else default to 'none'
+          onChange({
+            model: model.id as CodexModelId,
+            reasoningEffort: isSelected ? selectedReasoningEffort : 'none',
+          });
+          setOpen(false);
+        }}
+        className="group flex items-center justify-between py-2"
       >
-        <Popover
-          open={isExpanded}
-          onOpenChange={(isOpen) => {
-            if (!isOpen) {
-              setExpandedCodexModel(null);
-            }
-          }}
-        >
-          <PopoverTrigger asChild>
-            <div
-              ref={isExpanded ? expandedCodexTriggerRef : undefined}
-              className={cn(
-                'w-full group flex items-center justify-between py-2 px-2 rounded-sm cursor-pointer',
-                'hover:bg-accent',
-                isExpanded && 'bg-accent'
-              )}
-            >
-              <div className="flex items-center gap-3 overflow-hidden">
-                <OpenAIIcon
-                  className={cn(
-                    'h-4 w-4 shrink-0',
-                    isSelected ? 'text-primary' : 'text-muted-foreground'
-                  )}
-                />
-                <div className="flex flex-col truncate">
-                  <span className={cn('truncate font-medium', isSelected && 'text-primary')}>
-                    {model.label}
-                  </span>
-                  <span className="truncate text-xs text-muted-foreground">
-                    {isSelected && currentReasoning !== 'none'
-                      ? `Reasoning: ${REASONING_EFFORT_LABELS[currentReasoning]}`
-                      : model.description}
-                  </span>
-                </div>
-              </div>
+        <div className="flex items-center gap-3 overflow-hidden">
+          <OpenAIIcon
+            className={cn(
+              'h-4 w-4 shrink-0',
+              isSelected ? 'text-primary' : 'text-muted-foreground'
+            )}
+          />
+          <div className="flex flex-col truncate">
+            <span className={cn('truncate font-medium', isSelected && 'text-primary')}>
+              {model.label}
+            </span>
+            <span className="truncate text-xs text-muted-foreground">
+              {isSelected && hasReasoning && currentReasoning !== 'none'
+                ? `Reasoning: ${REASONING_EFFORT_LABELS[currentReasoning]}`
+                : model.description}
+            </span>
+          </div>
+        </div>
 
-              <div className="flex items-center gap-1 ml-2">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className={cn(
-                    'h-6 w-6 hover:bg-transparent hover:text-yellow-500 focus:ring-0',
-                    isFavorite
-                      ? 'text-yellow-500 opacity-100'
-                      : 'opacity-0 group-hover:opacity-100 text-muted-foreground'
-                  )}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    toggleFavoriteModel(model.id);
-                  }}
-                >
-                  <Star className={cn('h-3.5 w-3.5', isFavorite && 'fill-current')} />
-                </Button>
-                {isSelected && <Check className="h-4 w-4 text-primary shrink-0" />}
-                <ChevronRight
-                  className={cn(
-                    'h-4 w-4 text-muted-foreground transition-transform',
-                    isExpanded && 'rotate-90'
-                  )}
-                />
-              </div>
-            </div>
-          </PopoverTrigger>
-          <PopoverContent
-            side="right"
-            align="start"
-            className="w-[220px] p-1"
-            sideOffset={8}
-            collisionPadding={16}
-            onCloseAutoFocus={(e) => e.preventDefault()}
+        <div className="flex items-center gap-1 ml-2">
+          <Button
+            variant="ghost"
+            size="icon"
+            className={cn(
+              'h-6 w-6 hover:bg-transparent hover:text-yellow-500 focus:ring-0',
+              isFavorite
+                ? 'text-yellow-500 opacity-100'
+                : 'opacity-0 group-hover:opacity-100 text-muted-foreground'
+            )}
+            onClick={(e) => {
+              e.stopPropagation();
+              toggleFavoriteModel(model.id);
+            }}
           >
-            <div className="space-y-1">
-              <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground border-b border-border/50 mb-1">
-                Reasoning Effort
-              </div>
-              {REASONING_EFFORT_LEVELS.map((effort) => (
-                <button
-                  key={effort}
-                  onClick={() => {
-                    onChange({
-                      model: model.id as CodexModelId,
-                      reasoningEffort: effort,
-                    });
-                    setExpandedCodexModel(null);
-                    setOpen(false);
-                  }}
-                  className={cn(
-                    'w-full flex items-center justify-between px-2 py-2 rounded-sm text-sm',
-                    'hover:bg-accent cursor-pointer transition-colors',
-                    isSelected && currentReasoning === effort && 'bg-accent text-accent-foreground'
-                  )}
-                >
-                  <div className="flex flex-col items-start">
-                    <span className="font-medium">{REASONING_EFFORT_LABELS[effort]}</span>
-                    <span className="text-xs text-muted-foreground">
-                      {effort === 'none' && 'No reasoning capability'}
-                      {effort === 'minimal' && 'Minimal reasoning'}
-                      {effort === 'low' && 'Light reasoning'}
-                      {effort === 'medium' && 'Moderate reasoning'}
-                      {effort === 'high' && 'Deep reasoning'}
-                      {effort === 'xhigh' && 'Maximum reasoning'}
-                    </span>
-                  </div>
-                  {isSelected && currentReasoning === effort && (
-                    <Check className="h-3.5 w-3.5 text-primary" />
-                  )}
-                </button>
-              ))}
-            </div>
-          </PopoverContent>
-        </Popover>
+            <Star className={cn('h-3.5 w-3.5', isFavorite && 'fill-current')} />
+          </Button>
+          {isSelected && <Check className="h-4 w-4 text-primary shrink-0" />}
+        </div>
       </CommandItem>
     );
   };
@@ -960,230 +728,65 @@ export function PhaseModelSelector({
     );
   };
 
-  // Render Claude model item with secondary popover for thinking level
+  // Render Claude model item - selects directly without nested thinking popover
+  // Thinking level is configured via a separate dropdown (see T003)
   const renderClaudeModelItem = (model: (typeof CLAUDE_MODELS)[0]) => {
     const isSelected = selectedModel === model.id;
     const isFavorite = favoriteModels.includes(model.id);
-    const isExpanded = expandedClaudeModel === model.id;
     const currentThinking = isSelected ? selectedThinkingLevel : 'none';
 
-    // On mobile, render inline expansion instead of nested popover
-    if (isMobile) {
-      return (
-        <div key={model.id}>
-          <CommandItem
-            value={model.label}
-            onSelect={() => setExpandedClaudeModel(isExpanded ? null : (model.id as ModelAlias))}
-            className="group flex items-center justify-between py-2"
-          >
-            <div className="flex items-center gap-3 overflow-hidden">
-              <AnthropicIcon
-                className={cn(
-                  'h-4 w-4 shrink-0',
-                  isSelected ? 'text-primary' : 'text-muted-foreground'
-                )}
-              />
-              <div className="flex flex-col truncate">
-                <span className={cn('truncate font-medium', isSelected && 'text-primary')}>
-                  {model.label}
-                </span>
-                <span className="truncate text-xs text-muted-foreground">
-                  {isSelected && currentThinking !== 'none'
-                    ? `Thinking: ${THINKING_LEVEL_LABELS[currentThinking]}`
-                    : model.description}
-                </span>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-1 ml-2">
-              <Button
-                variant="ghost"
-                size="icon"
-                className={cn(
-                  'h-6 w-6 hover:bg-transparent hover:text-yellow-500 focus:ring-0',
-                  isFavorite
-                    ? 'text-yellow-500 opacity-100'
-                    : 'opacity-0 group-hover:opacity-100 text-muted-foreground'
-                )}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  toggleFavoriteModel(model.id);
-                }}
-              >
-                <Star className={cn('h-3.5 w-3.5', isFavorite && 'fill-current')} />
-              </Button>
-              {isSelected && !isExpanded && <Check className="h-4 w-4 text-primary shrink-0" />}
-              <ChevronRight
-                className={cn(
-                  'h-4 w-4 text-muted-foreground transition-transform',
-                  isExpanded && 'rotate-90'
-                )}
-              />
-            </div>
-          </CommandItem>
-
-          {/* Inline thinking level options on mobile */}
-          {isExpanded && (
-            <div className="pl-6 pr-2 pb-2 space-y-1">
-              <div className="px-2 py-1 text-xs font-medium text-muted-foreground">
-                Thinking Level
-              </div>
-              {THINKING_LEVELS.map((level) => (
-                <button
-                  key={level}
-                  onClick={() => {
-                    onChange({
-                      model: model.id as ModelAlias,
-                      thinkingLevel: level,
-                    });
-                    setExpandedClaudeModel(null);
-                    setOpen(false);
-                  }}
-                  className={cn(
-                    'w-full flex items-center justify-between px-2 py-2 rounded-sm text-sm',
-                    'hover:bg-accent cursor-pointer transition-colors',
-                    isSelected && currentThinking === level && 'bg-accent text-accent-foreground'
-                  )}
-                >
-                  <div className="flex flex-col items-start">
-                    <span className="font-medium text-xs">{THINKING_LEVEL_LABELS[level]}</span>
-                    <span className="text-[10px] text-muted-foreground">
-                      {level === 'none' && 'No extended thinking'}
-                      {level === 'low' && 'Light reasoning (1k tokens)'}
-                      {level === 'medium' && 'Moderate reasoning (10k tokens)'}
-                      {level === 'high' && 'Deep reasoning (16k tokens)'}
-                      {level === 'ultrathink' && 'Maximum reasoning (32k tokens)'}
-                    </span>
-                  </div>
-                  {isSelected && currentThinking === level && (
-                    <Check className="h-3.5 w-3.5 text-primary" />
-                  )}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      );
-    }
-
-    // Desktop: Use nested popover
     return (
       <CommandItem
         key={model.id}
         value={model.label}
-        onSelect={() => setExpandedClaudeModel(isExpanded ? null : (model.id as ModelAlias))}
-        className="p-0 data-[selected=true]:bg-transparent"
+        onSelect={() => {
+          // Select model directly, preserving current thinking level if same model, else default to 'none'
+          onChange({
+            model: model.id as ModelAlias,
+            thinkingLevel: isSelected ? selectedThinkingLevel : 'none',
+          });
+          setOpen(false);
+        }}
+        className="group flex items-center justify-between py-2"
       >
-        <Popover
-          open={isExpanded}
-          onOpenChange={(isOpen) => {
-            if (!isOpen) {
-              setExpandedClaudeModel(null);
-            }
-          }}
-        >
-          <PopoverTrigger asChild>
-            <div
-              ref={isExpanded ? expandedClaudeTriggerRef : undefined}
-              className={cn(
-                'w-full group flex items-center justify-between py-2 px-2 rounded-sm cursor-pointer',
-                'hover:bg-accent',
-                isExpanded && 'bg-accent'
-              )}
-            >
-              <div className="flex items-center gap-3 overflow-hidden">
-                <AnthropicIcon
-                  className={cn(
-                    'h-4 w-4 shrink-0',
-                    isSelected ? 'text-primary' : 'text-muted-foreground'
-                  )}
-                />
-                <div className="flex flex-col truncate">
-                  <span className={cn('truncate font-medium', isSelected && 'text-primary')}>
-                    {model.label}
-                  </span>
-                  <span className="truncate text-xs text-muted-foreground">
-                    {isSelected && currentThinking !== 'none'
-                      ? `Thinking: ${THINKING_LEVEL_LABELS[currentThinking]}`
-                      : model.description}
-                  </span>
-                </div>
-              </div>
+        <div className="flex items-center gap-3 overflow-hidden">
+          <AnthropicIcon
+            className={cn(
+              'h-4 w-4 shrink-0',
+              isSelected ? 'text-primary' : 'text-muted-foreground'
+            )}
+          />
+          <div className="flex flex-col truncate">
+            <span className={cn('truncate font-medium', isSelected && 'text-primary')}>
+              {model.label}
+            </span>
+            <span className="truncate text-xs text-muted-foreground">
+              {isSelected && currentThinking !== 'none'
+                ? `Thinking: ${THINKING_LEVEL_LABELS[currentThinking]}`
+                : model.description}
+            </span>
+          </div>
+        </div>
 
-              <div className="flex items-center gap-1 ml-2">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className={cn(
-                    'h-6 w-6 hover:bg-transparent hover:text-yellow-500 focus:ring-0',
-                    isFavorite
-                      ? 'text-yellow-500 opacity-100'
-                      : 'opacity-0 group-hover:opacity-100 text-muted-foreground'
-                  )}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    toggleFavoriteModel(model.id);
-                  }}
-                >
-                  <Star className={cn('h-3.5 w-3.5', isFavorite && 'fill-current')} />
-                </Button>
-                {isSelected && <Check className="h-4 w-4 text-primary shrink-0" />}
-                <ChevronRight
-                  className={cn(
-                    'h-4 w-4 text-muted-foreground transition-transform',
-                    isExpanded && 'rotate-90'
-                  )}
-                />
-              </div>
-            </div>
-          </PopoverTrigger>
-          <PopoverContent
-            side="right"
-            align="start"
-            className="w-[220px] p-1"
-            sideOffset={8}
-            collisionPadding={16}
-            onCloseAutoFocus={(e) => e.preventDefault()}
+        <div className="flex items-center gap-1 ml-2">
+          <Button
+            variant="ghost"
+            size="icon"
+            className={cn(
+              'h-6 w-6 hover:bg-transparent hover:text-yellow-500 focus:ring-0',
+              isFavorite
+                ? 'text-yellow-500 opacity-100'
+                : 'opacity-0 group-hover:opacity-100 text-muted-foreground'
+            )}
+            onClick={(e) => {
+              e.stopPropagation();
+              toggleFavoriteModel(model.id);
+            }}
           >
-            <div className="space-y-1">
-              <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground border-b border-border/50 mb-1">
-                Thinking Level
-              </div>
-              {THINKING_LEVELS.map((level) => (
-                <button
-                  key={level}
-                  onClick={() => {
-                    onChange({
-                      model: model.id as ModelAlias,
-                      thinkingLevel: level,
-                    });
-                    setExpandedClaudeModel(null);
-                    setOpen(false);
-                  }}
-                  className={cn(
-                    'w-full flex items-center justify-between px-2 py-2 rounded-sm text-sm',
-                    'hover:bg-accent cursor-pointer transition-colors',
-                    isSelected && currentThinking === level && 'bg-accent text-accent-foreground'
-                  )}
-                >
-                  <div className="flex flex-col items-start">
-                    <span className="font-medium">{THINKING_LEVEL_LABELS[level]}</span>
-                    <span className="text-xs text-muted-foreground">
-                      {level === 'none' && 'No extended thinking'}
-                      {level === 'low' && 'Light reasoning (1k tokens)'}
-                      {level === 'medium' && 'Moderate reasoning (10k tokens)'}
-                      {level === 'high' && 'Deep reasoning (16k tokens)'}
-                      {level === 'ultrathink' && 'Maximum reasoning (32k tokens)'}
-                    </span>
-                  </div>
-                  {isSelected && currentThinking === level && (
-                    <Check className="h-3.5 w-3.5 text-primary" />
-                  )}
-                </button>
-              ))}
-            </div>
-          </PopoverContent>
-        </Popover>
+            <Star className={cn('h-3.5 w-3.5', isFavorite && 'fill-current')} />
+          </Button>
+          {isSelected && <Check className="h-4 w-4 text-primary shrink-0" />}
+        </div>
       </CommandItem>
     );
   };
@@ -1546,15 +1149,119 @@ export function PhaseModelSelector({
     </PopoverContent>
   );
 
+  // Thinking level dropdown for Claude models
+  const compactThinkingDropdown = isClaudeModel && (
+    <Select
+      value={selectedThinkingLevel}
+      onValueChange={(value) => handleThinkingLevelChange(value as ThinkingLevel)}
+      disabled={disabled}
+    >
+      <SelectTrigger
+        className={cn('h-11 w-[72px] gap-1 text-xs font-medium rounded-xl border-border px-2')}
+      >
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {THINKING_LEVELS.map((level) => (
+          <SelectItem key={level} value={level}>
+            {THINKING_LEVEL_LABELS[level]}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+
+  // Reasoning effort dropdown for Codex models (compact mode)
+  const compactReasoningDropdown = isCodexModelWithReasoning && (
+    <Select
+      value={selectedReasoningEffort}
+      onValueChange={(value) => handleReasoningEffortChange(value as ReasoningEffort)}
+      disabled={disabled}
+    >
+      <SelectTrigger
+        className={cn('h-11 w-[72px] gap-1 text-xs font-medium rounded-xl border-border px-2')}
+      >
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {REASONING_EFFORT_LEVELS.map((effort) => (
+          <SelectItem key={effort} value={effort}>
+            {REASONING_EFFORT_LABELS[effort]}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+
   // Compact mode - just the popover with compact trigger
   if (compact) {
     return (
-      <Popover open={open} onOpenChange={setOpen} modal={false}>
-        <PopoverTrigger asChild>{compactTrigger}</PopoverTrigger>
-        {popoverContent}
-      </Popover>
+      <div className="flex items-center gap-1.5">
+        <Popover open={open} onOpenChange={setOpen} modal={false}>
+          <PopoverTrigger asChild>{compactTrigger}</PopoverTrigger>
+          {popoverContent}
+        </Popover>
+        {compactThinkingDropdown}
+        {compactReasoningDropdown}
+      </div>
     );
   }
+
+  // Full thinking level dropdown for Claude models
+  const thinkingLevelDropdown = isClaudeModel && (
+    <Select
+      value={selectedThinkingLevel}
+      onValueChange={(value) => handleThinkingLevelChange(value as ThinkingLevel)}
+      disabled={disabled}
+    >
+      <SelectTrigger
+        className={cn(
+          'w-[100px] h-9 px-3 bg-background/50 border-border/50 hover:bg-background/80',
+          'text-sm'
+        )}
+      >
+        <div className="flex items-center gap-1.5">
+          <span className="text-muted-foreground text-xs">Think:</span>
+          <SelectValue />
+        </div>
+      </SelectTrigger>
+      <SelectContent>
+        {THINKING_LEVELS.map((level) => (
+          <SelectItem key={level} value={level}>
+            {THINKING_LEVEL_LABELS[level]}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+
+  // Full reasoning effort dropdown for Codex models
+  const reasoningEffortDropdown = isCodexModelWithReasoning && (
+    <Select
+      value={selectedReasoningEffort}
+      onValueChange={(value) => handleReasoningEffortChange(value as ReasoningEffort)}
+      disabled={disabled}
+    >
+      <SelectTrigger
+        className={cn(
+          'w-[110px] h-9 px-3 bg-background/50 border-border/50 hover:bg-background/80',
+          'text-sm'
+        )}
+      >
+        <div className="flex items-center gap-1.5">
+          <span className="text-muted-foreground text-xs">Reason:</span>
+          <SelectValue />
+        </div>
+      </SelectTrigger>
+      <SelectContent>
+        {REASONING_EFFORT_LEVELS.map((effort) => (
+          <SelectItem key={effort} value={effort}>
+            {REASONING_EFFORT_LABELS[effort]}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
 
   // Full mode - with label and description wrapper
   return (
@@ -1571,11 +1278,15 @@ export function PhaseModelSelector({
         <p className="text-xs text-muted-foreground">{description}</p>
       </div>
 
-      {/* Model Selection Popover */}
-      <Popover open={open} onOpenChange={setOpen} modal={false}>
-        <PopoverTrigger asChild>{fullTrigger}</PopoverTrigger>
-        {popoverContent}
-      </Popover>
+      {/* Model Selection Popover and Thinking/Reasoning Level Dropdown */}
+      <div className="flex items-center gap-2">
+        <Popover open={open} onOpenChange={setOpen} modal={false}>
+          <PopoverTrigger asChild>{fullTrigger}</PopoverTrigger>
+          {popoverContent}
+        </Popover>
+        {thinkingLevelDropdown}
+        {reasoningEffortDropdown}
+      </div>
     </div>
   );
 }

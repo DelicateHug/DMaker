@@ -13,9 +13,14 @@ import { Label } from '@/components/ui/label';
 import { AlertCircle } from 'lucide-react';
 import { modelSupportsThinking } from '@/lib/utils';
 import { Feature, ModelAlias, ThinkingLevel, PlanningMode } from '@/store/app-store';
-import { TestingTabContent, PrioritySelect, PlanningModeSelect, WorkModeSelector } from '../shared';
+import {
+  TestingTabContent,
+  PrioritySelect,
+  PlanningModeSelect,
+  WorkModeSelector,
+  PhaseModelSelector,
+} from '../shared';
 import type { WorkMode } from '../shared';
-import { PhaseModelSelector } from '@/components/views/settings-view/model-defaults/phase-model-selector';
 import { isCursorModel, isClaudeModel, type PhaseModelEntry } from '@automaker/types';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';

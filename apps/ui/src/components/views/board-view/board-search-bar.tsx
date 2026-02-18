@@ -1,6 +1,8 @@
 import { useRef, useEffect } from 'react';
 import { Input } from '@/components/ui/input';
-import { Search, X, Loader2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Search, X, Loader2, Star } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface BoardSearchBarProps {
   searchQuery: string;
@@ -8,6 +10,9 @@ interface BoardSearchBarProps {
   isCreatingSpec: boolean;
   creatingSpecProjectPath?: string;
   currentProjectPath?: string;
+  // Favorites filter
+  showFavoritesOnly: boolean;
+  onShowFavoritesOnlyChange: (show: boolean) => void;
 }
 
 export function BoardSearchBar({
@@ -16,6 +21,8 @@ export function BoardSearchBar({
   isCreatingSpec,
   creatingSpecProjectPath,
   currentProjectPath,
+  showFavoritesOnly,
+  onShowFavoritesOnlyChange,
 }: BoardSearchBarProps) {
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -68,6 +75,20 @@ export function BoardSearchBar({
           </span>
         )}
       </div>
+      {/* Favorites Filter Toggle */}
+      <Button
+        variant={showFavoritesOnly ? 'default' : 'outline'}
+        size="sm"
+        onClick={() => onShowFavoritesOnlyChange(!showFavoritesOnly)}
+        className={cn(
+          'h-8 px-2.5 shrink-0',
+          showFavoritesOnly && 'bg-amber-500 hover:bg-amber-600 text-white border-amber-500'
+        )}
+        title={showFavoritesOnly ? 'Show all features' : 'Show favorites only'}
+        data-testid="favorites-filter-toggle"
+      >
+        <Star className={cn('w-4 h-4', showFavoritesOnly && 'fill-current')} />
+      </Button>
       {/* Spec Creation Loading Badge */}
       {isCreatingSpec && currentProjectPath === creatingSpecProjectPath && (
         <div

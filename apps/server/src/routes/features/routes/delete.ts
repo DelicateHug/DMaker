@@ -4,7 +4,7 @@
 
 import type { Request, Response } from 'express';
 import { FeatureLoader } from '../../../services/feature-loader.js';
-import { getErrorMessage, logError } from '../common.js';
+import { getErrorMessage, logError, invalidateFeaturesCache } from '../common.js';
 
 export function createDeleteHandler(featureLoader: FeatureLoader) {
   return async (req: Request, res: Response): Promise<void> => {
@@ -23,6 +23,11 @@ export function createDeleteHandler(featureLoader: FeatureLoader) {
       }
 
       const success = await featureLoader.delete(projectPath, featureId);
+
+      if (success) {
+        invalidateFeaturesCache(projectPath);
+      }
+
       res.json({ success });
     } catch (error) {
       logError(error, 'Delete feature failed');

@@ -22,8 +22,8 @@ type UsageError = {
   message: string;
 };
 
-// Fixed refresh interval (45 seconds)
-const REFRESH_INTERVAL_SECONDS = 45;
+// Fixed refresh interval (30 seconds)
+const REFRESH_INTERVAL_SECONDS = 30;
 
 // Helper to format reset time
 function formatResetTime(unixTimestamp: number): string {
@@ -139,18 +139,30 @@ export function CodexUsagePopover() {
       }
     }
 
-    // Auto-refresh interval (only when open)
-    let intervalId: NodeJS.Timeout | null = null;
-    if (open) {
-      intervalId = setInterval(() => {
-        fetchUsage(true);
-      }, REFRESH_INTERVAL_SECONDS * 1000);
-    }
-
-    return () => {
-      if (intervalId) clearInterval(intervalId);
-    };
+    return undefined;
   }, [open, codexUsage, isStale, isCodexAuthenticated, fetchUsage]);
+
+  // Countdown timer for next refresh
+  const [refreshCountdown, setRefreshCountdown] = useState(REFRESH_INTERVAL_SECONDS);
+
+  // Auto-refresh with countdown (only when open)
+  useEffect(() => {
+    if (!open || !isCodexAuthenticated) return;
+
+    setRefreshCountdown(REFRESH_INTERVAL_SECONDS);
+
+    const countdownId = setInterval(() => {
+      setRefreshCountdown((prev) => {
+        if (prev <= 1) {
+          fetchUsage(true);
+          return REFRESH_INTERVAL_SECONDS;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(countdownId);
+  }, [open, isCodexAuthenticated, fetchUsage]);
 
   // Derived status color/icon helper
   const getStatusInfo = (percentage: number) => {
@@ -284,16 +296,26 @@ export function CodexUsagePopover() {
           <div className="flex items-center gap-2">
             <span className="text-sm font-semibold">Codex Usage</span>
           </div>
-          {error && error.code !== ERROR_CODES.NOT_AVAILABLE && (
+          <div className="flex items-center gap-2">
+            {open && codexUsage && !error && (
+              <span className="text-[10px] text-muted-foreground font-mono tabular-nums">
+                {refreshCountdown}s
+              </span>
+            )}
             <Button
               variant="ghost"
               size="icon"
               className={cn('h-6 w-6', loading && 'opacity-80')}
-              onClick={() => !loading && fetchUsage(false)}
+              onClick={() => {
+                if (!loading) {
+                  fetchUsage(false);
+                  setRefreshCountdown(REFRESH_INTERVAL_SECONDS);
+                }
+              }}
             >
-              <RefreshCw className="w-3.5 h-3.5" />
+              <RefreshCw className={cn('w-3.5 h-3.5', loading && 'animate-spin')} />
             </Button>
-          )}
+          </div>
         </div>
 
         {/* Content */}
@@ -397,7 +419,10 @@ export function CodexUsagePopover() {
             OpenAI Dashboard <ExternalLink className="w-2.5 h-2.5" />
           </a>
 
-          <span className="text-[10px] text-muted-foreground">Updates every minute</span>
+          <span className="text-[10px] text-muted-foreground font-mono tabular-nums flex items-center gap-1">
+            <RefreshCw className="w-2.5 h-2.5" />
+            {refreshCountdown}s
+          </span>
         </div>
       </PopoverContent>
     </Popover>

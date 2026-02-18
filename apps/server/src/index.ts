@@ -10,12 +10,13 @@ import express from 'express';
 import cors from 'cors';
 import morgan from 'morgan';
 import cookieParser from 'cookie-parser';
+import compression from 'compression';
 import cookie from 'cookie';
 import { WebSocketServer, WebSocket } from 'ws';
 import { createServer } from 'http';
 import dotenv from 'dotenv';
 
-import { createEventEmitter, type EventEmitter } from './lib/events.js';
+import { createEventEmitter, createThrottledCallback, type EventEmitter } from './lib/events.js';
 import { initAllowedPaths } from '@automaker/platform';
 import { createLogger, setLogLevel, LogLevel } from '@automaker/utils';
 
@@ -83,11 +84,15 @@ import { createNotificationsRoutes } from './routes/notifications/index.js';
 import { getNotificationService } from './services/notification-service.js';
 import { createEventHistoryRoutes } from './routes/event-history/index.js';
 import { getEventHistoryService } from './services/event-history-service.js';
+import { createDeployRoutes } from './routes/deploy/index.js';
+import { deployScriptRunner } from './services/deploy-service.js';
+import { createVoiceRoutes } from './routes/voice/index.js';
+import { VoiceService } from './services/voice-service.js';
 
 // Load environment variables
 dotenv.config();
 
-const PORT = parseInt(process.env.PORT || '3008', 10);
+const PORT = parseInt(process.env.PORT || '3009', 10);
 const HOST = process.env.HOST || '0.0.0.0';
 const HOSTNAME = process.env.HOSTNAME || 'localhost';
 const DATA_DIR = process.env.DATA_DIR || './data';
@@ -193,6 +198,23 @@ app.use(
 );
 app.use(express.json({ limit: '50mb' }));
 app.use(cookieParser());
+app.use(
+  compression({
+    // Skip compression for SSE (text/event-stream) responses.
+    // The compression middleware buffers output which prevents real-time
+    // streaming of deploy output and other SSE endpoints.
+    filter: (req, res) => {
+      const contentType = res.getHeader('Content-Type');
+      if (
+        contentType === 'text/event-stream' ||
+        (typeof contentType === 'string' && contentType.startsWith('text/event-stream'))
+      ) {
+        return false;
+      }
+      return compression.filter(req, res);
+    },
+  })
+);
 
 // Create shared event emitter for streaming
 const events: EventEmitter = createEventEmitter();
@@ -202,13 +224,15 @@ const events: EventEmitter = createEventEmitter();
 const settingsService = new SettingsService(DATA_DIR);
 const agentService = new AgentService(DATA_DIR, events, settingsService);
 const featureLoader = new FeatureLoader();
-const autoModeService = new AutoModeService(events, settingsService);
+const autoModeService = new AutoModeService(events, settingsService, featureLoader);
 const claudeUsageService = new ClaudeUsageService();
+claudeUsageService.setEventEmitter(events);
 const codexAppServerService = new CodexAppServerService();
 const codexModelCacheService = new CodexModelCacheService(DATA_DIR, codexAppServerService);
 const codexUsageService = new CodexUsageService(codexAppServerService);
 const mcpTestService = new MCPTestService(settingsService);
 const ideationService = new IdeationService(events, settingsService, featureLoader);
+const voiceService = new VoiceService(DATA_DIR, events, settingsService);
 
 // Initialize DevServerService with event emitter for real-time log streaming
 const devServerService = getDevServerService();
@@ -223,6 +247,9 @@ const eventHistoryService = getEventHistoryService();
 
 // Initialize Event Hook Service for custom event triggers (with history storage)
 eventHookService.initialize(events, settingsService, eventHistoryService);
+
+// DeployScriptRunner requires no initialization – it's a simple
+// stateless service that discovers and runs scripts from the deploy folder.
 
 // Initialize services
 (async () => {
@@ -243,6 +270,9 @@ eventHookService.initialize(events, settingsService, eventHistoryService);
 
   await agentService.initialize();
   logger.info('Agent service initialized');
+
+  await voiceService.initialize();
+  logger.info('Voice service initialized');
 
   // Bootstrap Codex model cache in background (don't block server startup)
   void codexModelCacheService.getModels().catch((err) => {
@@ -277,7 +307,10 @@ app.get('/api/health/detailed', createDetailedHandler());
 app.use('/api/fs', createFsRoutes(events));
 app.use('/api/agent', createAgentRoutes(agentService, events));
 app.use('/api/sessions', createSessionsRoutes(agentService));
-app.use('/api/features', createFeaturesRoutes(featureLoader, settingsService, events));
+app.use(
+  '/api/features',
+  createFeaturesRoutes(featureLoader, settingsService, events, autoModeService)
+);
 app.use('/api/auto-mode', createAutoModeRoutes(autoModeService));
 app.use('/api/enhance-prompt', createEnhancePromptRoutes(settingsService));
 app.use('/api/worktree', createWorktreeRoutes(events, settingsService));
@@ -300,12 +333,20 @@ app.use('/api/pipeline', createPipelineRoutes(pipelineService));
 app.use('/api/ideation', createIdeationRoutes(events, ideationService, featureLoader));
 app.use('/api/notifications', createNotificationsRoutes(notificationService));
 app.use('/api/event-history', createEventHistoryRoutes(eventHistoryService, settingsService));
+app.use('/api/deploy', createDeployRoutes(deployScriptRunner, events));
+app.use('/api/voice', createVoiceRoutes(voiceService));
 
 // Create HTTP server
 const server = createServer(app);
 
 // WebSocket servers using noServer mode for proper multi-path support
-const wss = new WebSocketServer({ noServer: true });
+const wss = new WebSocketServer({
+  noServer: true,
+  perMessageDeflate: {
+    zlibDeflateOptions: { level: 6 },
+    threshold: 1024, // Only compress messages larger than 1KB
+  },
+});
 const terminalWss = new WebSocketServer({ noServer: true });
 const terminalService = getTerminalService();
 
@@ -375,16 +416,8 @@ server.on('upgrade', (request, socket, head) => {
 wss.on('connection', (ws: WebSocket) => {
   logger.info('Client connected, ready state:', ws.readyState);
 
-  // Subscribe to all events and forward to this client
-  const unsubscribe = events.subscribe((type, payload) => {
-    logger.info('Event received:', {
-      type,
-      hasPayload: !!payload,
-      payloadKeys: payload ? Object.keys(payload) : [],
-      wsReadyState: ws.readyState,
-      wsOpen: ws.readyState === WebSocket.OPEN,
-    });
-
+  // Create a throttled callback to rate-limit high-frequency events per connection
+  const { throttled, cleanup: throttleCleanup } = createThrottledCallback((type, payload) => {
     if (ws.readyState === WebSocket.OPEN) {
       const message = JSON.stringify({ type, payload });
       logger.info('Sending event to client:', {
@@ -398,13 +431,28 @@ wss.on('connection', (ws: WebSocket) => {
     }
   });
 
+  // Subscribe to all events and forward through the throttled callback
+  const unsubscribe = events.subscribe((type, payload) => {
+    logger.info('Event received:', {
+      type,
+      hasPayload: !!payload,
+      payloadKeys: payload ? Object.keys(payload) : [],
+      wsReadyState: ws.readyState,
+      wsOpen: ws.readyState === WebSocket.OPEN,
+    });
+
+    throttled(type, payload);
+  });
+
   ws.on('close', () => {
     logger.info('Client disconnected');
+    throttleCleanup();
     unsubscribe();
   });
 
   ws.on('error', (error) => {
     logger.error('ERROR:', error);
+    throttleCleanup();
     unsubscribe();
   });
 });

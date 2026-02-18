@@ -37,13 +37,18 @@ import {
 
 const logger = createLogger('AutoMode');
 import { resolveModelString, resolvePhaseModel, DEFAULT_MODELS } from '@automaker/model-resolver';
-import { resolveDependencies, areDependenciesSatisfied } from '@automaker/dependency-resolver';
 import {
-  getFeatureDir,
+  resolveDependencies,
+  areDependenciesSatisfied,
+  shouldBlockOnDependencies,
+} from '@automaker/dependency-resolver';
+import {
   getAutomakerDir,
   getFeaturesDir,
   getExecutionStatePath,
   ensureAutomakerDir,
+  isMonthDir,
+  isStatusDir,
 } from '@automaker/platform';
 import { exec } from 'child_process';
 import { promisify } from 'util';
@@ -65,6 +70,7 @@ import {
   getPromptCustomization,
 } from '../lib/settings-helpers.js';
 import { getNotificationService } from './notification-service.js';
+import { invalidateFeaturesCache } from '../routes/features/common.js';
 
 const execAsync = promisify(exec);
 
@@ -213,6 +219,9 @@ interface RunningFeature {
   startTime: number;
   model?: string;
   provider?: ModelProvider;
+  tasksCompleted?: number;
+  tasksTotal?: number;
+  currentTaskId?: string;
 }
 
 interface AutoLoopState {
@@ -252,7 +261,7 @@ interface ExecutionState {
 const DEFAULT_EXECUTION_STATE: ExecutionState = {
   version: 1,
   autoLoopWasRunning: false,
-  maxConcurrency: 3,
+  maxConcurrency: 5,
   projectPath: '',
   runningFeatureIds: [],
   savedAt: '',
@@ -266,7 +275,7 @@ export class AutoModeService {
   private events: EventEmitter;
   private runningFeatures = new Map<string, RunningFeature>();
   private autoLoop: AutoLoopState | null = null;
-  private featureLoader = new FeatureLoader();
+  private featureLoader: FeatureLoader;
   private autoLoopRunning = false;
   private autoLoopAbortController: AbortController | null = null;
   private config: AutoModeConfig | null = null;
@@ -275,10 +284,26 @@ export class AutoModeService {
   // Track consecutive failures to detect quota/API issues
   private consecutiveFailures: { timestamp: number; error: string }[] = [];
   private pausedDueToFailures = false;
+  // In-memory output buffers for running features (featureId -> current responseText)
+  // This allows the agent-output endpoint to return the latest content without waiting for disk flush
+  private featureOutputBuffers = new Map<string, string>();
 
-  constructor(events: EventEmitter, settingsService?: SettingsService) {
+  constructor(
+    events: EventEmitter,
+    settingsService?: SettingsService,
+    featureLoader?: FeatureLoader
+  ) {
     this.events = events;
     this.settingsService = settingsService ?? null;
+    this.featureLoader = featureLoader ?? new FeatureLoader();
+  }
+
+  /**
+   * Get the FeatureLoader instance used by this service.
+   * Allows route handlers to use the same cache instead of creating separate instances.
+   */
+  getFeatureLoader(): FeatureLoader {
+    return this.featureLoader;
   }
 
   /**
@@ -358,7 +383,7 @@ export class AutoModeService {
   /**
    * Start the auto mode loop - continuously picks and executes pending features
    */
-  async startAutoLoop(projectPath: string, maxConcurrency = 3): Promise<void> {
+  async startAutoLoop(projectPath: string, maxConcurrency = 5): Promise<void> {
     if (this.autoLoopRunning) {
       throw new Error('Auto mode is already running');
     }
@@ -404,25 +429,47 @@ export class AutoModeService {
     ) {
       try {
         // Check if we have capacity
-        if (this.runningFeatures.size >= (this.config?.maxConcurrency || 3)) {
+        if (this.runningFeatures.size >= (this.config?.maxConcurrency || 5)) {
           await this.sleep(5000);
           continue;
         }
 
         // Load pending features
-        const pendingFeatures = await this.loadPendingFeatures(this.config!.projectPath);
+        const { readyFeatures, blockedByDependencies, blockedFeatureNames } =
+          await this.loadPendingFeatures(this.config!.projectPath);
 
-        if (pendingFeatures.length === 0) {
-          this.emitAutoModeEvent('auto_mode_idle', {
-            message: 'No pending features - auto mode idle',
-            projectPath: this.config!.projectPath,
-          });
+        if (readyFeatures.length === 0) {
+          // Determine the appropriate idle message based on why there are no ready features
+          if (blockedByDependencies > 0) {
+            // All pending features are blocked by unsatisfied dependencies
+            const featureList =
+              blockedFeatureNames.length <= 3
+                ? blockedFeatureNames.join(', ')
+                : `${blockedFeatureNames.slice(0, 3).join(', ')} and ${blockedByDependencies - 3} more`;
+            this.emitAutoModeEvent('auto_mode_idle', {
+              message: `${blockedByDependencies} feature${blockedByDependencies === 1 ? '' : 's'} waiting for dependencies to complete`,
+              reason: 'blocked_by_dependencies',
+              blockedCount: blockedByDependencies,
+              blockedFeatures: blockedFeatureNames,
+              projectPath: this.config!.projectPath,
+            });
+            logger.info(
+              `Auto mode idle: ${blockedByDependencies} feature(s) blocked by dependencies: ${featureList}`
+            );
+          } else {
+            // No pending features at all
+            this.emitAutoModeEvent('auto_mode_idle', {
+              message: 'No pending features - auto mode idle',
+              reason: 'no_pending_features',
+              projectPath: this.config!.projectPath,
+            });
+          }
           await this.sleep(10000);
           continue;
         }
 
         // Find a feature not currently running
-        const nextFeature = pendingFeatures.find((f) => !this.runningFeatures.has(f.id));
+        const nextFeature = readyFeatures.find((f) => !this.runningFeatures.has(f.id));
 
         if (nextFeature) {
           // Start feature execution in background
@@ -513,6 +560,7 @@ export class AutoModeService {
       await this.saveExecutionState(projectPath);
     }
 
+    let feature: Feature | null = null;
     try {
       // Validate that project path is allowed using centralized validation
       validateWorkingDirectory(projectPath);
@@ -542,7 +590,7 @@ export class AutoModeService {
         },
       });
       // Load feature details FIRST to get branchName
-      const feature = await this.loadFeature(projectPath, featureId);
+      feature = await this.loadFeature(projectPath, featureId);
       if (!feature) {
         throw new Error(`Feature ${featureId} not found`);
       }
@@ -691,8 +739,9 @@ export class AutoModeService {
 
       // Record learnings and memory usage after successful feature completion
       try {
-        const featureDir = getFeatureDir(projectPath, featureId);
-        const outputPath = path.join(featureDir, 'agent-output.md');
+        const resolvedDir = await this.featureLoader.resolveFeatureDir(projectPath, featureId);
+        const featureDir = resolvedDir || this.featureLoader.getFeatureDir(projectPath, featureId);
+        const outputPath = path.join(featureDir, 'logs', 'agent-output.md');
         let agentOutput = '';
         try {
           const outputContent = await secureFs.readFile(outputPath, 'utf-8');
@@ -719,8 +768,12 @@ export class AutoModeService {
         console.warn('[AutoMode] Failed to record learnings:', learningError);
       }
 
+      // Re-read title from disk since it may have been generated asynchronously
+      const latestTitle = await this.getFeatureTitle(projectPath, featureId, feature.title);
+
       this.emitAutoModeEvent('auto_mode_feature_complete', {
         featureId,
+        featureTitle: latestTitle,
         passes: true,
         message: `Feature completed in ${Math.round(
           (Date.now() - tempRunningFeature.startTime) / 1000
@@ -733,8 +786,10 @@ export class AutoModeService {
       const errorInfo = classifyError(error);
 
       if (errorInfo.isAbort) {
+        const abortTitle = await this.getFeatureTitle(projectPath, featureId, feature?.title);
         this.emitAutoModeEvent('auto_mode_feature_complete', {
           featureId,
+          featureTitle: abortTitle,
           passes: false,
           message: 'Feature stopped by user',
           projectPath,
@@ -807,8 +862,10 @@ export class AutoModeService {
     const contextFilesPrompt = filterClaudeMdFromContext(contextResult, autoLoadClaudeMd);
 
     // Load previous agent output for context continuity
-    const featureDir = getFeatureDir(projectPath, featureId);
-    const contextPath = path.join(featureDir, 'agent-output.md');
+    const resolvedPipelineDir = await this.featureLoader.resolveFeatureDir(projectPath, featureId);
+    const featureDir =
+      resolvedPipelineDir || this.featureLoader.getFeatureDir(projectPath, featureId);
+    const contextPath = path.join(featureDir, 'logs', 'agent-output.md');
     let previousContext = '';
     try {
       previousContext = (await secureFs.readFile(contextPath, 'utf-8')) as string;
@@ -964,7 +1021,14 @@ Complete the pipeline step instructions above. Review the previous work and appl
     // Load feature to check status
     const feature = await this.loadFeature(projectPath, featureId);
     if (!feature) {
-      throw new Error(`Feature ${featureId} not found`);
+      const errorMsg = `Feature ${featureId} not found`;
+      this.emitAutoModeEvent('auto_mode_error', {
+        featureId,
+        error: errorMsg,
+        errorType: 'feature_not_found',
+        projectPath,
+      });
+      throw new Error(errorMsg);
     }
 
     // Check if feature is stuck in a pipeline step
@@ -981,8 +1045,9 @@ Complete the pipeline step instructions above. Review the previous work and appl
 
     // Normal resume flow for non-pipeline features
     // Check if context exists in .automaker directory
-    const featureDir = getFeatureDir(projectPath, featureId);
-    const contextPath = path.join(featureDir, 'agent-output.md');
+    const resolvedDir = await this.featureLoader.resolveFeatureDir(projectPath, featureId);
+    const featureDir = resolvedDir || this.featureLoader.getFeatureDir(projectPath, featureId);
+    const contextPath = path.join(featureDir, 'logs', 'agent-output.md');
 
     let hasContext = false;
     try {
@@ -1029,8 +1094,10 @@ Complete the pipeline step instructions above. Review the previous work and appl
     );
 
     // Check for context file
-    const featureDir = getFeatureDir(projectPath, featureId);
-    const contextPath = path.join(featureDir, 'agent-output.md');
+    const resolvedPipelineDir = await this.featureLoader.resolveFeatureDir(projectPath, featureId);
+    const featureDir =
+      resolvedPipelineDir || this.featureLoader.getFeatureDir(projectPath, featureId);
+    const contextPath = path.join(featureDir, 'logs', 'agent-output.md');
 
     let hasContext = false;
     try {
@@ -1062,8 +1129,10 @@ Complete the pipeline step instructions above. Review the previous work and appl
 
       await this.updateFeatureStatus(projectPath, featureId, finalStatus);
 
+      const pipelineTitle = await this.getFeatureTitle(projectPath, featureId, feature.title);
       this.emitAutoModeEvent('auto_mode_feature_complete', {
         featureId,
+        featureTitle: pipelineTitle,
         passes: true,
         message:
           'Pipeline step no longer exists - feature completed without remaining pipeline steps',
@@ -1214,8 +1283,10 @@ Complete the pipeline step instructions above. Review the previous work and appl
 
       console.log('[AutoMode] Pipeline resume completed successfully');
 
+      const resumeTitle = await this.getFeatureTitle(projectPath, featureId, feature.title);
       this.emitAutoModeEvent('auto_mode_feature_complete', {
         featureId,
+        featureTitle: resumeTitle,
         passes: true,
         message: 'Pipeline resumed and completed successfully',
         projectPath,
@@ -1224,8 +1295,10 @@ Complete the pipeline step instructions above. Review the previous work and appl
       const errorInfo = classifyError(error);
 
       if (errorInfo.isAbort) {
+        const resumeAbortTitle = await this.getFeatureTitle(projectPath, featureId, feature.title);
         this.emitAutoModeEvent('auto_mode_feature_complete', {
           featureId,
+          featureTitle: resumeAbortTitle,
           passes: false,
           message: 'Pipeline resume stopped by user',
           projectPath,
@@ -1284,8 +1357,8 @@ Complete the pipeline step instructions above. Review the previous work and appl
     }
 
     // Load previous agent output if it exists
-    const featureDir = getFeatureDir(projectPath, featureId);
-    const contextPath = path.join(featureDir, 'agent-output.md');
+    const featureDir = this.featureLoader.getFeatureDir(projectPath, featureId);
+    const contextPath = path.join(featureDir, 'logs', 'agent-output.md');
     let previousContext = '';
     try {
       previousContext = (await secureFs.readFile(contextPath, 'utf-8')) as string;
@@ -1375,7 +1448,7 @@ Address the follow-up instructions above. Review the previous work and make the 
       // Copy follow-up images to feature folder
       const copiedImagePaths: string[] = [];
       if (imagePaths && imagePaths.length > 0) {
-        const featureDirForImages = getFeatureDir(projectPath, featureId);
+        const featureDirForImages = this.featureLoader.getFeatureDir(projectPath, featureId);
         const featureImagesDir = path.join(featureDirForImages, 'images');
 
         await secureFs.mkdir(featureImagesDir, { recursive: true });
@@ -1422,7 +1495,7 @@ Address the follow-up instructions above. Review the previous work and make the 
 
       // Save updated feature.json with new images (atomic write with backup)
       if (copiedImagePaths.length > 0 && feature) {
-        const featureDirForSave = getFeatureDir(projectPath, featureId);
+        const featureDirForSave = this.featureLoader.getFeatureDir(projectPath, featureId);
         const featurePath = path.join(featureDirForSave, 'feature.json');
 
         try {
@@ -1463,8 +1536,10 @@ Address the follow-up instructions above. Review the previous work and make the 
       // Record success to reset consecutive failure tracking
       this.recordSuccess();
 
+      const followUpTitle = await this.getFeatureTitle(projectPath, featureId, feature?.title);
       this.emitAutoModeEvent('auto_mode_feature_complete', {
         featureId,
+        featureTitle: followUpTitle,
         passes: true,
         message: `Follow-up completed successfully${finalStatus === 'verified' ? ' - auto-verified' : ''}`,
         projectPath,
@@ -1503,6 +1578,9 @@ Address the follow-up instructions above. Review the previous work and make the 
    * Verify a feature's implementation
    */
   async verifyFeature(projectPath: string, featureId: string): Promise<boolean> {
+    // Load feature for title
+    const feature = await this.loadFeature(projectPath, featureId);
+
     // Worktrees are in project dir
     const worktreePath = path.join(projectPath, '.worktrees', featureId);
     let workDir = projectPath;
@@ -1547,14 +1625,21 @@ Address the follow-up instructions above. Review the previous work and make the 
       }
     }
 
+    const verifyTitle = await this.getFeatureTitle(projectPath, featureId, feature?.title);
     this.emitAutoModeEvent('auto_mode_feature_complete', {
       featureId,
+      featureTitle: verifyTitle,
       passes: allPassed,
       message: allPassed
         ? 'All verification checks passed'
         : `Verification failed: ${results.find((r) => !r.passed)?.check || 'Unknown'}`,
       projectPath,
     });
+
+    // Update feature status to completed when verification passes
+    if (allPassed) {
+      await this.updateFeatureStatus(projectPath, featureId, 'completed');
+    }
 
     return allPassed;
   }
@@ -1623,8 +1708,10 @@ Address the follow-up instructions above. Review the previous work and make the 
         cwd: workDir,
       });
 
+      const commitTitle = await this.getFeatureTitle(projectPath, featureId, feature?.title);
       this.emitAutoModeEvent('auto_mode_feature_complete', {
         featureId,
+        featureTitle: commitTitle,
         passes: true,
         message: `Changes committed: ${hash.trim().substring(0, 8)}`,
         projectPath,
@@ -1641,9 +1728,10 @@ Address the follow-up instructions above. Review the previous work and make the 
    * Check if context exists for a feature
    */
   async contextExists(projectPath: string, featureId: string): Promise<boolean> {
-    // Context is stored in .automaker directory
-    const featureDir = getFeatureDir(projectPath, featureId);
-    const contextPath = path.join(featureDir, 'agent-output.md');
+    // Context is stored in .automaker directory - use resolveFeatureDir for correct status-based path
+    const resolvedDir = await this.featureLoader.resolveFeatureDir(projectPath, featureId);
+    const featureDir = resolvedDir || this.featureLoader.getFeatureDir(projectPath, featureId);
+    const contextPath = path.join(featureDir, 'logs', 'agent-output.md');
 
     try {
       await secureFs.access(contextPath);
@@ -1747,6 +1835,7 @@ Format your response as a structured markdown document.`;
 
       this.emitAutoModeEvent('auto_mode_feature_complete', {
         featureId: analysisFeatureId,
+        featureTitle: 'Project analysis',
         passes: true,
         message: 'Project analysis completed',
         projectPath,
@@ -1778,6 +1867,22 @@ Format your response as a structured markdown document.`;
   }
 
   /**
+   * Check if a specific feature is currently running
+   */
+  isFeatureRunning(featureId: string): boolean {
+    return this.runningFeatures.has(featureId);
+  }
+
+  /**
+   * Get the in-memory output buffer for a running feature.
+   * Returns the latest accumulated output text if the feature is currently executing,
+   * or null if the feature is not running (caller should fall back to reading from disk).
+   */
+  getInMemoryOutput(featureId: string): string | null {
+    return this.featureOutputBuffers.get(featureId) ?? null;
+  }
+
+  /**
    * Get detailed info about all running agents
    */
   async getRunningAgents(): Promise<
@@ -1790,6 +1895,9 @@ Format your response as a structured markdown document.`;
       provider?: ModelProvider;
       title?: string;
       description?: string;
+      tasksCompleted?: number;
+      tasksTotal?: number;
+      currentTaskId?: string;
     }>
   > {
     const agents = await Promise.all(
@@ -1817,6 +1925,9 @@ Format your response as a structured markdown document.`;
           provider: rf.provider,
           title,
           description,
+          tasksCompleted: rf.tasksCompleted,
+          tasksTotal: rf.tasksTotal,
+          currentTaskId: rf.currentTaskId,
         };
       })
     );
@@ -2074,16 +2185,31 @@ Format your response as a structured markdown document.`;
   }
 
   private async loadFeature(projectPath: string, featureId: string): Promise<Feature | null> {
-    // Features are stored in .automaker directory
-    const featureDir = getFeatureDir(projectPath, featureId);
-    const featurePath = path.join(featureDir, 'feature.json');
+    // Delegate to FeatureLoader.get() which handles migration, cache population,
+    // status-directory resolution, and automatic recovery from corrupted files.
+    return this.featureLoader.get(projectPath, featureId);
+  }
 
+  /**
+   * Get the latest feature title from disk.
+   * Title may have been generated asynchronously after the in-memory feature object was loaded,
+   * so we re-read from disk to get the most up-to-date title.
+   * Falls back to the in-memory title or empty string if disk read fails.
+   */
+  private async getFeatureTitle(
+    projectPath: string,
+    featureId: string,
+    fallbackTitle?: string
+  ): Promise<string> {
     try {
-      const data = (await secureFs.readFile(featurePath, 'utf-8')) as string;
-      return JSON.parse(data);
+      const freshFeature = await this.loadFeature(projectPath, featureId);
+      if (freshFeature?.title) {
+        return freshFeature.title;
+      }
     } catch {
-      return null;
+      // Fall through to fallback
     }
+    return fallbackTitle || '';
   }
 
   private async updateFeatureStatus(
@@ -2091,8 +2217,9 @@ Format your response as a structured markdown document.`;
     featureId: string,
     status: string
   ): Promise<void> {
-    // Features are stored in .automaker directory
-    const featureDir = getFeatureDir(projectPath, featureId);
+    // Features are stored in .automaker directory — resolve from cache or scan
+    const resolvedDir = await this.featureLoader.resolveFeatureDir(projectPath, featureId);
+    const featureDir = resolvedDir || this.featureLoader.getFeatureDir(projectPath, featureId);
     const featurePath = path.join(featureDir, 'feature.json');
 
     try {
@@ -2120,9 +2247,27 @@ Format your response as a structured markdown document.`;
         // Clear the timestamp when moving to other statuses
         feature.justFinishedAt = undefined;
       }
+      // Set completedAt timestamp when feature is completed or verified
+      if (status === 'completed' || status === 'verified') {
+        feature.completedAt = new Date().toISOString();
+      }
 
-      // Use atomic write with backup support
-      await atomicWriteJson(featurePath, feature, { backupCount: DEFAULT_BACKUP_COUNT });
+      // Move the feature directory to the new status subdirectory FIRST so that
+      // the directory-derived status (used by collectFeatureDirs) is always
+      // consistent. Then write the JSON — even if a poll fires between the move
+      // and the write, the knownStatus override will be correct.
+      await this.featureLoader.moveFeatureToStatusDir(projectPath, featureId, status);
+
+      // Now write the updated JSON to the new location
+      const newResolvedDir = await this.featureLoader.resolveFeatureDir(projectPath, featureId);
+      const newFeaturePath = newResolvedDir
+        ? path.join(newResolvedDir, 'feature.json')
+        : featurePath;
+      await atomicWriteJson(newFeaturePath, feature, { backupCount: DEFAULT_BACKUP_COUNT });
+
+      // Invalidate the server-side features cache so the next list/summary
+      // request returns fresh data instead of stale cached results
+      invalidateFeaturesCache(projectPath);
 
       // Create notifications for important status changes
       const notificationService = getNotificationService();
@@ -2143,6 +2288,14 @@ Format your response as a structured markdown document.`;
           projectPath,
         });
       }
+
+      // Emit feature:status-changed event for push-based UI updates
+      this.events.emit('feature:status-changed', {
+        featureId,
+        status,
+        projectPath,
+        title: feature.title || feature.name || featureId,
+      });
 
       // Sync completed/verified features to app_spec.txt
       if (status === 'verified' || status === 'completed') {
@@ -2166,8 +2319,9 @@ Format your response as a structured markdown document.`;
     featureId: string,
     updates: Partial<PlanSpec>
   ): Promise<void> {
-    // Use getFeatureDir helper for consistent path resolution
-    const featureDir = getFeatureDir(projectPath, featureId);
+    // Resolve from cache or scan for consistent path resolution
+    const resolvedDir = await this.featureLoader.resolveFeatureDir(projectPath, featureId);
+    const featureDir = resolvedDir || this.featureLoader.getFeatureDir(projectPath, featureId);
     const featurePath = path.join(featureDir, 'feature.json');
 
     try {
@@ -2211,7 +2365,14 @@ Format your response as a structured markdown document.`;
     }
   }
 
-  private async loadPendingFeatures(projectPath: string): Promise<Feature[]> {
+  /**
+   * Result of loading pending features, including information about blocked features
+   */
+  private async loadPendingFeatures(projectPath: string): Promise<{
+    readyFeatures: Feature[];
+    blockedByDependencies: number;
+    blockedFeatureNames: string[];
+  }> {
     // Features are stored in .automaker directory
     const featuresDir = getFeaturesDir(projectPath);
 
@@ -2219,56 +2380,121 @@ Format your response as a structured markdown document.`;
       const entries = await secureFs.readdir(featuresDir, {
         withFileTypes: true,
       });
+
+      // Collect all feature directories from status-based, month-based, and flat layouts
+      const featureDirs: Array<{ name: string; featurePath: string }> = [];
+      for (const entry of entries) {
+        if (entry.isDirectory()) {
+          if (isStatusDir(entry.name)) {
+            // Status-based layout: children are feature directories
+            const statusPath = path.join(featuresDir, entry.name);
+            try {
+              const statusEntries = await secureFs.readdir(statusPath, { withFileTypes: true });
+              for (const child of statusEntries) {
+                if (child.isDirectory()) {
+                  featureDirs.push({
+                    name: child.name,
+                    featurePath: path.join(statusPath, child.name, 'feature.json'),
+                  });
+                }
+              }
+            } catch {
+              // Failed to read status directory, skip it
+            }
+          } else if (isMonthDir(entry.name)) {
+            // Legacy month-based layout: scan subdirectories inside the month directory
+            const monthPath = path.join(featuresDir, entry.name);
+            try {
+              const monthEntries = await secureFs.readdir(monthPath, { withFileTypes: true });
+              for (const child of monthEntries) {
+                if (child.isDirectory()) {
+                  featureDirs.push({
+                    name: child.name,
+                    featurePath: path.join(monthPath, child.name, 'feature.json'),
+                  });
+                }
+              }
+            } catch {
+              // Failed to read month directory, skip it
+            }
+          } else {
+            // Legacy flat layout: directory is a feature
+            featureDirs.push({
+              name: entry.name,
+              featurePath: path.join(featuresDir, entry.name, 'feature.json'),
+            });
+          }
+        }
+      }
+
       const allFeatures: Feature[] = [];
       const pendingFeatures: Feature[] = [];
 
       // Load all features (for dependency checking) with recovery support
-      for (const entry of entries) {
-        if (entry.isDirectory()) {
-          const featurePath = path.join(featuresDir, entry.name, 'feature.json');
+      for (const { name, featurePath } of featureDirs) {
+        // Use recovery-enabled read for corrupted file handling
+        const result = await readJsonWithRecovery<Feature | null>(featurePath, null, {
+          maxBackups: DEFAULT_BACKUP_COUNT,
+          autoRestore: true,
+        });
 
-          // Use recovery-enabled read for corrupted file handling
-          const result = await readJsonWithRecovery<Feature | null>(featurePath, null, {
-            maxBackups: DEFAULT_BACKUP_COUNT,
-            autoRestore: true,
-          });
+        logRecoveryWarning(result, `Feature ${name}`, logger);
 
-          logRecoveryWarning(result, `Feature ${entry.name}`, logger);
+        const feature = result.data;
+        if (!feature) {
+          // Skip features that couldn't be loaded or recovered
+          continue;
+        }
 
-          const feature = result.data;
-          if (!feature) {
-            // Skip features that couldn't be loaded or recovered
-            continue;
-          }
+        allFeatures.push(feature);
 
-          allFeatures.push(feature);
-
-          // Track pending features separately
-          if (
-            feature.status === 'pending' ||
-            feature.status === 'ready' ||
-            feature.status === 'backlog'
-          ) {
-            pendingFeatures.push(feature);
-          }
+        // Track pending features separately
+        if (
+          feature.status === 'pending' ||
+          feature.status === 'ready' ||
+          feature.status === 'backlog'
+        ) {
+          pendingFeatures.push(feature);
         }
       }
 
       // Apply dependency-aware ordering
       const { orderedFeatures } = resolveDependencies(pendingFeatures);
 
-      // Get skipVerificationInAutoMode setting
+      // Get global settings for dependency blocking
       const settings = await this.settingsService?.getGlobalSettings();
       const skipVerification = settings?.skipVerificationInAutoMode ?? false;
+      const enableDependencyBlocking = settings?.enableDependencyBlocking ?? true;
+
+      // Track features blocked by dependencies
+      const blockedFeatures: Feature[] = [];
 
       // Filter to only features with satisfied dependencies
-      const readyFeatures = orderedFeatures.filter((feature: Feature) =>
-        areDependenciesSatisfied(feature, allFeatures, { skipVerification })
-      );
+      // Uses shouldBlockOnDependencies to combine global and per-feature settings
+      const readyFeatures = orderedFeatures.filter((feature: Feature) => {
+        // Check if this feature should block on dependencies based on global + per-feature settings
+        if (!shouldBlockOnDependencies(feature, { enableDependencyBlocking })) {
+          // Feature doesn't need to wait for dependencies (either global blocking is off,
+          // or per-feature waitForDependencies is false/undefined)
+          return true;
+        }
+        // Feature requires dependency blocking - check if dependencies are satisfied
+        const satisfied = areDependenciesSatisfied(feature, allFeatures, { skipVerification });
+        if (!satisfied) {
+          blockedFeatures.push(feature);
+        }
+        return satisfied;
+      });
 
-      return readyFeatures;
+      return {
+        readyFeatures,
+        blockedByDependencies: blockedFeatures.length,
+        blockedFeatureNames: blockedFeatures.map(
+          (f) => f.title || f.description?.split('\n')[0]?.substring(0, 50) || f.id
+        ),
+      };
     } catch {
-      return [];
+      return { readyFeatures: [], blockedByDependencies: 0, blockedFeatureNames: [] };
     }
   }
 
@@ -2458,8 +2684,8 @@ You can use the Read tool to view these images at any time during implementation
       await this.sleep(200);
 
       // Save mock agent output
-      const featureDirForOutput = getFeatureDir(projectPath, featureId);
-      const outputPath = path.join(featureDirForOutput, 'agent-output.md');
+      const featureDirForOutput = this.featureLoader.getFeatureDir(projectPath, featureId);
+      const outputPath = path.join(featureDirForOutput, 'logs', 'agent-output.md');
 
       const mockOutput = `# Mock Agent Output
 
@@ -2557,13 +2783,15 @@ This mock response was generated because AUTOMAKER_MOCK_AGENT=true was set.
     let responseText = previousContent
       ? `${previousContent}\n\n---\n\n## Follow-up Session\n\n`
       : '';
+    // Store initial buffer in memory so the agent-output endpoint can return it immediately
+    this.featureOutputBuffers.set(featureId, responseText);
     let specDetected = false;
 
     // Agent output goes to .automaker directory
     // Note: We use projectPath here, not workDir, because workDir might be a worktree path
-    const featureDirForOutput = getFeatureDir(projectPath, featureId);
-    const outputPath = path.join(featureDirForOutput, 'agent-output.md');
-    const rawOutputPath = path.join(featureDirForOutput, 'raw-output.jsonl');
+    const featureDirForOutput = this.featureLoader.getFeatureDir(projectPath, featureId);
+    const outputPath = path.join(featureDirForOutput, 'logs', 'agent-output.md');
+    const rawOutputPath = path.join(featureDirForOutput, 'logs', 'raw-output.jsonl');
 
     // Raw output logging is configurable via environment variable
     // Set AUTOMAKER_DEBUG_RAW_OUTPUT=true to enable raw stream event logging
@@ -2619,6 +2847,9 @@ This mock response was generated because AUTOMAKER_MOCK_AGENT=true was set.
 
     // Debounced write - schedules a write after WRITE_DEBOUNCE_MS
     const scheduleWrite = (): void => {
+      // Update in-memory buffer immediately (no debounce) so the agent-output endpoint
+      // always returns the latest content for running features
+      this.featureOutputBuffers.set(featureId, responseText);
       if (writeTimeout) {
         clearTimeout(writeTimeout);
       }
@@ -2959,8 +3190,9 @@ After generating the revised spec, output:
                       throw new Error('Feature execution aborted');
                     }
 
-                    // Emit task started
+                    // Emit task started and write timestamp marker to output
                     logger.info(`Starting task ${task.id}: ${task.description}`);
+                    const taskStartTimestamp = new Date().toISOString();
                     this.emitAutoModeEvent('auto_mode_task_started', {
                       featureId,
                       projectPath,
@@ -2969,6 +3201,28 @@ After generating the revised spec, output:
                       taskIndex,
                       tasksTotal: parsedTasks.length,
                     });
+
+                    // Add task/phase timestamp marker to agent output
+                    if (responseText.length > 0 && !responseText.endsWith('\n')) {
+                      responseText += '\n';
+                    }
+                    if (task.phase) {
+                      // Check if this is the first task in a new phase
+                      const prevTask = taskIndex > 0 ? parsedTasks[taskIndex - 1] : null;
+                      if (!prevTask || prevTask.phase !== task.phase) {
+                        responseText += `\n[timestamp:${taskStartTimestamp}] [Phase: ${task.phase}]\n`;
+                      }
+                    }
+                    responseText += `[timestamp:${taskStartTimestamp}] ⚡ Task ${task.id}: ${task.description}\n`;
+                    scheduleWrite();
+
+                    // Update running feature progress
+                    const runningFeature = this.runningFeatures.get(featureId);
+                    if (runningFeature) {
+                      runningFeature.tasksCompleted = taskIndex;
+                      runningFeature.tasksTotal = parsedTasks.length;
+                      runningFeature.currentTaskId = task.id;
+                    }
 
                     // Update planSpec with current task
                     await this.updateFeaturePlanSpec(projectPath, featureId, {
@@ -3015,6 +3269,16 @@ After generating the revised spec, output:
                               tool: block.name,
                               input: block.input,
                             });
+
+                            // Persist tool call with timestamp to agent output
+                            if (responseText.length > 0 && !responseText.endsWith('\n')) {
+                              responseText += '\n';
+                            }
+                            responseText += `\n[timestamp:${new Date().toISOString()}] 🔧 Tool: ${block.name}\n`;
+                            if (block.input) {
+                              responseText += `Input: ${JSON.stringify(block.input, null, 2)}\n`;
+                            }
+                            scheduleWrite();
                           }
                         }
                       } else if (msg.type === 'error') {
@@ -3025,8 +3289,15 @@ After generating the revised spec, output:
                       }
                     }
 
-                    // Emit task completed
+                    // Emit task completed with timestamp marker
+                    const taskCompleteTimestamp = new Date().toISOString();
                     logger.info(`Task ${task.id} completed for feature ${featureId}`);
+                    if (responseText.length > 0 && !responseText.endsWith('\n')) {
+                      responseText += '\n';
+                    }
+                    responseText += `[timestamp:${taskCompleteTimestamp}] ✅ Task ${task.id} completed\n`;
+                    scheduleWrite();
+
                     this.emitAutoModeEvent('auto_mode_task_complete', {
                       featureId,
                       projectPath,
@@ -3034,6 +3305,13 @@ After generating the revised spec, output:
                       tasksCompleted: taskIndex + 1,
                       tasksTotal: parsedTasks.length,
                     });
+
+                    // Update running feature progress
+                    const runningFeatureAfterComplete = this.runningFeatures.get(featureId);
+                    if (runningFeatureAfterComplete) {
+                      runningFeatureAfterComplete.tasksCompleted = taskIndex + 1;
+                      runningFeatureAfterComplete.tasksTotal = parsedTasks.length;
+                    }
 
                     // Update planSpec with progress
                     await this.updateFeaturePlanSpec(projectPath, featureId, {
@@ -3045,8 +3323,16 @@ After generating the revised spec, output:
                       const nextTask = parsedTasks[taskIndex + 1];
                       if (!nextTask || nextTask.phase !== task.phase) {
                         // Phase changed, emit phase complete
+                        const phaseCompleteTimestamp = new Date().toISOString();
                         const phaseMatch = task.phase.match(/Phase\s*(\d+)/i);
                         if (phaseMatch) {
+                          // Write phase completion marker to agent output
+                          if (responseText.length > 0 && !responseText.endsWith('\n')) {
+                            responseText += '\n';
+                          }
+                          responseText += `[timestamp:${phaseCompleteTimestamp}] ✅ ${task.phase} completed\n`;
+                          scheduleWrite();
+
                           this.emitAutoModeEvent('auto_mode_phase_complete', {
                             featureId,
                             projectPath,
@@ -3105,6 +3391,16 @@ After generating the revised spec, output:
                             tool: block.name,
                             input: block.input,
                           });
+
+                          // Persist tool call with timestamp to agent output
+                          if (responseText.length > 0 && !responseText.endsWith('\n')) {
+                            responseText += '\n';
+                          }
+                          responseText += `\n[timestamp:${new Date().toISOString()}] 🔧 Tool: ${block.name}\n`;
+                          if (block.input) {
+                            responseText += `Input: ${JSON.stringify(block.input, null, 2)}\n`;
+                          }
+                          scheduleWrite();
                         }
                       }
                     } else if (msg.type === 'error') {
@@ -3142,7 +3438,7 @@ After generating the revised spec, output:
               if (responseText.length > 0 && !responseText.endsWith('\n')) {
                 responseText += '\n';
               }
-              responseText += `\n🔧 Tool: ${block.name}\n`;
+              responseText += `\n[timestamp:${new Date().toISOString()}] 🔧 Tool: ${block.name}\n`;
               if (block.input) {
                 responseText += `Input: ${JSON.stringify(block.input, null, 2)}\n`;
               }
@@ -3162,6 +3458,26 @@ After generating the revised spec, output:
 
       // Final write - ensure all accumulated content is saved (on success path)
       await writeToFile();
+
+      // Extract <summary> from responseText and save as a separate summary file
+      try {
+        const summaryMatch = responseText.match(/<summary>([\s\S]*?)<\/summary>/);
+        if (summaryMatch) {
+          const summaryContent = summaryMatch[1].trim();
+          if (summaryContent.length > 0) {
+            await this.featureLoader.saveSummaryFile(
+              projectPath,
+              featureId,
+              summaryContent,
+              undefined,
+              model
+            );
+            logger.info(`Extracted and saved summary for feature ${featureId} with model ${model}`);
+          }
+        }
+      } catch (summaryError) {
+        logger.error(`Failed to save summary file for ${featureId}:`, summaryError);
+      }
 
       // Flush remaining raw output (only if enabled, on success path)
       if (enableRawOutput && rawOutputLines.length > 0) {
@@ -3184,6 +3500,9 @@ After generating the revised spec, output:
         clearTimeout(rawWriteTimeout);
         rawWriteTimeout = null;
       }
+      // Clean up in-memory output buffer now that execution is complete
+      // (disk file is the source of truth after execution ends)
+      this.featureOutputBuffers.delete(featureId);
     }
   }
 
@@ -3377,6 +3696,7 @@ After generating the revised spec, output:
     // Wrap the event in auto-mode:event format expected by the client
     this.events.emit('auto-mode:event', {
       type: eventType,
+      timestamp: new Date().toISOString(),
       ...data,
     });
   }
@@ -3420,7 +3740,7 @@ After generating the revised spec, output:
       const state: ExecutionState = {
         version: 1,
         autoLoopWasRunning: this.autoLoopRunning,
-        maxConcurrency: this.config?.maxConcurrency ?? 3,
+        maxConcurrency: this.config?.maxConcurrency ?? 5,
         projectPath,
         runningFeatureIds: Array.from(this.runningFeatures.keys()),
         savedAt: new Date().toISOString(),
@@ -3476,68 +3796,122 @@ After generating the revised spec, output:
 
     try {
       const entries = await secureFs.readdir(featuresDir, { withFileTypes: true });
-      const interruptedFeatures: Feature[] = [];
 
+      // Collect all feature directories from status-based, month-based, and flat layouts
+      const featureDirs: Array<{ name: string; featurePath: string }> = [];
       for (const entry of entries) {
         if (entry.isDirectory()) {
-          const featurePath = path.join(featuresDir, entry.name, 'feature.json');
-
-          // Use recovery-enabled read for corrupted file handling
-          const result = await readJsonWithRecovery<Feature | null>(featurePath, null, {
-            maxBackups: DEFAULT_BACKUP_COUNT,
-            autoRestore: true,
-          });
-
-          logRecoveryWarning(result, `Feature ${entry.name}`, logger);
-
-          const feature = result.data;
-          if (!feature) {
-            // Skip features that couldn't be loaded or recovered
-            continue;
-          }
-
-          // Check if feature was interrupted (in_progress or pipeline_*)
-          if (
-            feature.status === 'in_progress' ||
-            (feature.status && feature.status.startsWith('pipeline_'))
-          ) {
-            // Verify it has existing context (agent-output.md)
-            const featureDir = getFeatureDir(projectPath, feature.id);
-            const contextPath = path.join(featureDir, 'agent-output.md');
+          if (isStatusDir(entry.name)) {
+            // Status-based layout: children are feature directories
+            const statusPath = path.join(featuresDir, entry.name);
             try {
-              await secureFs.access(contextPath);
-              interruptedFeatures.push(feature);
-              logger.info(
-                `Found interrupted feature: ${feature.id} (${feature.title}) - status: ${feature.status}`
-              );
+              const statusEntries = await secureFs.readdir(statusPath, { withFileTypes: true });
+              for (const child of statusEntries) {
+                if (child.isDirectory()) {
+                  featureDirs.push({
+                    name: child.name,
+                    featurePath: path.join(statusPath, child.name, 'feature.json'),
+                  });
+                }
+              }
             } catch {
-              // No context file, skip this feature - it will be restarted fresh
-              logger.info(`Interrupted feature ${feature.id} has no context, will restart fresh`);
+              // Failed to read status directory, skip it
             }
+          } else if (isMonthDir(entry.name)) {
+            // Legacy month-based layout: scan subdirectories inside the month directory
+            const monthPath = path.join(featuresDir, entry.name);
+            try {
+              const monthEntries = await secureFs.readdir(monthPath, { withFileTypes: true });
+              for (const child of monthEntries) {
+                if (child.isDirectory()) {
+                  featureDirs.push({
+                    name: child.name,
+                    featurePath: path.join(monthPath, child.name, 'feature.json'),
+                  });
+                }
+              }
+            } catch {
+              // Failed to read month directory, skip it
+            }
+          } else {
+            // Legacy flat layout: directory is a feature
+            featureDirs.push({
+              name: entry.name,
+              featurePath: path.join(featuresDir, entry.name, 'feature.json'),
+            });
           }
         }
       }
 
-      if (interruptedFeatures.length === 0) {
+      const interruptedFeatures: Feature[] = [];
+      const freshStartFeatures: Feature[] = [];
+
+      for (const { name, featurePath } of featureDirs) {
+        // Use recovery-enabled read for corrupted file handling
+        const result = await readJsonWithRecovery<Feature | null>(featurePath, null, {
+          maxBackups: DEFAULT_BACKUP_COUNT,
+          autoRestore: true,
+        });
+
+        logRecoveryWarning(result, `Feature ${name}`, logger);
+
+        const feature = result.data;
+        if (!feature) {
+          // Skip features that couldn't be loaded or recovered
+          continue;
+        }
+
+        // Check if feature was interrupted (in_progress or pipeline_*)
+        if (
+          feature.status === 'in_progress' ||
+          (feature.status && feature.status.startsWith('pipeline_'))
+        ) {
+          // Verify it has existing context (logs/agent-output.md)
+          const resolvedInterruptedDir = await this.featureLoader.resolveFeatureDir(
+            projectPath,
+            feature.id
+          );
+          const featureDir =
+            resolvedInterruptedDir || this.featureLoader.getFeatureDir(projectPath, feature.id);
+          const contextPath = path.join(featureDir, 'logs', 'agent-output.md');
+          try {
+            await secureFs.access(contextPath);
+            interruptedFeatures.push(feature);
+            logger.info(
+              `Found interrupted feature: ${feature.id} (${feature.title}) - status: ${feature.status}`
+            );
+          } catch {
+            // No context file - this feature needs a fresh start
+            freshStartFeatures.push(feature);
+            logger.info(`Interrupted feature ${feature.id} has no context, will restart fresh`);
+          }
+        }
+      }
+
+      const totalFeatures = interruptedFeatures.length + freshStartFeatures.length;
+      if (totalFeatures === 0) {
         logger.info('No interrupted features found');
         return;
       }
 
-      logger.info(`Found ${interruptedFeatures.length} interrupted feature(s) to resume`);
+      logger.info(
+        `Found ${interruptedFeatures.length} interrupted feature(s) to resume, ${freshStartFeatures.length} to restart fresh`
+      );
 
       // Emit event to notify UI
+      const allFeaturesToResume = [...interruptedFeatures, ...freshStartFeatures];
       this.emitAutoModeEvent('auto_mode_resuming_features', {
-        message: `Resuming ${interruptedFeatures.length} interrupted feature(s) after server restart`,
+        message: `Resuming ${totalFeatures} interrupted feature(s) after server restart`,
         projectPath,
-        featureIds: interruptedFeatures.map((f) => f.id),
-        features: interruptedFeatures.map((f) => ({
+        featureIds: allFeaturesToResume.map((f) => f.id),
+        features: allFeaturesToResume.map((f) => ({
           id: f.id,
           title: f.title,
           status: f.status,
         })),
       });
 
-      // Resume each interrupted feature
+      // Resume each interrupted feature that has context
       for (const feature of interruptedFeatures) {
         try {
           logger.info(`Resuming feature: ${feature.id} (${feature.title})`);
@@ -3545,6 +3919,17 @@ After generating the revised spec, output:
           await this.resumeFeature(projectPath, feature.id, true);
         } catch (error) {
           logger.error(`Failed to resume feature ${feature.id}:`, error);
+          // Continue with other features
+        }
+      }
+
+      // Restart features that have no context (fresh start)
+      for (const feature of freshStartFeatures) {
+        try {
+          logger.info(`Restarting feature fresh: ${feature.id} (${feature.title})`);
+          await this.executeFeature(projectPath, feature.id, true, false);
+        } catch (error) {
+          logger.error(`Failed to restart feature ${feature.id}:`, error);
           // Continue with other features
         }
       }

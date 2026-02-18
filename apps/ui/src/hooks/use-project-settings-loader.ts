@@ -1,6 +1,29 @@
 import { useEffect, useRef } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { useAppStore } from '@/store/app-store';
 import { getHttpApiClient } from '@/lib/http-api-client';
+import { loadFontByFamily } from '@/lib/font-loader';
+
+/**
+ * Selector for project settings loader state and actions
+ */
+const selectProjectSettingsLoader = (state: ReturnType<typeof useAppStore.getState>) => ({
+  currentProject: state.currentProject,
+  setBoardBackground: state.setBoardBackground,
+  setCardOpacity: state.setCardOpacity,
+  setColumnOpacity: state.setColumnOpacity,
+  setColumnBorderEnabled: state.setColumnBorderEnabled,
+  setCardGlassmorphism: state.setCardGlassmorphism,
+  setCardBorderEnabled: state.setCardBorderEnabled,
+  setCardBorderOpacity: state.setCardBorderOpacity,
+  setHideScrollbar: state.setHideScrollbar,
+  setWorktreePanelVisible: state.setWorktreePanelVisible,
+  setShowInitScriptIndicator: state.setShowInitScriptIndicator,
+  setDefaultDeleteBranch: state.setDefaultDeleteBranch,
+  setAutoDismissInitScriptIndicator: state.setAutoDismissInitScriptIndicator,
+  setProjectFontSans: state.setProjectFontSans,
+  setProjectFontMono: state.setProjectFontMono,
+});
 
 /**
  * Hook that loads project settings from the server when the current project changes.
@@ -8,21 +31,23 @@ import { getHttpApiClient } from '@/lib/http-api-client';
  * switching between projects or restarting the app.
  */
 export function useProjectSettingsLoader() {
-  const currentProject = useAppStore((state) => state.currentProject);
-  const setBoardBackground = useAppStore((state) => state.setBoardBackground);
-  const setCardOpacity = useAppStore((state) => state.setCardOpacity);
-  const setColumnOpacity = useAppStore((state) => state.setColumnOpacity);
-  const setColumnBorderEnabled = useAppStore((state) => state.setColumnBorderEnabled);
-  const setCardGlassmorphism = useAppStore((state) => state.setCardGlassmorphism);
-  const setCardBorderEnabled = useAppStore((state) => state.setCardBorderEnabled);
-  const setCardBorderOpacity = useAppStore((state) => state.setCardBorderOpacity);
-  const setHideScrollbar = useAppStore((state) => state.setHideScrollbar);
-  const setWorktreePanelVisible = useAppStore((state) => state.setWorktreePanelVisible);
-  const setShowInitScriptIndicator = useAppStore((state) => state.setShowInitScriptIndicator);
-  const setDefaultDeleteBranch = useAppStore((state) => state.setDefaultDeleteBranch);
-  const setAutoDismissInitScriptIndicator = useAppStore(
-    (state) => state.setAutoDismissInitScriptIndicator
-  );
+  const {
+    currentProject,
+    setBoardBackground,
+    setCardOpacity,
+    setColumnOpacity,
+    setColumnBorderEnabled,
+    setCardGlassmorphism,
+    setCardBorderEnabled,
+    setCardBorderOpacity,
+    setHideScrollbar,
+    setWorktreePanelVisible,
+    setShowInitScriptIndicator,
+    setDefaultDeleteBranch,
+    setAutoDismissInitScriptIndicator,
+    setProjectFontSans,
+    setProjectFontMono,
+  } = useAppStore(useShallow(selectProjectSettingsLoader));
 
   const loadingRef = useRef<string | null>(null);
   const currentProjectRef = useRef<string | null>(null);
@@ -106,6 +131,32 @@ export function useProjectSettingsLoader() {
               requestedProjectPath,
               result.settings.autoDismissInitScriptIndicator
             );
+          }
+
+          // Apply project-specific font overrides and preload bundled font assets.
+          // Setting these in the store triggers __root.tsx's font effect to apply
+          // CSS variables. We also eagerly call loadFontByFamily here so that
+          // bundled fonts (e.g. Zed Sans/Mono) start loading in parallel.
+          // Use getState() to read the latest project ID after the async gap.
+          const projectId = useAppStore.getState().currentProject?.id;
+          if (projectId) {
+            const { fontFamilySans, fontFamilyMono } = result.settings;
+
+            if (fontFamilySans !== undefined) {
+              setProjectFontSans(projectId, fontFamilySans || null);
+              // Start loading bundled font assets immediately
+              if (fontFamilySans) {
+                loadFontByFamily(fontFamilySans).catch(() => {});
+              }
+            }
+
+            if (fontFamilyMono !== undefined) {
+              setProjectFontMono(projectId, fontFamilyMono || null);
+              // Start loading bundled font assets immediately
+              if (fontFamilyMono) {
+                loadFontByFamily(fontFamilyMono).catch(() => {});
+              }
+            }
           }
         }
       } catch (error) {

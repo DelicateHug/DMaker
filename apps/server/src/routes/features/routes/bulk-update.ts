@@ -5,7 +5,7 @@
 import type { Request, Response } from 'express';
 import { FeatureLoader } from '../../../services/feature-loader.js';
 import type { Feature } from '@automaker/types';
-import { getErrorMessage, logError } from '../common.js';
+import { getErrorMessage, logError, invalidateFeaturesCache } from '../common.js';
 
 interface BulkUpdateRequest {
   projectPath: string;
@@ -78,6 +78,10 @@ export function createBulkUpdateHandler(featureLoader: FeatureLoader) {
 
       const successCount = results.filter((r) => r.success).length;
       const failureCount = results.filter((r) => !r.success).length;
+
+      if (successCount > 0) {
+        invalidateFeaturesCache(projectPath);
+      }
 
       res.json({
         success: failureCount === 0,

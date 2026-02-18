@@ -47,6 +47,25 @@ export type EventType =
   | 'dev-server:started'
   | 'dev-server:output'
   | 'dev-server:stopped'
-  | 'notification:created';
+  | 'notification:created'
+  | 'feature:status-changed'
+  | 'session:state-changed'
+  | 'usage:updated'
+  | 'deploy:output'
+  | 'deploy:success'
+  | 'deploy:error'
+  | 'voice:session-started'
+  | 'voice:session-ended'
+  | 'voice:recording-started'
+  | 'voice:recording-stopped'
+  | 'voice:transcription-started'
+  | 'voice:transcription-completed'
+  | 'voice:command-received'
+  | 'voice:command-executed'
+  | 'voice:response-started'
+  | 'voice:response-completed'
+  | 'voice:speaking-started'
+  | 'voice:speaking-completed'
+  | 'voice:error';
 
 export type EventCallback = (type: EventType, payload: unknown) => void;

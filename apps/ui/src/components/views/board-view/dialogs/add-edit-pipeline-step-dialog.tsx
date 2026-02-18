@@ -127,7 +127,10 @@ export function AddEditPipelineStepDialog({
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-      <DialogContent className="max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
+      <DialogContent
+        className="max-w-2xl max-h-[85vh] overflow-hidden flex flex-col"
+        data-testid="add-edit-pipeline-step-dialog"
+      >
         {/* Hidden file input for loading instructions from .md files */}
         <input
           ref={fileInputRef}

@@ -56,6 +56,14 @@ export function DeleteConfirmDialog({
 
         {children}
 
+        <div className="text-xs text-muted-foreground pt-3 pb-2">
+          Tip: Hold{' '}
+          <kbd className="px-1.5 py-0.5 bg-sidebar-accent/30 border border-sidebar-border rounded text-xs font-mono">
+            Shift
+          </kbd>{' '}
+          and click the delete icon to skip this confirmation.
+        </div>
+
         <DialogFooter className="gap-2 sm:gap-2 pt-4">
           <Button
             variant="ghost"

@@ -1,5 +1,14 @@
 import { useState, useEffect, useCallback } from 'react';
-import { FolderOpen, Folder, ChevronRight, HardDrive, Clock, X } from 'lucide-react';
+import {
+  FolderOpen,
+  Folder,
+  ChevronRight,
+  HardDrive,
+  Clock,
+  X,
+  FileIcon,
+  FileCode,
+} from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -21,15 +30,23 @@ interface DirectoryEntry {
   path: string;
 }
 
+interface FileEntry {
+  name: string;
+  path: string;
+}
+
 interface BrowseResult {
   success: boolean;
   currentPath: string;
   parentPath: string | null;
   directories: DirectoryEntry[];
+  files?: FileEntry[];
   drives?: string[];
   error?: string;
   warning?: string;
 }
+
+export type FileBrowserMode = 'directory' | 'file';
 
 interface FileBrowserDialogProps {
   open: boolean;
@@ -38,6 +55,10 @@ interface FileBrowserDialogProps {
   title?: string;
   description?: string;
   initialPath?: string;
+  /** Whether to select a directory or a file. Defaults to 'directory'. */
+  mode?: FileBrowserMode;
+  /** File extensions to filter by when mode is 'file' (e.g. ['sh', 'py', 'js']). */
+  fileExtensions?: string[];
 }
 
 const MAX_RECENT_FOLDERS = 5;
@@ -46,14 +67,26 @@ export function FileBrowserDialog({
   open,
   onOpenChange,
   onSelect,
-  title = 'Select Project Directory',
-  description = 'Navigate to your project folder or paste a path directly',
+  title,
+  description,
   initialPath,
+  mode = 'directory',
+  fileExtensions,
 }: FileBrowserDialogProps) {
+  const isFileMode = mode === 'file';
+  const resolvedTitle = title || (isFileMode ? 'Select File' : 'Select Project Directory');
+  const resolvedDescription =
+    description ||
+    (isFileMode
+      ? 'Navigate to the file you want to select'
+      : 'Navigate to your project folder or paste a path directly');
+
   const { isMac } = useOSDetection();
   const [currentPath, setCurrentPath] = useState<string>('');
   const [parentPath, setParentPath] = useState<string | null>(null);
   const [directories, setDirectories] = useState<DirectoryEntry[]>([]);
+  const [files, setFiles] = useState<FileEntry[]>([]);
+  const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [drives, setDrives] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -73,29 +106,42 @@ export function FileBrowserDialog({
     [recentFolders, setRecentFolders]
   );
 
-  const browseDirectory = useCallback(async (dirPath?: string) => {
-    setLoading(true);
-    setError('');
-    setWarning('');
+  const browseDirectory = useCallback(
+    async (dirPath?: string) => {
+      setLoading(true);
+      setError('');
+      setWarning('');
+      setSelectedFile(null);
 
-    try {
-      const result = await apiPost<BrowseResult>('/api/fs/browse', { dirPath });
+      try {
+        const body: Record<string, unknown> = { dirPath };
+        if (isFileMode) {
+          body.includeFiles = true;
+          if (fileExtensions && fileExtensions.length > 0) {
+            body.fileExtensions = fileExtensions;
+          }
+        }
 
-      if (result.success) {
-        setCurrentPath(result.currentPath);
-        setParentPath(result.parentPath);
-        setDirectories(result.directories);
-        setDrives(result.drives || []);
-        setWarning(result.warning || '');
-      } else {
-        setError(result.error || 'Failed to browse directory');
+        const result = await apiPost<BrowseResult>('/api/fs/browse', body);
+
+        if (result.success) {
+          setCurrentPath(result.currentPath);
+          setParentPath(result.parentPath);
+          setDirectories(result.directories);
+          setFiles(result.files || []);
+          setDrives(result.drives || []);
+          setWarning(result.warning || '');
+        } else {
+          setError(result.error || 'Failed to browse directory');
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load directories');
+      } finally {
+        setLoading(false);
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load directories');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+    },
+    [isFileMode, fileExtensions]
+  );
 
   const handleSelectRecent = useCallback(
     (path: string) => {
@@ -110,6 +156,8 @@ export function FileBrowserDialog({
       setCurrentPath('');
       setParentPath(null);
       setDirectories([]);
+      setFiles([]);
+      setSelectedFile(null);
       setError('');
       setWarning('');
     }
@@ -119,32 +167,26 @@ export function FileBrowserDialog({
   useEffect(() => {
     if (open && !currentPath) {
       // Priority order:
-      // 1. Last selected directory from this file browser (from localStorage)
-      // 2. initialPath prop (from parent component)
-      // 3. Default workspace directory
-      // 4. Home directory
+      // 1. initialPath prop (from parent component) - always takes priority when provided
+      // 2. Default workspace directory (last used > Documents/Automaker > DATA_DIR)
+      // 3. Home directory
       const loadInitialPath = async () => {
+        // If initialPath is explicitly provided, use it directly (e.g. file selection starting at project dir)
+        if (initialPath) {
+          browseDirectory(initialPath);
+          return;
+        }
+
         try {
-          // First, check for last selected directory from getDefaultWorkspaceDirectory
-          // which already implements the priority: last used > Documents/Automaker > DATA_DIR
           const defaultDir = await getDefaultWorkspaceDirectory();
 
-          // If we have a default directory, use it (unless initialPath is explicitly provided and different)
-          const pathToUse = initialPath || defaultDir;
-
-          if (pathToUse) {
-            browseDirectory(pathToUse);
+          if (defaultDir) {
+            browseDirectory(defaultDir);
           } else {
-            // No default directory, browse home directory
             browseDirectory();
           }
         } catch {
-          // If config fetch fails, try initialPath or fall back to home directory
-          if (initialPath) {
-            browseDirectory(initialPath);
-          } else {
-            browseDirectory();
-          }
+          browseDirectory();
         }
       };
 
@@ -172,14 +214,19 @@ export function FileBrowserDialog({
   };
 
   const handleSelect = useCallback(() => {
-    if (currentPath) {
+    if (isFileMode) {
+      if (selectedFile) {
+        onSelect(selectedFile);
+        onOpenChange(false);
+      }
+    } else if (currentPath) {
       addRecentFolder(currentPath);
       // Save to last project directory so it's used as default next time
       saveLastProjectDirectory(currentPath);
       onSelect(currentPath);
       onOpenChange(false);
     }
-  }, [currentPath, onSelect, onOpenChange]);
+  }, [isFileMode, selectedFile, currentPath, onSelect, onOpenChange]);
 
   // Handle Command/Ctrl+Enter keyboard shortcut to select current folder
   useEffect(() => {
@@ -189,7 +236,8 @@ export function FileBrowserDialog({
       // Check for Command+Enter (Mac) or Ctrl+Enter (Windows/Linux)
       if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
-        if (currentPath && !loading) {
+        const canSelect = isFileMode ? !!selectedFile : !!currentPath;
+        if (canSelect && !loading) {
           handleSelect();
         }
       }
@@ -207,14 +255,21 @@ export function FileBrowserDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-popover border-border max-w-3xl max-h-[85vh] overflow-hidden flex flex-col p-4 focus:outline-none focus-visible:outline-none">
+      <DialogContent
+        className="bg-popover border-border max-w-3xl max-h-[85vh] overflow-hidden flex flex-col p-4 focus:outline-none focus-visible:outline-none"
+        data-testid="file-browser-dialog"
+      >
         <DialogHeader className="pb-1">
           <DialogTitle className="flex items-center gap-2 text-base">
-            <FolderOpen className="w-4 h-4 text-brand-500" />
-            {title}
+            {isFileMode ? (
+              <FileCode className="w-4 h-4 text-brand-500" />
+            ) : (
+              <FolderOpen className="w-4 h-4 text-brand-500" />
+            )}
+            {resolvedTitle}
           </DialogTitle>
           <DialogDescription className="text-muted-foreground text-xs">
-            {description}
+            {resolvedDescription}
           </DialogDescription>
         </DialogHeader>
 
@@ -227,16 +282,21 @@ export function FileBrowserDialog({
             error={!!error}
             onNavigate={handleNavigate}
             onHome={handleGoHome}
-            entries={directories.map((dir) => ({ ...dir, isDirectory: true }))}
+            entries={[
+              ...directories.map((dir) => ({ ...dir, isDirectory: true })),
+              ...(isFileMode ? files.map((f) => ({ ...f, isDirectory: false })) : []),
+            ]}
             onSelectEntry={(entry) => {
               if (entry.isDirectory) {
                 handleSelectDirectory(entry);
+              } else if (isFileMode) {
+                setSelectedFile(entry.path);
               }
             }}
           />
 
-          {/* Recent folders */}
-          {recentFolders.length > 0 && (
+          {/* Recent folders - only show in directory mode (not useful for file selection) */}
+          {!isFileMode && recentFolders.length > 0 && (
             <div className="flex flex-wrap gap-1.5 p-2 rounded-md bg-sidebar-accent/10 border border-sidebar-border">
               <div className="flex items-center gap-1 text-xs text-muted-foreground mr-1">
                 <Clock className="w-3 h-3" />
@@ -287,7 +347,10 @@ export function FileBrowserDialog({
           )}
 
           {/* Directory list */}
-          <div className="flex-1 overflow-y-auto border border-sidebar-border rounded-md scrollbar-styled">
+          <div
+            className="flex-1 overflow-y-auto border border-sidebar-border rounded-md scrollbar-styled"
+            data-testid="file-browser-directory-list"
+          >
             {loading && (
               <div className="flex items-center justify-center h-full p-4">
                 <div className="text-xs text-muted-foreground">Loading directories...</div>
@@ -306,13 +369,15 @@ export function FileBrowserDialog({
               </div>
             )}
 
-            {!loading && !error && !warning && directories.length === 0 && (
+            {!loading && !error && !warning && directories.length === 0 && files.length === 0 && (
               <div className="flex items-center justify-center h-full p-4">
-                <div className="text-xs text-muted-foreground">No subdirectories found</div>
+                <div className="text-xs text-muted-foreground">
+                  {isFileMode ? 'No matching files or folders found' : 'No subdirectories found'}
+                </div>
               </div>
             )}
 
-            {!loading && !error && directories.length > 0 && (
+            {!loading && !error && (directories.length > 0 || files.length > 0) && (
               <div className="divide-y divide-sidebar-border">
                 {directories.map((dir) => (
                   <button
@@ -325,33 +390,75 @@ export function FileBrowserDialog({
                     <ChevronRight className="w-3.5 h-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
                   </button>
                 ))}
+                {isFileMode &&
+                  files.map((file) => (
+                    <button
+                      key={file.path}
+                      onClick={() => setSelectedFile(file.path)}
+                      onDoubleClick={() => {
+                        setSelectedFile(file.path);
+                        onSelect(file.path);
+                        onOpenChange(false);
+                      }}
+                      className={`w-full flex items-center gap-2 px-2 py-1.5 hover:bg-sidebar-accent/10 transition-colors text-left group ${
+                        selectedFile === file.path ? 'bg-brand-500/10 ring-1 ring-brand-500/30' : ''
+                      }`}
+                    >
+                      <FileIcon className="w-4 h-4 text-muted-foreground shrink-0" />
+                      <span className="flex-1 truncate text-xs">{file.name}</span>
+                    </button>
+                  ))}
               </div>
             )}
           </div>
 
           <div className="text-[10px] text-muted-foreground">
-            Paste a full path above, or click on folders to navigate. Press Enter or click → to jump
-            to a path.
+            {isFileMode
+              ? 'Navigate to the folder containing your file, then click a file to select it. Double-click to select immediately.'
+              : 'Paste a full path above, or click on folders to navigate. Press Enter or click \u2192 to jump to a path.'}
           </div>
         </div>
 
         <DialogFooter className="border-t border-border pt-3 gap-2 mt-1">
-          <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => onOpenChange(false)}
+            data-testid="file-browser-cancel-button"
+          >
             Cancel
           </Button>
-          <Button
-            size="sm"
-            onClick={handleSelect}
-            disabled={!currentPath || loading}
-            title="Select current folder (Cmd+Enter / Ctrl+Enter)"
-          >
-            <FolderOpen className="w-3.5 h-3.5 mr-1.5" />
-            Select Current Folder
-            <KbdGroup className="ml-1">
-              <Kbd>{isMac ? '⌘' : 'Ctrl'}</Kbd>
-              <Kbd>↵</Kbd>
-            </KbdGroup>
-          </Button>
+          {isFileMode ? (
+            <Button
+              size="sm"
+              onClick={handleSelect}
+              disabled={!selectedFile || loading}
+              title="Select file (Cmd+Enter / Ctrl+Enter)"
+              data-testid="file-browser-select-button"
+            >
+              <FileIcon className="w-3.5 h-3.5 mr-1.5" />
+              {selectedFile ? `Select "${selectedFile.split(/[/\\]/).pop()}"` : 'Select File'}
+              <KbdGroup className="ml-1">
+                <Kbd>{isMac ? '⌘' : 'Ctrl'}</Kbd>
+                <Kbd>↵</Kbd>
+              </KbdGroup>
+            </Button>
+          ) : (
+            <Button
+              size="sm"
+              onClick={handleSelect}
+              disabled={!currentPath || loading}
+              title="Select current folder (Cmd+Enter / Ctrl+Enter)"
+              data-testid="file-browser-select-button"
+            >
+              <FolderOpen className="w-3.5 h-3.5 mr-1.5" />
+              Select Current Folder
+              <KbdGroup className="ml-1">
+                <Kbd>{isMac ? '⌘' : 'Ctrl'}</Kbd>
+                <Kbd>↵</Kbd>
+              </KbdGroup>
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

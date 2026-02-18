@@ -2,7 +2,7 @@
  * Enhanced logger with colors and timestamps
  *
  * Environment Variables:
- * - LOG_LEVEL: error, warn, info, debug (default: info)
+ * - LOG_LEVEL: error, warn, info, debug (default: warn)
  * - LOG_COLORS: true/false (default: true in Node.js)
  * - LOG_TIMESTAMPS: true/false (default: false)
  */
@@ -57,7 +57,7 @@ const BROWSER_STYLES = {
 const isBrowser = typeof (globalThis as any).window !== 'undefined';
 
 // Configuration state
-let currentLogLevel: LogLevel = LogLevel.INFO;
+let currentLogLevel: LogLevel = LogLevel.WARN;
 
 // Get environment variable safely (works in both Node.js and browser)
 function getEnvVar(name: string): string | undefined {

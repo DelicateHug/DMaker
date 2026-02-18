@@ -84,61 +84,69 @@ const KEYBOARD_ROWS = [
 // Map shortcut names to human-readable labels
 const SHORTCUT_LABELS: Record<keyof KeyboardShortcuts, string> = {
   board: 'Kanban Board',
-  graph: 'Graph View',
   agent: 'Agent Runner',
   spec: 'Spec Editor',
-  context: 'Context',
   memory: 'Memory',
   settings: 'Settings',
   projectSettings: 'Project Settings',
   terminal: 'Terminal',
   ideation: 'Ideation',
-  notifications: 'Notifications',
   githubIssues: 'GitHub Issues',
   githubPrs: 'Pull Requests',
-  toggleSidebar: 'Toggle Sidebar',
   addFeature: 'Add Feature',
-  addContextFile: 'Add Context File',
   startNext: 'Start Next',
   newSession: 'New Session',
   openProject: 'Open Project',
   projectPicker: 'Project Picker',
   cyclePrevProject: 'Prev Project',
   cycleNextProject: 'Next Project',
+  autoMode: 'Auto Mode',
+  completedFeatures: 'Completed',
   splitTerminalRight: 'Split Right',
   splitTerminalDown: 'Split Down',
   closeTerminal: 'Close Terminal',
   newTerminalTab: 'New Tab',
+  voiceMode: 'Voice Mode',
+  voiceModeToggle: 'Toggle Voice Mode',
+  recordingToggle: 'Toggle Recording',
+  toggleFileExplorer: 'Files Panel',
+  toggleKanbanPanel: 'Board Panel',
+  toggleAgentChat: 'Agent Chat',
+  toggleDeployPanel: 'Deploy Panel',
 };
 
 // Categorize shortcuts for color coding
-const SHORTCUT_CATEGORIES: Record<keyof KeyboardShortcuts, 'navigation' | 'ui' | 'action'> = {
+const SHORTCUT_CATEGORIES: Record<keyof KeyboardShortcuts, 'navigation' | 'action'> = {
   board: 'navigation',
-  graph: 'navigation',
   agent: 'navigation',
   spec: 'navigation',
-  context: 'navigation',
   memory: 'navigation',
   settings: 'navigation',
   projectSettings: 'navigation',
   terminal: 'navigation',
   ideation: 'navigation',
-  notifications: 'navigation',
   githubIssues: 'navigation',
   githubPrs: 'navigation',
-  toggleSidebar: 'ui',
   addFeature: 'action',
-  addContextFile: 'action',
   startNext: 'action',
   newSession: 'action',
   openProject: 'action',
   projectPicker: 'action',
   cyclePrevProject: 'action',
   cycleNextProject: 'action',
+  autoMode: 'action',
+  completedFeatures: 'action',
   splitTerminalRight: 'action',
   splitTerminalDown: 'action',
   closeTerminal: 'action',
   newTerminalTab: 'action',
+  voiceMode: 'action',
+  voiceModeToggle: 'action',
+  recordingToggle: 'action',
+  toggleFileExplorer: 'action',
+  toggleKanbanPanel: 'action',
+  toggleAgentChat: 'action',
+  toggleDeployPanel: 'action',
 };
 
 // Category colors
@@ -308,7 +316,10 @@ export function KeyboardMap({ onKeySelect, selectedKey, className }: KeyboardMap
     <TooltipProvider>
       <div className={cn('space-y-4', className)} data-testid="keyboard-map">
         {/* Legend */}
-        <div className="flex flex-wrap gap-4 justify-center text-xs">
+        <div
+          className="flex flex-wrap gap-4 justify-center text-xs"
+          data-testid="keyboard-map-legend"
+        >
           {Object.entries(CATEGORY_COLORS).map(([key, colors]) => (
             <div key={key} className="flex items-center gap-2">
               <div className={cn('w-4 h-4 rounded border', colors.bg, colors.border)} />
@@ -326,7 +337,10 @@ export function KeyboardMap({ onKeySelect, selectedKey, className }: KeyboardMap
         </div>
 
         {/* Keyboard layout */}
-        <div className="flex flex-col items-center gap-1.5 p-4 rounded-xl bg-sidebar-accent/5 border border-sidebar-border">
+        <div
+          className="flex flex-col items-center gap-1.5 p-4 rounded-xl bg-sidebar-accent/5 border border-sidebar-border"
+          data-testid="keyboard-map-layout"
+        >
           {KEYBOARD_ROWS.map((row, rowIndex) => (
             <div key={rowIndex} className="flex gap-1.5 justify-center">
               {row.map(renderKey)}
@@ -335,7 +349,10 @@ export function KeyboardMap({ onKeySelect, selectedKey, className }: KeyboardMap
         </div>
 
         {/* Stats */}
-        <div className="flex justify-center gap-6 text-xs text-muted-foreground">
+        <div
+          className="flex justify-center gap-6 text-xs text-muted-foreground"
+          data-testid="keyboard-map-stats"
+        >
           <span>
             <strong className="text-foreground">{Object.keys(keyboardShortcuts).length}</strong>{' '}
             shortcuts configured
@@ -527,7 +544,7 @@ export function ShortcutReferencePanel({ editable = false }: ShortcutReferencePa
         {Object.entries(groupedShortcuts).map(([category, shortcuts]) => {
           const colors = CATEGORY_COLORS[category as keyof typeof CATEGORY_COLORS];
           return (
-            <div key={category} className="space-y-2">
+            <div key={category} className="space-y-2" data-testid={`shortcut-category-${category}`}>
               <h4 className={cn('text-sm font-semibold', colors.text)}>{colors.label}</h4>
               <div className="grid grid-cols-2 gap-2">
                 {shortcuts.map(({ key, label, value }) => {

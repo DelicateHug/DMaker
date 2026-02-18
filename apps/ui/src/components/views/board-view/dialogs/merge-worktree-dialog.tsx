@@ -102,7 +102,7 @@ export function MergeWorktreeDialog({
   if (step === 'confirm') {
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent>
+        <DialogContent data-testid="merge-worktree-dialog">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <GitMerge className="w-5 h-5 text-green-600" />
@@ -170,7 +170,7 @@ export function MergeWorktreeDialog({
   // Second step: Type confirmation
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent data-testid="merge-worktree-confirm-dialog">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <AlertTriangle className="w-5 h-5 text-orange-500" />

@@ -6,7 +6,7 @@ interface BranchAutocompleteProps {
   value: string;
   onChange: (value: string) => void;
   branches: string[];
-  branchCardCounts?: Record<string, number>; // Map of branch name to unarchived card count
+  branchCardCounts?: Record<string, number>; // Map of branch name to active card count
   placeholder?: string;
   className?: string;
   disabled?: boolean;

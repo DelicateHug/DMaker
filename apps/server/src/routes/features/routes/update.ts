@@ -5,13 +5,13 @@
 import type { Request, Response } from 'express';
 import { FeatureLoader } from '../../../services/feature-loader.js';
 import type { Feature, FeatureStatus } from '@automaker/types';
-import { getErrorMessage, logError } from '../common.js';
+import { getErrorMessage, logError, invalidateFeaturesCache } from '../common.js';
 import { createLogger } from '@automaker/utils';
 
 const logger = createLogger('features/update');
 
 // Statuses that should trigger syncing to app_spec.txt
-const SYNC_TRIGGER_STATUSES: FeatureStatus[] = ['verified', 'completed'];
+const SYNC_TRIGGER_STATUSES: FeatureStatus[] = ['completed'];
 
 export function createUpdateHandler(featureLoader: FeatureLoader) {
   return async (req: Request, res: Response): Promise<void> => {
@@ -85,6 +85,9 @@ export function createUpdateHandler(featureLoader: FeatureLoader) {
           logger.error(`Failed to sync feature to app_spec.txt:`, syncError);
         }
       }
+
+      // Invalidate cached feature lists so subsequent reads return fresh data
+      invalidateFeaturesCache(projectPath);
 
       res.json({ success: true, feature: updated });
     } catch (error) {

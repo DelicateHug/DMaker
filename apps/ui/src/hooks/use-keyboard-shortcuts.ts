@@ -1,6 +1,12 @@
 import { useEffect, useCallback, useMemo } from 'react';
 import { useAppStore, parseShortcut, DEFAULT_KEYBOARD_SHORTCUTS } from '@/store/app-store';
 
+/**
+ * Selector for keyboard shortcuts configuration from app store
+ */
+const selectKeyboardShortcuts = (state: ReturnType<typeof useAppStore.getState>) =>
+  state.keyboardShortcuts;
+
 export interface KeyboardShortcut {
   key: string; // Can be simple "K" or with modifiers "Shift+N", "Cmd+K"
   action: () => void;
@@ -129,23 +135,12 @@ function keyToCode(key: string): string {
 }
 
 /**
- * Check if a keyboard event matches a shortcut definition using event.code
- * This is keyboard-layout independent - useful for terminals where Alt+key
- * combinations can produce special characters with event.key
+ * Check if modifier keys match the shortcut requirements
  */
-export function matchesShortcutWithCode(event: KeyboardEvent, shortcutStr: string): boolean {
-  const shortcut = parseShortcut(shortcutStr);
-  if (!shortcut.key) return false;
-
-  // Convert the shortcut key to event.code format
-  const expectedCode = keyToCode(shortcut.key);
-
-  // Check if the code matches
-  if (event.code !== expectedCode) {
-    return false;
-  }
-
-  // Check modifier keys
+function modifiersMatch(
+  event: KeyboardEvent,
+  shortcut: { shift?: boolean; cmdCtrl?: boolean; alt?: boolean }
+): boolean {
   const cmdCtrlPressed = event.metaKey || event.ctrlKey;
   const shiftPressed = event.shiftKey;
   const altPressed = event.altKey;
@@ -169,37 +164,56 @@ export function matchesShortcutWithCode(event: KeyboardEvent, shortcutStr: strin
 }
 
 /**
- * Check if a keyboard event matches a shortcut definition
+ * Check if a keyboard event matches a shortcut definition using event.code
+ * This is keyboard-layout independent - useful for terminals where Alt+key
+ * combinations can produce special characters with event.key
  */
-function matchesShortcut(event: KeyboardEvent, shortcutStr: string): boolean {
+export function matchesShortcutWithCode(event: KeyboardEvent, shortcutStr: string): boolean {
   const shortcut = parseShortcut(shortcutStr);
+  if (!shortcut.key) return false;
 
-  // Check if the key matches (case-insensitive)
-  if (event.key.toLowerCase() !== shortcut.key.toLowerCase()) {
+  // Convert the shortcut key to event.code format
+  const expectedCode = keyToCode(shortcut.key);
+
+  // Check if the code matches
+  if (event.code !== expectedCode) {
     return false;
   }
 
   // Check modifier keys
-  const cmdCtrlPressed = event.metaKey || event.ctrlKey;
-  const shiftPressed = event.shiftKey;
-  const altPressed = event.altKey;
+  return modifiersMatch(event, shortcut);
+}
 
-  // If shortcut requires cmdCtrl, it must be pressed
-  if (shortcut.cmdCtrl && !cmdCtrlPressed) return false;
-  // If shortcut doesn't require cmdCtrl, it shouldn't be pressed
-  if (!shortcut.cmdCtrl && cmdCtrlPressed) return false;
+/**
+ * Check if a keyboard event matches a shortcut definition
+ *
+ * Uses event.key for primary matching, and falls back to event.code for
+ * Shift+digit shortcuts where event.key produces shifted characters
+ * (e.g., Shift+1 produces '!' on US keyboards instead of '1').
+ */
+function matchesShortcut(event: KeyboardEvent, shortcutStr: string): boolean {
+  const shortcut = parseShortcut(shortcutStr);
+  if (!shortcut.key) return false;
 
-  // If shortcut requires shift, it must be pressed
-  if (shortcut.shift && !shiftPressed) return false;
-  // If shortcut doesn't require shift, it shouldn't be pressed
-  if (!shortcut.shift && shiftPressed) return false;
+  // First, check modifiers - if they don't match, no need to check key
+  if (!modifiersMatch(event, shortcut)) {
+    return false;
+  }
 
-  // If shortcut requires alt, it must be pressed
-  if (shortcut.alt && !altPressed) return false;
-  // If shortcut doesn't require alt, it shouldn't be pressed
-  if (!shortcut.alt && altPressed) return false;
+  // Primary match: compare event.key (case-insensitive)
+  if (event.key.toLowerCase() === shortcut.key.toLowerCase()) {
+    return true;
+  }
 
-  return true;
+  // Fallback: use event.code for keyboard-layout independent matching.
+  // This handles cases like Shift+1 where event.key becomes '!' on US keyboards,
+  // but event.code remains 'Digit1'.
+  const expectedCode = keyToCode(shortcut.key);
+  if (event.code === expectedCode) {
+    return true;
+  }
+
+  return false;
 }
 
 /**

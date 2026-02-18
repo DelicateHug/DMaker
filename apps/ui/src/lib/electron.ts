@@ -27,8 +27,22 @@ import type {
   CreateIdeaInput,
   UpdateIdeaInput,
   ConvertToFeatureOptions,
+  VoiceSettings,
+  VoiceSession,
+  VoiceSessionStatus,
+  VoiceEvent,
+  SummaryHistoryEntry,
+  ListSummariesResponse,
+  GetSummaryResponse,
+  SummaryErrorResponse,
+  FeatureListSummary,
+  ListFeatureSummariesResponse,
 } from '@automaker/types';
 import { getJSON, setJSON, removeItem } from './storage';
+
+// Distributive Omit that works correctly with union types
+// Standard Omit collapses unions; this preserves discriminated union variants
+type DistributiveOmit<T, K extends keyof T> = T extends unknown ? Omit<T, K> : never;
 
 // Re-export issue validation types for use in components
 export type {
@@ -155,6 +169,18 @@ export interface FileStats {
   mtime: Date;
 }
 
+export interface FileFilter {
+  name: string;
+  extensions: string[];
+}
+
+export interface OpenFileOptions {
+  title?: string;
+  defaultPath?: string;
+  filters?: FileFilter[];
+  properties?: string[];
+}
+
 export interface DialogResult {
   canceled: boolean;
   filePaths: string[];
@@ -220,6 +246,9 @@ export interface RunningAgent {
   isAutoMode: boolean;
   title?: string;
   description?: string;
+  tasksCompleted?: number;
+  tasksTotal?: number;
+  currentTaskId?: string;
 }
 
 export interface RunningAgentsResult {
@@ -453,9 +482,16 @@ export interface SpecRegenerationAPI {
 }
 
 // Features API types
+export interface StatusFilterOptions {
+  excludeStatuses?: string[];
+  includeStatuses?: string[];
+}
+
 export interface FeaturesAPI {
   getAll: (
-    projectPath: string
+    projectPath: string,
+    forceRefresh?: boolean,
+    options?: StatusFilterOptions
   ) => Promise<{ success: boolean; features?: Feature[]; error?: string }>;
   get: (
     projectPath: string,
@@ -478,9 +514,30 @@ export interface FeaturesAPI {
     projectPath: string,
     featureId: string
   ) => Promise<{ success: boolean; content?: string | null; error?: string }>;
+  getSummaries: (
+    projectPath: string,
+    featureId: string
+  ) => Promise<ListSummariesResponse | SummaryErrorResponse>;
+  getSummaryFiles: (
+    projectPath: string,
+    featureId: string
+  ) => Promise<ListSummariesResponse | SummaryErrorResponse>;
+  getSummary: (
+    projectPath: string,
+    featureId: string,
+    timestamp: string
+  ) => Promise<GetSummaryResponse | SummaryErrorResponse>;
   generateTitle: (
     description: string
   ) => Promise<{ success: boolean; title?: string; error?: string }>;
+  getListSummaries: (
+    projectPath: string,
+    forceRefresh?: boolean,
+    options?: StatusFilterOptions
+  ) => Promise<ListFeatureSummariesResponse | { success: false; error?: string }>;
+  getCountsByStatus: (
+    projectPath: string
+  ) => Promise<{ success: boolean; counts?: Record<string, number>; error?: string }>;
 }
 
 export interface AutoModeAPI {
@@ -505,8 +562,20 @@ export interface AutoModeAPI {
     projectPath: string,
     featureId: string,
     useWorktrees?: boolean,
-    worktreePath?: string
-  ) => Promise<{ success: boolean; passes?: boolean; error?: string }>;
+    forceRun?: boolean
+  ) => Promise<{
+    success: boolean;
+    passes?: boolean;
+    error?: string;
+    warning?: 'unsatisfied_dependencies';
+    message?: string;
+    blockingDependencies?: Array<{
+      id: string;
+      title?: string;
+      description?: string;
+      status?: string;
+    }>;
+  }>;
   verifyFeature: (
     projectPath: string,
     featureId: string
@@ -641,8 +710,9 @@ export interface ElectronAPI {
   getApiKey?: () => Promise<string | null>;
   quit?: () => Promise<void>;
   openExternalLink: (url: string) => Promise<{ success: boolean; error?: string }>;
+  updateTrayCount?: (count: number) => Promise<{ success: boolean; error?: string }>;
   openDirectory: () => Promise<DialogResult>;
-  openFile: (options?: object) => Promise<DialogResult>;
+  openFile: (options?: OpenFileOptions) => Promise<DialogResult>;
   readFile: (filePath: string) => Promise<FileResult>;
   writeFile: (filePath: string, content: string) => Promise<WriteResult>;
   mkdir: (dirPath: string) => Promise<WriteResult>;
@@ -942,6 +1012,95 @@ export interface ElectronAPI {
       error?: string;
     }>;
   };
+  voice?: {
+    startSession: (
+      projectPath: string,
+      settings?: Partial<VoiceSettings>
+    ) => Promise<{
+      success: boolean;
+      session?: VoiceSession;
+      error?: string;
+    }>;
+    stopSession: (sessionId: string) => Promise<{
+      success: boolean;
+      error?: string;
+    }>;
+    getSession: (sessionId: string) => Promise<{
+      success: boolean;
+      session?: VoiceSession;
+      error?: string;
+    }>;
+    listSessions: (projectPath?: string) => Promise<{
+      success: boolean;
+      sessions?: VoiceSession[];
+      count?: number;
+      error?: string;
+    }>;
+    deleteSession: (sessionId: string) => Promise<{
+      success: boolean;
+      error?: string;
+    }>;
+    processCommand: (
+      sessionId: string,
+      text: string,
+      audioDurationMs?: number,
+      confidence?: number
+    ) => Promise<{
+      success: boolean;
+      response?: string;
+      messageId?: string;
+      commandExecuted?: boolean;
+      commandResult?: {
+        success: boolean;
+        response: string;
+        commandName?: string;
+        data?: unknown;
+        error?: string;
+      };
+      error?: string;
+    }>;
+    stopProcessing: (sessionId: string) => Promise<{
+      success: boolean;
+      error?: string;
+    }>;
+    getStatus: (sessionId: string) => Promise<{
+      success: boolean;
+      status?: VoiceSessionStatus;
+      session?: VoiceSession;
+      error?: string;
+    }>;
+    updateStatus: (
+      sessionId: string,
+      status: VoiceSessionStatus
+    ) => Promise<{
+      success: boolean;
+      error?: string;
+    }>;
+    updateSettings: (
+      sessionId: string,
+      settings: Partial<VoiceSettings>
+    ) => Promise<{
+      success: boolean;
+      error?: string;
+    }>;
+    onEvent: (callback: (event: VoiceEvent) => void) => () => void;
+  };
+  pushEvents?: {
+    onFeatureStatusChanged: (
+      callback: (payload: {
+        featureId: string;
+        status: string;
+        projectPath: string;
+        title: string;
+      }) => void
+    ) => () => void;
+    onSessionStateChanged: (
+      callback: (payload: { sessionId: string; isRunning: boolean }) => void
+    ) => () => void;
+    onUsageUpdated: (
+      callback: (payload: { provider: string; usage: unknown }) => void
+    ) => () => void;
+  };
 }
 
 // Note: Window interface is declared in @/types/electron.d.ts
@@ -1079,8 +1238,11 @@ const getMockElectronAPI = (): ElectronAPI => {
       };
     },
 
-    openFile: async () => {
-      const path = prompt('Enter file path:');
+    openFile: async (options?: OpenFileOptions) => {
+      const filterHint = options?.filters?.[0]
+        ? ` (${options.filters[0].extensions.map((e) => `.${e}`).join(', ')})`
+        : '';
+      const path = prompt(`${options?.title || 'Select file'}${filterHint}:`);
       return {
         canceled: !path,
         filePaths: path ? [path] : [],
@@ -2047,6 +2209,7 @@ function createMockAutoModeAPI(): AutoModeAPI {
       emitAutoModeEvent({
         type: 'auto_mode_feature_complete',
         featureId,
+        featureTitle: 'Sample Feature',
         passes: false,
         message: 'Feature stopped by user',
       });
@@ -2068,7 +2231,7 @@ function createMockAutoModeAPI(): AutoModeAPI {
       projectPath: string,
       featureId: string,
       useWorktrees?: boolean,
-      worktreePath?: string
+      forceRun?: boolean
     ) => {
       if (mockRunningFeatures.has(featureId)) {
         return {
@@ -2078,7 +2241,7 @@ function createMockAutoModeAPI(): AutoModeAPI {
       }
 
       console.log(
-        `[Mock] Running feature ${featureId} with useWorktrees: ${useWorktrees}, worktreePath: ${worktreePath}`
+        `[Mock] Running feature ${featureId} with useWorktrees: ${useWorktrees}, forceRun: ${forceRun}`
       );
       mockRunningFeatures.add(featureId);
       simulateAutoModeLoop(projectPath, featureId);
@@ -2221,6 +2384,7 @@ function createMockAutoModeAPI(): AutoModeAPI {
       emitAutoModeEvent({
         type: 'auto_mode_feature_complete',
         featureId: analysisId,
+        featureTitle: 'Project analysis',
         passes: true,
         message: 'Project analyzed successfully',
       });
@@ -2293,6 +2457,7 @@ function createMockAutoModeAPI(): AutoModeAPI {
       emitAutoModeEvent({
         type: 'auto_mode_feature_complete',
         featureId,
+        featureTitle: 'Sample Feature',
         passes: true,
         message: 'Changes committed successfully',
       });
@@ -2331,8 +2496,9 @@ function createMockAutoModeAPI(): AutoModeAPI {
   };
 }
 
-function emitAutoModeEvent(event: AutoModeEvent) {
-  mockAutoModeCallbacks.forEach((cb) => cb(event));
+function emitAutoModeEvent(event: DistributiveOmit<AutoModeEvent, 'timestamp'>) {
+  const eventWithTimestamp = { ...event, timestamp: new Date().toISOString() } as AutoModeEvent;
+  mockAutoModeCallbacks.forEach((cb) => cb(eventWithTimestamp));
 }
 
 async function simulateAutoModeLoop(projectPath: string, featureId: string) {
@@ -2436,6 +2602,7 @@ async function simulateAutoModeLoop(projectPath: string, featureId: string) {
   emitAutoModeEvent({
     type: 'auto_mode_feature_complete',
     featureId,
+    featureTitle: mockFeature.description,
     passes: true,
     message: 'Feature implemented successfully',
   });
@@ -3121,12 +3288,90 @@ function createMockFeaturesAPI(): FeaturesAPI {
       return { success: true, content: content || null };
     },
 
+    getSummaries: async (projectPath: string, featureId: string) => {
+      console.log('[Mock] Getting summaries:', { projectPath, featureId });
+      return { success: true, summaries: [] };
+    },
+
+    getSummaryFiles: async (projectPath: string, featureId: string) => {
+      console.log('[Mock] Getting summary files:', { projectPath, featureId });
+      return { success: true, summaries: [] };
+    },
+
+    getSummary: async (projectPath: string, featureId: string, timestamp: string) => {
+      console.log('[Mock] Getting summary:', { projectPath, featureId, timestamp });
+      return { success: false, error: 'Summary not found' };
+    },
+
     generateTitle: async (description: string) => {
       console.log('[Mock] Generating title for:', description.substring(0, 50));
       // Mock title generation - just take first few words
       const words = description.split(/\s+/).slice(0, 6).join(' ');
       const title = words.length > 40 ? words.substring(0, 40) + '...' : words;
       return { success: true, title: `Add ${title}` };
+    },
+
+    getListSummaries: async (projectPath: string) => {
+      console.log('[Mock] Getting list summaries for:', projectPath);
+
+      const toSummary = (f: any): FeatureListSummary => ({
+        id: f.id || '',
+        title: f.title,
+        titleGenerating: f.titleGenerating,
+        category: f.category || 'General',
+        status: f.status,
+        priority: f.priority,
+        isFavorite: f.isFavorite,
+        model: f.model,
+        thinkingLevel: f.thinkingLevel,
+        branchName: f.branchName,
+        error: f.error,
+        startedAt: f.startedAt,
+        imagePathsCount: f.imagePaths?.length ?? 0,
+      });
+
+      // Check if test has set mock features via global variable
+      const testFeatures = (window as any).__mockFeatures;
+      if (testFeatures !== undefined) {
+        return { success: true, features: testFeatures.map(toSummary) };
+      }
+
+      // Try to read from mock file system
+      const featuresDir = `${projectPath}/.automaker/features`;
+      const summaries: FeatureListSummary[] = [];
+
+      const featureKeys = Object.keys(mockFileSystem).filter(
+        (key) => key.startsWith(featuresDir) && key.endsWith('/feature.json')
+      );
+
+      for (const key of featureKeys) {
+        try {
+          const content = mockFileSystem[key];
+          if (content) {
+            summaries.push(toSummary(JSON.parse(content)));
+          }
+        } catch (error) {
+          console.error('[Mock] Failed to parse feature for summary:', error);
+        }
+      }
+
+      // Fallback to mock features if no features found
+      if (summaries.length === 0) {
+        return { success: true, features: mockFeatures.map(toSummary) };
+      }
+
+      return { success: true, features: summaries };
+    },
+
+    getCountsByStatus: async (projectPath: string) => {
+      console.log('[Mock] Getting counts by status for:', projectPath);
+      // Return mock counts based on mock features
+      const counts: Record<string, number> = {};
+      for (const f of mockFeatures) {
+        const status = f.status || 'backlog';
+        counts[status] = (counts[status] || 0) + 1;
+      }
+      return { success: true, counts };
     },
   };
 }
@@ -3297,6 +3542,7 @@ export interface Project {
   isFavorite?: boolean; // Pin project to top of dashboard
   icon?: string; // Lucide icon name for project identification
   customIconPath?: string; // Path to custom uploaded icon image in .automaker/images/
+  defaultBranch?: string; // Default git branch for this project (e.g., "main", "develop")
 }
 
 export interface TrashedProject extends Project {

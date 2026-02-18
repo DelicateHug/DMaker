@@ -1,7 +1,16 @@
 import { useEffect } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { useAppStore } from '@/store/app-store';
 import { getHttpApiClient } from '@/lib/http-api-client';
 import { pathsEqual } from '@/lib/utils';
+
+/**
+ * Selector for init script event actions
+ */
+const selectInitScriptActions = (state: ReturnType<typeof useAppStore.getState>) => ({
+  setInitScriptState: state.setInitScriptState,
+  appendInitScriptOutput: state.appendInitScriptOutput,
+});
 
 interface InitScriptStartedPayload {
   projectPath: string;
@@ -30,8 +39,9 @@ interface InitScriptCompletedPayload {
  * Should be used in a component that's always mounted (e.g., board-view).
  */
 export function useInitScriptEvents(projectPath: string | null) {
-  const setInitScriptState = useAppStore((s) => s.setInitScriptState);
-  const appendInitScriptOutput = useAppStore((s) => s.appendInitScriptOutput);
+  const { setInitScriptState, appendInitScriptOutput } = useAppStore(
+    useShallow(selectInitScriptActions)
+  );
 
   useEffect(() => {
     if (!projectPath) return;

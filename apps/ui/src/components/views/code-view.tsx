@@ -29,7 +29,7 @@ const shouldIgnore = (name: string) => {
 };
 
 export function CodeView() {
-  const { currentProject } = useAppStore();
+  const currentProject = useAppStore((state) => state.currentProject);
   const [fileTree, setFileTree] = useState<FileTreeNode[]>([]);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [fileContent, setFileContent] = useState<string>('');

@@ -12,6 +12,8 @@ import {
   DEFAULT_MAX_FILES,
   validateImageFile,
 } from '@/lib/image-utils';
+import { ImagePreviewDialog } from '@/components/ui/image-preview-dialog';
+import { LazyImage } from '@/components/ui/lazy-image';
 
 export interface FeatureImage {
   id: string;
@@ -40,6 +42,10 @@ export function FeatureImageUpload({
 }: FeatureImageUploadProps) {
   const [isDragOver, setIsDragOver] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [previewDialogOpen, setPreviewDialogOpen] = useState(false);
+  const [previewImageSrc, setPreviewImageSrc] = useState('');
+  const [previewImageAlt, setPreviewImageAlt] = useState('');
+  const [previewImageFilename, setPreviewImageFilename] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const processFiles = useCallback(
@@ -156,6 +162,13 @@ export function FeatureImageUpload({
     onImagesChange([]);
   }, [onImagesChange]);
 
+  const handleImageClick = useCallback((image: FeatureImage) => {
+    setPreviewImageSrc(image.data);
+    setPreviewImageAlt(image.filename);
+    setPreviewImageFilename(image.filename);
+    setPreviewDialogOpen(true);
+  }, []);
+
   return (
     <div className={cn('relative', className)}>
       {/* Hidden file input */}
@@ -230,15 +243,18 @@ export function FeatureImageUpload({
             {images.map((image) => (
               <div
                 key={image.id}
-                className="relative group rounded-md border border-muted bg-muted/50 overflow-hidden"
+                className="relative group rounded-md border border-muted bg-muted/50 overflow-hidden cursor-pointer hover:border-primary/50 transition-colors"
                 data-testid={`feature-image-preview-${image.id}`}
+                onClick={() => handleImageClick(image)}
               >
                 {/* Image thumbnail */}
                 <div className="w-16 h-16 flex items-center justify-center">
-                  <img
+                  <LazyImage
                     src={image.data}
                     alt={image.filename}
                     className="max-w-full max-h-full object-contain"
+                    containerClassName="w-full h-full flex items-center justify-center"
+                    errorIconSize="w-4 h-4"
                   />
                 </div>
                 {/* Remove button */}
@@ -264,6 +280,15 @@ export function FeatureImageUpload({
           </div>
         </div>
       )}
+
+      {/* Image preview dialog */}
+      <ImagePreviewDialog
+        open={previewDialogOpen}
+        onOpenChange={setPreviewDialogOpen}
+        imageSrc={previewImageSrc}
+        imageAlt={previewImageAlt}
+        imageFilename={previewImageFilename}
+      />
     </div>
   );
 }

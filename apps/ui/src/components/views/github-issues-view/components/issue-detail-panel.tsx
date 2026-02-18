@@ -18,6 +18,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Markdown } from '@/components/ui/markdown';
+import { LazyImage } from '@/components/ui/lazy-image';
 import { cn } from '@/lib/utils';
 import type { IssueDetailPanelProps } from '../types';
 import { isValidationStale } from '../utils';
@@ -226,10 +227,12 @@ export function IssueDetailPanel({
                   className="inline-flex items-center gap-1.5 px-2 py-0.5 text-xs font-medium rounded-full bg-blue-500/10 text-blue-500 border border-blue-500/20"
                 >
                   {assignee.avatarUrl && (
-                    <img
+                    <LazyImage
                       src={assignee.avatarUrl}
                       alt={assignee.login}
                       className="h-4 w-4 rounded-full"
+                      containerClassName="h-4 w-4"
+                      errorIconSize="w-2 h-2"
                     />
                   )}
                   {assignee.login}

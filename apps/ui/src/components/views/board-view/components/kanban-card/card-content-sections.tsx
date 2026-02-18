@@ -1,4 +1,5 @@
 // @ts-nocheck
+import { memo } from 'react';
 import { Feature } from '@/store/app-store';
 import { GitBranch, GitPullRequest, ExternalLink } from 'lucide-react';
 
@@ -7,12 +8,15 @@ interface CardContentSectionsProps {
   useWorktrees: boolean;
 }
 
-export function CardContentSections({ feature, useWorktrees }: CardContentSectionsProps) {
+export const CardContentSections = memo(function CardContentSections({
+  feature,
+  useWorktrees,
+}: CardContentSectionsProps) {
   return (
     <>
       {/* Target Branch Display */}
       {useWorktrees && feature.branchName && (
-        <div className="mb-2 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+        <div className="mb-1 flex items-center gap-1 text-[11px] text-muted-foreground">
           <GitBranch className="w-3 h-3 shrink-0" />
           <span className="font-mono truncate" title={feature.branchName}>
             {feature.branchName}
@@ -26,14 +30,14 @@ export function CardContentSections({ feature, useWorktrees }: CardContentSectio
         (() => {
           const prNumber = feature.prUrl.split('/').pop();
           return (
-            <div className="mb-2">
+            <div className="mb-1">
               <a
                 href={feature.prUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={(e) => e.stopPropagation()}
                 onPointerDown={(e) => e.stopPropagation()}
-                className="inline-flex items-center gap-1.5 text-[11px] text-purple-500 hover:text-purple-400 transition-colors"
+                className="inline-flex items-center gap-1 text-[11px] text-purple-500 hover:text-purple-400 transition-colors"
                 title={feature.prUrl}
                 data-testid={`pr-url-${feature.id}`}
               >
@@ -48,4 +52,4 @@ export function CardContentSections({ feature, useWorktrees }: CardContentSectio
         })()}
     </>
   );
-}
+});

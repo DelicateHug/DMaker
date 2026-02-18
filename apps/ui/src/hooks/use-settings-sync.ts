@@ -12,10 +12,17 @@
  */
 
 import { useEffect, useRef, useCallback, useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { createLogger } from '@automaker/utils/logger';
 import { getHttpApiClient, waitForApiKeyInit } from '@/lib/http-api-client';
 import { setItem } from '@/lib/storage';
-import { useAppStore, type ThemeMode, THEME_STORAGE_KEY } from '@/store/app-store';
+import {
+  useAppStore,
+  type ThemeMode,
+  type SyntaxTheme,
+  THEME_STORAGE_KEY,
+  SYNTAX_THEME_STORAGE_KEY,
+} from '@/store/app-store';
 import { useSetupStore } from '@/store/setup-store';
 import { useAuthStore } from '@/store/auth-store';
 import { waitForMigrationComplete, resetMigrationState } from './use-settings-migration';
@@ -25,6 +32,15 @@ import {
   type GlobalSettings,
 } from '@automaker/types';
 
+/**
+ * Selector for auth state needed by settings sync
+ */
+const selectAuthState = (state: ReturnType<typeof useAuthStore.getState>) => ({
+  isAuthenticated: state.isAuthenticated,
+  authChecked: state.authChecked,
+  settingsLoaded: state.settingsLoaded,
+});
+
 const logger = createLogger('SettingsSync');
 
 // Debounce delay for syncing settings to server (ms)
@@ -33,12 +49,14 @@ const SYNC_DEBOUNCE_MS = 1000;
 // Fields to sync to server (subset of AppState that should be persisted)
 const SETTINGS_FIELDS_TO_SYNC = [
   'theme',
+  'syntaxTheme',
   'fontFamilySans',
   'fontFamilyMono',
   'terminalFontFamily', // Maps to terminalState.fontFamily
   'sidebarOpen',
   'chatHistoryOpen',
-  'maxConcurrency',
+  'maxConcurrency', // Deprecated - kept for backwards compatibility
+  'agentMultiplier', // Global agent multiplier for all projects
   'defaultSkipTests',
   'enableDependencyBlocking',
   'skipVerificationInAutoMode',
@@ -64,6 +82,7 @@ const SETTINGS_FIELDS_TO_SYNC = [
   'defaultEditorCommand',
   'promptCustomization',
   'eventHooks',
+  'claudeAccounts',
   'projects',
   'trashedProjects',
   'currentProjectId', // ID of currently open project
@@ -74,6 +93,14 @@ const SETTINGS_FIELDS_TO_SYNC = [
   'worktreePanelCollapsed',
   'lastProjectDir',
   'recentFolders',
+  'kanbanPanelSize',
+  'agentsPanelSize',
+  'agentChatPanelSize',
+  'isAgentChatPanelCollapsed',
+  'isKanbanPanelCollapsed',
+  'isAgentsPanelCollapsed',
+  'deployPanelSize',
+  'isDeployPanelCollapsed',
 ] as const;
 
 // Fields from setup store to sync
@@ -138,9 +165,9 @@ export function useSettingsSync(): SettingsSyncState {
     syncing: false,
   });
 
-  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
-  const authChecked = useAuthStore((s) => s.authChecked);
-  const settingsLoaded = useAuthStore((s) => s.settingsLoaded);
+  const { isAuthenticated, authChecked, settingsLoaded } = useAuthStore(
+    useShallow(selectAuthState)
+  );
 
   const syncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSyncedRef = useRef<string>('');
@@ -475,9 +502,13 @@ export async function refreshSettingsFromServer(): Promise<boolean> {
     if (serverSettings.theme) {
       setItem(THEME_STORAGE_KEY, serverSettings.theme);
     }
+    if (serverSettings.syntaxTheme) {
+      setItem(SYNTAX_THEME_STORAGE_KEY, serverSettings.syntaxTheme);
+    }
 
     useAppStore.setState({
       theme: serverSettings.theme as unknown as ThemeMode,
+      syntaxTheme: (serverSettings.syntaxTheme ?? 'auto') as SyntaxTheme,
       sidebarOpen: serverSettings.sidebarOpen,
       chatHistoryOpen: serverSettings.chatHistoryOpen,
       maxConcurrency: serverSettings.maxConcurrency,
@@ -519,6 +550,7 @@ export async function refreshSettingsFromServer(): Promise<boolean> {
       worktreePanelCollapsed: serverSettings.worktreePanelCollapsed ?? false,
       lastProjectDir: serverSettings.lastProjectDir ?? '',
       recentFolders: serverSettings.recentFolders ?? [],
+      claudeAccounts: serverSettings.claudeAccounts ?? [],
       // Terminal font (nested in terminalState)
       ...(serverSettings.terminalFontFamily && {
         terminalState: {

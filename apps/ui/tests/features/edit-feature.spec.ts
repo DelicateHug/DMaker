@@ -99,13 +99,6 @@ test.describe('Edit Feature', () => {
     const cardTestId = await featureCard.getAttribute('data-testid');
     const featureId = cardTestId?.replace('kanban-card-', '');
 
-    // Collapse the sidebar first to avoid it intercepting clicks
-    const collapseSidebarButton = page.locator('button:has-text("Collapse sidebar")');
-    if (await collapseSidebarButton.isVisible()) {
-      await collapseSidebarButton.click();
-      await page.waitForTimeout(300); // Wait for sidebar animation
-    }
-
     // Click the edit button on the card using JavaScript click to bypass pointer interception
     const editButton = page.locator(`[data-testid="edit-backlog-${featureId}"]`);
     await expect(editButton).toBeVisible({ timeout: 5000 });

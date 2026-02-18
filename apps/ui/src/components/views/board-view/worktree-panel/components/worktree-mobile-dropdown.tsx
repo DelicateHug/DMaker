@@ -50,7 +50,10 @@ export function WorktreeMobileDropdown({
           )}
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-64 max-h-80 overflow-y-auto">
+      <DropdownMenuContent
+        align="start"
+        className="w-64 max-w-[calc(100vw-2rem)] max-h-[min(20rem,60vh)] overflow-y-auto"
+      >
         <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
           Branches & Worktrees
         </DropdownMenuLabel>

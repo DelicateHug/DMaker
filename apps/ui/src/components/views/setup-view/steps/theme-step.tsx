@@ -4,6 +4,7 @@ import { ArrowRight, ArrowLeft, Check, Moon, Sun } from 'lucide-react';
 import { darkThemes, lightThemes } from '@/config/theme-options';
 import { useAppStore } from '@/store/app-store';
 import { cn } from '@/lib/utils';
+import { preloadTheme } from '@/lib/theme-loader';
 
 interface ThemeStepProps {
   onNext: () => void;
@@ -15,6 +16,7 @@ export function ThemeStep({ onNext, onBack }: ThemeStepProps) {
   const [activeTab, setActiveTab] = useState<'dark' | 'light'>('dark');
 
   const handleThemeHover = (themeValue: string) => {
+    preloadTheme(themeValue);
     setPreviewTheme(themeValue as typeof theme);
   };
 
@@ -35,7 +37,7 @@ export function ThemeStep({ onNext, onBack }: ThemeStepProps) {
   const themesToShow = activeTab === 'dark' ? darkThemes : lightThemes;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" data-testid="setup-theme-step">
       <div className="text-center">
         <h2 className="text-3xl font-bold text-foreground mb-3">Choose Your Theme</h2>
         <p className="text-muted-foreground max-w-md mx-auto">
@@ -47,6 +49,7 @@ export function ThemeStep({ onNext, onBack }: ThemeStepProps) {
       <div className="flex justify-center gap-2">
         <button
           onClick={() => setActiveTab('dark')}
+          data-testid="theme-dark-tab"
           className={cn(
             'flex items-center gap-2 px-6 py-2.5 rounded-lg font-medium transition-all duration-200',
             activeTab === 'dark'
@@ -59,6 +62,7 @@ export function ThemeStep({ onNext, onBack }: ThemeStepProps) {
         </button>
         <button
           onClick={() => setActiveTab('light')}
+          data-testid="theme-light-tab"
           className={cn(
             'flex items-center gap-2 px-6 py-2.5 rounded-lg font-medium transition-all duration-200',
             activeTab === 'light'
@@ -104,7 +108,7 @@ export function ThemeStep({ onNext, onBack }: ThemeStepProps) {
       </div>
 
       <div className="flex justify-between pt-4">
-        <Button variant="ghost" onClick={onBack}>
+        <Button variant="ghost" onClick={onBack} data-testid="theme-back-button">
           <ArrowLeft className="w-4 h-4 mr-2" />
           Back
         </Button>

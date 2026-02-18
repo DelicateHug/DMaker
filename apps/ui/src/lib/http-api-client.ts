@@ -35,12 +35,32 @@ import type {
   NotificationsAPI,
   EventHistoryAPI,
 } from './electron';
-import type { EventHistoryFilter } from '@automaker/types';
+import type {
+  EventHistoryFilter,
+  VoiceSession,
+  VoiceSettings,
+  VoiceSessionStatus,
+  VoiceSessionStatusResponse,
+  ProcessVoiceCommandRequest,
+  ProcessVoiceCommandResponse,
+  VoiceEvent,
+} from '@automaker/types';
 import type { Message, SessionListItem } from '@/types/electron';
 import type { Feature, ClaudeUsageResponse, CodexUsageResponse } from '@/store/app-store';
 import type { WorktreeAPI, GitAPI, ModelDefinition, ProviderStatus } from '@/types/electron';
 import type { ModelId, ThinkingLevel, ReasoningEffort } from '@automaker/types';
 import { getGlobalFileBrowser } from '@/contexts/file-browser-context';
+import {
+  DEFAULT_CACHE_OPTIONS,
+  FEATURES_CACHE_TTL_MS,
+  MODELS_CACHE_TTL_MS,
+  USAGE_CACHE_TTL_MS,
+  type EndpointCategory,
+} from '@automaker/types';
+import {
+  RequestCache as ClientRequestCache,
+  type GetOrSetOptions as CacheGetOptions,
+} from './request-cache';
 
 const logger = createLogger('HttpClient');
 const NO_STORE_CACHE_MODE: RequestCache = 'no-store';
@@ -158,8 +178,9 @@ const getServerUrl = (): string => {
     if (envUrl) return envUrl;
   }
   // Use VITE_HOSTNAME if set, otherwise default to localhost
+  // Dev mode uses port 3019 to avoid conflicts with production on 3009
   const hostname = import.meta.env.VITE_HOSTNAME || 'localhost';
-  return `http://${hostname}:3008`;
+  return `http://${hostname}:3019`;
 };
 
 /**
@@ -512,6 +533,9 @@ export const checkSandboxEnvironment = async (): Promise<{
 type EventType =
   | 'agent:stream'
   | 'auto-mode:event'
+  | 'feature:status-changed'
+  | 'session:state-changed'
+  | 'usage:updated'
   | 'suggestions:event'
   | 'spec-regeneration:event'
   | 'issue-validation:event'
@@ -524,7 +548,23 @@ type EventType =
   | 'dev-server:started'
   | 'dev-server:output'
   | 'dev-server:stopped'
-  | 'notification:created';
+  | 'notification:created'
+  | 'deploy:output'
+  | 'deploy:success'
+  | 'deploy:error'
+  | 'voice:session-started'
+  | 'voice:session-ended'
+  | 'voice:recording-started'
+  | 'voice:recording-stopped'
+  | 'voice:transcription-started'
+  | 'voice:transcription-completed'
+  | 'voice:command-received'
+  | 'voice:command-executed'
+  | 'voice:response-started'
+  | 'voice:response-completed'
+  | 'voice:speaking-started'
+  | 'voice:speaking-completed'
+  | 'voice:error';
 
 /**
  * Dev server log event payloads for WebSocket streaming
@@ -587,6 +627,17 @@ export class HttpApiClient implements ElectronAPI {
   private eventCallbacks: Map<EventType, Set<EventCallback>> = new Map();
   private reconnectTimer: NodeJS.Timeout | null = null;
   private isConnecting = false;
+  /**
+   * Client-side request cache for GET endpoint deduplication and caching.
+   * Keyed by endpoint URL string, stores parsed JSON responses.
+   * Uses a 60-second default TTL with cleanup every 2 minutes and max 500 entries.
+   */
+  private readonly requestCache = new ClientRequestCache<string, unknown>({
+    defaultTtl: 60_000,
+    enableSwr: false,
+    cleanupInterval: 120_000,
+    maxEntries: 500,
+  });
 
   constructor() {
     this.serverUrl = getServerUrl();
@@ -876,6 +927,48 @@ export class HttpApiClient implements ElectronAPI {
     return response.json();
   }
 
+  /**
+   * GET request with client-side caching via RequestCache.
+   *
+   * Wraps `this.get()` through the request cache using `getOrSet`.
+   * The cache key is the endpoint URL so that identical GET requests
+   * share the same cached response.
+   *
+   * @param endpoint - API endpoint path (used as cache key)
+   * @param ttl      - Cache TTL in milliseconds (overrides the cache default)
+   */
+  private async cachedGet<T>(endpoint: string, ttl?: number): Promise<T> {
+    return this.requestCache.getOrSet(
+      endpoint,
+      () => this.get<T>(endpoint),
+      ttl ? { ttl } : undefined
+    ) as Promise<T>;
+  }
+
+  /**
+   * POST request with client-side caching via RequestCache.
+   *
+   * Wraps `this.post()` through the request cache using `getOrSet`.
+   * The cache key is derived from the endpoint + serialized body so that
+   * identical requests share the same cached response.
+   *
+   * @param endpoint - API endpoint path
+   * @param body     - Request body (also used to build the cache key)
+   * @param ttl      - Cache TTL in milliseconds (overrides the cache default)
+   */
+  private async cachedPost<T>(
+    endpoint: string,
+    body?: unknown,
+    ttl?: number,
+    forceRefresh?: boolean
+  ): Promise<T> {
+    const cacheKey = body ? `${endpoint}:${JSON.stringify(body)}` : endpoint;
+    return this.requestCache.getOrSet(cacheKey, () => this.post<T>(endpoint, body), {
+      ...(ttl ? { ttl } : {}),
+      ...(forceRefresh ? { forceRefresh } : {}),
+    }) as Promise<T>;
+  }
+
   private async put<T>(endpoint: string, body?: unknown): Promise<T> {
     // Ensure API key is initialized before making request
     await waitForApiKeyInit();
@@ -950,6 +1043,15 @@ export class HttpApiClient implements ElectronAPI {
     return { success: true };
   }
 
+  async updateTrayCount(count: number): Promise<{ success: boolean; error?: string }> {
+    // Only available in Electron mode
+    if (typeof window !== 'undefined' && (window as any).electronAPI?.updateTrayCount) {
+      return (window as any).electronAPI.updateTrayCount(count);
+    }
+    // Silently succeed in web mode (no tray icon available)
+    return { success: true };
+  }
+
   async openInEditor(
     filePath: string,
     line?: number,
@@ -1020,7 +1122,11 @@ export class HttpApiClient implements ElectronAPI {
     return { canceled: true, filePaths: [] };
   }
 
-  async openFile(_options?: object): Promise<DialogResult> {
+  async openFile(options?: {
+    title?: string;
+    filters?: Array<{ name: string; extensions: string[] }>;
+    defaultPath?: string;
+  }): Promise<DialogResult> {
     const fileBrowser = getGlobalFileBrowser();
 
     if (!fileBrowser) {
@@ -1028,8 +1134,19 @@ export class HttpApiClient implements ElectronAPI {
       return { canceled: true, filePaths: [] };
     }
 
-    // For now, use the same directory browser (could be enhanced for file selection)
-    const path = await fileBrowser();
+    // Extract file extensions from filters for the file browser
+    // If any filter includes '*' (All Files), don't restrict by extension
+    const allExtensions = options?.filters?.flatMap((f) => f.extensions) ?? [];
+    const hasWildcard = allExtensions.includes('*');
+    const fileExtensions = hasWildcard ? undefined : allExtensions.filter((ext) => ext !== '*');
+
+    const path = await fileBrowser({
+      title: options?.title || 'Select File',
+      description: 'Navigate to the file you want to select',
+      initialPath: options?.defaultPath,
+      mode: 'file',
+      fileExtensions: fileExtensions && fileExtensions.length > 0 ? fileExtensions : undefined,
+    });
 
     if (!path) {
       return { canceled: true, filePaths: [] };
@@ -1151,14 +1268,14 @@ export class HttpApiClient implements ElectronAPI {
       models?: ModelDefinition[];
       error?: string;
     }> => {
-      return this.get('/api/models/available');
+      return this.cachedGet('/api/models/available', MODELS_CACHE_TTL_MS);
     },
     checkProviders: async (): Promise<{
       success: boolean;
       providers?: Record<string, ProviderStatus>;
       error?: string;
     }> => {
-      return this.get('/api/models/providers');
+      return this.cachedGet('/api/models/providers', MODELS_CACHE_TTL_MS);
     },
   };
 
@@ -1594,7 +1711,17 @@ export class HttpApiClient implements ElectronAPI {
       error?: string;
     }>;
   } = {
-    getAll: (projectPath: string) => this.post('/api/features/list', { projectPath }),
+    getAll: (
+      projectPath: string,
+      forceRefresh?: boolean,
+      options?: { excludeStatuses?: string[]; includeStatuses?: string[] }
+    ) =>
+      this.cachedPost(
+        '/api/features/list',
+        { projectPath, ...options },
+        FEATURES_CACHE_TTL_MS,
+        forceRefresh
+      ),
     get: (projectPath: string, featureId: string) =>
       this.post('/api/features/get', { projectPath, featureId }),
     create: (projectPath: string, feature: Feature) =>
@@ -1619,8 +1746,27 @@ export class HttpApiClient implements ElectronAPI {
       this.post('/api/features/delete', { projectPath, featureId }),
     getAgentOutput: (projectPath: string, featureId: string) =>
       this.post('/api/features/agent-output', { projectPath, featureId }),
+    getSummaries: (projectPath: string, featureId: string) =>
+      this.post('/api/features/summaries', { projectPath, featureId }),
+    getSummaryFiles: (projectPath: string, featureId: string) =>
+      this.post('/api/features/summaries', { projectPath, featureId }),
+    getSummary: (projectPath: string, featureId: string, timestamp: string) =>
+      this.post('/api/features/summary', { projectPath, featureId, timestamp }),
     generateTitle: (description: string) =>
       this.post('/api/features/generate-title', { description }),
+    getListSummaries: (
+      projectPath: string,
+      forceRefresh?: boolean,
+      options?: { excludeStatuses?: string[]; includeStatuses?: string[] }
+    ) =>
+      this.cachedPost(
+        '/api/features/list-summaries',
+        { projectPath, ...options },
+        FEATURES_CACHE_TTL_MS,
+        forceRefresh
+      ),
+    getCountsByStatus: (projectPath: string) =>
+      this.post('/api/features/counts-by-status', { projectPath }),
     bulkUpdate: (projectPath: string, featureIds: string[], updates: Partial<Feature>) =>
       this.post('/api/features/bulk-update', { projectPath, featureIds, updates }),
     bulkDelete: (projectPath: string, featureIds: string[]) =>
@@ -1638,13 +1784,13 @@ export class HttpApiClient implements ElectronAPI {
       projectPath: string,
       featureId: string,
       useWorktrees?: boolean,
-      worktreePath?: string
+      forceRun?: boolean
     ) =>
       this.post('/api/auto-mode/run-feature', {
         projectPath,
         featureId,
         useWorktrees,
-        worktreePath,
+        forceRun,
       }),
     verifyFeature: (projectPath: string, featureId: string) =>
       this.post('/api/auto-mode/verify-feature', { projectPath, featureId }),
@@ -2162,6 +2308,7 @@ export class HttpApiClient implements ElectronAPI {
       settings?: {
         version: number;
         theme?: string;
+        defaultBranch?: string;
         useWorktrees?: boolean;
         currentWorktree?: { path: string | null; branch: string };
         worktrees?: Array<{
@@ -2187,6 +2334,8 @@ export class HttpApiClient implements ElectronAPI {
         defaultDeleteBranchWithWorktree?: boolean;
         autoDismissInitScriptIndicator?: boolean;
         lastSelectedSessionId?: string;
+        fontFamilySans?: string;
+        fontFamilyMono?: string;
       };
       error?: string;
     }> => this.post('/api/settings/project', { projectPath }),
@@ -2282,12 +2431,14 @@ export class HttpApiClient implements ElectronAPI {
 
   // Claude API
   claude = {
-    getUsage: (): Promise<ClaudeUsageResponse> => this.get('/api/claude/usage'),
+    getUsage: (): Promise<ClaudeUsageResponse> =>
+      this.cachedGet('/api/claude/usage', USAGE_CACHE_TTL_MS),
   };
 
   // Codex API
   codex = {
-    getUsage: (): Promise<CodexUsageResponse> => this.get('/api/codex/usage'),
+    getUsage: (): Promise<CodexUsageResponse> =>
+      this.cachedGet('/api/codex/usage', USAGE_CACHE_TTL_MS),
     getModels: (
       refresh = false
     ): Promise<{
@@ -2622,6 +2773,310 @@ export class HttpApiClient implements ElectronAPI {
       stepIds: string[]
     ): Promise<{ success: boolean; error?: string }> =>
       this.post('/api/pipeline/steps/reorder', { projectPath, stepIds }),
+  };
+
+  // Voice API - Voice mode interactions
+  voice = {
+    /**
+     * Start a new voice session for a project
+     */
+    startSession: (
+      projectPath: string,
+      settings?: Partial<VoiceSettings>
+    ): Promise<{
+      success: boolean;
+      session?: VoiceSession;
+      error?: string;
+    }> => this.post('/api/voice/start-session', { projectPath, settings }),
+
+    /**
+     * Stop an active voice session
+     */
+    stopSession: (sessionId: string): Promise<{ success: boolean; error?: string }> =>
+      this.post('/api/voice/stop-session', { sessionId }),
+
+    /**
+     * Get a specific voice session
+     */
+    getSession: (
+      sessionId: string
+    ): Promise<{
+      success: boolean;
+      session?: VoiceSession;
+      error?: string;
+    }> => this.post('/api/voice/get-session', { sessionId }),
+
+    /**
+     * List all voice sessions, optionally filtered by project
+     */
+    listSessions: (
+      projectPath?: string
+    ): Promise<{
+      success: boolean;
+      sessions?: VoiceSession[];
+      count?: number;
+      error?: string;
+    }> => this.post('/api/voice/list-sessions', { projectPath }),
+
+    /**
+     * Delete a voice session
+     */
+    deleteSession: (sessionId: string): Promise<{ success: boolean; error?: string }> =>
+      this.post('/api/voice/delete-session', { sessionId }),
+
+    /**
+     * Process a voice command (transcribed text)
+     */
+    processCommand: (
+      sessionId: string,
+      text: string,
+      audioDurationMs?: number,
+      confidence?: number
+    ): Promise<{
+      success: boolean;
+      messageId?: string;
+      response?: string;
+      commandExecuted?: boolean;
+      commandResult?: {
+        success: boolean;
+        response: string;
+        commandName?: string;
+        data?: unknown;
+        error?: string;
+      };
+      error?: string;
+    }> =>
+      this.post('/api/voice/process-command', {
+        sessionId,
+        text,
+        audioDurationMs,
+        confidence,
+      } as ProcessVoiceCommandRequest),
+
+    /**
+     * Stop any ongoing command processing
+     */
+    stopProcessing: (sessionId: string): Promise<{ success: boolean; error?: string }> =>
+      this.post('/api/voice/stop-processing', { sessionId }),
+
+    /**
+     * Get the current status of a voice session
+     */
+    getStatus: (
+      sessionId: string
+    ): Promise<{
+      success: boolean;
+      sessionId?: string;
+      active?: boolean;
+      status?: VoiceSessionStatus;
+      messageCount?: number;
+      durationMs?: number;
+      error?: string;
+    }> => this.post('/api/voice/get-status', { sessionId }),
+
+    /**
+     * Update the status of a voice session (e.g., recording, processing)
+     */
+    updateStatus: (
+      sessionId: string,
+      status: VoiceSessionStatus
+    ): Promise<{ success: boolean; error?: string }> =>
+      this.post('/api/voice/update-status', { sessionId, status }),
+
+    /**
+     * Update voice settings for a session
+     */
+    updateSettings: (
+      sessionId: string,
+      settings: Partial<VoiceSettings>
+    ): Promise<{ success: boolean; error?: string }> =>
+      this.post('/api/voice/update-settings', { sessionId, settings }),
+
+    /**
+     * Subscribe to voice events via WebSocket
+     */
+    onEvent: (callback: (event: VoiceEvent) => void): (() => void) => {
+      // Subscribe to all voice event types
+      const unsubscribers: Array<() => void> = [];
+
+      // Voice events are emitted with type prefixes, subscribe to each event type
+      // The server emits events with the payload containing all event data
+      const voiceEventTypes: EventType[] = [
+        'voice:session-started',
+        'voice:session-ended',
+        'voice:recording-started',
+        'voice:recording-stopped',
+        'voice:transcription-started',
+        'voice:transcription-completed',
+        'voice:command-received',
+        'voice:command-executed',
+        'voice:response-started',
+        'voice:response-completed',
+        'voice:speaking-started',
+        'voice:speaking-completed',
+        'voice:error',
+      ];
+
+      for (const eventType of voiceEventTypes) {
+        const unsub = this.subscribeToEvent(eventType, (payload) => {
+          // The server sends the event with type included in the payload
+          callback(payload as VoiceEvent);
+        });
+        unsubscribers.push(unsub);
+      }
+
+      return () => {
+        for (const unsub of unsubscribers) {
+          unsub();
+        }
+      };
+    },
+  };
+
+  // ---------------------------------------------------------------------------
+  // Cache API — public access to the client-side request cache
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Public cache operations for external callers.
+   *
+   * Exposes controlled access to the client-side request cache so that UI
+   * components, stores, or other modules can invalidate stale entries after
+   * mutations without reaching into private internals.
+   *
+   * @example
+   * ```ts
+   * const client = getHttpApiClient();
+   *
+   * // Invalidate all cached feature list responses after a mutation
+   * client.cache.invalidateBy(key => key.startsWith('/api/features'));
+   *
+   * // Invalidate a specific endpoint
+   * client.cache.invalidate('/api/models/available');
+   *
+   * // Clear the entire client cache
+   * client.cache.clear();
+   * ```
+   */
+  cache = {
+    /**
+     * Invalidate a single cache entry by its exact key.
+     *
+     * Cache keys are typically the endpoint URL for GET requests,
+     * or `endpoint:JSON.stringify(body)` for POST requests.
+     *
+     * @param key - The exact cache key to remove
+     * @returns `true` if an entry was removed, `false` if no entry existed for that key
+     */
+    invalidate: (key: string): boolean => {
+      return this.requestCache.delete(key);
+    },
+
+    /**
+     * Invalidate all cache entries whose keys match a predicate.
+     *
+     * Useful for bulk-invalidating related endpoints after a mutation,
+     * e.g. clearing all feature-related cache entries.
+     *
+     * @param predicate - Function that receives each cache key; return `true` to invalidate
+     * @returns Number of entries invalidated
+     *
+     * @example
+     * ```ts
+     * // Invalidate all feature endpoints
+     * client.cache.invalidateBy(key => key.includes('/api/features'));
+     *
+     * // Invalidate a specific model endpoint
+     * client.cache.invalidateBy(key => key === '/api/models/available');
+     * ```
+     */
+    invalidateBy: (predicate: (key: string) => boolean): number => {
+      return this.requestCache.invalidateBy(predicate);
+    },
+
+    /**
+     * Clear all client-side cache entries.
+     *
+     * This removes all cached responses and cancels in-flight request tracking.
+     * Use sparingly — prefer targeted invalidation via `invalidate` or `invalidateBy`.
+     */
+    clear: (): void => {
+      this.requestCache.clear();
+    },
+
+    /**
+     * Check whether a cache entry exists and is not expired.
+     *
+     * @param key - The cache key to check
+     * @returns `true` if a non-expired entry exists for the key
+     */
+    has: (key: string): boolean => {
+      return this.requestCache.has(key);
+    },
+
+    /**
+     * Get the number of entries currently in the cache.
+     *
+     * @returns The current cache size (including potentially stale entries)
+     */
+    size: (): number => {
+      return this.requestCache.size;
+    },
+
+    /**
+     * Get all cache keys (useful for debugging or selective invalidation).
+     *
+     * @returns A snapshot array of all current cache keys
+     */
+    keys: (): string[] => {
+      return [...this.requestCache.keys()];
+    },
+  };
+
+  // Deploy event subscriptions (WebSocket fallback for SSE streaming)
+  deploy = {
+    onDeployOutput: (callback: (payload: { data: string }) => void): (() => void) => {
+      return this.subscribeToEvent('deploy:output', callback as EventCallback);
+    },
+    onDeploySuccess: (
+      callback: (payload: { message?: string; duration?: number }) => void
+    ): (() => void) => {
+      return this.subscribeToEvent('deploy:success', callback as EventCallback);
+    },
+    onDeployError: (
+      callback: (payload: {
+        message?: string;
+        error?: string;
+        duration?: number;
+        exitCode?: number | null;
+      }) => void
+    ): (() => void) => {
+      return this.subscribeToEvent('deploy:error', callback as EventCallback);
+    },
+  };
+
+  // Push event subscriptions for real-time UI updates
+  pushEvents = {
+    onFeatureStatusChanged: (
+      callback: (payload: {
+        featureId: string;
+        status: string;
+        projectPath: string;
+        title: string;
+      }) => void
+    ): (() => void) => {
+      return this.subscribeToEvent('feature:status-changed', callback as EventCallback);
+    },
+    onSessionStateChanged: (
+      callback: (payload: { sessionId: string; isRunning: boolean }) => void
+    ): (() => void) => {
+      return this.subscribeToEvent('session:state-changed', callback as EventCallback);
+    },
+    onUsageUpdated: (
+      callback: (payload: { provider: string; usage: unknown }) => void
+    ): (() => void) => {
+      return this.subscribeToEvent('usage:updated', callback as EventCallback);
+    },
   };
 }
 

@@ -16,7 +16,7 @@ interface UseSpecGenerationOptions {
 }
 
 export function useSpecGeneration({ loadSpec }: UseSpecGenerationOptions) {
-  const { currentProject } = useAppStore();
+  const currentProject = useAppStore((state) => state.currentProject);
 
   // Dialog visibility state
   const [showCreateDialog, setShowCreateDialog] = useState(false);

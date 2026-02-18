@@ -47,15 +47,18 @@ describe('fs-utils.ts', () => {
       await expect(mkdirSafe(existingDir)).resolves.not.toThrow();
     });
 
-    it('should succeed when path is a symlink to a directory', async () => {
-      const targetDir = path.join(tempDir, 'target');
-      const symlinkPath = path.join(tempDir, 'symlink');
+    it.skipIf(process.platform === 'win32')(
+      'should succeed when path is a symlink to a directory',
+      async () => {
+        const targetDir = path.join(tempDir, 'target');
+        const symlinkPath = path.join(tempDir, 'symlink');
 
-      await fs.mkdir(targetDir);
-      await fs.symlink(targetDir, symlinkPath, 'dir');
+        await fs.mkdir(targetDir);
+        await fs.symlink(targetDir, symlinkPath, 'dir');
 
-      await expect(mkdirSafe(symlinkPath)).resolves.not.toThrow();
-    });
+        await expect(mkdirSafe(symlinkPath)).resolves.not.toThrow();
+      }
+    );
 
     it('should throw when path exists as a file', async () => {
       const filePath = path.join(tempDir, 'existing-file.txt');
@@ -126,7 +129,7 @@ describe('fs-utils.ts', () => {
       expect(result).toBe(false);
     });
 
-    it('should return true for symlink', async () => {
+    it.skipIf(process.platform === 'win32')('should return true for symlink', async () => {
       const target = path.join(tempDir, 'target.txt');
       const symlink = path.join(tempDir, 'link.txt');
 
@@ -138,7 +141,7 @@ describe('fs-utils.ts', () => {
       expect(result).toBe(true);
     });
 
-    it('should return true for broken symlink', async () => {
+    it.skipIf(process.platform === 'win32')('should return true for broken symlink', async () => {
       const symlink = path.join(tempDir, 'broken-link');
 
       // Create symlink to non-existent target

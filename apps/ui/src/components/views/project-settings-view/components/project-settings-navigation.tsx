@@ -30,6 +30,7 @@ export function ProjectSettingsNavigation({
 
       {/* Navigation sidebar */}
       <nav
+        data-testid="project-settings-nav"
         className={cn(
           // Mobile: fixed position overlay with slide transition from right
           'fixed inset-y-0 right-0 w-72 z-30',
@@ -54,6 +55,7 @@ export function ProjectSettingsNavigation({
             onClick={onClose}
             className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
             aria-label="Close navigation menu"
+            data-testid="project-settings-nav-close"
           >
             <X className="w-4 h-4" />
           </Button>
@@ -69,6 +71,7 @@ export function ProjectSettingsNavigation({
               <button
                 key={item.id}
                 onClick={() => onNavigate(item.id)}
+                data-testid={`project-settings-nav-${item.id}`}
                 className={cn(
                   'group w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ease-out text-left relative overflow-hidden',
                   isActive

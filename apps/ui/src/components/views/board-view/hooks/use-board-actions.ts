@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import {
   Feature,
   FeatureImage,
@@ -8,6 +8,7 @@ import {
   PlanningMode,
   useAppStore,
 } from '@/store/app-store';
+import { useShallow } from 'zustand/react/shallow';
 import type { ReasoningEffort } from '@automaker/types';
 import { FeatureImagePath as DescriptionImagePath } from '@/components/ui/description-image-dropzone';
 import { getElectronAPI } from '@/lib/electron';
@@ -15,10 +16,33 @@ import { isConnectionError, handleServerOffline } from '@/lib/http-api-client';
 import { toast } from 'sonner';
 import { useAutoMode } from '@/hooks/use-auto-mode';
 import { truncateDescription } from '@/lib/utils';
-import { getBlockingDependencies } from '@automaker/dependency-resolver';
+import { getBlockingDependencies, shouldBlockOnDependencies } from '@automaker/dependency-resolver';
 import { createLogger } from '@automaker/utils/logger';
 
 const logger = createLogger('BoardActions');
+
+/** Resolve the project path for a feature, preferring the feature's own projectPath (set in multi-project mode) */
+function getFeatureProjectPath(
+  feature: Feature,
+  fallbackProject: { path: string } | null
+): string | null {
+  return (feature as any)?.projectPath || fallbackProject?.path || null;
+}
+
+/** Information about a blocking dependency for the confirmation dialog */
+export interface BlockingDependencyInfo {
+  id: string;
+  title?: string;
+  description: string;
+  status: string;
+}
+
+/** State for the unsatisfied dependencies confirmation dialog */
+export interface UnsatisfiedDependenciesDialogState {
+  open: boolean;
+  feature: Feature | null;
+  blockingDependencies: BlockingDependencyInfo[];
+}
 
 interface UseBoardActionsProps {
   currentProject: { path: string; id: string } | null;
@@ -91,8 +115,29 @@ export function useBoardActions({
     skipVerificationInAutoMode,
     isPrimaryWorktreeBranch,
     getPrimaryWorktreeBranch,
-  } = useAppStore();
+  } = useAppStore(
+    useShallow((state) => ({
+      addFeature: state.addFeature,
+      updateFeature: state.updateFeature,
+      removeFeature: state.removeFeature,
+      moveFeature: state.moveFeature,
+      useWorktrees: state.useWorktrees,
+      enableDependencyBlocking: state.enableDependencyBlocking,
+      skipVerificationInAutoMode: state.skipVerificationInAutoMode,
+      isPrimaryWorktreeBranch: state.isPrimaryWorktreeBranch,
+      getPrimaryWorktreeBranch: state.getPrimaryWorktreeBranch,
+      addRunningTask: state.addRunningTask,
+    }))
+  );
   const autoMode = useAutoMode();
+
+  // State for unsatisfied dependencies confirmation dialog
+  const [unsatisfiedDepsDialog, setUnsatisfiedDepsDialog] =
+    useState<UnsatisfiedDependenciesDialogState>({
+      open: false,
+      feature: null,
+      blockingDependencies: [],
+    });
 
   // Worktrees are created when adding/editing features with a branch name
   // This ensures the worktree exists before the feature starts execution
@@ -114,8 +159,13 @@ export function useBoardActions({
       dependencies?: string[];
       childDependencies?: string[]; // Feature IDs that should depend on this feature
       workMode?: 'current' | 'auto' | 'custom';
+      selectedProjectPath?: string; // Optional project path for multi-project support
     }) => {
       const workMode = featureData.workMode || 'current';
+
+      // Use the selected project path if provided (for multi-project mode),
+      // otherwise fall back to the current project
+      const targetProjectPath = featureData.selectedProjectPath || currentProject?.path;
 
       // Determine final branch name based on work mode:
       // - 'current': No branch name, work on current branch (no worktree)
@@ -130,7 +180,7 @@ export function useBoardActions({
         // Auto-generate a branch name based on primary branch (main/master) and timestamp
         // Always use primary branch to avoid nested feature/feature/... paths
         const baseBranch =
-          (currentProject?.path ? getPrimaryWorktreeBranch(currentProject.path) : null) || 'main';
+          (targetProjectPath ? getPrimaryWorktreeBranch(targetProjectPath) : null) || 'main';
         const timestamp = Date.now();
         const randomSuffix = Math.random().toString(36).substring(2, 6);
         finalBranchName = `feature/${baseBranch}-${timestamp}-${randomSuffix}`;
@@ -140,11 +190,11 @@ export function useBoardActions({
       }
 
       // Create worktree for 'auto' or 'custom' modes when we have a branch name
-      if ((workMode === 'auto' || workMode === 'custom') && finalBranchName && currentProject) {
+      if ((workMode === 'auto' || workMode === 'custom') && finalBranchName && targetProjectPath) {
         try {
           const api = getElectronAPI();
           if (api?.worktree?.create) {
-            const result = await api.worktree.create(currentProject.path, finalBranchName);
+            const result = await api.worktree.create(targetProjectPath, finalBranchName);
             if (result.success && result.worktree) {
               logger.info(
                 `Worktree for branch "${finalBranchName}" ${
@@ -186,10 +236,13 @@ export function useBoardActions({
         status: 'backlog' as const,
         branchName: finalBranchName,
         dependencies: featureData.dependencies || [],
+        // Add project path for multi-project support
+        projectPath: targetProjectPath,
       };
       const createdFeature = addFeature(newFeatureData);
       // Must await to ensure feature exists on server before user can drag it
-      await persistFeatureCreate(createdFeature);
+      // Pass the target project path for multi-project support
+      await persistFeatureCreate(createdFeature, targetProjectPath);
       saveCategory(featureData.category);
 
       // Handle child dependencies - update other features to depend on this new feature
@@ -211,10 +264,19 @@ export function useBoardActions({
       if (needsTitleGeneration) {
         const api = getElectronAPI();
         if (api?.features?.generateTitle) {
-          api.features
-            .generateTitle(featureData.description)
+          // Wrap in a timeout to prevent hanging indefinitely
+          const TITLE_GENERATION_TIMEOUT_MS = 30000;
+          const titlePromise = api.features.generateTitle(featureData.description);
+          const timeoutPromise = new Promise<{ success: false; error: string }>((resolve) =>
+            setTimeout(
+              () => resolve({ success: false, error: 'Title generation timed out' }),
+              TITLE_GENERATION_TIMEOUT_MS
+            )
+          );
+
+          Promise.race([titlePromise, timeoutPromise])
             .then((result) => {
-              if (result.success && result.title) {
+              if (result.success && 'title' in result && result.title) {
                 const titleUpdates = {
                   title: result.title,
                   titleGenerating: false,
@@ -222,7 +284,7 @@ export function useBoardActions({
                 updateFeature(createdFeature.id, titleUpdates);
                 persistFeatureUpdate(createdFeature.id, titleUpdates);
               } else {
-                // Clear generating flag even if failed
+                // Clear generating flag even if failed or timed out
                 const titleUpdates = { titleGenerating: false };
                 updateFeature(createdFeature.id, titleUpdates);
                 persistFeatureUpdate(createdFeature.id, titleUpdates);
@@ -235,6 +297,11 @@ export function useBoardActions({
               updateFeature(createdFeature.id, titleUpdates);
               persistFeatureUpdate(createdFeature.id, titleUpdates);
             });
+        } else {
+          // API not available — clear the flag immediately
+          const titleUpdates = { titleGenerating: false };
+          updateFeature(createdFeature.id, titleUpdates);
+          persistFeatureUpdate(createdFeature.id, titleUpdates);
         }
       }
     },
@@ -334,6 +401,10 @@ export function useBoardActions({
         ...restUpdates,
         title: updates.title,
         branchName: finalBranchName,
+        // Clear remote modified flag when user edits the feature
+        remoteModified: false,
+        remoteModifiedBy: undefined,
+        remoteModifiedAt: undefined,
       };
 
       updateFeature(featureId, finalUpdates);
@@ -445,7 +516,8 @@ export function useBoardActions({
 
   const handleRunFeature = useCallback(
     async (feature: Feature) => {
-      if (!currentProject) {
+      const projectPath = getFeatureProjectPath(feature, currentProject);
+      if (!projectPath) {
         throw new Error('No project selected');
       }
 
@@ -456,7 +528,7 @@ export function useBoardActions({
 
       // Server derives workDir from feature.branchName at execution time
       const result = await api.autoMode.runFeature(
-        currentProject.path,
+        projectPath,
         feature.id,
         useWorktrees
         // No worktreePath - server derives from feature.branchName
@@ -472,34 +544,9 @@ export function useBoardActions({
     [currentProject, useWorktrees]
   );
 
-  const handleStartImplementation = useCallback(
-    async (feature: Feature) => {
-      if (!autoMode.canStartNewTask) {
-        toast.error('Concurrency limit reached', {
-          description: `You can only have ${autoMode.maxConcurrency} task${
-            autoMode.maxConcurrency > 1 ? 's' : ''
-          } running at a time. Wait for a task to complete or increase the limit.`,
-        });
-        return false;
-      }
-
-      // Check for blocking dependencies and show warning if enabled
-      if (enableDependencyBlocking) {
-        const blockingDeps = getBlockingDependencies(feature, features);
-        if (blockingDeps.length > 0) {
-          const depDescriptions = blockingDeps
-            .map((depId) => {
-              const dep = features.find((f) => f.id === depId);
-              return dep ? truncateDescription(dep.description, 40) : depId;
-            })
-            .join(', ');
-
-          toast.warning('Starting feature with incomplete dependencies', {
-            description: `This feature depends on: ${depDescriptions}`,
-          });
-        }
-      }
-
+  // Internal function that actually starts the feature (used after confirmation or directly)
+  const doStartImplementation = useCallback(
+    async (feature: Feature): Promise<boolean> => {
       const updates = {
         status: 'in_progress' as const,
         startedAt: new Date().toISOString(),
@@ -534,19 +581,113 @@ export function useBoardActions({
         return false;
       }
     },
-    [
-      autoMode,
-      enableDependencyBlocking,
-      features,
-      updateFeature,
-      persistFeatureUpdate,
-      handleRunFeature,
-    ]
+    [updateFeature, persistFeatureUpdate, handleRunFeature]
   );
+
+  const handleStartImplementation = useCallback(
+    async (feature: Feature) => {
+      if (!autoMode.canStartNewTask) {
+        toast.error('Concurrency limit reached', {
+          description: `You can only have ${autoMode.effectiveMaxAgents} task${
+            autoMode.effectiveMaxAgents > 1 ? 's' : ''
+          } running at a time. Wait for a task to complete or increase the limit.`,
+        });
+        return false;
+      }
+
+      // Check if feature should block on dependencies (combines global and per-feature settings)
+      const shouldBlock = shouldBlockOnDependencies(feature, { enableDependencyBlocking });
+
+      if (shouldBlock) {
+        // Get blocking dependencies when waitForDependencies is enabled
+        const blockingDeps = getBlockingDependencies(feature, features);
+        if (blockingDeps.length > 0) {
+          // Build detailed info about blocking dependencies for the dialog
+          const blockingDependencyInfos: BlockingDependencyInfo[] = blockingDeps
+            .map((depId) => {
+              const dep = features.find((f) => f.id === depId);
+              if (!dep) return null;
+              return {
+                id: dep.id,
+                title: dep.title,
+                description: dep.description,
+                status: dep.status,
+              };
+            })
+            .filter((info): info is BlockingDependencyInfo => info !== null);
+
+          // Show confirmation dialog instead of just starting with a warning
+          setUnsatisfiedDepsDialog({
+            open: true,
+            feature,
+            blockingDependencies: blockingDependencyInfos,
+          });
+          return false; // Don't start yet - wait for user confirmation
+        }
+      } else if (enableDependencyBlocking) {
+        // Global dependency blocking is enabled but this feature doesn't have waitForDependencies
+        // Show a warning toast but proceed anyway (existing behavior for features without the flag)
+        const blockingDeps = getBlockingDependencies(feature, features);
+        if (blockingDeps.length > 0) {
+          const depDescriptions = blockingDeps
+            .map((depId) => {
+              const dep = features.find((f) => f.id === depId);
+              return dep ? truncateDescription(dep.description, 40) : depId;
+            })
+            .join(', ');
+
+          toast.warning('Starting feature with incomplete dependencies', {
+            description: `This feature depends on: ${depDescriptions}`,
+          });
+        }
+      }
+
+      // No blocking dependencies or feature doesn't require waiting - start immediately
+      return doStartImplementation(feature);
+    },
+    [autoMode, enableDependencyBlocking, features, doStartImplementation]
+  );
+
+  // Handler for confirming start despite unsatisfied dependencies
+  const handleConfirmStartWithUnsatisfiedDeps = useCallback(async () => {
+    const feature = unsatisfiedDepsDialog.feature;
+    if (!feature) return;
+
+    // Close the dialog
+    setUnsatisfiedDepsDialog({
+      open: false,
+      feature: null,
+      blockingDependencies: [],
+    });
+
+    // Proceed with starting the feature
+    await doStartImplementation(feature);
+  }, [unsatisfiedDepsDialog.feature, doStartImplementation]);
+
+  // Handler for canceling the start
+  const handleCancelStartWithUnsatisfiedDeps = useCallback(() => {
+    setUnsatisfiedDepsDialog({
+      open: false,
+      feature: null,
+      blockingDependencies: [],
+    });
+  }, []);
+
+  // Handler for dialog open state changes
+  const handleUnsatisfiedDepsDialogOpenChange = useCallback((open: boolean) => {
+    if (!open) {
+      setUnsatisfiedDepsDialog({
+        open: false,
+        feature: null,
+        blockingDependencies: [],
+      });
+    }
+  }, []);
 
   const handleVerifyFeature = useCallback(
     async (feature: Feature) => {
-      if (!currentProject) return;
+      const projectPath = getFeatureProjectPath(feature, currentProject);
+      if (!projectPath) return;
 
       try {
         const api = getElectronAPI();
@@ -555,7 +696,7 @@ export function useBoardActions({
           return;
         }
 
-        const result = await api.autoMode.verifyFeature(currentProject.path, feature.id);
+        const result = await api.autoMode.verifyFeature(projectPath, feature.id);
 
         if (result.success) {
           logger.info('Feature verification started successfully');
@@ -574,7 +715,8 @@ export function useBoardActions({
   const handleResumeFeature = useCallback(
     async (feature: Feature) => {
       logger.info('handleResumeFeature called for feature:', feature.id);
-      if (!currentProject) {
+      const projectPath = getFeatureProjectPath(feature, currentProject);
+      if (!projectPath) {
         logger.error('No current project');
         return;
       }
@@ -587,27 +729,34 @@ export function useBoardActions({
         }
 
         logger.info('Calling resumeFeature API...', {
-          projectPath: currentProject.path,
+          projectPath,
           featureId: feature.id,
           useWorktrees,
         });
 
-        const result = await api.autoMode.resumeFeature(
-          currentProject.path,
-          feature.id,
-          useWorktrees
-        );
+        const result = await api.autoMode.resumeFeature(projectPath, feature.id, useWorktrees);
 
         logger.info('resumeFeature result:', result);
 
         if (result.success) {
           logger.info('Feature resume started successfully');
+          // Optimistic UI update: immediately show the blinking running state
+          // so the user doesn't have to wait for the server event
+          if (currentProject?.id) {
+            addRunningTask(currentProject.id, feature.id);
+          }
         } else {
           logger.error('Failed to resume feature:', result.error);
+          toast.error('Failed to resume feature', {
+            description: result.error || 'The feature could not be found or resumed',
+          });
           await loadFeatures();
         }
       } catch (error) {
         logger.error('Error resuming feature:', error);
+        toast.error('Failed to resume feature', {
+          description: 'An unexpected error occurred',
+        });
         await loadFeatures();
       }
     },
@@ -615,29 +764,57 @@ export function useBoardActions({
   );
 
   const handleManualVerify = useCallback(
-    (feature: Feature) => {
-      moveFeature(feature.id, 'verified');
-      persistFeatureUpdate(feature.id, {
-        status: 'verified',
-        justFinishedAt: undefined,
-      });
-      toast.success('Feature verified', {
-        description: `Marked as verified: ${truncateDescription(feature.description)}`,
-      });
+    async (feature: Feature) => {
+      try {
+        moveFeature(feature.id, 'completed');
+        // Must await to ensure the status is persisted to disk before any
+        // background loadFeatures() reload can read stale data and overwrite
+        // the local state back to waiting_approval.
+        await persistFeatureUpdate(feature.id, {
+          status: 'completed',
+          completedAt: new Date().toISOString(),
+          justFinishedAt: undefined,
+        });
+        toast.success('Feature completed', {
+          description: `Marked as complete: ${truncateDescription(feature.description)}`,
+        });
+      } catch (error) {
+        console.error('Failed to complete feature:', error);
+        toast.error('Failed to complete feature', {
+          description: error instanceof Error ? error.message : 'Unknown error',
+        });
+        // Revert the optimistic update
+        loadFeatures();
+      }
     },
-    [moveFeature, persistFeatureUpdate]
+    [moveFeature, persistFeatureUpdate, loadFeatures]
   );
 
   const handleMoveBackToInProgress = useCallback(
-    (feature: Feature) => {
+    async (feature: Feature) => {
       const updates = {
         status: 'in_progress' as const,
         startedAt: new Date().toISOString(),
       };
       updateFeature(feature.id, updates);
-      persistFeatureUpdate(feature.id, updates);
+      await persistFeatureUpdate(feature.id, updates);
       toast.info('Feature moved back', {
         description: `Moved back to In Progress: ${truncateDescription(feature.description)}`,
+      });
+    },
+    [updateFeature, persistFeatureUpdate]
+  );
+
+  const handleMoveBackToBacklog = useCallback(
+    async (feature: Feature) => {
+      const updates = {
+        status: 'backlog' as const,
+        startedAt: undefined,
+      };
+      updateFeature(feature.id, updates);
+      await persistFeatureUpdate(feature.id, updates);
+      toast.info('Feature moved to backlog', {
+        description: `Moved to Backlog: ${truncateDescription(feature.description)}`,
       });
     },
     [updateFeature, persistFeatureUpdate]
@@ -654,7 +831,10 @@ export function useBoardActions({
   );
 
   const handleSendFollowUp = useCallback(async () => {
-    if (!currentProject || !followUpFeature || !followUpPrompt.trim()) return;
+    if (!followUpFeature || !followUpPrompt.trim()) return;
+
+    const projectPath = getFeatureProjectPath(followUpFeature, currentProject);
+    if (!projectPath) return;
 
     const featureId = followUpFeature.id;
     const featureDescription = followUpFeature.description;
@@ -692,7 +872,7 @@ export function useBoardActions({
       const imagePaths = followUpImagePaths.map((img) => img.path);
       // Server derives workDir from feature.branchName at execution time
       const result = await api.autoMode.followUpFeature(
-        currentProject.path,
+        projectPath,
         followUpFeature.id,
         followUpPrompt,
         imagePaths,
@@ -706,7 +886,7 @@ export function useBoardActions({
       // Rollback to previous status if follow-up fails
       logger.error('Error sending follow-up, rolling back:', error);
       const rollbackUpdates = {
-        status: previousStatus as 'backlog' | 'in_progress' | 'waiting_approval' | 'verified',
+        status: previousStatus as 'backlog' | 'in_progress' | 'waiting_approval' | 'completed',
         startedAt: undefined,
       };
       updateFeature(featureId, rollbackUpdates);
@@ -739,7 +919,8 @@ export function useBoardActions({
 
   const handleCommitFeature = useCallback(
     async (feature: Feature) => {
-      if (!currentProject) return;
+      const projectPath = getFeatureProjectPath(feature, currentProject);
+      if (!projectPath) return;
 
       try {
         const api = getElectronAPI();
@@ -753,16 +934,19 @@ export function useBoardActions({
 
         // Server derives workDir from feature.branchName
         const result = await api.autoMode.commitFeature(
-          currentProject.path,
+          projectPath,
           feature.id
           // No worktreePath - server derives from feature.branchName
         );
 
         if (result.success) {
-          moveFeature(feature.id, 'verified');
-          persistFeatureUpdate(feature.id, { status: 'verified' });
+          moveFeature(feature.id, 'completed');
+          persistFeatureUpdate(feature.id, {
+            status: 'completed',
+            completedAt: new Date().toISOString(),
+          });
           toast.success('Feature committed', {
-            description: `Committed and verified: ${truncateDescription(feature.description)}`,
+            description: `Committed and completed: ${truncateDescription(feature.description)}`,
           });
           // Refresh worktree selector to update commit counts
           onWorktreeCreated?.();
@@ -786,7 +970,8 @@ export function useBoardActions({
 
   const handleMergeFeature = useCallback(
     async (feature: Feature) => {
-      if (!currentProject) return;
+      const projectPath = getFeatureProjectPath(feature, currentProject);
+      if (!projectPath) return;
 
       try {
         const api = getElectronAPI();
@@ -798,7 +983,7 @@ export function useBoardActions({
           return;
         }
 
-        const result = await api.worktree.mergeFeature(currentProject.path, feature.id);
+        const result = await api.worktree.mergeFeature(projectPath, feature.id);
 
         if (result.success) {
           await loadFeatures();
@@ -824,30 +1009,31 @@ export function useBoardActions({
   );
 
   const handleCompleteFeature = useCallback(
-    (feature: Feature) => {
+    async (feature: Feature) => {
       const updates = {
         status: 'completed' as const,
+        completedAt: new Date().toISOString(),
       };
       updateFeature(feature.id, updates);
-      persistFeatureUpdate(feature.id, updates);
+      await persistFeatureUpdate(feature.id, updates);
 
       toast.success('Feature completed', {
-        description: `Archived: ${truncateDescription(feature.description)}`,
+        description: `Completed: ${truncateDescription(feature.description)}`,
       });
     },
     [updateFeature, persistFeatureUpdate]
   );
 
-  const handleUnarchiveFeature = useCallback(
-    (feature: Feature) => {
+  const handleRestoreFeature = useCallback(
+    async (feature: Feature) => {
       const updates = {
-        status: 'verified' as const,
+        status: 'waiting_approval' as const,
       };
       updateFeature(feature.id, updates);
-      persistFeatureUpdate(feature.id, updates);
+      await persistFeatureUpdate(feature.id, updates);
 
       toast.success('Feature restored', {
-        description: `Moved back to verified: ${truncateDescription(feature.description)}`,
+        description: `Moved back to Waiting Approval: ${truncateDescription(feature.description)}`,
       });
     },
     [updateFeature, persistFeatureUpdate]
@@ -938,7 +1124,7 @@ export function useBoardActions({
       return featureBranch === currentWorktreeBranch;
     });
 
-    const availableSlots = useAppStore.getState().maxConcurrency - runningAutoTasks.length;
+    const availableSlots = useAppStore.getState().agentMultiplier - runningAutoTasks.length;
 
     if (availableSlots <= 0) {
       toast.error('Concurrency limit reached', {
@@ -1008,28 +1194,29 @@ export function useBoardActions({
     skipVerificationInAutoMode,
   ]);
 
-  const handleArchiveAllVerified = useCallback(async () => {
-    const verifiedFeatures = features.filter((f) => f.status === 'verified');
+  const handleCompleteAllWaiting = useCallback(async () => {
+    const waitingFeatures = features.filter((f) => f.status === 'waiting_approval');
 
-    for (const feature of verifiedFeatures) {
+    for (const feature of waitingFeatures) {
       const isRunning = runningAutoTasks.includes(feature.id);
       if (isRunning) {
         try {
           await autoMode.stopFeature(feature.id);
         } catch (error) {
-          logger.error('Error stopping feature before archive:', error);
+          logger.error('Error stopping feature before completing:', error);
         }
       }
-      // Archive the feature by setting status to completed
+      // Complete the feature by setting status to completed
       const updates = {
         status: 'completed' as const,
+        completedAt: new Date().toISOString(),
       };
       updateFeature(feature.id, updates);
-      persistFeatureUpdate(feature.id, updates);
+      await persistFeatureUpdate(feature.id, updates);
     }
 
-    toast.success('All verified features archived', {
-      description: `Archived ${verifiedFeatures.length} feature(s).`,
+    toast.success('All waiting approval features completed', {
+      description: `Completed ${waitingFeatures.length} feature(s).`,
     });
   }, [features, runningAutoTasks, autoMode, updateFeature, persistFeatureUpdate]);
 
@@ -1042,16 +1229,22 @@ export function useBoardActions({
     handleResumeFeature,
     handleManualVerify,
     handleMoveBackToInProgress,
+    handleMoveBackToBacklog,
     handleOpenFollowUp,
     handleSendFollowUp,
     handleCommitFeature,
     handleMergeFeature,
     handleCompleteFeature,
-    handleUnarchiveFeature,
+    handleRestoreFeature,
     handleViewOutput,
     handleOutputModalNumberKeyPress,
     handleForceStopFeature,
     handleStartNextFeatures,
-    handleArchiveAllVerified,
+    handleCompleteAllWaiting,
+    // Unsatisfied dependencies dialog state and handlers
+    unsatisfiedDepsDialog,
+    handleConfirmStartWithUnsatisfiedDeps,
+    handleCancelStartWithUnsatisfiedDeps,
+    handleUnsatisfiedDepsDialogOpenChange,
   };
 }

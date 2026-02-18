@@ -1,14 +1,16 @@
-import { useMemo } from 'react';
+import { useMemo, useState, useCallback, type ReactNode } from 'react';
 import { DndContext, DragOverlay } from '@dnd-kit/core';
-import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { Button } from '@/components/ui/button';
-import { KanbanColumn, KanbanCard, EmptyStateCard } from './components';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { KanbanCard } from './components';
+import { VirtualizedColumnContent } from './components/virtualized-column-content';
 import { Feature, useAppStore, formatShortcut } from '@/store/app-store';
-import { Archive, Settings2, CheckSquare, GripVertical, Plus } from 'lucide-react';
+import { Settings2, CheckSquare, GripVertical, Plus } from 'lucide-react';
 import { useResponsiveKanban } from '@/hooks/use-responsive-kanban';
 import { getColumnsWithPipeline, type ColumnId } from './constants';
 import type { PipelineConfig } from '@automaker/types';
 import { cn } from '@/lib/utils';
+import type { StatusTabId } from './hooks/use-board-status-tabs';
 interface KanbanBoardProps {
   sensors: any;
   collisionDetectionStrategy: (args: any) => any;
@@ -34,18 +36,17 @@ interface KanbanBoardProps {
   onForceStop: (feature: Feature) => void;
   onManualVerify: (feature: Feature) => void;
   onMoveBackToInProgress: (feature: Feature) => void;
+  onMoveBackToBacklog: (feature: Feature) => void;
   onFollowUp: (feature: Feature) => void;
-  onComplete: (feature: Feature) => void;
   onImplement: (feature: Feature) => void;
   onViewPlan: (feature: Feature) => void;
   onApprovePlan: (feature: Feature) => void;
   onSpawnTask?: (feature: Feature) => void;
+  onToggleFavorite?: (feature: Feature) => void;
   featuresWithContext: Set<string>;
   runningAutoTasks: string[];
-  onArchiveAllVerified: () => void;
+  onCompleteAllWaiting: () => void;
   onAddFeature: () => void;
-  onShowCompletedModal: () => void;
-  completedCount: number;
   pipelineConfig: PipelineConfig | null;
   onOpenPipelineSettings?: () => void;
   // Selection mode props
@@ -62,6 +63,21 @@ interface KanbanBoardProps {
   isReadOnly?: boolean;
   /** Additional className for custom styling (e.g., transition classes) */
   className?: string;
+  /** Whether full feature data has been loaded (Phase 2 complete).
+   *  When false, features only contain summary data and cards show skeleton placeholders. */
+  isFullyLoaded?: boolean;
+  // Single-column mode props
+  /** When true, only display the column(s) matching active status tab(s) */
+  singleColumnMode?: boolean;
+  /** The primary active status tab ID (backward-compatible) */
+  activeStatusTab?: StatusTabId;
+  /** Active status tab IDs for multi-select column filtering */
+  activeStatusTabs?: StatusTabId[];
+  // All-projects mode props
+  /** When true, board is showing features from all projects */
+  showAllProjects?: boolean;
+  /** Lookup function to get a project's default branch by projectId */
+  getProjectDefaultBranch?: (projectId: string) => string | undefined;
 }
 
 export function KanbanBoard({
@@ -81,18 +97,17 @@ export function KanbanBoard({
   onForceStop,
   onManualVerify,
   onMoveBackToInProgress,
+  onMoveBackToBacklog,
   onFollowUp,
-  onComplete,
   onImplement,
   onViewPlan,
   onApprovePlan,
   onSpawnTask,
+  onToggleFavorite,
   featuresWithContext,
   runningAutoTasks,
-  onArchiveAllVerified,
+  onCompleteAllWaiting,
   onAddFeature,
-  onShowCompletedModal,
-  completedCount,
   pipelineConfig,
   onOpenPipelineSettings,
   isSelectionMode = false,
@@ -104,22 +119,233 @@ export function KanbanBoard({
   isDragging = false,
   isReadOnly = false,
   className,
+  isFullyLoaded = true,
+  singleColumnMode = false,
+  activeStatusTab,
+  activeStatusTabs,
+  showAllProjects = false,
+  getProjectDefaultBranch,
 }: KanbanBoardProps) {
   // Generate columns including pipeline steps
-  const columns = useMemo(() => getColumnsWithPipeline(pipelineConfig), [pipelineConfig]);
+  const allColumns = useMemo(() => getColumnsWithPipeline(pipelineConfig), [pipelineConfig]);
+
+  // Filter to active column(s) when in single-column mode (supports multi-select)
+  const columns = useMemo(() => {
+    if (!singleColumnMode) return allColumns;
+    // Multi-select: filter columns matching any active tab
+    const tabs =
+      activeStatusTabs && activeStatusTabs.length > 0
+        ? activeStatusTabs
+        : activeStatusTab
+          ? [activeStatusTab]
+          : [];
+    if (tabs.length === 0) return allColumns;
+    const filtered = allColumns.filter((col) => tabs.includes(col.id));
+    return filtered.length > 0 ? filtered : allColumns;
+  }, [allColumns, singleColumnMode, activeStatusTab, activeStatusTabs]);
 
   // Get the keyboard shortcut for adding features
-  const { keyboardShortcuts } = useAppStore();
+  const keyboardShortcuts = useAppStore((state) => state.keyboardShortcuts);
   const addFeatureShortcut = keyboardShortcuts.addFeature || 'N';
 
   // Use responsive column widths based on window size
   // containerStyle handles centering and ensures columns fit without horizontal scroll in Electron
-  const { columnWidth, containerStyle } = useResponsiveKanban(columns.length);
+  // For single-column mode, pass allColumns.length to calculate width as if all columns existed,
+  // then we can apply special styling for the single column
+  const { columnWidth, containerStyle, singleColumnWidth, singleColumnContainerStyle } =
+    useResponsiveKanban(singleColumnMode ? allColumns.length : columns.length);
+
+  // Use the appropriate container style based on mode
+  const effectiveContainerStyle = singleColumnMode ? singleColumnContainerStyle : containerStyle;
+
+  // Track collapsed category groups across all columns
+  // Key format: "columnId:category"
+  const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
+
+  const toggleCategory = useCallback((columnId: string, category: string) => {
+    const key = `${columnId}:${category}`;
+    setCollapsedCategories((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  }, []);
+
+  // Track collapsed project groups across all columns (multi-project mode)
+  // Key format: "columnId:projectName"
+  const [collapsedProjects, setCollapsedProjects] = useState<Set<string>>(new Set());
+
+  const toggleProject = useCallback((columnId: string, projectName: string) => {
+    const key = `${columnId}:${projectName}`;
+    setCollapsedProjects((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  }, []);
+
+  // Memoize card rendering props to avoid unnecessary re-renders
+  const cardProps = useMemo(
+    () => ({
+      onEdit,
+      onDelete,
+      onViewOutput,
+      onVerify,
+      onResume,
+      onForceStop,
+      onManualVerify,
+      onMoveBackToInProgress,
+      onMoveBackToBacklog,
+      onFollowUp,
+      onImplement,
+      onViewPlan,
+      onApprovePlan,
+      onSpawnTask,
+      onToggleFavorite,
+      featuresWithContext,
+      runningAutoTasks,
+      backgroundSettings: {
+        cardOpacity: backgroundSettings.cardOpacity,
+        cardGlassmorphism: backgroundSettings.cardGlassmorphism,
+        cardBorderEnabled: backgroundSettings.cardBorderEnabled,
+        cardBorderOpacity: backgroundSettings.cardBorderOpacity,
+      },
+      isSelectionMode,
+      selectionTarget,
+      selectedFeatureIds,
+      onToggleFeatureSelection,
+      showAllProjects,
+      getProjectDefaultBranch,
+      isFullyLoaded,
+    }),
+    [
+      onEdit,
+      onDelete,
+      onViewOutput,
+      onVerify,
+      onResume,
+      onForceStop,
+      onManualVerify,
+      onMoveBackToInProgress,
+      onMoveBackToBacklog,
+      onFollowUp,
+      onImplement,
+      onViewPlan,
+      onApprovePlan,
+      onSpawnTask,
+      onToggleFavorite,
+      featuresWithContext,
+      runningAutoTasks,
+      backgroundSettings.cardOpacity,
+      backgroundSettings.cardGlassmorphism,
+      backgroundSettings.cardBorderEnabled,
+      backgroundSettings.cardBorderOpacity,
+      isSelectionMode,
+      selectionTarget,
+      selectedFeatureIds,
+      onToggleFeatureSelection,
+      showAllProjects,
+      getProjectDefaultBranch,
+      isFullyLoaded,
+    ]
+  );
+
+  // ---------------------------------------------------------------------------
+  // Board-level render function for individual feature cards.
+  //
+  // This callback is passed down to VirtualizedColumnContent → KanbanColumn so
+  // that the board controls how each item is rendered in both virtualized and
+  // non-virtualized columns.  The column ID and global index are provided so the
+  // render function can apply column-specific logic (e.g. keyboard shortcuts for
+  // in_progress items).
+  // ---------------------------------------------------------------------------
+  const renderItem = useCallback(
+    (feature: Feature, columnId: string, globalIndex: number): ReactNode => {
+      let shortcutKey: string | undefined;
+      if (columnId === 'in_progress' && globalIndex < 10) {
+        shortcutKey = globalIndex === 9 ? '0' : String(globalIndex + 1);
+      }
+
+      return (
+        <KanbanCard
+          key={feature.id}
+          feature={feature}
+          onEdit={() => onEdit(feature)}
+          onDelete={() => onDelete(feature.id)}
+          onViewOutput={() => onViewOutput(feature)}
+          onVerify={() => onVerify(feature)}
+          onResume={() => onResume(feature)}
+          onForceStop={() => onForceStop(feature)}
+          onManualVerify={() => onManualVerify(feature)}
+          onMoveBackToInProgress={() => onMoveBackToInProgress(feature)}
+          onMoveBackToBacklog={() => onMoveBackToBacklog(feature)}
+          onFollowUp={() => onFollowUp(feature)}
+          onImplement={() => onImplement(feature)}
+          onViewPlan={() => onViewPlan(feature)}
+          onApprovePlan={() => onApprovePlan(feature)}
+          onSpawnTask={() => onSpawnTask?.(feature)}
+          onToggleFavorite={() => onToggleFavorite?.(feature)}
+          hasContext={featuresWithContext.has(feature.id)}
+          isCurrentAutoTask={runningAutoTasks.includes(feature.id)}
+          shortcutKey={shortcutKey}
+          opacity={backgroundSettings.cardOpacity}
+          glassmorphism={backgroundSettings.cardGlassmorphism}
+          cardBorderEnabled={backgroundSettings.cardBorderEnabled}
+          cardBorderOpacity={backgroundSettings.cardBorderOpacity}
+          isSelectionMode={isSelectionMode}
+          selectionTarget={selectionTarget}
+          isSelected={selectedFeatureIds.has(feature.id)}
+          onToggleSelect={() => onToggleFeatureSelection?.(feature.id)}
+          showAllProjects={showAllProjects}
+          projectDefaultBranch={getProjectDefaultBranch?.(feature.projectId as string)}
+          isFullyLoaded={isFullyLoaded}
+        />
+      );
+    },
+    [
+      onEdit,
+      onDelete,
+      onViewOutput,
+      onVerify,
+      onResume,
+      onForceStop,
+      onManualVerify,
+      onMoveBackToInProgress,
+      onMoveBackToBacklog,
+      onFollowUp,
+      onImplement,
+      onViewPlan,
+      onApprovePlan,
+      onSpawnTask,
+      onToggleFavorite,
+      featuresWithContext,
+      runningAutoTasks,
+      backgroundSettings.cardOpacity,
+      backgroundSettings.cardGlassmorphism,
+      backgroundSettings.cardBorderEnabled,
+      backgroundSettings.cardBorderOpacity,
+      isSelectionMode,
+      selectionTarget,
+      selectedFeatureIds,
+      onToggleFeatureSelection,
+      showAllProjects,
+      getProjectDefaultBranch,
+      isFullyLoaded,
+    ]
+  );
 
   return (
     <div
       className={cn(
-        'flex-1 overflow-x-auto px-5 pt-4 pb-4 relative',
+        'flex-1 overflow-hidden relative h-full',
         'transition-opacity duration-200',
         className
       )}
@@ -131,63 +357,50 @@ export function KanbanBoard({
         onDragStart={onDragStart}
         onDragEnd={onDragEnd}
       >
-        <div className="h-full py-1" style={containerStyle}>
+        <div className="h-full overflow-x-auto py-2" style={effectiveContainerStyle}>
           {columns.map((column) => {
             const columnFeatures = getColumnFeatures(column.id as ColumnId);
             return (
-              <KanbanColumn
+              <VirtualizedColumnContent
                 key={column.id}
-                id={column.id}
-                title={column.title}
-                colorClass={column.colorClass}
-                count={columnFeatures.length}
-                width={columnWidth}
+                columnId={column.id}
+                columnTitle={column.title}
+                columnColorClass={column.colorClass}
+                isPipelineStep={column.isPipelineStep}
+                features={columnFeatures}
+                width={singleColumnMode ? singleColumnWidth : columnWidth}
                 opacity={backgroundSettings.columnOpacity}
                 showBorder={backgroundSettings.columnBorderEnabled}
                 hideScrollbar={backgroundSettings.hideScrollbar}
+                cardProps={cardProps}
+                renderItem={renderItem}
+                isDragging={isDragging}
+                isReadOnly={isReadOnly}
+                addFeatureShortcut={addFeatureShortcut}
+                onAiSuggest={onAiSuggest}
+                collapsedCategories={collapsedCategories}
+                onToggleCategory={toggleCategory}
+                collapsedProjects={showAllProjects ? collapsedProjects : undefined}
+                onToggleProject={showAllProjects ? toggleProject : undefined}
                 headerAction={
-                  column.id === 'verified' ? (
+                  column.id === 'backlog' ? (
                     <div className="flex items-center gap-1">
-                      {columnFeatures.length > 0 && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-6 px-2 text-xs"
-                          onClick={onArchiveAllVerified}
-                          data-testid="archive-all-verified-button"
-                        >
-                          <Archive className="w-3 h-3 mr-1" />
-                          Complete All
-                        </Button>
-                      )}
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 w-6 p-0 relative"
-                        onClick={onShowCompletedModal}
-                        title={`Completed Features (${completedCount})`}
-                        data-testid="completed-features-button"
-                      >
-                        <Archive className="w-3.5 h-3.5 text-muted-foreground" />
-                        {completedCount > 0 && (
-                          <span className="absolute -top-1 -right-1 bg-brand-500 text-white text-[8px] font-bold rounded-full w-3.5 h-3.5 flex items-center justify-center">
-                            {completedCount > 99 ? '99+' : completedCount}
-                          </span>
-                        )}
-                      </Button>
-                    </div>
-                  ) : column.id === 'backlog' ? (
-                    <div className="flex items-center gap-1">
-                      <Button
-                        variant="default"
-                        size="sm"
-                        className="h-6 w-6 p-0"
-                        onClick={onAddFeature}
-                        title="Add Feature"
-                        data-testid="add-feature-button"
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                      </Button>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="default"
+                            size="sm"
+                            className="h-6 w-6 p-0"
+                            onClick={onAddFeature}
+                            data-testid="add-feature-button"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Add Feature ({formatShortcut(addFeatureShortcut, true)})</p>
+                        </TooltipContent>
+                      </Tooltip>
                       <Button
                         variant="ghost"
                         size="sm"
@@ -212,30 +425,43 @@ export function KanbanBoard({
                       </Button>
                     </div>
                   ) : column.id === 'waiting_approval' ? (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className={`h-6 px-2 text-xs ${selectionTarget === 'waiting_approval' ? 'text-primary bg-primary/10' : 'text-muted-foreground hover:text-foreground'}`}
-                      onClick={() => onToggleSelectionMode?.('waiting_approval')}
-                      title={
-                        selectionTarget === 'waiting_approval'
-                          ? 'Switch to Drag Mode'
-                          : 'Select Multiple'
-                      }
-                      data-testid="waiting-approval-selection-mode-button"
-                    >
-                      {selectionTarget === 'waiting_approval' ? (
-                        <>
-                          <GripVertical className="w-3.5 h-3.5 mr-1" />
-                          Drag
-                        </>
-                      ) : (
-                        <>
-                          <CheckSquare className="w-3.5 h-3.5 mr-1" />
-                          Select
-                        </>
+                    <div className="flex items-center gap-1">
+                      {columnFeatures.length > 0 && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 px-2 text-xs"
+                          onClick={onCompleteAllWaiting}
+                          data-testid="complete-all-waiting-button"
+                        >
+                          Complete All
+                        </Button>
                       )}
-                    </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className={`h-6 px-2 text-xs ${selectionTarget === 'waiting_approval' ? 'text-primary bg-primary/10' : 'text-muted-foreground hover:text-foreground'}`}
+                        onClick={() => onToggleSelectionMode?.('waiting_approval')}
+                        title={
+                          selectionTarget === 'waiting_approval'
+                            ? 'Switch to Drag Mode'
+                            : 'Select Multiple'
+                        }
+                        data-testid="waiting-approval-selection-mode-button"
+                      >
+                        {selectionTarget === 'waiting_approval' ? (
+                          <>
+                            <GripVertical className="w-3.5 h-3.5 mr-1" />
+                            Drag
+                          </>
+                        ) : (
+                          <>
+                            <CheckSquare className="w-3.5 h-3.5 mr-1" />
+                            Select
+                          </>
+                        )}
+                      </Button>
+                    </div>
                   ) : column.id === 'in_progress' ? (
                     <Button
                       variant="ghost"
@@ -262,86 +488,32 @@ export function KanbanBoard({
                 }
                 footerAction={
                   column.id === 'backlog' ? (
-                    <Button
-                      variant="default"
-                      size="sm"
-                      className="w-full h-9 text-sm"
-                      onClick={onAddFeature}
-                      data-testid="add-feature-floating-button"
-                    >
-                      <Plus className="w-4 h-4 mr-2" />
-                      Add Feature
-                      <span className="ml-auto pl-2 text-[10px] font-mono opacity-70 bg-black/20 px-1.5 py-0.5 rounded">
-                        {formatShortcut(addFeatureShortcut, true)}
-                      </span>
-                    </Button>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="default"
+                          size="sm"
+                          className="w-full h-9 text-sm"
+                          onClick={onAddFeature}
+                          data-testid="add-feature-floating-button"
+                        >
+                          <Plus className="w-4 h-4 mr-2" />
+                          Add Feature
+                          <span className="ml-auto pl-2 text-[10px] font-mono opacity-70 bg-black/20 px-1.5 py-0.5 rounded">
+                            {formatShortcut(addFeatureShortcut, true)}
+                          </span>
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>
+                          Add a new feature to the backlog (
+                          {formatShortcut(addFeatureShortcut, true)})
+                        </p>
+                      </TooltipContent>
+                    </Tooltip>
                   ) : undefined
                 }
-              >
-                <SortableContext
-                  items={columnFeatures.map((f) => f.id)}
-                  strategy={verticalListSortingStrategy}
-                >
-                  {/* Empty state card when column has no features */}
-                  {columnFeatures.length === 0 && !isDragging && (
-                    <EmptyStateCard
-                      columnId={column.id}
-                      columnTitle={column.title}
-                      addFeatureShortcut={addFeatureShortcut}
-                      isReadOnly={isReadOnly}
-                      onAiSuggest={column.id === 'backlog' ? onAiSuggest : undefined}
-                      opacity={backgroundSettings.cardOpacity}
-                      glassmorphism={backgroundSettings.cardGlassmorphism}
-                      customConfig={
-                        column.isPipelineStep
-                          ? {
-                              title: `${column.title} Empty`,
-                              description: `Features will appear here during the ${column.title.toLowerCase()} phase of the pipeline.`,
-                            }
-                          : undefined
-                      }
-                    />
-                  )}
-                  {columnFeatures.map((feature, index) => {
-                    // Calculate shortcut key for in-progress cards (first 10 get 1-9, 0)
-                    let shortcutKey: string | undefined;
-                    if (column.id === 'in_progress' && index < 10) {
-                      shortcutKey = index === 9 ? '0' : String(index + 1);
-                    }
-                    return (
-                      <KanbanCard
-                        key={feature.id}
-                        feature={feature}
-                        onEdit={() => onEdit(feature)}
-                        onDelete={() => onDelete(feature.id)}
-                        onViewOutput={() => onViewOutput(feature)}
-                        onVerify={() => onVerify(feature)}
-                        onResume={() => onResume(feature)}
-                        onForceStop={() => onForceStop(feature)}
-                        onManualVerify={() => onManualVerify(feature)}
-                        onMoveBackToInProgress={() => onMoveBackToInProgress(feature)}
-                        onFollowUp={() => onFollowUp(feature)}
-                        onComplete={() => onComplete(feature)}
-                        onImplement={() => onImplement(feature)}
-                        onViewPlan={() => onViewPlan(feature)}
-                        onApprovePlan={() => onApprovePlan(feature)}
-                        onSpawnTask={() => onSpawnTask?.(feature)}
-                        hasContext={featuresWithContext.has(feature.id)}
-                        isCurrentAutoTask={runningAutoTasks.includes(feature.id)}
-                        shortcutKey={shortcutKey}
-                        opacity={backgroundSettings.cardOpacity}
-                        glassmorphism={backgroundSettings.cardGlassmorphism}
-                        cardBorderEnabled={backgroundSettings.cardBorderEnabled}
-                        cardBorderOpacity={backgroundSettings.cardBorderOpacity}
-                        isSelectionMode={isSelectionMode}
-                        selectionTarget={selectionTarget}
-                        isSelected={selectedFeatureIds.has(feature.id)}
-                        onToggleSelect={() => onToggleFeatureSelection?.(feature.id)}
-                      />
-                    );
-                  })}
-                </SortableContext>
-              </KanbanColumn>
+              />
             );
           })}
         </div>
@@ -353,7 +525,7 @@ export function KanbanBoard({
           }}
         >
           {activeFeature && (
-            <div style={{ width: `${columnWidth}px` }}>
+            <div style={{ width: `${singleColumnMode ? singleColumnWidth : columnWidth}px` }}>
               <KanbanCard
                 feature={activeFeature}
                 isOverlay
@@ -365,9 +537,9 @@ export function KanbanBoard({
                 onForceStop={() => {}}
                 onManualVerify={() => {}}
                 onMoveBackToInProgress={() => {}}
+                onMoveBackToBacklog={() => {}}
                 onFollowUp={() => {}}
                 onImplement={() => {}}
-                onComplete={() => {}}
                 onViewPlan={() => {}}
                 onApprovePlan={() => {}}
                 onSpawnTask={() => {}}
@@ -377,6 +549,8 @@ export function KanbanBoard({
                 glassmorphism={backgroundSettings.cardGlassmorphism}
                 cardBorderEnabled={backgroundSettings.cardBorderEnabled}
                 cardBorderOpacity={backgroundSettings.cardBorderOpacity}
+                showAllProjects={showAllProjects}
+                projectDefaultBranch={getProjectDefaultBranch?.(activeFeature.projectId as string)}
               />
             </div>
           )}

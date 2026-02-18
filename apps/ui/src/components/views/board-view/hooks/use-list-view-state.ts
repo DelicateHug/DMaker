@@ -26,6 +26,10 @@ interface ListViewPersistedState {
 /** Storage key for list view preferences */
 const STORAGE_KEY = 'automaker:list-view-state';
 
+/** Migration version - increment this to force a migration */
+const CURRENT_MIGRATION_VERSION = 2;
+const MIGRATION_VERSION_KEY = 'automaker:list-view-migration-version';
+
 /** Default sort configuration */
 const DEFAULT_SORT_CONFIG: SortConfig = {
   column: 'createdAt',
@@ -34,18 +38,29 @@ const DEFAULT_SORT_CONFIG: SortConfig = {
 
 /** Default persisted state */
 const DEFAULT_STATE: ListViewPersistedState = {
-  viewMode: 'kanban',
+  viewMode: 'list',
   sortConfig: DEFAULT_SORT_CONFIG,
 };
 
 /**
- * Validates and returns a valid ViewMode, defaulting to 'kanban' if invalid
+ * Validates and returns a valid ViewMode, defaulting to 'list' if invalid
+ * Migration v2: Force list view for all users to eliminate unused Kanban card space
  */
 function validateViewMode(value: unknown): ViewMode {
+  // Check if migration is needed - always use list view after migration v2
+  const storedVersion = localStorage.getItem(MIGRATION_VERSION_KEY);
+  const currentVersion = storedVersion ? parseInt(storedVersion, 10) : 0;
+
+  if (currentVersion < CURRENT_MIGRATION_VERSION) {
+    // Perform migration: force list view
+    localStorage.setItem(MIGRATION_VERSION_KEY, String(CURRENT_MIGRATION_VERSION));
+    return 'list';
+  }
+
   if (value === 'kanban' || value === 'list') {
     return value;
   }
-  return 'kanban';
+  return 'list';
 }
 
 /**

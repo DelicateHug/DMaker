@@ -9,7 +9,12 @@
 
 import type { Request, Response } from 'express';
 import type { SettingsService } from '../../../services/settings-service.js';
-import { getErrorMessage, logError } from '../common.js';
+import {
+  getErrorMessage,
+  logError,
+  globalSettingsCache,
+  GLOBAL_SETTINGS_CACHE_KEY,
+} from '../common.js';
 
 /**
  * Create handler factory for GET /api/settings/global
@@ -20,7 +25,9 @@ import { getErrorMessage, logError } from '../common.js';
 export function createGetGlobalHandler(settingsService: SettingsService) {
   return async (_req: Request, res: Response): Promise<void> => {
     try {
-      const settings = await settingsService.getGlobalSettings();
+      const settings = await globalSettingsCache.getOrSet(GLOBAL_SETTINGS_CACHE_KEY, () =>
+        settingsService.getGlobalSettings()
+      );
 
       res.json({
         success: true,
