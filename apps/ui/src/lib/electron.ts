@@ -396,6 +396,30 @@ export interface GitHubAPI {
     endCursor?: string;
     error?: string;
   }>;
+  /** Get the GitHub username of the currently authenticated gh CLI user */
+  getCurrentUser: (projectPath: string) => Promise<{
+    success: boolean;
+    username: string | null;
+    error?: string;
+  }>;
+  /** Claim a GitHub issue for this user (assigns on GitHub) */
+  claimIssue: (
+    projectPath: string,
+    featureId: string,
+    issueNumber: number
+  ) => Promise<{ success: boolean; claimedBy?: string; error?: string }>;
+  /** Release claim on a GitHub issue (removes assignee on GitHub) */
+  unclaimIssue: (
+    projectPath: string,
+    featureId: string,
+    issueNumber: number
+  ) => Promise<{ success: boolean; error?: string }>;
+  /** Sync assignee/label/state data from GitHub for a linked issue */
+  syncIssue: (
+    projectPath: string,
+    featureId: string,
+    issueNumber: number
+  ) => Promise<{ success: boolean; issueData?: unknown; error?: string }>;
 }
 
 // Feature Suggestions types
@@ -562,13 +586,15 @@ export interface AutoModeAPI {
     projectPath: string,
     featureId: string,
     useWorktrees?: boolean,
-    forceRun?: boolean
+    forceRun?: boolean,
+    forceRunClaimed?: boolean
   ) => Promise<{
     success: boolean;
     passes?: boolean;
     error?: string;
-    warning?: 'unsatisfied_dependencies';
+    warning?: 'unsatisfied_dependencies' | 'claimed_by_other';
     message?: string;
+    claimedBy?: string;
     blockingDependencies?: Array<{
       id: string;
       title?: string;
@@ -2231,7 +2257,8 @@ function createMockAutoModeAPI(): AutoModeAPI {
       projectPath: string,
       featureId: string,
       useWorktrees?: boolean,
-      forceRun?: boolean
+      forceRun?: boolean,
+      forceRunClaimed?: boolean
     ) => {
       if (mockRunningFeatures.has(featureId)) {
         return {
@@ -2241,7 +2268,7 @@ function createMockAutoModeAPI(): AutoModeAPI {
       }
 
       console.log(
-        `[Mock] Running feature ${featureId} with useWorktrees: ${useWorktrees}, forceRun: ${forceRun}`
+        `[Mock] Running feature ${featureId} with useWorktrees: ${useWorktrees}, forceRun: ${forceRun}, forceRunClaimed: ${forceRunClaimed}`
       );
       mockRunningFeatures.add(featureId);
       simulateAutoModeLoop(projectPath, featureId);
@@ -3525,6 +3552,22 @@ function createMockGitHubAPI(): GitHubAPI {
         totalCount: 0,
         hasNextPage: false,
       };
+    },
+    getCurrentUser: async (projectPath: string) => {
+      console.log('[Mock] Getting current GitHub user for:', projectPath);
+      return { success: true, username: null };
+    },
+    claimIssue: async (projectPath: string, featureId: string, issueNumber: number) => {
+      console.log('[Mock] Claiming issue:', { projectPath, featureId, issueNumber });
+      return { success: false, error: 'Not available in mock mode' };
+    },
+    unclaimIssue: async (projectPath: string, featureId: string, issueNumber: number) => {
+      console.log('[Mock] Unclaiming issue:', { projectPath, featureId, issueNumber });
+      return { success: false, error: 'Not available in mock mode' };
+    },
+    syncIssue: async (projectPath: string, featureId: string, issueNumber: number) => {
+      console.log('[Mock] Syncing issue:', { projectPath, featureId, issueNumber });
+      return { success: false, error: 'Not available in mock mode' };
     },
   };
 }

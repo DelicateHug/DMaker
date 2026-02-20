@@ -11,6 +11,7 @@ import type { AutoModeService } from '../../../services/auto-mode-service.js';
 import { createLogger } from '@automaker/utils';
 import { getErrorMessage, logError } from '../common.js';
 import { getBlockingDependencies } from '@automaker/dependency-resolver';
+import { getGitHubSyncService } from '../../../services/github-sync-service.js';
 
 const logger = createLogger('AutoMode');
 
@@ -20,11 +21,12 @@ export function createRunFeatureHandler(autoModeService: AutoModeService) {
 
   return async (req: Request, res: Response): Promise<void> => {
     try {
-      const { projectPath, featureId, useWorktrees, forceRun } = req.body as {
+      const { projectPath, featureId, useWorktrees, forceRun, forceRunClaimed } = req.body as {
         projectPath: string;
         featureId: string;
         useWorktrees?: boolean;
         forceRun?: boolean; // If true, bypass dependency warning and run anyway
+        forceRunClaimed?: boolean; // If true, bypass claim-by-other warning and run anyway
       };
 
       if (!projectPath || !featureId) {
@@ -74,6 +76,25 @@ export function createRunFeatureHandler(autoModeService: AutoModeService) {
             blockingDependencies: blockingDependencyDetails,
           });
           return;
+        }
+      }
+
+      // Check if the feature is claimed by someone else on GitHub
+      if (!forceRunClaimed && feature.githubIssue) {
+        try {
+          const syncService = getGitHubSyncService();
+          const canExecute = await syncService.canExecute(projectPath, feature);
+          if (!canExecute.allowed) {
+            res.json({
+              success: false,
+              warning: 'claimed_by_other',
+              message: `This issue is claimed by ${canExecute.claimedBy} on GitHub`,
+              claimedBy: canExecute.claimedBy,
+            });
+            return;
+          }
+        } catch (claimCheckErr) {
+          logger.warn('Claim check failed, allowing execution:', claimCheckErr);
         }
       }
 

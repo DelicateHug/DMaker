@@ -78,6 +78,8 @@ interface KanbanBoardProps {
   showAllProjects?: boolean;
   /** Lookup function to get a project's default branch by projectId */
   getProjectDefaultBranch?: (projectId: string) => string | undefined;
+  /** GitHub username of the current Automaker user (for claim badge display) */
+  currentGitHubUser?: string | null;
 }
 
 export function KanbanBoard({
@@ -125,6 +127,7 @@ export function KanbanBoard({
   activeStatusTabs,
   showAllProjects = false,
   getProjectDefaultBranch,
+  currentGitHubUser,
 }: KanbanBoardProps) {
   // Generate columns including pipeline steps
   const allColumns = useMemo(() => getColumnsWithPipeline(pipelineConfig), [pipelineConfig]);
@@ -307,6 +310,7 @@ export function KanbanBoard({
           showAllProjects={showAllProjects}
           projectDefaultBranch={getProjectDefaultBranch?.(feature.projectId as string)}
           isFullyLoaded={isFullyLoaded}
+          currentGitHubUser={currentGitHubUser}
         />
       );
     },
@@ -339,6 +343,7 @@ export function KanbanBoard({
       showAllProjects,
       getProjectDefaultBranch,
       isFullyLoaded,
+      currentGitHubUser,
     ]
   );
 
@@ -551,6 +556,7 @@ export function KanbanBoard({
                 cardBorderOpacity={backgroundSettings.cardBorderOpacity}
                 showAllProjects={showAllProjects}
                 projectDefaultBranch={getProjectDefaultBranch?.(activeFeature.projectId as string)}
+                currentGitHubUser={currentGitHubUser}
               />
             </div>
           )}

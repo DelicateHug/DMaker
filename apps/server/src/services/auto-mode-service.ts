@@ -71,6 +71,7 @@ import {
 } from '../lib/settings-helpers.js';
 import { getNotificationService } from './notification-service.js';
 import { invalidateFeaturesCache } from '../routes/features/common.js';
+import { getGitHubSyncService } from './github-sync-service.js';
 
 const execAsync = promisify(exec);
 
@@ -468,8 +469,42 @@ export class AutoModeService {
           continue;
         }
 
+        // Filter out features claimed by other GitHub users
+        let claimBlockedCount = 0;
+        const claimBlockedNames: string[] = [];
+        const executableFeatures: typeof readyFeatures = [];
+        try {
+          const syncService = getGitHubSyncService();
+          for (const f of readyFeatures) {
+            if (f.githubIssue) {
+              const canExec = await syncService.canExecute(this.config!.projectPath, f);
+              if (!canExec.allowed) {
+                claimBlockedCount++;
+                claimBlockedNames.push(`${f.title || f.id} (claimed by ${canExec.claimedBy})`);
+                continue;
+              }
+            }
+            executableFeatures.push(f);
+          }
+        } catch {
+          // If claim check fails, use all ready features
+          executableFeatures.push(...readyFeatures);
+        }
+
+        if (executableFeatures.length === 0 && claimBlockedCount > 0) {
+          this.emitAutoModeEvent('auto_mode_idle', {
+            message: `${claimBlockedCount} feature${claimBlockedCount === 1 ? '' : 's'} claimed by other collaborators`,
+            reason: 'claimed_by_other',
+            blockedCount: claimBlockedCount,
+            blockedFeatures: claimBlockedNames,
+            projectPath: this.config!.projectPath,
+          });
+          await this.sleep(10000);
+          continue;
+        }
+
         // Find a feature not currently running
-        const nextFeature = readyFeatures.find((f) => !this.runningFeatures.has(f.id));
+        const nextFeature = executableFeatures.find((f) => !this.runningFeatures.has(f.id));
 
         if (nextFeature) {
           // Start feature execution in background
@@ -593,6 +628,25 @@ export class AutoModeService {
       feature = await this.loadFeature(projectPath, featureId);
       if (!feature) {
         throw new Error(`Feature ${featureId} not found`);
+      }
+
+      // Hard guard: refuse to execute if this feature is claimed by another GitHub user
+      if (feature.githubIssue) {
+        try {
+          const syncService = getGitHubSyncService();
+          const canExec = await syncService.canExecute(projectPath, feature);
+          if (!canExec.allowed) {
+            throw new Error(
+              `Feature is claimed by ${canExec.claimedBy} on GitHub. Claim it first before executing.`
+            );
+          }
+        } catch (claimErr) {
+          if ((claimErr as Error).message?.includes('claimed by')) {
+            throw claimErr;
+          }
+          // Other errors (network, etc.) – log and allow
+          logger.warn('GitHub claim check error, allowing execution:', claimErr);
+        }
       }
 
       // Derive workDir from feature.branchName

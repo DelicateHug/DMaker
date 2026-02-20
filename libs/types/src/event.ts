@@ -66,6 +66,9 @@ export type EventType =
   | 'voice:response-completed'
   | 'voice:speaking-started'
   | 'voice:speaking-completed'
-  | 'voice:error';
+  | 'voice:error'
+  | 'feature:claimed'
+  | 'feature:unclaimed'
+  | 'feature:claim-blocked';
 
 export type EventCallback = (type: EventType, payload: unknown) => void;

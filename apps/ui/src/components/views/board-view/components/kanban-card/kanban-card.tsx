@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Star } from 'lucide-react';
 import { Feature, useAppStore } from '@/store/app-store';
 import { useShallow } from 'zustand/react/shallow';
-import { CardBadges, PriorityBadges, BranchBadge } from './card-badges';
+import { CardBadges, PriorityBadges, BranchBadge, GitHubIssueBadge } from './card-badges';
 import { CardHeaderSection } from './card-header';
 import { CardContentSections } from './card-content-sections';
 import { AgentInfoPanel } from './agent-info-panel';
@@ -76,6 +76,8 @@ interface KanbanCardProps {
   /** Whether full feature data has been loaded (Phase 2 complete).
    *  When false, description and agent info sections show skeleton placeholders. */
   isFullyLoaded?: boolean;
+  /** The GitHub username of the current Automaker user (for claim display) */
+  currentGitHubUser?: string | null;
 }
 
 export const KanbanCard = memo(function KanbanCard({
@@ -112,6 +114,7 @@ export const KanbanCard = memo(function KanbanCard({
   showAllProjects = false,
   projectDefaultBranch,
   isFullyLoaded = true,
+  currentGitHubUser,
 }: KanbanCardProps) {
   const { useWorktrees } = useAppStore(
     useShallow((state) => ({
@@ -197,6 +200,9 @@ export const KanbanCard = memo(function KanbanCard({
 
       {/* Status Badges Row */}
       <CardBadges feature={feature} />
+
+      {/* GitHub Issue collaboration badge */}
+      <GitHubIssueBadge feature={feature} currentGitHubUser={currentGitHubUser} />
 
       {/* Category row with selection checkbox and favorite toggle */}
       <div className="px-2.5 pt-2 flex items-center gap-1.5">

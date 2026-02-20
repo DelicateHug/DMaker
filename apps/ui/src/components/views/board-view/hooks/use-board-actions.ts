@@ -115,6 +115,7 @@ export function useBoardActions({
     skipVerificationInAutoMode,
     isPrimaryWorktreeBranch,
     getPrimaryWorktreeBranch,
+    addRunningTask,
   } = useAppStore(
     useShallow((state) => ({
       addFeature: state.addFeature,
@@ -536,6 +537,11 @@ export function useBoardActions({
 
       if (result.success) {
         logger.info('Feature run started successfully, branch:', feature.branchName || 'default');
+      } else if (result.warning === 'claimed_by_other') {
+        // Feature is claimed by another collaborator on GitHub
+        throw new Error(
+          `This issue is claimed by ${result.claimedBy || 'another user'} on GitHub. Claim it first before executing.`
+        );
       } else {
         // Throw error so caller can handle rollback
         throw new Error(result.error || 'Failed to start feature');
@@ -558,6 +564,11 @@ export function useBoardActions({
         await persistFeatureUpdate(feature.id, updates);
         logger.info('Feature moved to in_progress, starting agent...');
         await handleRunFeature(feature);
+        // Optimistic UI update: immediately show the blinking running state
+        // so the user doesn't have to wait for the server event
+        if (currentProject?.id) {
+          addRunningTask(currentProject.id, feature.id);
+        }
         return true;
       } catch (error) {
         // Rollback to backlog if persist or run fails (e.g., server offline)
@@ -581,7 +592,7 @@ export function useBoardActions({
         return false;
       }
     },
-    [updateFeature, persistFeatureUpdate, handleRunFeature]
+    [updateFeature, persistFeatureUpdate, handleRunFeature, currentProject, addRunningTask]
   );
 
   const handleStartImplementation = useCallback(
@@ -760,7 +771,7 @@ export function useBoardActions({
         await loadFeatures();
       }
     },
-    [currentProject, loadFeatures, useWorktrees]
+    [currentProject, loadFeatures, useWorktrees, addRunningTask]
   );
 
   const handleManualVerify = useCallback(
@@ -882,6 +893,12 @@ export function useBoardActions({
       if (!result.success) {
         throw new Error(result.error || 'Failed to send follow-up');
       }
+
+      // Optimistic UI update: immediately show the blinking running state
+      // so the user doesn't have to wait for the server event
+      if (currentProject?.id) {
+        addRunningTask(currentProject.id, featureId);
+      }
     } catch (error) {
       // Rollback to previous status if follow-up fails
       logger.error('Error sending follow-up, rolling back:', error);
@@ -909,6 +926,7 @@ export function useBoardActions({
     followUpImagePaths,
     updateFeature,
     persistFeatureUpdate,
+    addRunningTask,
     setShowFollowUpDialog,
     setFollowUpFeature,
     setFollowUpPrompt,

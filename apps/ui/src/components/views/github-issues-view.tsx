@@ -136,8 +136,22 @@ export function GitHubIssuesView() {
             .filter(Boolean)
             .join('\n');
 
+          // Get current GitHub user so we can auto-claim the issue
+          let currentGitHubUser: string | null = null;
+          try {
+            const userResult = await api.github.getCurrentUser(currentProject.path);
+            if (userResult?.success) {
+              currentGitHubUser = userResult.username ?? null;
+            }
+          } catch {
+            // Non-fatal: claim can be done manually later
+          }
+
+          const now = new Date().toISOString();
+          const featureId = `issue-${issue.number}-${generateUUID()}`;
+
           const feature = {
-            id: `issue-${issue.number}-${generateUUID()}`,
+            id: featureId,
             title: issue.title,
             description,
             category: 'From GitHub',
@@ -147,13 +161,36 @@ export function GitHubIssuesView() {
             model: 'opus',
             thinkingLevel: 'none' as const,
             branchName: currentBranch,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
+            createdAt: now,
+            updatedAt: now,
+            // Link to the GitHub issue for collaboration
+            githubIssue: {
+              number: issue.number,
+              url: issue.url,
+              assignees: (issue.assignees ?? []).map((a: { login: string }) => a.login),
+              labels: (issue.labels ?? []).map((l: { name: string }) => l.name),
+              state: (issue.state?.toLowerCase() === 'closed' ? 'closed' : 'open') as
+                | 'open'
+                | 'closed',
+              syncedAt: now,
+            },
+            // Auto-claim for the current user
+            ...(currentGitHubUser ? { claimedBy: currentGitHubUser, claimedAt: now } : {}),
           };
 
           const result = await api.features.create(currentProject.path, feature);
           if (result.success) {
-            toast.success(`Created task: ${issue.title}`);
+            // Auto-assign on GitHub if authenticated
+            if (currentGitHubUser) {
+              try {
+                await api.github.claimIssue(currentProject.path, featureId, issue.number);
+              } catch {
+                // Non-fatal: user can manually claim later
+              }
+            }
+            toast.success(
+              `Created task: ${issue.title}${currentGitHubUser ? ` (claimed by ${currentGitHubUser})` : ''}`
+            );
           } else {
             toast.error(result.error || 'Failed to create task');
           }

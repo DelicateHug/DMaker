@@ -1784,13 +1784,15 @@ export class HttpApiClient implements ElectronAPI {
       projectPath: string,
       featureId: string,
       useWorktrees?: boolean,
-      forceRun?: boolean
+      forceRun?: boolean,
+      forceRunClaimed?: boolean
     ) =>
       this.post('/api/auto-mode/run-feature', {
         projectPath,
         featureId,
         useWorktrees,
         forceRun,
+        forceRunClaimed,
       }),
     verifyFeature: (projectPath: string, featureId: string) =>
       this.post('/api/auto-mode/verify-feature', { projectPath, featureId }),
@@ -2091,6 +2093,28 @@ export class HttpApiClient implements ElectronAPI {
       this.subscribeToEvent('issue-validation:event', callback as EventCallback),
     getIssueComments: (projectPath: string, issueNumber: number, cursor?: string) =>
       this.post('/api/github/issue-comments', { projectPath, issueNumber, cursor }),
+    getCurrentUser: (
+      projectPath: string
+    ): Promise<{ success: boolean; username: string | null; error?: string }> =>
+      this.post('/api/github/current-user', { projectPath }),
+    claimIssue: (
+      projectPath: string,
+      featureId: string,
+      issueNumber: number
+    ): Promise<{ success: boolean; claimedBy?: string; error?: string }> =>
+      this.post('/api/github/claim-issue', { projectPath, featureId, issueNumber }),
+    unclaimIssue: (
+      projectPath: string,
+      featureId: string,
+      issueNumber: number
+    ): Promise<{ success: boolean; error?: string }> =>
+      this.post('/api/github/unclaim-issue', { projectPath, featureId, issueNumber }),
+    syncIssue: (
+      projectPath: string,
+      featureId: string,
+      issueNumber: number
+    ): Promise<{ success: boolean; issueData?: unknown; error?: string }> =>
+      this.post('/api/github/sync-issue', { projectPath, featureId, issueNumber }),
   };
 
   // Workspace API

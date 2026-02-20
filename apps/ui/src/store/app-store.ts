@@ -412,10 +412,10 @@ export const DEFAULT_KEYBOARD_SHORTCUTS: KeyboardShortcuts = {
   recordingToggle: 'Alt+N', // Global shortcut - toggle recording start/stop when voice mode is open
 
   // Board panel toggle shortcuts (only active in board view)
-  toggleFileExplorer: 'Ctrl+Q', // Toggle file explorer panel
-  toggleKanbanPanel: 'Ctrl+W', // Toggle kanban board panel
-  toggleAgentChat: 'Ctrl+E', // Toggle agent chat panel
-  toggleDeployPanel: 'Ctrl+Alt+R', // Toggle deploy panel
+  toggleFileExplorer: 'Alt+Q', // Toggle file explorer panel
+  toggleKanbanPanel: 'Alt+W', // Toggle kanban board panel
+  toggleAgentChat: 'Alt+E', // Toggle agent chat panel
+  toggleDeployPanel: 'Alt+R', // Toggle deploy panel
 
   // Terminal shortcuts (only active in terminal view)
   // Using Alt modifier to avoid conflicts with both terminal signals AND browser shortcuts

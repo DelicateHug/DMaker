@@ -17,6 +17,11 @@ import {
   createDeleteValidationHandler,
   createMarkViewedHandler,
 } from './routes/validation-endpoints.js';
+import { createClaimIssueHandler } from './routes/claim-issue.js';
+import { createUnclaimIssueHandler } from './routes/unclaim-issue.js';
+import { createSyncIssueHandler } from './routes/sync-issue.js';
+import { createCurrentUserHandler } from './routes/current-user.js';
+import { getGitHubSyncService } from '../../services/github-sync-service.js';
 import type { SettingsService } from '../../services/settings-service.js';
 
 export function createGitHubRoutes(
@@ -24,6 +29,9 @@ export function createGitHubRoutes(
   settingsService?: SettingsService
 ): Router {
   const router = Router();
+
+  // Initialize the singleton sync service with the shared event emitter
+  getGitHubSyncService(events);
 
   router.post('/check-remote', validatePathParams('projectPath'), createCheckGitHubRemoteHandler());
   router.post('/issues', validatePathParams('projectPath'), createListIssuesHandler());
@@ -53,6 +61,16 @@ export function createGitHubRoutes(
     validatePathParams('projectPath'),
     createMarkViewedHandler(events)
   );
+
+  // Collaboration: claim/unclaim/sync issue assignees
+  router.post('/claim-issue', validatePathParams('projectPath'), createClaimIssueHandler(events));
+  router.post(
+    '/unclaim-issue',
+    validatePathParams('projectPath'),
+    createUnclaimIssueHandler(events)
+  );
+  router.post('/sync-issue', validatePathParams('projectPath'), createSyncIssueHandler(events));
+  router.post('/current-user', validatePathParams('projectPath'), createCurrentUserHandler(events));
 
   return router;
 }

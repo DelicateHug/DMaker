@@ -513,15 +513,18 @@ export interface AutoModeAPI {
     projectPath: string,
     featureId: string,
     useWorktrees?: boolean,
-    forceRun?: boolean
+    forceRun?: boolean,
+    forceRunClaimed?: boolean
   ) => Promise<{
     success: boolean;
     passes?: boolean;
     error?: string;
-    /** Warning type when feature has unsatisfied dependencies */
-    warning?: 'unsatisfied_dependencies';
+    /** Warning type when feature has unsatisfied dependencies or is claimed by another user */
+    warning?: 'unsatisfied_dependencies' | 'claimed_by_other';
     /** Human-readable warning message */
     message?: string;
+    /** GitHub username that claimed the feature (when warning is 'claimed_by_other') */
+    claimedBy?: string;
     /** Details of blocking dependencies when warning is 'unsatisfied_dependencies' */
     blockingDependencies?: Array<{
       id: string;
