@@ -4,7 +4,19 @@ import { Feature, useAppStore } from '@/store/app-store';
 import { useShallow } from 'zustand/react/shallow';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { AlertCircle, Lock, Hand, Sparkles, Cloud, User, Clock, GitBranch } from 'lucide-react';
+import {
+  AlertCircle,
+  Lock,
+  Hand,
+  Sparkles,
+  Cloud,
+  User,
+  Clock,
+  GitBranch,
+  CircleDot,
+  UserCheck,
+  UserX,
+} from 'lucide-react';
 import { getBlockingDependencies } from '@automaker/dependency-resolver';
 
 /** Uniform badge style for all card badges */
@@ -357,5 +369,97 @@ export const BranchBadge = memo(function BranchBadge({
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>
+  );
+});
+
+interface GitHubIssueBadgeProps {
+  feature: Feature;
+  /** The GitHub username of the current Automaker user */
+  currentGitHubUser?: string | null;
+}
+
+/**
+ * GitHubIssueBadge - Shows GitHub issue link, assignees, and claim status on a card.
+ *
+ * - No assignees: grey "unclaimed" badge
+ * - Claimed by me: green badge with my username
+ * - Claimed by others: amber badge with their username (warns this Automaker won't run it)
+ */
+export const GitHubIssueBadge = memo(function GitHubIssueBadge({
+  feature,
+  currentGitHubUser,
+}: GitHubIssueBadgeProps) {
+  if (!feature.githubIssue) return null;
+
+  const { number, url, assignees } = feature.githubIssue;
+  const isClaimed = assignees.length > 0;
+  const isClaimedByMe = currentGitHubUser && assignees.includes(currentGitHubUser);
+  const isClaimedByOther = isClaimed && !isClaimedByMe;
+  const claimOwner = assignees[0];
+
+  return (
+    <div className="flex items-center gap-1 flex-wrap mt-1 px-3">
+      {/* Issue number link */}
+      <TooltipProvider delayDuration={200}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <a
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] bg-muted/50 border border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              data-testid={`github-issue-badge-${feature.id}`}
+            >
+              <CircleDot className="w-3 h-3 shrink-0" />
+              <span>#{number}</span>
+            </a>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" className="text-xs">
+            <p>GitHub Issue #{number}</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+
+      {/* Claim status badge */}
+      <TooltipProvider delayDuration={200}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div
+              className={cn(
+                'inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] border',
+                !isClaimed && 'bg-muted/30 border-border/40 text-muted-foreground',
+                isClaimedByMe &&
+                  'bg-green-500/15 border-green-500/40 text-green-600 dark:text-green-400',
+                isClaimedByOther &&
+                  'bg-amber-500/15 border-amber-500/40 text-amber-600 dark:text-amber-400'
+              )}
+              data-testid={`claim-badge-${feature.id}`}
+            >
+              {!isClaimed && <UserX className="w-3 h-3 shrink-0" />}
+              {isClaimedByMe && <UserCheck className="w-3 h-3 shrink-0" />}
+              {isClaimedByOther && <User className="w-3 h-3 shrink-0" />}
+              <span className="truncate max-w-[80px]">
+                {!isClaimed && 'Unclaimed'}
+                {isClaimedByMe && 'Claimed by me'}
+                {isClaimedByOther && claimOwner}
+              </span>
+            </div>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" className="text-xs max-w-[220px]">
+            {!isClaimed && (
+              <p>No one has claimed this issue. Click "Claim" to assign yourself on GitHub.</p>
+            )}
+            {isClaimedByMe && <p>You have claimed this issue. Automaker will work on it.</p>}
+            {isClaimedByOther && (
+              <p>
+                Claimed by <strong>{claimOwner}</strong> on GitHub. Automaker will refuse to execute
+                this until you claim it.
+              </p>
+            )}
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    </div>
   );
 });

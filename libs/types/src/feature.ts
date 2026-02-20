@@ -180,6 +180,17 @@ export interface Feature {
   isFavorite?: boolean; // Whether this feature is marked as a favorite for quick access
   // Deploy settings
   autoDeploy?: boolean; // Whether to auto-deploy when feature completes
+  // GitHub Issue collaboration
+  githubIssue?: {
+    number: number;
+    url: string;
+    assignees: string[]; // GitHub usernames currently assigned
+    labels: string[];
+    state: 'open' | 'closed';
+    syncedAt?: string; // ISO timestamp of last sync from GitHub
+  };
+  claimedBy?: string; // GitHub username of the person who claimed this feature
+  claimedAt?: string; // ISO timestamp when the feature was claimed
   [key: string]: unknown; // Keep catch-all for extensibility
 }
 
@@ -207,6 +218,17 @@ export interface FeatureListSummary {
   startedAt?: string;
   /** Number of images attached to the feature (count only, not full paths) */
   imagePathsCount: number;
+  /** GitHub issue claim state for collaboration */
+  githubIssue?: {
+    number: number;
+    url: string;
+    assignees: string[];
+    labels: string[];
+    state: 'open' | 'closed';
+    syncedAt?: string;
+  };
+  claimedBy?: string;
+  claimedAt?: string;
 }
 
 /**

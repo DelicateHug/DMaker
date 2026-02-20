@@ -5,7 +5,7 @@ import { getElectronAPI } from '@/lib/electron';
 import { toast } from 'sonner';
 import { createLogger } from '@automaker/utils/logger';
 import { useBoardProject } from './use-board-project';
-import { pendingPersistIds } from './use-board-persistence';
+import { pendingPersistIds, protectOptimisticUpdate } from './use-board-persistence';
 import type { Project } from '@/lib/electron';
 import type { FeatureListSummary } from '@automaker/types';
 
@@ -97,6 +97,10 @@ function summaryToFeature(
     branchName: summary.branchName,
     error: summary.error,
     startedAt: summary.startedAt,
+    // GitHub collaboration fields
+    githubIssue: summary.githubIssue,
+    claimedBy: summary.claimedBy,
+    claimedAt: summary.claimedAt,
     // Project info for multi-project support
     projectPath,
     projectName,
@@ -594,6 +598,9 @@ export function useBoardFeatures({
         f.id === featureId ? { ...f, status: status as Feature['status'] } : f
       );
       setFeatures(updated);
+      // Protect this optimistic update from being overwritten by stale server
+      // cache data during subsequent background polls or debounced reloads.
+      protectOptimisticUpdate(featureId);
     };
 
     const unsubscribe = api.autoMode.onEvent((event) => {

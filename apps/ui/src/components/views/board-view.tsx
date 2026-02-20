@@ -248,6 +248,8 @@ export function BoardView() {
   } = useBoardFeatures({ currentProject, projects });
   const [editingFeature, setEditingFeature] = useState<Feature | null>(null);
   const [showAddDialog, setShowAddDialog] = useState(false);
+  // GitHub collaboration: current authenticated user
+  const [currentGitHubUser, setCurrentGitHubUser] = useState<string | null>(null);
   const [isMounted, setIsMounted] = useState(false);
   const [showOutputModal, setShowOutputModal] = useState(false);
   const [outputFeature, setOutputFeature] = useState<Feature | null>(null);
@@ -779,6 +781,20 @@ export function BoardView() {
   useEffect(() => {
     setIsMounted(true);
   }, []);
+
+  // Fetch GitHub current user when the project changes (for claim badge display)
+  useEffect(() => {
+    if (!currentProject?.path) return;
+    const api = getElectronAPI();
+    api.github
+      ?.getCurrentUser?.(currentProject.path)
+      .then((result) => {
+        if (result?.success) setCurrentGitHubUser(result.username ?? null);
+      })
+      .catch(() => {
+        // Non-fatal: badges degrade gracefully without a user
+      });
+  }, [currentProject?.path]);
 
   const sensors = useSensors(
     useSensor(DialogAwarePointerSensor, {
@@ -2193,6 +2209,7 @@ export function BoardView() {
                       activeStatusTab={activeStatusTab}
                       activeStatusTabs={activeStatusTabs}
                       showAllProjects={showAllProjectsInBoard}
+                      currentGitHubUser={currentGitHubUser}
                     />
                   ) : (
                     <KanbanBoard
@@ -2246,6 +2263,7 @@ export function BoardView() {
                       activeStatusTab={activeStatusTab}
                       activeStatusTabs={activeStatusTabs}
                       showAllProjects={showAllProjectsInBoard}
+                      currentGitHubUser={currentGitHubUser}
                     />
                   )}
                 </div>

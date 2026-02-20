@@ -765,6 +765,9 @@ export class FeatureLoader {
       error: feature.error,
       startedAt: feature.startedAt,
       imagePathsCount: feature.imagePaths?.length ?? 0,
+      githubIssue: feature.githubIssue,
+      claimedBy: feature.claimedBy,
+      claimedAt: feature.claimedAt,
     }));
   }
 
@@ -859,6 +862,9 @@ export class FeatureLoader {
           error: feature.error,
           startedAt: feature.startedAt,
           imagePathsCount: feature.imagePaths?.length ?? 0,
+          githubIssue: feature.githubIssue,
+          claimedBy: feature.claimedBy,
+          claimedAt: feature.claimedAt,
         };
 
         return summary;
