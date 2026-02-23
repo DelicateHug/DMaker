@@ -103,3 +103,6 @@ test-output.txt
 
 # Windows NUL artifacts
 nul
+
+# Per-project feature data (user-specific, may contain sensitive output)
+.automaker/features/
