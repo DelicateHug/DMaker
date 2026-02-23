@@ -203,7 +203,9 @@ async function fetchIssueComments(
 export function createListCommentsHandler() {
   return async (req: Request, res: Response): Promise<void> => {
     try {
-      const { projectPath, issueNumber, cursor } = req.body as ListCommentsRequest;
+      const { projectPath, issueNumber, cursor, githubRepo } = req.body as ListCommentsRequest & {
+        githubRepo?: string;
+      };
 
       if (!projectPath) {
         res.status(400).json({ success: false, error: 'projectPath is required' });
@@ -217,8 +219,8 @@ export function createListCommentsHandler() {
         return;
       }
 
-      // First check if this is a GitHub repo and get owner/repo
-      const remoteStatus = await checkGitHubRemote(projectPath);
+      // First check if this is a GitHub repo and get owner/repo (with optional override)
+      const remoteStatus = await checkGitHubRemote(projectPath, githubRepo);
       if (!remoteStatus.hasGitHubRemote || !remoteStatus.owner || !remoteStatus.repo) {
         res.status(400).json({
           success: false,

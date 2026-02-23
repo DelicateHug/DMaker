@@ -1,3 +1,4 @@
+// Test 2: Pipeline verification marker (20-02-2026-test_2)
 import type { Feature } from '@/store/app-store';
 import type { PipelineConfig, FeatureStatusWithPipeline } from '@automaker/types';
 
@@ -22,6 +23,11 @@ export interface EmptyStateConfig {
  * Default empty state configurations per column type
  */
 export const EMPTY_STATE_CONFIGS: Record<string, EmptyStateConfig> = {
+  local: {
+    title: 'No Local Features',
+    description: 'Features start here. Link a GitHub issue to move them to the backlog.',
+    icon: 'lightbulb',
+  },
   backlog: {
     title: 'Ready for Ideas',
     description:
@@ -32,6 +38,11 @@ export const EMPTY_STATE_CONFIGS: Record<string, EmptyStateConfig> = {
       label: 'Use AI Suggestions',
       actionType: 'none',
     },
+  },
+  planning: {
+    title: 'Nothing Being Planned',
+    description: 'Features will appear here while the AI generates an implementation plan.',
+    icon: 'clock',
   },
   in_progress: {
     title: 'Nothing in Progress',
@@ -71,7 +82,9 @@ export interface Column {
 
 // Base columns (start)
 const BASE_COLUMNS: Column[] = [
+  { id: 'local', title: 'Local', colorClass: 'bg-[var(--status-local)]' },
   { id: 'backlog', title: 'Backlog', colorClass: 'bg-[var(--status-backlog)]' },
+  { id: 'planning', title: 'Planning', colorClass: 'bg-[var(--status-planning)]' },
   {
     id: 'in_progress',
     title: 'In Progress',
@@ -80,6 +93,8 @@ const BASE_COLUMNS: Column[] = [
 ];
 
 // End columns (after pipeline)
+// Note: 'completed' is intentionally excluded — it is accessed via the
+// self-contained Completed Features modal, not as a board column/tab.
 const END_COLUMNS: Column[] = [
   {
     id: 'waiting_approval',
@@ -152,10 +167,11 @@ export function getStepIdFromStatus(status: string): string | null {
  * These correspond to the base column IDs, plus special view tabs
  */
 export type StatusTabId =
+  | 'local'
   | 'backlog'
+  | 'planning'
   | 'in_progress'
   | 'waiting_approval'
-  | 'completed'
   | 'all'
   | string;
 
@@ -178,32 +194,46 @@ export interface StatusTabConfig {
  */
 export const STATUS_TAB_CONFIGS: StatusTabConfig[] = [
   {
+    id: 'local',
+    label: 'Local',
+    colorClass: 'bg-[var(--status-local)]',
+    description: 'Local features not yet linked to a GitHub issue',
+    shortcutKey: 'Shift+1',
+  },
+  {
     id: 'backlog',
     label: 'Backlog',
     colorClass: 'bg-[var(--status-backlog)]',
     description: 'Features waiting to be worked on',
-    shortcutKey: 'Shift+1',
+    shortcutKey: 'Shift+2',
+  },
+  {
+    id: 'planning',
+    label: 'Planning',
+    colorClass: 'bg-[var(--status-planning)]',
+    description: 'Features being planned by the AI agent',
+    shortcutKey: 'Shift+3',
   },
   {
     id: 'in_progress',
     label: 'In Progress',
     colorClass: 'bg-[var(--status-in-progress)]',
     description: 'Features currently being implemented',
-    shortcutKey: 'Shift+2',
+    shortcutKey: 'Shift+4',
   },
   {
     id: 'waiting_approval',
     label: 'Waiting Approval',
     colorClass: 'bg-[var(--status-waiting)]',
     description: 'Features awaiting review and approval',
-    shortcutKey: 'Shift+3',
+    shortcutKey: 'Shift+5',
   },
   {
     id: 'all',
     label: 'All Statuses',
     colorClass: 'bg-[var(--status-all)]',
     description: 'View all features across all statuses',
-    shortcutKey: 'Shift+4',
+    shortcutKey: 'Shift+0',
   },
 ];
 
@@ -242,7 +272,7 @@ const SPECIAL_VIEW_TABS: StatusTabConfig[] = [
 /**
  * Generate status tab configurations from columns
  * Converts Column definitions to StatusTabConfig format, useful for pipeline columns.
- * Appends 'completed' and 'all' special view tabs after the column-derived tabs.
+ * Appends 'all' special view tab after the column-derived tabs.
  */
 export function getStatusTabsFromColumns(columns: Column[]): StatusTabConfig[] {
   const columnTabs = columns.map((col, index) => ({

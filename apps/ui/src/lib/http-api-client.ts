@@ -33,18 +33,7 @@ import type {
   UpdateIdeaInput,
   ConvertToFeatureOptions,
   NotificationsAPI,
-  EventHistoryAPI,
 } from './electron';
-import type {
-  EventHistoryFilter,
-  VoiceSession,
-  VoiceSettings,
-  VoiceSessionStatus,
-  VoiceSessionStatusResponse,
-  ProcessVoiceCommandRequest,
-  ProcessVoiceCommandResponse,
-  VoiceEvent,
-} from '@automaker/types';
 import type { Message, SessionListItem } from '@/types/electron';
 import type { Feature, ClaudeUsageResponse, CodexUsageResponse } from '@/store/app-store';
 import type { WorktreeAPI, GitAPI, ModelDefinition, ProviderStatus } from '@/types/electron';
@@ -551,20 +540,7 @@ type EventType =
   | 'notification:created'
   | 'deploy:output'
   | 'deploy:success'
-  | 'deploy:error'
-  | 'voice:session-started'
-  | 'voice:session-ended'
-  | 'voice:recording-started'
-  | 'voice:recording-stopped'
-  | 'voice:transcription-started'
-  | 'voice:transcription-completed'
-  | 'voice:command-received'
-  | 'voice:command-executed'
-  | 'voice:response-started'
-  | 'voice:response-completed'
-  | 'voice:speaking-started'
-  | 'voice:speaking-completed'
-  | 'voice:error';
+  | 'deploy:error';
 
 /**
  * Dev server log event payloads for WebSocket streaming
@@ -2065,8 +2041,10 @@ export class HttpApiClient implements ElectronAPI {
   // GitHub API
   github: GitHubAPI = {
     checkRemote: (projectPath: string) => this.post('/api/github/check-remote', { projectPath }),
-    listIssues: (projectPath: string) => this.post('/api/github/issues', { projectPath }),
-    listPRs: (projectPath: string) => this.post('/api/github/prs', { projectPath }),
+    listIssues: (projectPath: string, githubRepo?: string) =>
+      this.post('/api/github/issues', { projectPath, githubRepo }),
+    listPRs: (projectPath: string, githubRepo?: string) =>
+      this.post('/api/github/prs', { projectPath, githubRepo }),
     validateIssue: (
       projectPath: string,
       issue: IssueValidationInput,
@@ -2115,6 +2093,56 @@ export class HttpApiClient implements ElectronAPI {
       issueNumber: number
     ): Promise<{ success: boolean; issueData?: unknown; error?: string }> =>
       this.post('/api/github/sync-issue', { projectPath, featureId, issueNumber }),
+    createIssue: (
+      projectPath: string,
+      title: string,
+      body?: string,
+      labels?: string[]
+    ): Promise<{ success: boolean; issueNumber?: number; url?: string; error?: string }> =>
+      this.post('/api/github/create-issue', { projectPath, title, body, labels }),
+    updateIssueLabels: (
+      projectPath: string,
+      issueNumber: number,
+      addLabels?: string[],
+      removeLabels?: string[]
+    ): Promise<{ success: boolean; error?: string }> =>
+      this.post('/api/github/update-issue-labels', {
+        projectPath,
+        issueNumber,
+        addLabels,
+        removeLabels,
+      }),
+    addComment: (
+      projectPath: string,
+      issueNumber: number,
+      body: string
+    ): Promise<{ success: boolean; error?: string }> =>
+      this.post('/api/github/add-comment', { projectPath, issueNumber, body }),
+    lockIssue: (
+      projectPath: string,
+      issueNumber: number
+    ): Promise<{ success: boolean; error?: string }> =>
+      this.post('/api/github/lock-issue', { projectPath, issueNumber }),
+    unlockIssue: (
+      projectPath: string,
+      issueNumber: number
+    ): Promise<{ success: boolean; error?: string }> =>
+      this.post('/api/github/unlock-issue', { projectPath, issueNumber }),
+    pinIssue: (
+      projectPath: string,
+      issueNumber: number
+    ): Promise<{ success: boolean; error?: string }> =>
+      this.post('/api/github/pin-issue', { projectPath, issueNumber }),
+    unpinIssue: (
+      projectPath: string,
+      issueNumber: number
+    ): Promise<{ success: boolean; error?: string }> =>
+      this.post('/api/github/unpin-issue', { projectPath, issueNumber }),
+    deleteIssue: (
+      projectPath: string,
+      issueNumber: number
+    ): Promise<{ success: boolean; error?: string }> =>
+      this.post('/api/github/delete-issue', { projectPath, issueNumber }),
   };
 
   // Workspace API
@@ -2264,8 +2292,6 @@ export class HttpApiClient implements ElectronAPI {
         defaultSkipTests: boolean;
         enableDependencyBlocking: boolean;
         useWorktrees: boolean;
-        defaultPlanningMode: string;
-        defaultRequirePlanApproval: boolean;
         muteDoneSound: boolean;
         enhancementModel: string;
         keyboardShortcuts: Record<string, string>;
@@ -2650,23 +2676,6 @@ export class HttpApiClient implements ElectronAPI {
     },
   };
 
-  // Event History API - stored events for debugging and replay
-  eventHistory: EventHistoryAPI = {
-    list: (projectPath: string, filter?: EventHistoryFilter) =>
-      this.post('/api/event-history/list', { projectPath, filter }),
-
-    get: (projectPath: string, eventId: string) =>
-      this.post('/api/event-history/get', { projectPath, eventId }),
-
-    delete: (projectPath: string, eventId: string) =>
-      this.post('/api/event-history/delete', { projectPath, eventId }),
-
-    clear: (projectPath: string) => this.post('/api/event-history/clear', { projectPath }),
-
-    replay: (projectPath: string, eventId: string, hookIds?: string[]) =>
-      this.post('/api/event-history/replay', { projectPath, eventId, hookIds }),
-  };
-
   // MCP API - Test MCP server connections and list tools
   // SECURITY: Only accepts serverId, not arbitrary serverConfig, to prevent
   // drive-by command execution attacks. Servers must be saved first.
@@ -2797,164 +2806,6 @@ export class HttpApiClient implements ElectronAPI {
       stepIds: string[]
     ): Promise<{ success: boolean; error?: string }> =>
       this.post('/api/pipeline/steps/reorder', { projectPath, stepIds }),
-  };
-
-  // Voice API - Voice mode interactions
-  voice = {
-    /**
-     * Start a new voice session for a project
-     */
-    startSession: (
-      projectPath: string,
-      settings?: Partial<VoiceSettings>
-    ): Promise<{
-      success: boolean;
-      session?: VoiceSession;
-      error?: string;
-    }> => this.post('/api/voice/start-session', { projectPath, settings }),
-
-    /**
-     * Stop an active voice session
-     */
-    stopSession: (sessionId: string): Promise<{ success: boolean; error?: string }> =>
-      this.post('/api/voice/stop-session', { sessionId }),
-
-    /**
-     * Get a specific voice session
-     */
-    getSession: (
-      sessionId: string
-    ): Promise<{
-      success: boolean;
-      session?: VoiceSession;
-      error?: string;
-    }> => this.post('/api/voice/get-session', { sessionId }),
-
-    /**
-     * List all voice sessions, optionally filtered by project
-     */
-    listSessions: (
-      projectPath?: string
-    ): Promise<{
-      success: boolean;
-      sessions?: VoiceSession[];
-      count?: number;
-      error?: string;
-    }> => this.post('/api/voice/list-sessions', { projectPath }),
-
-    /**
-     * Delete a voice session
-     */
-    deleteSession: (sessionId: string): Promise<{ success: boolean; error?: string }> =>
-      this.post('/api/voice/delete-session', { sessionId }),
-
-    /**
-     * Process a voice command (transcribed text)
-     */
-    processCommand: (
-      sessionId: string,
-      text: string,
-      audioDurationMs?: number,
-      confidence?: number
-    ): Promise<{
-      success: boolean;
-      messageId?: string;
-      response?: string;
-      commandExecuted?: boolean;
-      commandResult?: {
-        success: boolean;
-        response: string;
-        commandName?: string;
-        data?: unknown;
-        error?: string;
-      };
-      error?: string;
-    }> =>
-      this.post('/api/voice/process-command', {
-        sessionId,
-        text,
-        audioDurationMs,
-        confidence,
-      } as ProcessVoiceCommandRequest),
-
-    /**
-     * Stop any ongoing command processing
-     */
-    stopProcessing: (sessionId: string): Promise<{ success: boolean; error?: string }> =>
-      this.post('/api/voice/stop-processing', { sessionId }),
-
-    /**
-     * Get the current status of a voice session
-     */
-    getStatus: (
-      sessionId: string
-    ): Promise<{
-      success: boolean;
-      sessionId?: string;
-      active?: boolean;
-      status?: VoiceSessionStatus;
-      messageCount?: number;
-      durationMs?: number;
-      error?: string;
-    }> => this.post('/api/voice/get-status', { sessionId }),
-
-    /**
-     * Update the status of a voice session (e.g., recording, processing)
-     */
-    updateStatus: (
-      sessionId: string,
-      status: VoiceSessionStatus
-    ): Promise<{ success: boolean; error?: string }> =>
-      this.post('/api/voice/update-status', { sessionId, status }),
-
-    /**
-     * Update voice settings for a session
-     */
-    updateSettings: (
-      sessionId: string,
-      settings: Partial<VoiceSettings>
-    ): Promise<{ success: boolean; error?: string }> =>
-      this.post('/api/voice/update-settings', { sessionId, settings }),
-
-    /**
-     * Subscribe to voice events via WebSocket
-     */
-    onEvent: (callback: (event: VoiceEvent) => void): (() => void) => {
-      // Subscribe to all voice event types
-      const unsubscribers: Array<() => void> = [];
-
-      // Voice events are emitted with type prefixes, subscribe to each event type
-      // The server emits events with the payload containing all event data
-      const voiceEventTypes: EventType[] = [
-        'voice:session-started',
-        'voice:session-ended',
-        'voice:recording-started',
-        'voice:recording-stopped',
-        'voice:transcription-started',
-        'voice:transcription-completed',
-        'voice:command-received',
-        'voice:command-executed',
-        'voice:response-started',
-        'voice:response-completed',
-        'voice:speaking-started',
-        'voice:speaking-completed',
-        'voice:error',
-      ];
-
-      for (const eventType of voiceEventTypes) {
-        const unsub = this.subscribeToEvent(eventType, (payload) => {
-          // The server sends the event with type included in the payload
-          callback(payload as VoiceEvent);
-        });
-        unsubscribers.push(unsub);
-      }
-
-      return () => {
-        for (const unsub of unsubscribers) {
-          unsub();
-        }
-      };
-    },
   };
 
   // ---------------------------------------------------------------------------

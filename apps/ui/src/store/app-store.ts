@@ -16,7 +16,6 @@ import type {
   FeatureTextFilePath,
   SummaryHistoryEntry,
   ModelAlias,
-  PlanningMode,
   ThinkingLevel,
   ModelProvider,
   CursorModelId,
@@ -32,12 +31,7 @@ import type {
   PromptCustomization,
   ModelDefinition,
   ServerLogLevel,
-  EventHook,
   ClaudeAccountRef,
-  VoiceSettings,
-  VoiceSession,
-  VoiceSessionStatus,
-  VoiceMessage,
   SyntaxTheme,
 } from '@automaker/types';
 import {
@@ -46,7 +40,6 @@ import {
   getAllOpencodeModelIds,
   DEFAULT_PHASE_MODELS,
   DEFAULT_OPENCODE_MODEL,
-  DEFAULT_VOICE_SETTINGS,
 } from '@automaker/types';
 
 const logger = createLogger('AppStore');
@@ -56,7 +49,6 @@ const OPENCODE_BEDROCK_MODEL_PREFIX = `${OPENCODE_BEDROCK_PROVIDER_ID}/`;
 // Re-export types for convenience
 export type {
   ModelAlias,
-  PlanningMode,
   ThinkingLevel,
   ModelProvider,
   ServerLogLevel,
@@ -366,9 +358,6 @@ export interface KeyboardShortcuts {
   cycleNextProject: string;
   autoMode: string;
   completedFeatures: string;
-  voiceMode: string;
-  voiceModeToggle: string;
-  recordingToggle: string;
 
   // Board panel toggle shortcuts
   toggleFileExplorer: string;
@@ -407,9 +396,6 @@ export const DEFAULT_KEYBOARD_SHORTCUTS: KeyboardShortcuts = {
   cycleNextProject: 'E', // Global shortcut
   autoMode: 'M', // Global shortcut - opens auto mode modal
   completedFeatures: 'C', // Only active in board view - toggles completed features view
-  voiceMode: 'Ctrl+Shift+V', // Global shortcut - opens voice mode dialog
-  voiceModeToggle: 'Alt+M', // Global shortcut - toggle voice mode dialog open/close (bypasses input focus)
-  recordingToggle: 'Alt+N', // Global shortcut - toggle recording start/stop when voice mode is open
 
   // Board panel toggle shortcuts (only active in board view)
   toggleFileExplorer: 'Alt+Q', // Toggle file explorer panel
@@ -647,6 +633,9 @@ export interface AppState {
 
   // Features/Kanban
   features: Feature[];
+  featuresLoading: boolean; // Phase 1 (summaries) in progress
+  featuresFullyLoaded: boolean; // Phase 2 (full data) complete
+  featuresLastLoadedProject: string | null; // Track which project's data is loaded
 
   // App spec
   appSpec: string;
@@ -775,27 +764,8 @@ export interface AppState {
   // Prompt Customization
   promptCustomization: PromptCustomization; // Custom prompts for Auto Mode, Agent, Backlog Plan, Enhancement
 
-  // Event Hooks
-  eventHooks: EventHook[]; // Event hooks for custom commands or webhooks
-
   // Claude Account Management
   claudeAccounts: ClaudeAccountRef[]; // Known Claude accounts for switching
-
-  // Voice Mode State
-  voiceSettings: VoiceSettings; // Voice mode settings for hands-free interaction
-  voiceSessionActive: boolean; // Whether a voice session is currently active
-  voiceSession: VoiceSession | null; // Current active voice session
-  voiceSessionStatus: VoiceSessionStatus; // Current status of the voice session
-  voiceRecording: boolean; // Whether voice recording is in progress
-  voiceProcessing: boolean; // Whether voice command is being processed
-  voiceError: string | null; // Current voice error message, if any
-  voiceTranscript: string; // Live transcription text (during recording)
-  voiceMessages: VoiceMessage[]; // Conversation history for current session
-
-  // Voice Widget State
-  voiceWidgetVisible: boolean; // Whether the floating voice widget is visible
-  voiceWidgetExpanded: boolean; // Whether the widget is expanded (true) or minimized (false)
-  voiceWidgetPosition: { x: number; y: number } | null; // Custom position (null = default bottom-right)
 
   // Project Analysis
   projectAnalysis: ProjectAnalysis | null;
@@ -831,8 +801,6 @@ export interface AppState {
   // Tracks which project is currently having its spec generated
   specCreatingForProject: string | null;
 
-  defaultPlanningMode: PlanningMode;
-  defaultRequirePlanApproval: boolean;
   defaultFeatureModel: PhaseModelEntry;
 
   // Plan Approval State
@@ -841,7 +809,6 @@ export interface AppState {
     featureId: string;
     projectPath: string;
     planContent: string;
-    planningMode: 'lite' | 'spec' | 'full';
   } | null;
 
   // Multi-agent waiting approval tracking
@@ -853,7 +820,6 @@ export interface AppState {
       featureId: string;
       projectPath: string;
       planContent: string;
-      planningMode: 'lite' | 'spec' | 'full';
       timestamp: number; // When the approval was requested
     }
   >;
@@ -1159,6 +1125,9 @@ export interface AppActions {
 
   // Feature actions
   setFeatures: (features: Feature[]) => void;
+  setFeaturesLoading: (loading: boolean) => void;
+  setFeaturesFullyLoaded: (loaded: boolean) => void;
+  setFeaturesLastLoadedProject: (projectPath: string | null) => void;
   updateFeature: (id: string, updates: Partial<Feature>) => void;
   addFeature: (feature: Omit<Feature, 'id'> & Partial<Pick<Feature, 'id'>>) => Feature;
   removeFeature: (id: string) => void;
@@ -1306,36 +1275,10 @@ export interface AppActions {
   // Prompt Customization actions
   setPromptCustomization: (customization: PromptCustomization) => Promise<void>;
 
-  // Event Hook actions
-  setEventHooks: (hooks: EventHook[]) => void;
-
   // Claude Account actions
   setClaudeAccounts: (accounts: ClaudeAccountRef[]) => void;
   addOrUpdateClaudeAccount: (email: string) => void;
   removeClaudeAccount: (email: string) => void;
-
-  // Voice Mode actions
-  setVoiceSettings: (settings: VoiceSettings) => void;
-  updateVoiceSettings: (updates: Partial<VoiceSettings>) => void;
-  setVoiceSessionActive: (active: boolean) => void;
-  setVoiceSession: (session: VoiceSession | null) => void;
-  setVoiceSessionStatus: (status: VoiceSessionStatus) => void;
-  setVoiceRecording: (recording: boolean) => void;
-  setVoiceProcessing: (processing: boolean) => void;
-  setVoiceError: (error: string | null) => void;
-  setVoiceTranscript: (transcript: string) => void;
-  addVoiceMessage: (message: VoiceMessage) => void;
-  clearVoiceMessages: () => void;
-  startVoiceSession: (session: VoiceSession) => void;
-  endVoiceSession: () => void;
-
-  // Voice Widget actions
-  setVoiceWidgetVisible: (visible: boolean) => void;
-  setVoiceWidgetExpanded: (expanded: boolean) => void;
-  setVoiceWidgetPosition: (position: { x: number; y: number } | null) => void;
-  toggleVoiceWidget: () => void;
-  showVoiceWidget: () => void;
-  hideVoiceWidget: () => void;
 
   // MCP Server actions
   addMCPServer: (server: Omit<MCPServerConfig, 'id'>) => void;
@@ -1420,8 +1363,6 @@ export interface AppActions {
   setSpecCreatingForProject: (projectPath: string | null) => void;
   isSpecCreatingForProject: (projectPath: string) => boolean;
 
-  setDefaultPlanningMode: (mode: PlanningMode) => void;
-  setDefaultRequirePlanApproval: (require: boolean) => void;
   setDefaultFeatureModel: (entry: PhaseModelEntry) => void;
 
   // Plan Approval actions
@@ -1430,7 +1371,6 @@ export interface AppActions {
       featureId: string;
       projectPath: string;
       planContent: string;
-      planningMode: 'lite' | 'spec' | 'full';
     } | null
   ) => void;
 
@@ -1439,14 +1379,12 @@ export interface AppActions {
     featureId: string;
     projectPath: string;
     planContent: string;
-    planningMode: 'lite' | 'spec' | 'full';
   }) => void;
   removePendingPlanApproval: (featureId: string) => void;
   getPendingPlanApprovalsForProject: (projectPath: string) => Array<{
     featureId: string;
     projectPath: string;
     planContent: string;
-    planningMode: 'lite' | 'spec' | 'full';
     timestamp: number;
   }>;
   getWaitingApprovalCount: () => number;
@@ -1614,6 +1552,9 @@ const initialState: AppState = {
   fontFamilySans: getStoredFontSans(), // Use localStorage font as initial value (null = use default Geist Sans)
   fontFamilyMono: getStoredFontMono(), // Use localStorage font as initial value (null = use default Geist Mono)
   features: [],
+  featuresLoading: false,
+  featuresFullyLoaded: false,
+  featuresLastLoadedProject: null,
   appSpec: '',
   ipcConnected: false,
   apiKeys: {
@@ -1674,22 +1615,7 @@ const initialState: AppState = {
   enableSubagents: true, // Subagents enabled by default
   subagentsSources: ['user', 'project'] as Array<'user' | 'project'>, // Load from both sources by default
   promptCustomization: {}, // Empty by default - all prompts use built-in defaults
-  eventHooks: [], // No event hooks configured by default
   claudeAccounts: [], // No known Claude accounts by default
-  // Voice Mode defaults
-  voiceSettings: DEFAULT_VOICE_SETTINGS, // Default voice settings from types
-  voiceSessionActive: false, // No active voice session by default
-  voiceSession: null, // No current voice session
-  voiceSessionStatus: 'idle' as VoiceSessionStatus, // Default to idle status
-  voiceRecording: false, // Not recording by default
-  voiceProcessing: false, // Not processing by default
-  voiceError: null, // No error by default
-  voiceTranscript: '', // Empty transcript by default
-  voiceMessages: [], // Empty conversation history by default
-  // Voice Widget defaults
-  voiceWidgetVisible: false, // Widget hidden by default
-  voiceWidgetExpanded: true, // Widget expanded when visible (not minimized)
-  voiceWidgetPosition: null, // Default position (bottom-right corner)
   projectAnalysis: null,
   isAnalyzing: false,
   boardBackgroundByProject: {},
@@ -1712,8 +1638,6 @@ const initialState: AppState = {
   },
   terminalLayoutByProject: {},
   specCreatingForProject: null,
-  defaultPlanningMode: 'skip' as PlanningMode,
-  defaultRequirePlanApproval: false,
   defaultFeatureModel: { model: 'opus' } as PhaseModelEntry,
   pendingPlanApproval: null,
   pendingPlanApprovals: {},
@@ -1740,7 +1664,7 @@ const initialState: AppState = {
   kanbanPanelSize: 65, // Default: 65% for kanban board
   agentsPanelSize: 35, // Default: 35% for running agents panel
   agentChatPanelSize: 30, // Default: 30% for agent chat panel
-  isAgentChatPanelCollapsed: false, // Default: agent chat panel is visible
+  isAgentChatPanelCollapsed: true, // Default: agent chat panel is collapsed
   isKanbanPanelCollapsed: false, // Default: kanban panel is visible
   isAgentsPanelCollapsed: false, // Default: agents panel is visible
   deployPanelSize: 35, // Default: 35% for deploy panel
@@ -2217,6 +2141,9 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
 
   // Feature actions
   setFeatures: (features) => set({ features }),
+  setFeaturesLoading: (loading) => set({ featuresLoading: loading }),
+  setFeaturesFullyLoaded: (loaded) => set({ featuresFullyLoaded: loaded }),
+  setFeaturesLastLoadedProject: (projectPath) => set({ featuresLastLoadedProject: projectPath }),
 
   updateFeature: (id, updates) => {
     set({
@@ -2782,9 +2709,6 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
     await syncSettingsToServer();
   },
 
-  // Event Hook actions
-  setEventHooks: (hooks) => set({ eventHooks: hooks }),
-
   // Claude Account actions
   setClaudeAccounts: (accounts) => set({ claudeAccounts: accounts }),
   addOrUpdateClaudeAccount: (email) => {
@@ -2804,53 +2728,6 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
   removeClaudeAccount: (email) => {
     set({ claudeAccounts: get().claudeAccounts.filter((a) => a.email !== email) });
   },
-
-  // Voice Mode actions
-  setVoiceSettings: (settings) => set({ voiceSettings: settings }),
-  updateVoiceSettings: (updates) =>
-    set((state) => ({
-      voiceSettings: { ...state.voiceSettings, ...updates },
-    })),
-  setVoiceSessionActive: (active) => set({ voiceSessionActive: active }),
-  setVoiceSession: (session) => set({ voiceSession: session }),
-  setVoiceSessionStatus: (status) => set({ voiceSessionStatus: status }),
-  setVoiceRecording: (recording) => set({ voiceRecording: recording }),
-  setVoiceProcessing: (processing) => set({ voiceProcessing: processing }),
-  setVoiceError: (error) => set({ voiceError: error }),
-  setVoiceTranscript: (transcript) => set({ voiceTranscript: transcript }),
-  addVoiceMessage: (message) =>
-    set((state) => ({
-      voiceMessages: [...state.voiceMessages, message],
-    })),
-  clearVoiceMessages: () => set({ voiceMessages: [] }),
-  startVoiceSession: (session) =>
-    set({
-      voiceSession: session,
-      voiceSessionActive: true,
-      voiceSessionStatus: 'idle',
-      voiceError: null,
-      voiceTranscript: '',
-      voiceMessages: session.messages || [],
-    }),
-  endVoiceSession: () =>
-    set({
-      voiceSession: null,
-      voiceSessionActive: false,
-      voiceSessionStatus: 'idle',
-      voiceRecording: false,
-      voiceProcessing: false,
-      voiceError: null,
-      voiceTranscript: '',
-      voiceMessages: [],
-    }),
-
-  // Voice Widget actions
-  setVoiceWidgetVisible: (visible) => set({ voiceWidgetVisible: visible }),
-  setVoiceWidgetExpanded: (expanded) => set({ voiceWidgetExpanded: expanded }),
-  setVoiceWidgetPosition: (position) => set({ voiceWidgetPosition: position }),
-  toggleVoiceWidget: () => set((state) => ({ voiceWidgetVisible: !state.voiceWidgetVisible })),
-  showVoiceWidget: () => set({ voiceWidgetVisible: true }),
-  hideVoiceWidget: () => set({ voiceWidgetVisible: false }),
 
   // MCP Server actions
   addMCPServer: (server) => {
@@ -3842,8 +3719,6 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
     return get().specCreatingForProject === projectPath;
   },
 
-  setDefaultPlanningMode: (mode) => set({ defaultPlanningMode: mode }),
-  setDefaultRequirePlanApproval: (require) => set({ defaultRequirePlanApproval: require }),
   setDefaultFeatureModel: (entry) => set({ defaultFeatureModel: entry }),
 
   // Plan Approval actions

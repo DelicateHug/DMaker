@@ -4,10 +4,20 @@
 import { memo, useCallback, useState, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { AlertCircle, Lock, Hand, Sparkles, FileText, ListTodo, Folder, Star } from 'lucide-react';
+import {
+  AlertCircle,
+  Lock,
+  Hand,
+  Sparkles,
+  FileText,
+  ListTodo,
+  Folder,
+  Star,
+  User,
+} from 'lucide-react';
 import type { Feature } from '@/store/app-store';
 import { RowActions, type RowActionHandlers } from './row-actions';
-import { BranchBadge } from '../kanban-card/card-badges';
+import { BranchBadge } from './branch-badge';
 import { formatModelName, DEFAULT_MODEL } from '@/lib/agent-context-parser';
 import { getProviderIconForModel } from '@/components/ui/provider-icon';
 
@@ -296,6 +306,47 @@ const TaskProgress = memo(function TaskProgress({ feature }: { feature: Feature 
 });
 
 /**
+ * AssigneeBadges displays "assigned-{username}" labels for GitHub issue features
+ */
+const AssigneeBadges = memo(function AssigneeBadges({ feature }: { feature: Feature }) {
+  if (!feature.githubIssue) return null;
+
+  const assignees = feature.githubIssue.assignees;
+  const names = assignees && assignees.length > 0 ? assignees : ['None'];
+
+  return (
+    <>
+      {names.map((username) => (
+        <TooltipProvider key={username} delayDuration={200}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div
+                className={cn(
+                  'inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px]',
+                  'bg-purple-500/10 text-purple-600 dark:text-purple-400',
+                  'border border-purple-500/20'
+                )}
+                data-testid={`list-row-assignee-${username}`}
+              >
+                <User className="w-3 h-3" />
+                <span className="font-medium">assigned-{username}</span>
+              </div>
+            </TooltipTrigger>
+            <TooltipContent side="top" className="text-xs">
+              <p>
+                {username === 'None'
+                  ? 'GitHub issue is unassigned'
+                  : `GitHub issue assigned to ${username}`}
+              </p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      ))}
+    </>
+  );
+});
+
+/**
  * ListRow displays a single feature as a compact vertical card in the list view.
  *
  * Features:
@@ -418,7 +469,7 @@ export const ListRow = memo(function ListRow({
                     'shrink-0 w-4 h-4 mt-0.5 flex items-center justify-center transition-colors',
                     feature.isFavorite
                       ? 'text-yellow-500 hover:text-yellow-600'
-                      : 'text-muted-foreground/40 hover:text-yellow-500'
+                      : 'text-muted-foreground/60 hover:text-yellow-500'
                   )}
                   onClick={(e) => {
                     e.stopPropagation();
@@ -484,6 +535,7 @@ export const ListRow = memo(function ListRow({
           showAllProjects={showAllProjects}
           projectDefaultBranch={projectDefaultBranch}
         />
+        <AssigneeBadges feature={feature} />
       </div>
     </div>
   );

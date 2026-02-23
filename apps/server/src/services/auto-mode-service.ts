@@ -19,7 +19,6 @@ import type {
   FeatureStatusWithPipeline,
   PipelineConfig,
   ThinkingLevel,
-  PlanningMode,
 } from '@automaker/types';
 import { DEFAULT_PHASE_MODELS, isClaudeModel, stripProviderPrefix } from '@automaker/types';
 import {
@@ -74,8 +73,6 @@ import { invalidateFeaturesCache } from '../routes/features/common.js';
 import { getGitHubSyncService } from './github-sync-service.js';
 
 const execAsync = promisify(exec);
-
-// PlanningMode type is imported from @automaker/types
 
 interface ParsedTask {
   id: string; // e.g., "T001"
@@ -200,14 +197,6 @@ function parseTaskLine(line: string, currentPhase?: string): ParsedTask | null {
     phase: currentPhase,
     status: 'pending',
   };
-}
-
-// Feature type is imported from feature-loader.js
-// Extended type with planning fields for local use
-interface FeatureWithPlanning extends Feature {
-  planningMode?: PlanningMode;
-  planSpec?: PlanSpec;
-  requirePlanApproval?: boolean;
 }
 
 interface RunningFeature {
@@ -677,8 +666,8 @@ export class AutoModeService {
       tempRunningFeature.worktreePath = worktreePath;
       tempRunningFeature.branchName = branchName ?? null;
 
-      // Update feature status to in_progress
-      await this.updateFeatureStatus(projectPath, featureId, 'in_progress');
+      // Update feature status to planning (transitions to in_progress after plan approval)
+      await this.updateFeatureStatus(projectPath, featureId, 'planning');
 
       // Load autoLoadClaudeMd setting to determine context loading strategy
       const autoLoadClaudeMd = await getAutoLoadClaudeMdSetting(
@@ -720,13 +709,11 @@ export class AutoModeService {
         prompt = planningPrefix + featurePrompt;
 
         // Emit planning mode info
-        if (feature.planningMode && feature.planningMode !== 'skip') {
-          this.emitAutoModeEvent('planning_started', {
-            featureId: feature.id,
-            mode: feature.planningMode,
-            message: `Starting ${feature.planningMode} planning phase`,
-          });
-        }
+        this.emitAutoModeEvent('planning_started', {
+          featureId: feature.id,
+          mode: 'full',
+          message: 'Starting full planning phase',
+        });
       }
 
       // Extract image paths from feature
@@ -757,8 +744,6 @@ export class AutoModeService {
         model,
         {
           projectPath,
-          planningMode: feature.planningMode,
-          requirePlanApproval: feature.requirePlanApproval,
           systemPrompt: combinedSystemPrompt || undefined,
           autoLoadClaudeMd,
           thinkingLevel: feature.thinkingLevel,
@@ -971,8 +956,6 @@ export class AutoModeService {
         model,
         {
           projectPath,
-          planningMode: 'skip', // Pipeline steps don't need planning
-          requirePlanApproval: false,
           previousContent: previousContext,
           systemPrompt: contextFilesPrompt || undefined,
           autoLoadClaudeMd,
@@ -1573,7 +1556,6 @@ Address the follow-up instructions above. Review the previous work and make the 
         model,
         {
           projectPath,
-          planningMode: 'skip', // Follow-ups don't require approval
           previousContent: previousContext || undefined,
           systemPrompt: contextFilesPrompt || undefined,
           autoLoadClaudeMd,
@@ -2079,6 +2061,9 @@ Format your response as a structured markdown document.`;
               content: editedPlan || feature.planSpec.content,
             });
 
+            // Transition from planning to in_progress
+            await this.updateFeatureStatus(projectPathFromClient, featureId, 'in_progress');
+
             // Get customized prompts from settings
             const prompts = await getPromptCustomization(this.settingsService, '[AutoMode]');
 
@@ -2351,6 +2336,35 @@ Format your response as a structured markdown document.`;
         title: feature.title || feature.name || featureId,
       });
 
+      // Update GitHub labels when feature status changes
+      if (status !== 'in_progress' && status !== 'planning' && feature.githubIssue?.number) {
+        try {
+          const syncService = getGitHubSyncService();
+          const currentUser = await syncService.getCurrentUser(projectPath);
+          if (currentUser) {
+            const inProgressLabel = `in-progress-${currentUser}`;
+            // Determine the new status label
+            const statusLabelMap: Record<string, string> = {
+              waiting_approval: 'label-waiting_approval',
+              verified: 'label-completed',
+              completed: 'label-completed',
+              backlog: 'label-backlog',
+              planning: 'label-planning',
+            };
+            const addLabels = statusLabelMap[status] ? [statusLabelMap[status]] : [];
+            const removeLabels = [inProgressLabel, 'label-in_progress', 'label-planning'];
+            await syncService.updateIssueLabels(
+              projectPath,
+              feature.githubIssue.number,
+              addLabels,
+              removeLabels
+            );
+          }
+        } catch (labelError) {
+          logger.warn(`Failed to update GitHub labels for feature ${featureId}:`, labelError);
+        }
+      }
+
       // Sync completed/verified features to app_spec.txt
       if (status === 'verified' || status === 'completed') {
         try {
@@ -2573,29 +2587,10 @@ Format your response as a structured markdown document.`;
   /**
    * Get the planning prompt prefix based on feature's planning mode
    */
-  private async getPlanningPromptPrefix(feature: Feature): Promise<string> {
-    const mode = feature.planningMode || 'skip';
-
-    if (mode === 'skip') {
-      return ''; // No planning phase
-    }
-
-    // Load prompts from settings (no caching - allows hot reload of custom prompts)
+  private async getPlanningPromptPrefix(_feature: Feature): Promise<string> {
+    // All features use full planning mode
     const prompts = await getPromptCustomization(this.settingsService, '[AutoMode]');
-    const planningPrompts: Record<string, string> = {
-      lite: prompts.autoMode.planningLite,
-      lite_with_approval: prompts.autoMode.planningLiteWithApproval,
-      spec: prompts.autoMode.planningSpec,
-      full: prompts.autoMode.planningFull,
-    };
-
-    // For lite mode, use the approval variant if requirePlanApproval is true
-    let promptKey: string = mode;
-    if (mode === 'lite' && feature.requirePlanApproval === true) {
-      promptKey = 'lite_with_approval';
-    }
-
-    const planningPrompt = planningPrompts[promptKey];
+    const planningPrompt = prompts.autoMode.planningFull;
     if (!planningPrompt) {
       return '';
     }
@@ -2670,8 +2665,6 @@ You can use the Read tool to view these images at any time during implementation
     model?: string,
     options?: {
       projectPath?: string;
-      planningMode?: PlanningMode;
-      requirePlanApproval?: boolean;
       previousContent?: string;
       systemPrompt?: string;
       autoLoadClaudeMd?: boolean;
@@ -2679,7 +2672,6 @@ You can use the Read tool to view these images at any time during implementation
     }
   ): Promise<void> {
     const finalProjectPath = options?.projectPath || projectPath;
-    const planningMode = options?.planningMode || 'skip';
     const previousContent = options?.previousContent;
 
     // Validate vision support before processing images
@@ -2694,14 +2686,9 @@ You can use the Read tool to view these images at any time during implementation
       }
     }
 
-    // Check if this planning mode can generate a spec/plan that needs approval
-    // - spec and full always generate specs
-    // - lite only generates approval-ready content when requirePlanApproval is true
-    const planningModeRequiresApproval =
-      planningMode === 'spec' ||
-      planningMode === 'full' ||
-      (planningMode === 'lite' && options?.requirePlanApproval === true);
-    const requiresApproval = planningModeRequiresApproval && options?.requirePlanApproval === true;
+    // All features use full planning - no approval gating needed
+    const planningModeRequiresApproval = true;
+    const requiresApproval = false;
 
     // CI/CD Mock Mode: Return early with mock response when AUTOMAKER_MOCK_AGENT is set
     // This prevents actual API calls during automated testing
@@ -2788,7 +2775,7 @@ This mock response was generated because AUTOMAKER_MOCK_AGENT=true was set.
     const allowedTools = sdkOptions.allowedTools as string[] | undefined;
 
     logger.info(
-      `runAgent called for feature ${featureId} with model: ${finalModel}, planningMode: ${planningMode}, requiresApproval: ${requiresApproval}`
+      `runAgent called for feature ${featureId} with model: ${finalModel}, requiresApproval: ${requiresApproval}`
     );
 
     // Get provider for this model
@@ -3040,7 +3027,6 @@ This mock response was generated because AUTOMAKER_MOCK_AGENT=true was set.
                       featureId,
                       projectPath,
                       planContent: currentPlanContent,
-                      planningMode,
                       planVersion,
                     });
 
@@ -3200,7 +3186,6 @@ After generating the revised spec, output:
                     featureId,
                     projectPath,
                     planContent,
-                    planningMode,
                   });
 
                   approvedPlanContent = planContent;
@@ -3218,6 +3203,36 @@ After generating the revised spec, output:
                   approvedAt: new Date().toISOString(),
                   reviewedByUser: requiresApproval,
                 });
+
+                // Transition from planning to in_progress now that plan is approved
+                await this.updateFeatureStatus(projectPath, featureId, 'in_progress');
+
+                // Post plan as comment on GitHub issue (non-blocking)
+                try {
+                  const featureForComment = await this.loadFeature(projectPath, featureId);
+                  if (featureForComment?.githubIssue?.number) {
+                    const syncService = getGitHubSyncService();
+                    const planComment = `## Implementation Plan\n\n${approvedPlanContent}`;
+                    await syncService.addComment(
+                      projectPath,
+                      featureForComment.githubIssue.number,
+                      planComment
+                    );
+                    logger.info(
+                      `Posted plan as comment on GitHub issue #${featureForComment.githubIssue.number}`
+                    );
+
+                    // Update GitHub labels: planning -> in_progress
+                    await syncService.updateIssueLabels(
+                      projectPath,
+                      featureForComment.githubIssue.number,
+                      ['label-in_progress'],
+                      ['label-planning']
+                    );
+                  }
+                } catch (commentErr) {
+                  logger.error('Failed to post plan comment to GitHub issue:', commentErr);
+                }
 
                 // ========================================
                 // MULTI-AGENT TASK EXECUTION

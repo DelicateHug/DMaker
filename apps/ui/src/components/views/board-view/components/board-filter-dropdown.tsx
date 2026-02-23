@@ -1,7 +1,16 @@
 import * as React from 'react';
 import { memo, useState, useCallback, useRef, useMemo } from 'react';
 import { cn } from '@/lib/utils';
-import { Check, ChevronDown, Minus, Plus, Trash2, Layers } from 'lucide-react';
+import {
+  Check,
+  ChevronDown,
+  Minus,
+  Plus,
+  Trash2,
+  Layers,
+  HardDrive,
+  CircleDot,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -17,10 +26,11 @@ const ALL_PROJECTS_ID = '__all_projects__';
 
 /** Base (non-deletable) status IDs */
 const BASE_STATUS_IDS = new Set<string>([
+  'local',
   'backlog',
+  'planning',
   'in_progress',
   'waiting_approval',
-  'completed',
   'all',
 ]);
 
@@ -115,6 +125,15 @@ function InlineCountBadge({ count }: { count: number }) {
   );
 }
 
+/** Board mode type: local features or github issues */
+export type BoardMode = 'local' | 'github';
+
+/** Mode options with display metadata */
+const MODE_OPTIONS: { id: BoardMode; label: string; icon: typeof HardDrive }[] = [
+  { id: 'local', label: 'Local', icon: HardDrive },
+  { id: 'github', label: 'GitHub', icon: CircleDot },
+];
+
 export interface BoardFilterDropdownProps {
   /** List of available projects */
   projects: Project[];
@@ -136,6 +155,10 @@ export interface BoardFilterDropdownProps {
   onDeleteStatus?: (tabId: StatusTabId) => void;
   /** Callback to create a new project */
   onCreateProject?: () => void;
+  /** Currently active board modes (multi-select) */
+  activeModes?: BoardMode[];
+  /** Callback when mode selection changes (committed on dropdown close) */
+  onModeChange?: (modes: BoardMode[]) => void;
   /** Additional CSS classes for the trigger button */
   className?: string;
   /** Alignment of the dropdown content relative to the trigger */
@@ -162,6 +185,8 @@ export const BoardFilterDropdown = memo(function BoardFilterDropdown({
   onCreateStatus,
   onDeleteStatus,
   onCreateProject,
+  activeModes = ['local'],
+  onModeChange,
   className,
   align = 'start',
 }: BoardFilterDropdownProps) {
@@ -174,6 +199,10 @@ export const BoardFilterDropdown = memo(function BoardFilterDropdown({
   // --- Status staged selection state ---
   const [stagedTabs, setStagedTabs] = useState<StatusTabId[]>(activeTabs);
   const stagedTabRef = useRef<StatusTabId[]>(activeTabs);
+
+  // --- Mode staged selection state ---
+  const [stagedModes, setStagedModes] = useState<BoardMode[]>(activeModes);
+  const stagedModeRef = useRef<BoardMode[]>(activeModes);
 
   // --- New status input state ---
   const [newStatusName, setNewStatusName] = useState('');
@@ -210,6 +239,16 @@ export const BoardFilterDropdown = memo(function BoardFilterDropdown({
     return `${firstLabel} +${activeTabs.length - 1}`;
   }, [activeTabs, activeTabConfig]);
 
+  const modeLabel = useMemo(() => {
+    if (activeModes.length === 0 || (activeModes.length === 1 && activeModes[0] === 'local')) {
+      return 'Local';
+    }
+    if (activeModes.length === 1 && activeModes[0] === 'github') {
+      return 'GitHub';
+    }
+    return 'Hybrid';
+  }, [activeModes]);
+
   const TriggerIcon = useMemo(() => {
     if (selectedProjectIds.includes(ALL_PROJECTS_ID) || selectedProjectIds.length !== 1) {
       return Layers;
@@ -232,8 +271,10 @@ export const BoardFilterDropdown = memo(function BoardFilterDropdown({
         stagedProjectRef.current = selectedProjectIds;
         setStagedTabs(activeTabs);
         stagedTabRef.current = activeTabs;
+        setStagedModes(activeModes);
+        stagedModeRef.current = activeModes;
       } else {
-        // Closing: commit both selections
+        // Closing: commit all selections
         const stagedP = stagedProjectRef.current;
         const projectChanged =
           stagedP.length !== selectedProjectIds.length ||
@@ -249,13 +290,27 @@ export const BoardFilterDropdown = memo(function BoardFilterDropdown({
           onTabChange(stagedT);
         }
 
+        const stagedM = stagedModeRef.current;
+        const modeChanged =
+          stagedM.length !== activeModes.length || stagedM.some((m) => !activeModes.includes(m));
+        if (modeChanged && onModeChange) {
+          onModeChange(stagedM);
+        }
+
         // Reset new-status input
         setShowNewStatusInput(false);
         setNewStatusName('');
       }
       setOpen(nextOpen);
     },
-    [selectedProjectIds, activeTabs, onProjectSelectionChange, onTabChange]
+    [
+      selectedProjectIds,
+      activeTabs,
+      activeModes,
+      onProjectSelectionChange,
+      onTabChange,
+      onModeChange,
+    ]
   );
 
   // --- Project toggle handler ---
@@ -306,6 +361,25 @@ export const BoardFilterDropdown = memo(function BoardFilterDropdown({
     });
   }, []);
 
+  // --- Mode toggle handler ---
+  const handleModeToggle = useCallback((modeId: BoardMode) => {
+    setStagedModes((current) => {
+      const isCurrentlyActive = current.includes(modeId);
+      let next: BoardMode[];
+
+      if (isCurrentlyActive) {
+        const remaining = current.filter((m) => m !== modeId);
+        // Must have at least one mode selected - fallback to 'local'
+        next = remaining.length === 0 ? ['local'] : remaining;
+      } else {
+        next = [...current, modeId];
+      }
+
+      stagedModeRef.current = next;
+      return next;
+    });
+  }, []);
+
   // --- Create status handler ---
   const handleCreateStatus = useCallback(() => {
     const name = newStatusName.trim();
@@ -347,7 +421,13 @@ export const BoardFilterDropdown = memo(function BoardFilterDropdown({
     return stagedTabs.some((id) => !activeTabs.includes(id));
   }, [stagedTabs, activeTabs]);
 
-  const hasPendingChanges = hasProjectPendingChanges || hasStatusPendingChanges;
+  const hasModePendingChanges = useMemo(() => {
+    if (stagedModes.length !== activeModes.length) return true;
+    return stagedModes.some((m) => !activeModes.includes(m));
+  }, [stagedModes, activeModes]);
+
+  const hasPendingChanges =
+    hasProjectPendingChanges || hasStatusPendingChanges || hasModePendingChanges;
 
   return (
     <DropdownMenu open={open} onOpenChange={handleOpenChange}>
@@ -368,6 +448,12 @@ export const BoardFilterDropdown = memo(function BoardFilterDropdown({
           <span className="text-muted-foreground/50 mx-0.5">/</span>
           {activeTabConfig && <StatusColorDot colorClass={activeTabConfig.colorClass} size="sm" />}
           <span className="max-w-[100px] truncate">{statusLabel}</span>
+          {onModeChange && (
+            <>
+              <span className="text-muted-foreground/50 mx-0.5">/</span>
+              <span className="max-w-[60px] truncate">{modeLabel}</span>
+            </>
+          )}
           <ChevronDown className="w-3 h-3 text-muted-foreground" />
         </Button>
       </DropdownMenuTrigger>
@@ -632,6 +718,63 @@ export const BoardFilterDropdown = memo(function BoardFilterDropdown({
               </>
             )}
           </div>
+
+          {/* Modes panel (only shown when onModeChange is provided) */}
+          {onModeChange && (
+            <>
+              {/* Vertical separator */}
+              <div className="w-px bg-border shrink-0" />
+
+              <div className="w-40 flex flex-col max-h-[min(28rem,70vh)]">
+                <div className="px-3 py-2 text-xs font-medium text-muted-foreground sticky top-0 bg-popover z-10">
+                  Modes
+                </div>
+                <div className="h-px bg-border mx-2" />
+
+                <div className="overflow-y-auto min-h-[4.5rem] flex-1">
+                  {MODE_OPTIONS.map((mode) => {
+                    const isStaged = stagedModes.includes(mode.id);
+                    const diffState = getItemDiffState(mode.id, activeModes, stagedModes);
+                    const ModeIcon = mode.icon;
+
+                    return (
+                      <button
+                        key={mode.id}
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          handleModeToggle(mode.id);
+                        }}
+                        className={cn(
+                          'flex items-center gap-2 cursor-pointer min-h-[2.25rem] w-full px-3 py-1.5',
+                          'text-left transition-colors duration-100',
+                          'hover:bg-accent/50',
+                          isStaged && 'bg-accent',
+                          diffState === 'added' && 'bg-emerald-500/5',
+                          diffState === 'removed' && 'bg-red-500/5'
+                        )}
+                        data-testid={`board-filter-dropdown-mode-${mode.id}`}
+                        role="option"
+                        aria-selected={isStaged}
+                      >
+                        <CheckboxIndicator checked={isStaged} diffState={diffState} />
+                        <ModeIcon className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                        <span
+                          className={cn(
+                            'flex-1 text-sm truncate',
+                            diffState === 'removed' && 'text-muted-foreground line-through'
+                          )}
+                        >
+                          {mode.label}
+                        </span>
+                        <DiffBadge diffState={diffState} />
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </>
+          )}
         </div>
 
         {/* Pending changes hint - full width at bottom */}
@@ -698,4 +841,4 @@ function ProjectItem({
 }
 
 export { ALL_PROJECTS_ID };
-export type { StatusTabId, StatusTab };
+export type { StatusTabId, StatusTab, BoardMode };

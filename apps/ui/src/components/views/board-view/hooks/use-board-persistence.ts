@@ -113,6 +113,33 @@ export function useBoardPersistence({ currentProject }: UseBoardPersistenceProps
           throw new Error(result.error || 'Failed to update feature');
         }
       } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        // Feature doesn't exist on server (e.g. virtual GitHub issue) - auto-create it
+        if (errorMsg.includes('not found')) {
+          try {
+            const api = getElectronAPI();
+            if (api.features) {
+              const { features: storeFeatures } = useAppStore.getState();
+              const fullFeature = storeFeatures.find((f) => f.id === featureId);
+              if (fullFeature) {
+                const projPath = (fullFeature as any)?.projectPath || currentProject?.path;
+                if (projPath) {
+                  logger.info(`Feature ${featureId} not found on server, creating it`);
+                  const createResult = await api.features.create(projPath, {
+                    ...fullFeature,
+                    ...updates,
+                  });
+                  if (createResult.success && createResult.feature) {
+                    updateFeature(createResult.feature.id, createResult.feature);
+                  }
+                  return;
+                }
+              }
+            }
+          } catch (createError) {
+            logger.error('Failed to auto-create feature after not found:', createError);
+          }
+        }
         logger.error('Failed to persist feature update:', error);
         throw error; // Re-throw so caller knows it failed
       } finally {

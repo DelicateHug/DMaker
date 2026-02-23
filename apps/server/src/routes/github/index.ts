@@ -21,6 +21,16 @@ import { createClaimIssueHandler } from './routes/claim-issue.js';
 import { createUnclaimIssueHandler } from './routes/unclaim-issue.js';
 import { createSyncIssueHandler } from './routes/sync-issue.js';
 import { createCurrentUserHandler } from './routes/current-user.js';
+import { createCreateIssueHandler } from './routes/create-issue.js';
+import { createUpdateIssueLabelsHandler } from './routes/update-issue-labels.js';
+import { createAddCommentHandler } from './routes/add-comment.js';
+import {
+  createLockIssueHandler,
+  createUnlockIssueHandler,
+  createPinIssueHandler,
+  createUnpinIssueHandler,
+  createDeleteIssueHandler,
+} from './routes/manage-issue.js';
 import { getGitHubSyncService } from '../../services/github-sync-service.js';
 import type { SettingsService } from '../../services/settings-service.js';
 
@@ -71,6 +81,20 @@ export function createGitHubRoutes(
   );
   router.post('/sync-issue', validatePathParams('projectPath'), createSyncIssueHandler(events));
   router.post('/current-user', validatePathParams('projectPath'), createCurrentUserHandler(events));
+  router.post('/create-issue', validatePathParams('projectPath'), createCreateIssueHandler());
+  router.post(
+    '/update-issue-labels',
+    validatePathParams('projectPath'),
+    createUpdateIssueLabelsHandler()
+  );
+  router.post('/add-comment', validatePathParams('projectPath'), createAddCommentHandler());
+
+  // Issue management: lock, unlock, pin, unpin, delete
+  router.post('/lock-issue', validatePathParams('projectPath'), createLockIssueHandler());
+  router.post('/unlock-issue', validatePathParams('projectPath'), createUnlockIssueHandler());
+  router.post('/pin-issue', validatePathParams('projectPath'), createPinIssueHandler());
+  router.post('/unpin-issue', validatePathParams('projectPath'), createUnpinIssueHandler());
+  router.post('/delete-issue', validatePathParams('projectPath'), createDeleteIssueHandler());
 
   return router;
 }

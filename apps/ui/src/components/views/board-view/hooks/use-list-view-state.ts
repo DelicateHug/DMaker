@@ -1,9 +1,5 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import { getJSON, setJSON } from '@/lib/storage';
-import type { ViewMode } from '../components/view-toggle';
-
-// Re-export ViewMode for convenience
-export type { ViewMode };
 
 /** Columns that can be sorted in the list view */
 export type SortColumn = 'title' | 'status' | 'category' | 'priority' | 'createdAt' | 'updatedAt';
@@ -19,16 +15,11 @@ export interface SortConfig {
 
 /** Persisted state for the list view */
 interface ListViewPersistedState {
-  viewMode: ViewMode;
   sortConfig: SortConfig;
 }
 
 /** Storage key for list view preferences */
 const STORAGE_KEY = 'automaker:list-view-state';
-
-/** Migration version - increment this to force a migration */
-const CURRENT_MIGRATION_VERSION = 2;
-const MIGRATION_VERSION_KEY = 'automaker:list-view-migration-version';
 
 /** Default sort configuration */
 const DEFAULT_SORT_CONFIG: SortConfig = {
@@ -38,30 +29,8 @@ const DEFAULT_SORT_CONFIG: SortConfig = {
 
 /** Default persisted state */
 const DEFAULT_STATE: ListViewPersistedState = {
-  viewMode: 'list',
   sortConfig: DEFAULT_SORT_CONFIG,
 };
-
-/**
- * Validates and returns a valid ViewMode, defaulting to 'list' if invalid
- * Migration v2: Force list view for all users to eliminate unused Kanban card space
- */
-function validateViewMode(value: unknown): ViewMode {
-  // Check if migration is needed - always use list view after migration v2
-  const storedVersion = localStorage.getItem(MIGRATION_VERSION_KEY);
-  const currentVersion = storedVersion ? parseInt(storedVersion, 10) : 0;
-
-  if (currentVersion < CURRENT_MIGRATION_VERSION) {
-    // Perform migration: force list view
-    localStorage.setItem(MIGRATION_VERSION_KEY, String(CURRENT_MIGRATION_VERSION));
-    return 'list';
-  }
-
-  if (value === 'kanban' || value === 'list') {
-    return value;
-  }
-  return 'list';
-}
 
 /**
  * Validates and returns a valid SortColumn, defaulting to 'createdAt' if invalid
@@ -102,7 +71,6 @@ function loadPersistedState(): ListViewPersistedState {
   }
 
   return {
-    viewMode: validateViewMode(stored.viewMode),
     sortConfig: {
       column: validateSortColumn(stored.sortConfig?.column),
       direction: validateSortDirection(stored.sortConfig?.direction),
@@ -118,16 +86,6 @@ function savePersistedState(state: ListViewPersistedState): void {
 }
 
 export interface UseListViewStateReturn {
-  /** Current view mode (kanban or list) */
-  viewMode: ViewMode;
-  /** Set the view mode */
-  setViewMode: (mode: ViewMode) => void;
-  /** Toggle between kanban and list views */
-  toggleViewMode: () => void;
-  /** Whether the current view is list mode */
-  isListView: boolean;
-  /** Whether the current view is kanban mode */
-  isKanbanView: boolean;
   /** Current sort configuration */
   sortConfig: SortConfig;
   /** Set the sort column (toggles direction if same column) */
@@ -139,50 +97,25 @@ export interface UseListViewStateReturn {
 }
 
 /**
- * Hook for managing list view state including view mode, sorting, and localStorage persistence.
- *
- * Features:
- * - View mode toggle between kanban and list views
- * - Sort configuration with column and direction
- * - Automatic persistence to localStorage
- * - Validated state restoration on mount
+ * Hook for managing list view sort state with localStorage persistence.
  *
  * @example
  * ```tsx
- * const { viewMode, setViewMode, sortConfig, setSortColumn } = useListViewState();
- *
- * // Toggle view mode
- * <ViewToggle viewMode={viewMode} onViewModeChange={setViewMode} />
+ * const { sortConfig, setSortColumn } = useListViewState();
  *
  * // Sort by column (clicking same column toggles direction)
  * <TableHeader onClick={() => setSortColumn('title')}>Title</TableHeader>
  * ```
  */
 export function useListViewState(): UseListViewStateReturn {
-  // Initialize state from localStorage
-  const [viewMode, setViewModeState] = useState<ViewMode>(() => loadPersistedState().viewMode);
   const [sortConfig, setSortConfigState] = useState<SortConfig>(
     () => loadPersistedState().sortConfig
   );
 
-  // Derived state
-  const isListView = viewMode === 'list';
-  const isKanbanView = viewMode === 'kanban';
-
   // Persist state changes to localStorage
   useEffect(() => {
-    savePersistedState({ viewMode, sortConfig });
-  }, [viewMode, sortConfig]);
-
-  // Set view mode
-  const setViewMode = useCallback((mode: ViewMode) => {
-    setViewModeState(mode);
-  }, []);
-
-  // Toggle between kanban and list views
-  const toggleViewMode = useCallback(() => {
-    setViewModeState((prev) => (prev === 'kanban' ? 'list' : 'kanban'));
-  }, []);
+    savePersistedState({ sortConfig });
+  }, [sortConfig]);
 
   // Set sort column - toggles direction if same column is clicked
   const setSortColumn = useCallback((column: SortColumn) => {
@@ -213,26 +146,11 @@ export function useListViewState(): UseListViewStateReturn {
 
   return useMemo(
     () => ({
-      viewMode,
-      setViewMode,
-      toggleViewMode,
-      isListView,
-      isKanbanView,
       sortConfig,
       setSortColumn,
       setSortConfig,
       resetSort,
     }),
-    [
-      viewMode,
-      setViewMode,
-      toggleViewMode,
-      isListView,
-      isKanbanView,
-      sortConfig,
-      setSortColumn,
-      setSortConfig,
-      resetSort,
-    ]
+    [sortConfig, setSortColumn, setSortConfig, resetSort]
   );
 }

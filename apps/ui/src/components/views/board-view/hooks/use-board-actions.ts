@@ -1,13 +1,6 @@
 // @ts-nocheck
 import { useCallback, useState } from 'react';
-import {
-  Feature,
-  FeatureImage,
-  ModelAlias,
-  ThinkingLevel,
-  PlanningMode,
-  useAppStore,
-} from '@/store/app-store';
+import { Feature, FeatureImage, ModelAlias, ThinkingLevel, useAppStore } from '@/store/app-store';
 import { useShallow } from 'zustand/react/shallow';
 import type { ReasoningEffort } from '@automaker/types';
 import { FeatureImagePath as DescriptionImagePath } from '@/components/ui/description-image-dropzone';
@@ -155,12 +148,11 @@ export function useBoardActions({
       thinkingLevel: ThinkingLevel;
       branchName: string;
       priority: number;
-      planningMode: PlanningMode;
-      requirePlanApproval: boolean;
       dependencies?: string[];
       childDependencies?: string[]; // Feature IDs that should depend on this feature
       workMode?: 'current' | 'auto' | 'custom';
       selectedProjectPath?: string; // Optional project path for multi-project support
+      source?: 'local' | 'github'; // Where this feature should be created
     }) => {
       const workMode = featureData.workMode || 'current';
 
@@ -234,17 +226,91 @@ export function useBoardActions({
         ...featureData,
         title: featureData.title,
         titleGenerating: needsTitleGeneration,
-        status: 'backlog' as const,
+        status: 'local' as const,
         branchName: finalBranchName,
         dependencies: featureData.dependencies || [],
         // Add project path for multi-project support
         projectPath: targetProjectPath,
+        // Source tracking
+        source: featureData.source || 'local',
       };
       const createdFeature = addFeature(newFeatureData);
       // Must await to ensure feature exists on server before user can drag it
       // Pass the target project path for multi-project support
       await persistFeatureCreate(createdFeature, targetProjectPath);
       saveCategory(featureData.category);
+
+      // If source is github, create a GitHub issue and link it to the feature
+      if (featureData.source === 'github' && targetProjectPath) {
+        try {
+          const api = getElectronAPI();
+          if (api?.github?.createIssue) {
+            // Build label from the feature's initial status (backlog)
+            const statusLabel = `label-backlog`;
+            // Use title as the issue name (AI-generated or human-input)
+            const issueTitle = featureData.title.trim() || featureData.description.slice(0, 100);
+            // Brief summary in issue body (first paragraph or first 200 chars)
+            const firstParagraph = featureData.description.split('\n\n')[0] || '';
+            const issueSummary =
+              firstParagraph.length > 200 ? firstParagraph.slice(0, 200) + '...' : firstParagraph;
+            const result = await api.github.createIssue(
+              targetProjectPath,
+              issueTitle,
+              issueSummary,
+              [statusLabel]
+            );
+            if (result.success && result.issueNumber) {
+              // Link the GitHub issue and move from local to backlog
+              const githubIssueData = {
+                status: 'backlog' as const,
+                githubIssue: {
+                  number: result.issueNumber,
+                  url: result.url || '',
+                  assignees: [],
+                  labels: [statusLabel],
+                  state: 'open' as const,
+                  syncedAt: new Date().toISOString(),
+                },
+              };
+              updateFeature(createdFeature.id, githubIssueData);
+              persistFeatureUpdate(createdFeature.id, githubIssueData);
+              toast.success(`GitHub issue #${result.issueNumber} created`);
+
+              // Post description + feature options as first comment (non-blocking)
+              if (api.github.addComment) {
+                const optionLines = [
+                  `- **Model**: ${featureData.model || 'default'}`,
+                  `- **Thinking Level**: ${featureData.thinkingLevel || 'none'}`,
+                  `- **Category**: ${featureData.category || 'Uncategorized'}`,
+                  `- **Skip Tests**: ${featureData.skipTests ? 'Yes' : 'No'}`,
+                ];
+                const commentBody = [
+                  '## Description',
+                  '',
+                  featureData.description,
+                  '',
+                  '## Feature Options',
+                  '',
+                  ...optionLines,
+                ].join('\n');
+                api.github
+                  .addComment(targetProjectPath, result.issueNumber, commentBody)
+                  .catch((err) => logger.error('Failed to post feature details comment:', err));
+              }
+            } else if (!result.success) {
+              logger.error('Failed to create GitHub issue:', result.error);
+              toast.error('Failed to create GitHub issue', {
+                description: result.error,
+              });
+            }
+          }
+        } catch (error) {
+          logger.error('Error creating GitHub issue:', error);
+          toast.error('Failed to create GitHub issue', {
+            description: error instanceof Error ? error.message : 'An error occurred',
+          });
+        }
+      }
 
       // Handle child dependencies - update other features to depend on this new feature
       if (featureData.childDependencies && featureData.childDependencies.length > 0) {
@@ -334,8 +400,6 @@ export function useBoardActions({
         imagePaths: DescriptionImagePath[];
         branchName: string;
         priority: number;
-        planningMode?: PlanningMode;
-        requirePlanApproval?: boolean;
         workMode?: 'current' | 'auto' | 'custom';
         dependencies?: string[];
         childDependencies?: string[]; // Feature IDs that should depend on this feature
@@ -554,7 +618,7 @@ export function useBoardActions({
   const doStartImplementation = useCallback(
     async (feature: Feature): Promise<boolean> => {
       const updates = {
-        status: 'in_progress' as const,
+        status: 'planning' as const,
         startedAt: new Date().toISOString(),
       };
       updateFeature(feature.id, updates);
@@ -569,6 +633,42 @@ export function useBoardActions({
         if (currentProject?.id) {
           addRunningTask(currentProject.id, feature.id);
         }
+
+        // Update GitHub issue labels and post comment (non-blocking)
+        const featureProjectPath = getFeatureProjectPath(feature, currentProject);
+        if (feature.githubIssue?.number && featureProjectPath) {
+          const api = getElectronAPI();
+          if (api?.github?.getCurrentUser && api?.github?.updateIssueLabels) {
+            api.github
+              .getCurrentUser(featureProjectPath)
+              .then((userResult) => {
+                if (userResult.success && userResult.username) {
+                  const inProgressLabel = `in-progress-${userResult.username}`;
+                  api.github
+                    .updateIssueLabels(
+                      featureProjectPath,
+                      feature.githubIssue!.number,
+                      [inProgressLabel, 'label-planning'],
+                      ['label-backlog']
+                    )
+                    .catch((err) => logger.error('Failed to add planning label:', err));
+
+                  // Post a comment that the user started working on this issue
+                  if (api.github.addComment) {
+                    api.github
+                      .addComment(
+                        featureProjectPath,
+                        feature.githubIssue!.number,
+                        `@${userResult.username} started working on this issue`
+                      )
+                      .catch((err) => logger.error('Failed to post start comment:', err));
+                  }
+                }
+              })
+              .catch((err) => logger.error('Failed to get current user for label:', err));
+          }
+        }
+
         return true;
       } catch (error) {
         // Rollback to backlog if persist or run fails (e.g., server offline)
@@ -597,6 +697,14 @@ export function useBoardActions({
 
   const handleStartImplementation = useCallback(
     async (feature: Feature) => {
+      // Block features in 'local' status without a GitHub issue
+      if (feature.status === 'local' && !feature.githubIssue) {
+        toast.error('Cannot start feature', {
+          description: 'Link a GitHub issue before starting this feature.',
+        });
+        return false;
+      }
+
       if (!autoMode.canStartNewTask) {
         toast.error('Concurrency limit reached', {
           description: `You can only have ${autoMode.effectiveMaxAgents} task${
@@ -1212,6 +1320,80 @@ export function useBoardActions({
     skipVerificationInAutoMode,
   ]);
 
+  const handleToggleOwner = useCallback(
+    async (feature: Feature) => {
+      const featurePath = getFeatureProjectPath(feature, currentProject);
+      if (!feature.githubIssue?.number || !featurePath) return;
+
+      const api = getElectronAPI();
+      if (!api?.github?.getCurrentUser || !api?.github?.updateIssueLabels) return;
+
+      try {
+        const userResult = await api.github.getCurrentUser(featurePath);
+        if (!userResult.success || !userResult.username) {
+          toast.error('Cannot determine GitHub user');
+          return;
+        }
+
+        const ownerLabel = `owner-${userResult.username}`;
+        const labels = feature.githubIssue.labels ?? [];
+        const existingOwnerLabel = labels.find((l) => l.startsWith('owner-'));
+        const isOwnedByMe = existingOwnerLabel === ownerLabel;
+        const isOwnedByOther = existingOwnerLabel && !isOwnedByMe;
+
+        if (isOwnedByOther) {
+          const otherUser = existingOwnerLabel.replace('owner-', '');
+          toast.error(`Owned by ${otherUser}`, {
+            description: 'You cannot change ownership of an issue owned by another user.',
+          });
+          return;
+        }
+
+        if (isOwnedByMe) {
+          // Unclaim ownership
+          const result = await api.github.updateIssueLabels(
+            featurePath,
+            feature.githubIssue.number,
+            [],
+            [ownerLabel]
+          );
+          if (result.success) {
+            const updatedLabels = labels.filter((l) => l !== ownerLabel);
+            const githubUpdate = {
+              githubIssue: { ...feature.githubIssue, labels: updatedLabels },
+            };
+            updateFeature(feature.id, githubUpdate);
+            persistFeatureUpdate(feature.id, githubUpdate);
+            toast.success('Ownership released');
+          }
+        } else {
+          // Claim ownership
+          const result = await api.github.updateIssueLabels(
+            featurePath,
+            feature.githubIssue.number,
+            [ownerLabel],
+            []
+          );
+          if (result.success) {
+            const updatedLabels = [...labels, ownerLabel];
+            const githubUpdate = {
+              githubIssue: { ...feature.githubIssue, labels: updatedLabels },
+            };
+            updateFeature(feature.id, githubUpdate);
+            persistFeatureUpdate(feature.id, githubUpdate);
+            toast.success('You now own this issue');
+          }
+        }
+      } catch (error) {
+        logger.error('Error toggling ownership:', error);
+        toast.error('Failed to update ownership', {
+          description: error instanceof Error ? error.message : 'An error occurred',
+        });
+      }
+    },
+    [currentProject, updateFeature, persistFeatureUpdate]
+  );
+
   const handleCompleteAllWaiting = useCallback(async () => {
     const waitingFeatures = features.filter((f) => f.status === 'waiting_approval');
 
@@ -1259,6 +1441,7 @@ export function useBoardActions({
     handleForceStopFeature,
     handleStartNextFeatures,
     handleCompleteAllWaiting,
+    handleToggleOwner,
     // Unsatisfied dependencies dialog state and handlers
     unsatisfiedDepsDialog,
     handleConfirmStartWithUnsatisfiedDeps,

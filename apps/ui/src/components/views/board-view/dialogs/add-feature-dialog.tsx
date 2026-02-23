@@ -22,26 +22,18 @@ import {
   FeatureTextFilePath as DescriptionTextFilePath,
   ImagePreviewMap,
 } from '@/components/ui/description-image-dropzone';
-import { Play, Cpu, FolderKanban, Settings2, Check, ChevronDown } from 'lucide-react';
+import { Play, Settings2, Check, ChevronDown, HardDrive, CircleDot } from 'lucide-react';
 import { useNavigate } from '@tanstack/react-router';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { modelSupportsThinking } from '@/lib/utils';
-import {
-  useAppStore,
-  ModelAlias,
-  ThinkingLevel,
-  FeatureImage,
-  PlanningMode,
-  Feature,
-} from '@/store/app-store';
+import { useAppStore, ModelAlias, ThinkingLevel, FeatureImage, Feature } from '@/store/app-store';
 import type { ReasoningEffort, PhaseModelEntry, AgentModel } from '@automaker/types';
-import { supportsReasoningEffort, isClaudeModel } from '@automaker/types';
+import { supportsReasoningEffort } from '@automaker/types';
 import {
   TestingTabContent,
   PrioritySelector,
   WorkModeSelector,
-  PlanningModeSelect,
   AncestorContextSection,
   EnhanceWithAI,
   EnhancementHistoryButton,
@@ -105,14 +97,13 @@ type FeatureData = {
   reasoningEffort: ReasoningEffort;
   branchName: string;
   priority: number;
-  planningMode: PlanningMode;
-  requirePlanApproval: boolean;
   autoDeploy: boolean;
   dependencies?: string[];
   childDependencies?: string[]; // Feature IDs that should depend on this feature
   waitForDependencies?: boolean; // If true, this feature won't start until all dependencies are completed/verified
   workMode: WorkMode;
   selectedProjectPath?: string; // The project path to add this feature to
+  source: 'local' | 'github'; // Where this feature should be created
 };
 
 interface AddFeatureDialogProps {
@@ -154,6 +145,11 @@ interface AddFeatureDialogProps {
    * When true, the project selector will be more prominently displayed.
    */
   showAllProjectsMode?: boolean;
+  /**
+   * The currently active board modes. Used to determine the default source
+   * for new features (github if github mode is active, local otherwise).
+   */
+  activeModes?: ('local' | 'github')[];
 }
 
 /**
@@ -182,6 +178,7 @@ export function AddFeatureDialog({
   projects = [],
   selectedProject,
   showAllProjectsMode = false,
+  activeModes = ['local'],
 }: AddFeatureDialogProps) {
   const isSpawnMode = !!parentFeature;
   const navigate = useNavigate();
@@ -198,15 +195,14 @@ export function AddFeatureDialog({
   const [branchName, setBranchName] = useState('');
   const [priority, setPriority] = useState(2);
 
+  // Source selection state (local or github)
+  const [source, setSource] = useState<'local' | 'github'>(
+    activeModes.includes('github') ? 'github' : 'local'
+  );
+
   // Model selection state
   const [modelEntry, setModelEntry] = useState<PhaseModelEntry>({ model: 'opus' });
 
-  // Check if current model supports planning mode (Claude/Anthropic only)
-  const modelSupportsPlanningMode = isClaudeModel(modelEntry.model);
-
-  // Planning mode state
-  const [planningMode, setPlanningMode] = useState<PlanningMode>('skip');
-  const [requirePlanApproval, setRequirePlanApproval] = useState(false);
   const [autoDeploy, setAutoDeploy] = useState(false);
 
   // UI state
@@ -232,13 +228,7 @@ export function AddFeatureDialog({
   const [isProjectDropdownOpen, setIsProjectDropdownOpen] = useState(false);
 
   // Get defaults from store
-  const {
-    defaultPlanningMode,
-    defaultRequirePlanApproval,
-    useWorktrees,
-    defaultFeatureModel,
-    defaultAutoDeploy,
-  } = useAppStore();
+  const { useWorktrees, defaultFeatureModel, defaultAutoDeploy } = useAppStore();
 
   // Track previous open state to detect when dialog opens
   const wasOpenRef = useRef(false);
@@ -256,8 +246,6 @@ export function AddFeatureDialog({
       setWorkMode(
         getDefaultWorkMode(useWorktrees, selectedNonMainWorktreeBranch, forceCurrentBranchMode)
       );
-      setPlanningMode(defaultPlanningMode);
-      setRequirePlanApproval(defaultRequirePlanApproval);
       setAutoDeploy(defaultAutoDeploy ?? false);
       setModelEntry(defaultFeatureModel);
 
@@ -281,13 +269,14 @@ export function AddFeatureDialog({
 
       // Sync the selected project from the board when dialog opens
       setDialogSelectedProject(selectedProject ?? null);
+
+      // Default source based on active board modes
+      setSource(activeModes.includes('github') ? 'github' : 'local');
     }
   }, [
     open,
     defaultSkipTests,
     defaultBranch,
-    defaultPlanningMode,
-    defaultRequirePlanApproval,
     defaultAutoDeploy,
     defaultFeatureModel,
     useWorktrees,
@@ -296,6 +285,7 @@ export function AddFeatureDialog({
     parentFeature,
     allFeatures,
     selectedProject,
+    activeModes,
   ]);
 
   const handleModelChange = (entry: PhaseModelEntry) => {
@@ -379,8 +369,6 @@ export function AddFeatureDialog({
       reasoningEffort: normalizedReasoning,
       branchName: finalBranchName,
       priority,
-      planningMode,
-      requirePlanApproval,
       autoDeploy,
       dependencies: finalDependencies,
       childDependencies: childDependencies.length > 0 ? childDependencies : undefined,
@@ -389,6 +377,7 @@ export function AddFeatureDialog({
       workMode,
       // Include selected project path for multi-project support
       selectedProjectPath: dialogSelectedProject?.path,
+      source,
     };
   };
 
@@ -407,8 +396,6 @@ export function AddFeatureDialog({
     setWorkMode(
       getDefaultWorkMode(useWorktrees, selectedNonMainWorktreeBranch, forceCurrentBranchMode)
     );
-    setPlanningMode(defaultPlanningMode);
-    setRequirePlanApproval(defaultRequirePlanApproval);
     setAutoDeploy(defaultAutoDeploy ?? false);
     setPreviewMap(new Map());
     setDescriptionError(false);
@@ -416,6 +403,7 @@ export function AddFeatureDialog({
     setParentDependencies([]);
     setChildDependencies([]);
     setWaitForDependencies(false);
+    setSource(activeModes.includes('github') ? 'github' : 'local');
     onOpenChange(false);
   };
 
@@ -636,6 +624,7 @@ export function AddFeatureDialog({
                 onPreviewMapChange={setPreviewMap}
                 autoFocus
                 error={descriptionError}
+                onAltEnter={handleAdd}
               />
             </div>
 
@@ -680,12 +669,12 @@ export function AddFeatureDialog({
             />
           </div>
 
-          {/* AI & Execution Section */}
+          {/* Feature Options Section */}
           <div className={cardClass}>
             <div className="flex items-center justify-between">
               <div className={sectionHeaderClass}>
-                <Cpu className="w-4 h-4 text-muted-foreground" />
-                <span>AI & Execution</span>
+                <Settings2 className="w-4 h-4 text-muted-foreground" />
+                <span>Feature Options</span>
               </div>
               <TooltipProvider>
                 <Tooltip>
@@ -719,111 +708,38 @@ export function AddFeatureDialog({
               />
             </div>
 
-            <div className="grid gap-3 grid-cols-2">
-              <div className="space-y-1.5">
-                <Label
-                  className={cn(
-                    'text-xs text-muted-foreground',
-                    !modelSupportsPlanningMode && 'opacity-50'
-                  )}
-                >
-                  Planning
-                </Label>
-                {modelSupportsPlanningMode ? (
-                  <PlanningModeSelect
-                    mode={planningMode}
-                    onModeChange={setPlanningMode}
-                    testIdPrefix="add-feature-planning"
-                    compact
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Options</Label>
+              <div className="flex flex-col gap-2 pt-1">
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="add-feature-skip-tests"
+                    checked={!skipTests}
+                    onCheckedChange={(checked) => setSkipTests(!checked)}
+                    data-testid="add-feature-skip-tests-checkbox"
                   />
-                ) : (
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <div>
-                          <PlanningModeSelect
-                            mode="skip"
-                            onModeChange={() => {}}
-                            testIdPrefix="add-feature-planning"
-                            compact
-                            disabled
-                          />
-                        </div>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Planning modes are only available for Claude Provider</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                )}
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">Options</Label>
-                <div className="flex flex-col gap-2 pt-1">
-                  <div className="flex items-center gap-2">
-                    <Checkbox
-                      id="add-feature-skip-tests"
-                      checked={!skipTests}
-                      onCheckedChange={(checked) => setSkipTests(!checked)}
-                      data-testid="add-feature-skip-tests-checkbox"
-                    />
-                    <Label
-                      htmlFor="add-feature-skip-tests"
-                      className="text-xs font-normal cursor-pointer"
-                    >
-                      Run tests
-                    </Label>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Checkbox
-                      id="add-feature-require-approval"
-                      checked={requirePlanApproval}
-                      onCheckedChange={(checked) => setRequirePlanApproval(!!checked)}
-                      disabled={
-                        !modelSupportsPlanningMode ||
-                        planningMode === 'skip' ||
-                        planningMode === 'lite'
-                      }
-                      data-testid="add-feature-require-approval-checkbox"
-                    />
-                    <Label
-                      htmlFor="add-feature-require-approval"
-                      className={cn(
-                        'text-xs font-normal',
-                        !modelSupportsPlanningMode ||
-                          planningMode === 'skip' ||
-                          planningMode === 'lite'
-                          ? 'cursor-not-allowed text-muted-foreground'
-                          : 'cursor-pointer'
-                      )}
-                    >
-                      Require approval
-                    </Label>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Checkbox
-                      id="add-feature-auto-deploy"
-                      checked={autoDeploy}
-                      onCheckedChange={(checked) => setAutoDeploy(!!checked)}
-                      data-testid="add-feature-auto-deploy-checkbox"
-                    />
-                    <Label
-                      htmlFor="add-feature-auto-deploy"
-                      className="text-xs font-normal cursor-pointer"
-                    >
-                      Auto-deploy
-                    </Label>
-                  </div>
+                  <Label
+                    htmlFor="add-feature-skip-tests"
+                    className="text-xs font-normal cursor-pointer"
+                  >
+                    Run tests
+                  </Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="add-feature-auto-deploy"
+                    checked={autoDeploy}
+                    onCheckedChange={(checked) => setAutoDeploy(!!checked)}
+                    data-testid="add-feature-auto-deploy-checkbox"
+                  />
+                  <Label
+                    htmlFor="add-feature-auto-deploy"
+                    className="text-xs font-normal cursor-pointer"
+                  >
+                    Auto-deploy
+                  </Label>
                 </div>
               </div>
-            </div>
-          </div>
-
-          {/* Organization Section */}
-          <div className={cardClass}>
-            <div className={sectionHeaderClass}>
-              <FolderKanban className="w-4 h-4 text-muted-foreground" />
-              <span>Organization</span>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
@@ -844,6 +760,39 @@ export function AddFeatureDialog({
                   onPrioritySelect={setPriority}
                   testIdPrefix="priority"
                 />
+              </div>
+            </div>
+
+            {/* Source Selector */}
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Source</Label>
+              <div className="flex gap-1">
+                <button
+                  type="button"
+                  onClick={() => setSource('local')}
+                  className={cn(
+                    'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors border',
+                    source === 'local'
+                      ? 'bg-foreground text-background border-foreground'
+                      : 'bg-muted/30 text-muted-foreground border-border/50 hover:bg-muted/50'
+                  )}
+                >
+                  <HardDrive className="w-3.5 h-3.5" />
+                  Local
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSource('github')}
+                  className={cn(
+                    'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors border',
+                    source === 'github'
+                      ? 'bg-purple-600 text-white border-purple-600'
+                      : 'bg-muted/30 text-muted-foreground border-border/50 hover:bg-muted/50'
+                  )}
+                >
+                  <CircleDot className="w-3.5 h-3.5" />
+                  GitHub
+                </button>
               </div>
             </div>
 
@@ -917,7 +866,7 @@ export function AddFeatureDialog({
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          {onAddAndStart && (
+          {onAddAndStart && source !== 'local' && (
             <Button
               onClick={handleAddAndStart}
               variant="secondary"
@@ -935,7 +884,7 @@ export function AddFeatureDialog({
             data-testid="confirm-add-feature"
             disabled={workMode === 'custom' && !branchName.trim()}
           >
-            {isSpawnMode ? 'Spawn Task' : 'Add Feature'}
+            {isSpawnMode ? 'Spawn Task' : source === 'local' ? 'Add to Local' : 'Add to Backlog'}
           </HotkeyButton>
         </DialogFooter>
       </DialogContent>

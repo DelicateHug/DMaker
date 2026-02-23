@@ -1,5 +1,4 @@
 import { create } from 'zustand';
-import type { ViewMode } from '@/components/views/board-view/components/view-toggle';
 import type {
   StatusTabId,
   StatusTab,
@@ -26,10 +25,6 @@ export interface BoardControlsState {
   showFavoritesOnly: boolean;
   onShowFavoritesOnlyChange: ((show: boolean) => void) | null;
 
-  // View toggle props
-  viewMode: ViewMode;
-  onViewModeChange: ((mode: ViewMode) => void) | null;
-
   // Board background props
   onShowBoardBackground: (() => void) | null;
 
@@ -55,12 +50,15 @@ export interface BoardControlsState {
   onDeleteStatus: ((tabId: StatusTabId) => void) | null;
   statusTabs: StatusTab[];
   statusTabCounts: Record<string, number>;
-  isListView: boolean;
 
   // Project filter props
   projects: Project[];
   selectedProjectIds: string[];
   onProjectSelectionChange: ((projectIds: string[]) => void) | null;
+
+  // Mode filter props
+  activeModes: ('local' | 'github')[];
+  onModeChange: ((modes: ('local' | 'github')[]) => void) | null;
 
   // Board actions expanded states
   expandedBoardActions: Set<string>;
@@ -86,7 +84,6 @@ export interface BoardControlsActions {
   // Update individual properties
   setSearchQuery: (query: string) => void;
   setShowFavoritesOnly: (show: boolean) => void;
-  setViewMode: (mode: ViewMode) => void;
   setIsAutoModeRunning: (running: boolean) => void;
   setRunningAgentsCount: (count: number) => void;
   setIsAutoModeModalOpen: (open: boolean) => void;
@@ -97,10 +94,11 @@ export interface BoardControlsActions {
   setActiveStatusTabs: (tabIds: StatusTabId[]) => void;
   setStatusTabs: (tabs: StatusTab[]) => void;
   setStatusTabCounts: (counts: Record<string, number>) => void;
-  setIsListView: (isListView: boolean) => void;
   // Project filter
   setProjects: (projects: Project[]) => void;
   setSelectedProjectIds: (ids: string[]) => void;
+  // Mode filter
+  setActiveModes: (modes: ('local' | 'github')[]) => void;
   // Board actions
   toggleBoardAction: (actionId: string) => void;
   setExpandedBoardAction: (actionId: string, expanded: boolean) => void;
@@ -118,10 +116,6 @@ const initialState: BoardControlsState = {
   // Favorites
   showFavoritesOnly: false,
   onShowFavoritesOnlyChange: null,
-
-  // View toggle
-  viewMode: 'kanban',
-  onViewModeChange: null,
 
   // Board background
   onShowBoardBackground: null,
@@ -148,12 +142,15 @@ const initialState: BoardControlsState = {
   onDeleteStatus: null,
   statusTabs: [],
   statusTabCounts: {},
-  isListView: false,
 
   // Project filter
   projects: [],
   selectedProjectIds: ['__all_projects__'],
   onProjectSelectionChange: null,
+
+  // Mode filter
+  activeModes: ['local'] as ('local' | 'github')[],
+  onModeChange: null,
 
   // Board actions
   expandedBoardActions: new Set<string>(),
@@ -184,7 +181,6 @@ export const useBoardControlsStore = create<BoardControlsState & BoardControlsAc
 
   setSearchQuery: (query) => set({ searchQuery: query }),
   setShowFavoritesOnly: (show) => set({ showFavoritesOnly: show }),
-  setViewMode: (mode) => set({ viewMode: mode }),
   setIsAutoModeRunning: (running) => set({ isAutoModeRunning: running }),
   setRunningAgentsCount: (count) => set({ runningAgentsCount: count }),
   setIsAutoModeModalOpen: (open) => set({ isAutoModeModalOpen: open }),
@@ -196,11 +192,13 @@ export const useBoardControlsStore = create<BoardControlsState & BoardControlsAc
   setActiveStatusTabs: (tabIds) => set({ activeStatusTabs: tabIds }),
   setStatusTabs: (tabs) => set({ statusTabs: tabs }),
   setStatusTabCounts: (counts) => set({ statusTabCounts: counts }),
-  setIsListView: (isListView) => set({ isListView }),
 
   // Project filter
   setProjects: (projects) => set({ projects }),
   setSelectedProjectIds: (ids) => set({ selectedProjectIds: ids }),
+
+  // Mode filter
+  setActiveModes: (modes) => set({ activeModes: modes }),
 
   toggleBoardAction: (actionId) =>
     set((state) => {
@@ -238,8 +236,6 @@ export function getBoardControlsForTopNav(state: BoardControlsState): {
   creatingSpecProjectPath?: string;
   showFavoritesOnly: boolean;
   onShowFavoritesOnlyChange: (show: boolean) => void;
-  viewMode: ViewMode;
-  onViewModeChange?: (mode: ViewMode) => void;
   onShowBoardBackground?: () => void;
   isAutoModeRunning: boolean;
   runningAgentsCount: number;
@@ -259,11 +255,14 @@ export function getBoardControlsForTopNav(state: BoardControlsState): {
   onDeleteStatus?: (tabId: StatusTabId) => void;
   statusTabs: StatusTab[];
   statusTabCounts: Record<string, number>;
-  isListView: boolean;
+
   // Project filter props
   projects: Project[];
   selectedProjectIds: string[];
   onProjectSelectionChange?: (projectIds: string[]) => void;
+  // Mode filter props
+  activeModes: ('local' | 'github')[];
+  onModeChange?: (modes: ('local' | 'github')[]) => void;
   // Deploy panel props
   isDeployPanelCollapsed: boolean;
   onToggleDeployPanel?: () => void;
@@ -275,7 +274,6 @@ export function getBoardControlsForTopNav(state: BoardControlsState): {
 } | null {
   // Return null if not mounted or missing required callbacks
   // Note: onShowBoardBackground is optional (moved to Settings only)
-  // Note: onViewModeChange is optional (view toggle removed from header)
   if (
     !state.isMounted ||
     !state.onSearchChange ||
@@ -293,8 +291,6 @@ export function getBoardControlsForTopNav(state: BoardControlsState): {
     creatingSpecProjectPath: state.creatingSpecProjectPath,
     showFavoritesOnly: state.showFavoritesOnly,
     onShowFavoritesOnlyChange: state.onShowFavoritesOnlyChange,
-    viewMode: state.viewMode,
-    onViewModeChange: state.onViewModeChange || undefined,
     onShowBoardBackground: state.onShowBoardBackground || undefined,
     isAutoModeRunning: state.isAutoModeRunning,
     runningAgentsCount: state.runningAgentsCount,
@@ -314,11 +310,13 @@ export function getBoardControlsForTopNav(state: BoardControlsState): {
     onDeleteStatus: state.onDeleteStatus || undefined,
     statusTabs: state.statusTabs,
     statusTabCounts: state.statusTabCounts,
-    isListView: state.isListView,
     // Project filter
     projects: state.projects,
     selectedProjectIds: state.selectedProjectIds,
     onProjectSelectionChange: state.onProjectSelectionChange || undefined,
+    // Mode filter
+    activeModes: state.activeModes,
+    onModeChange: state.onModeChange || undefined,
     // Deploy panel
     isDeployPanelCollapsed: state.isDeployPanelCollapsed,
     onToggleDeployPanel: state.onToggleDeployPanel || undefined,

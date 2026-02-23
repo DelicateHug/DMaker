@@ -224,6 +224,17 @@ export function ClaudeUsagePopover() {
     }
   }, [isStale, isCliVerified, fetchUsage]);
 
+  // Background refresh: always fetch every 30s so data is ready when popover opens
+  useEffect(() => {
+    if (!isCliVerified) return;
+
+    const intervalId = setInterval(() => {
+      fetchUsage(true);
+    }, REFRESH_INTERVAL_SECONDS * 1000);
+
+    return () => clearInterval(intervalId);
+  }, [isCliVerified, fetchUsage]);
+
   // Fetch when popover opens (if stale or no data)
   useEffect(() => {
     if (!open || !isCliVerified) return;

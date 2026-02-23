@@ -2,10 +2,8 @@ import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useNavigate, useLocation } from '@tanstack/react-router';
 import {
   ChevronDown,
-  ChevronRight,
   Check,
   Layers,
-  Github,
   CircleDot,
   GitPullRequest,
   GitBranch,
@@ -23,7 +21,6 @@ import {
   Settings2,
   CheckCircle2,
   Wand2,
-  ClipboardCheck,
   Bot,
 } from 'lucide-react';
 import { cn, isMac, pathsEqual } from '@/lib/utils';
@@ -46,7 +43,6 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Slider } from '@/components/ui/slider';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
   useKeyboardShortcuts,
   useKeyboardShortcutsConfig,
@@ -58,9 +54,7 @@ import { createLogger } from '@automaker/utils/logger';
 import { RunningAgentsIndicator } from './running-agents-indicator';
 import { DeleteProjectDialog } from '@/components/dialogs';
 import { UsagePopover } from '@/components/usage-popover';
-import { VoiceButton } from '@/components/ui/voice-button';
 import { BoardSearchBar } from '@/components/views/board-view/board-search-bar';
-import type { ViewMode } from '@/components/views/board-view/components/view-toggle';
 import type {
   StatusTabId,
   StatusTab,
@@ -68,10 +62,8 @@ import type {
 import { BoardStatusDropdown } from '@/components/views/board-view/components/board-status-dropdown';
 import { BoardProjectDropdown } from '@/components/views/board-view/components/board-project-dropdown';
 import { BoardFilterDropdown } from '@/components/views/board-view/components/board-filter-dropdown';
-import { PlanSettingsPopover } from '@/components/views/board-view/dialogs/plan-settings-popover';
 import { CompletedFeaturesModal } from '@/components/views/board-view/dialogs';
 import { AutoModeModal } from '@/components/dialogs/auto-mode-modal';
-import { useSetupStore } from '@/store/setup-store';
 import { useBoardControlsStore, getBoardControlsForTopNav } from '@/store/board-controls-store';
 import { useIsTablet } from '@/hooks/use-media-query';
 
@@ -104,9 +96,6 @@ interface TopNavigationBarProps {
     // Favorites filter props
     showFavoritesOnly: boolean;
     onShowFavoritesOnlyChange: (show: boolean) => void;
-    // View toggle props (optional - removed from header)
-    viewMode: ViewMode;
-    onViewModeChange?: (mode: ViewMode) => void;
     // Board background props (optional - moved to Settings only)
     onShowBoardBackground?: () => void;
     // Auto mode props
@@ -129,7 +118,6 @@ interface TopNavigationBarProps {
     onDeleteStatus?: (tabId: StatusTabId) => void;
     statusTabs: StatusTab[];
     statusTabCounts: Record<string, number>;
-    isListView: boolean;
     // Project filter props
     projects?: Project[];
     selectedProjectIds?: string[];
@@ -149,7 +137,7 @@ interface TopNavigationBarProps {
  * - Navigation: Tasks, GitHub, Tools, Git dropdowns
  * - Separator (when on board view)
  * - Board controls: Search, View toggle, Completed, Board settings
- * - Right side: Usage, Auto Mode, Voice, Plan, Settings, Agents
+ * - Right side: Usage, Auto Mode, Plan, Settings, Agents
  *
  * GLOBAL NAVIGATION CONTROLS:
  * - Tasks dropdown with project filtering for quick access to the Kanban board
@@ -166,7 +154,7 @@ interface TopNavigationBarProps {
  * - Board background settings
  * - Usage popover (Claude/Codex usage tracking)
  * - Auto Mode button with modal
- * - Voice mode button
+ * - Plan button
  * - Plan button with settings popover
  *
  * All controls are combined into a single unified row for maximum vertical space.
@@ -190,13 +178,6 @@ export function TopNavigationBar({
   );
   // Use props if provided, otherwise fall back to store
   const boardControls = boardControlsProp || boardControlsFromStore;
-
-  // Setup store for usage visibility
-  const claudeAuthStatus = useSetupStore((state) => state.claudeAuthStatus);
-  const codexAuthStatus = useSetupStore((state) => state.codexAuthStatus);
-  const isClaudeCliVerified = !!claudeAuthStatus?.authenticated;
-  const showClaudeUsage = isClaudeCliVerified;
-  const showCodexUsage = !!codexAuthStatus?.authenticated;
 
   // Responsive check
   const isTablet = useIsTablet();
@@ -442,9 +423,6 @@ export function TopNavigationBar({
         action: () => navigate({ to: '/settings' }),
         description: 'Navigate to Global Settings',
       });
-
-      // Note: Voice mode shortcut (Alt+M) is now handled globally by use-voice-mode.ts
-      // via the voiceModeToggle shortcut which toggles the VoiceWidget visibility
     }
 
     return shortcutsList;
@@ -501,6 +479,18 @@ export function TopNavigationBar({
     >
       {/* Left section: Navigation items (GitHub, Tools, Git, Deploy) + Board controls */}
       <div className="flex items-center gap-2">
+        {/* View indicator - gently pulsing label showing current view mode */}
+        {isOnBoardView && !isTablet && (
+          <span className="text-xs font-medium text-muted-foreground/70 tracking-wide uppercase animate-pulse [animation-duration:3s] border border-border/60 rounded px-2 py-0.5">
+            {(() => {
+              const modes = boardControls?.activeModes ?? ['local'];
+              if (modes.includes('local') && modes.includes('github')) return 'Kanban-hybrid';
+              if (modes.includes('github')) return 'Kanban-github';
+              return 'Kanban-local';
+            })()}
+          </span>
+        )}
+
         {/* Board-specific search - moved to far left for visibility */}
         {isOnBoardView && boardControls && boardControls.isMounted && !isTablet && (
           <BoardSearchBar
@@ -539,6 +529,8 @@ export function TopNavigationBar({
               onCreateStatus={boardControls.onCreateStatus}
               onDeleteStatus={boardControls.onDeleteStatus}
               onCreateProject={handleOpenFolder}
+              activeModes={boardControls.activeModes}
+              onModeChange={boardControls.onModeChange}
             />
           )}
 
@@ -563,9 +555,6 @@ export function TopNavigationBar({
             />
           )}
 
-        {/* T012: GitHub button with tabs (Issues + PRs) */}
-        <GitHubButton location={location} onNavigate={(path) => navigate({ to: path })} />
-
         {/* T013: Tools button with tabs (Ideation, Spec, Memory, Terminal) + Board Actions */}
         <ToolsButton
           location={location}
@@ -585,7 +574,7 @@ export function TopNavigationBar({
         />
       </div>
 
-      {/* Right section: Usage + Voice Mode + Settings + Running Agents */}
+      {/* Right section: Usage + Settings + Running Agents */}
       <div className="flex items-center gap-2">
         {/* Refresh Button - board view only */}
         {isOnBoardView &&
@@ -608,12 +597,8 @@ export function TopNavigationBar({
             </Button>
           )}
 
-        {/* Usage Popover - icon only, no "Usage" text */}
-        {isOnBoardView &&
-          boardControls &&
-          boardControls.isMounted &&
-          !isTablet &&
-          (showClaudeUsage || showCodexUsage) && <UsagePopover />}
+        {/* Usage Popover - always visible on desktop, component handles its own auth state */}
+        {!isTablet && <UsagePopover />}
 
         {/* Auto Mode Modal - rendered when needed */}
         {isOnBoardView && boardControls && (
@@ -634,10 +619,6 @@ export function TopNavigationBar({
         >
           {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
         </Button>
-        {/* Voice Mode Button - positioned after Usage, before Settings */}
-        <div className="hidden lg:block">
-          <VoiceButton variant="ghost" size="sm" />
-        </div>
         {/* T014: Settings button - hidden on mobile (available in mobile menu) */}
         <div className="hidden lg:block">
           <SettingsButton location={location} onNavigate={(path) => navigate({ to: path })} />
@@ -671,123 +652,11 @@ export function TopNavigationBar({
           onHardDelete: handleHardDelete,
         }}
       />
-
-      {/* Note: VoiceModeDialog has been replaced by VoiceWidget which is rendered
-          in the root layout (__root.tsx) and toggled via the VoiceButton or Alt+M shortcut */}
     </header>
   );
 }
 
 export { ALL_PROJECTS_VALUE };
-export type { ViewMode };
-
-/**
- * GitHubButton - Combined GitHub button with tabs for Issues and PRs
- *
- * Phase 3: T012 - Create combined GitHub button with tabs
- */
-interface GitHubButtonProps {
-  location: { pathname: string };
-  onNavigate: (path: string) => void;
-}
-
-function GitHubButton({ location, onNavigate }: GitHubButtonProps) {
-  const [open, setOpen] = useState(false);
-
-  // Check if we're on any GitHub-related view
-  const isOnGitHubIssues = location.pathname === '/github-issues';
-  const isOnGitHubPRs = location.pathname === '/github-prs';
-  const isOnGitHubView = isOnGitHubIssues || isOnGitHubPRs;
-
-  // Determine the active tab based on current route
-  const activeTab = isOnGitHubPRs ? 'prs' : 'issues';
-
-  const handleTabChange = (value: string) => {
-    if (value === 'issues') {
-      onNavigate('/github-issues');
-    } else if (value === 'prs') {
-      onNavigate('/github-prs');
-    }
-    setOpen(false);
-  };
-
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          variant="ghost"
-          size="sm"
-          className={cn(
-            'flex items-center gap-2 h-8 px-3',
-            'hover:bg-accent/50 transition-colors duration-150',
-            'font-medium text-sm',
-            isOnGitHubView && 'bg-brand-500/10 text-brand-500'
-          )}
-          data-testid="github-dropdown-trigger"
-        >
-          {/* GitHub Icon */}
-          <div
-            className={cn(
-              'w-5 h-5 rounded flex items-center justify-center',
-              isOnGitHubView ? 'bg-brand-500/20' : 'bg-muted'
-            )}
-          >
-            <Github
-              className={cn(
-                'w-3.5 h-3.5',
-                isOnGitHubView ? 'text-brand-500' : 'text-muted-foreground'
-              )}
-            />
-          </div>
-
-          {/* Label */}
-          <span>GitHub</span>
-
-          {/* Chevron */}
-          <ChevronDown className="w-4 h-4 text-muted-foreground" />
-        </Button>
-      </PopoverTrigger>
-
-      <PopoverContent align="center" className="w-auto p-2" data-testid="github-dropdown-content">
-        <div className="flex flex-col gap-3">
-          {/* Section Header */}
-          <div className="text-xs font-medium text-muted-foreground px-1">GitHub</div>
-
-          {/* Tabs for Issues and PRs */}
-          <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-            <TabsList className="w-full grid grid-cols-2">
-              <TabsTrigger
-                value="issues"
-                className="flex items-center gap-2"
-                data-testid="github-tab-issues"
-              >
-                <CircleDot className="w-3.5 h-3.5" />
-                <span>Issues</span>
-              </TabsTrigger>
-              <TabsTrigger
-                value="prs"
-                className="flex items-center gap-2"
-                data-testid="github-tab-prs"
-              >
-                <GitPullRequest className="w-3.5 h-3.5" />
-                <span>PRs</span>
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
-
-          {/* Quick info / description */}
-          <div className="text-[10px] text-muted-foreground px-1">
-            {isOnGitHubIssues
-              ? 'Viewing GitHub Issues'
-              : isOnGitHubPRs
-                ? 'Viewing Pull Requests'
-                : 'Select a view to open'}
-          </div>
-        </div>
-      </PopoverContent>
-    </Popover>
-  );
-}
 
 /**
  * AgConfigurationSection - Global agent concurrency slider (1-20, default 5)
@@ -892,7 +761,6 @@ function ToolsButton({
   }, [currentProject?.path, open]);
 
   // Get expanded states from board controls store
-  const { expandedBoardActions, toggleBoardAction } = useBoardControlsStore();
 
   // Check if we're on any Tools-related view
   const isOnIdeation = location.pathname === '/ideation';
@@ -995,142 +863,45 @@ function ToolsButton({
             {/* Quick info / description */}
             <div className="text-[10px] text-muted-foreground px-1">{getCurrentViewLabel()}</div>
 
-            {/* Completed Features - always available */}
+            {/* Completed Features - direct button */}
             {currentProject && (
               <>
                 <div className="h-px bg-border my-1" />
-                <Collapsible
-                  open={expandedBoardActions.has('completed')}
-                  onOpenChange={() => toggleBoardAction('completed')}
+                <button
+                  className="w-full flex items-center gap-3 px-2 py-2 rounded-md hover:bg-accent/50 transition-colors"
+                  data-testid="tools-completed-button"
+                  onClick={() => {
+                    setShowCompletedModal(true);
+                    setOpen(false);
+                  }}
                 >
-                  <CollapsibleTrigger asChild>
-                    <button
-                      className="w-full flex items-center gap-3 px-2 py-2 rounded-md hover:bg-accent/50 transition-colors"
-                      data-testid="tools-completed-button"
-                    >
-                      <span className="text-muted-foreground shrink-0">
-                        {expandedBoardActions.has('completed') ? (
-                          <ChevronDown className="w-3.5 h-3.5" />
-                        ) : (
-                          <ChevronRight className="w-3.5 h-3.5" />
-                        )}
-                      </span>
-                      <div className="w-8 h-8 rounded flex items-center justify-center bg-muted relative">
-                        <CheckCircle2 className="w-4 h-4 text-muted-foreground" />
-                        {completedCount > 0 && (
-                          <span className="absolute -top-1 -right-1 bg-brand-500 text-white text-[9px] font-bold rounded-full min-w-[14px] h-[14px] flex items-center justify-center px-0.5">
-                            {completedCount > 99 ? '99+' : completedCount}
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex flex-col items-start">
-                        <span className="text-sm font-medium">Completed</span>
-                        <span className="text-[10px] text-muted-foreground">
-                          View completed features
-                        </span>
-                      </div>
-                    </button>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent>
-                    <div className="ml-6 px-2 py-2 space-y-2">
-                      <p className="text-xs text-muted-foreground">
-                        {completedCount === 0
-                          ? 'No completed features yet.'
-                          : `${completedCount} completed feature${completedCount === 1 ? '' : 's'}`}
-                      </p>
-                      <Button
-                        onClick={() => {
-                          setShowCompletedModal(true);
-                          setOpen(false);
-                        }}
-                        size="sm"
-                        variant="secondary"
-                        className="w-full"
-                      >
-                        View All
-                      </Button>
-                    </div>
-                  </CollapsibleContent>
-                </Collapsible>
+                  <CheckCircle2 className="w-4 h-4 text-muted-foreground shrink-0" />
+                  <span className="text-sm font-medium flex-1 text-left">Completed</span>
+                  {completedCount > 0 && (
+                    <span className="bg-brand-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
+                      {completedCount > 99 ? '99+' : completedCount}
+                    </span>
+                  )}
+                </button>
               </>
             )}
 
-            {/* Board-specific actions - only show when on board view */}
+            {/* Plan - direct button (only on board view) */}
             {isOnBoardView && boardControls && boardControls.isMounted && (
-              <>
-                {/* Plan - Collapsible */}
-                <Collapsible
-                  open={expandedBoardActions.has('plan')}
-                  onOpenChange={() => toggleBoardAction('plan')}
-                >
-                  <CollapsibleTrigger asChild>
-                    <button
-                      className="w-full flex items-center gap-3 px-2 py-2 rounded-md hover:bg-accent/50 transition-colors"
-                      data-testid="tools-plan-button"
-                    >
-                      <span className="text-muted-foreground shrink-0">
-                        {expandedBoardActions.has('plan') ? (
-                          <ChevronDown className="w-3.5 h-3.5" />
-                        ) : (
-                          <ChevronRight className="w-3.5 h-3.5" />
-                        )}
-                      </span>
-                      <div className="w-8 h-8 rounded flex items-center justify-center bg-muted relative">
-                        <Wand2 className="w-4 h-4 text-muted-foreground" />
-                        {boardControls.hasPendingPlan && (
-                          <span className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-500 rounded-full flex items-center justify-center">
-                            <ClipboardCheck className="w-2 h-2 text-white" />
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex flex-col items-start flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium">Plan</span>
-                          {boardControls.hasPendingPlan && (
-                            <span className="text-[10px] text-emerald-500 font-medium">
-                              Review ready
-                            </span>
-                          )}
-                        </div>
-                        <span className="text-[10px] text-muted-foreground">
-                          Generate feature plans
-                        </span>
-                      </div>
-                    </button>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent>
-                    <div className="ml-6 px-2 py-2 space-y-2">
-                      <p className="text-xs text-muted-foreground">
-                        {boardControls.hasPendingPlan
-                          ? 'A plan is ready for review'
-                          : 'Generate plans for backlog features'}
-                      </p>
-                      <div className="flex gap-2">
-                        <Button
-                          onClick={() => {
-                            boardControls.onOpenPlanDialog();
-                            setOpen(false);
-                          }}
-                          size="sm"
-                          variant="secondary"
-                          className="flex-1"
-                        >
-                          {boardControls.hasPendingPlan ? 'Review Plan' : 'Generate'}
-                        </Button>
-                        {planUseSelectedWorktreeBranch !== undefined &&
-                          onPlanUseSelectedWorktreeBranchChange && (
-                            <PlanSettingsPopover
-                              planUseSelectedWorktreeBranch={planUseSelectedWorktreeBranch}
-                              onPlanUseSelectedWorktreeBranchChange={
-                                onPlanUseSelectedWorktreeBranchChange
-                              }
-                            />
-                          )}
-                      </div>
-                    </div>
-                  </CollapsibleContent>
-                </Collapsible>
-              </>
+              <button
+                className="w-full flex items-center gap-3 px-2 py-2 rounded-md hover:bg-accent/50 transition-colors"
+                data-testid="tools-plan-button"
+                onClick={() => {
+                  boardControls.onOpenPlanDialog();
+                  setOpen(false);
+                }}
+              >
+                <Wand2 className="w-4 h-4 text-muted-foreground shrink-0" />
+                <span className="text-sm font-medium flex-1 text-left">Plan</span>
+                {boardControls.hasPendingPlan && (
+                  <span className="text-[10px] text-emerald-500 font-medium">Review ready</span>
+                )}
+              </button>
             )}
 
             {/* AG Configuration - always visible */}

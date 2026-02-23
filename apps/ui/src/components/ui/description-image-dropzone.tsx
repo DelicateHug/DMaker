@@ -49,6 +49,7 @@ interface DescriptionImageDropZoneProps {
   onPreviewMapChange?: (map: ImagePreviewMap) => void;
   autoFocus?: boolean;
   error?: boolean; // Show error state with red border
+  onAltEnter?: () => void; // Callback for Alt+Enter keyboard shortcut
 }
 
 export function DescriptionImageDropZone({
@@ -67,6 +68,7 @@ export function DescriptionImageDropZone({
   onPreviewMapChange,
   autoFocus = false,
   error = false,
+  onAltEnter,
 }: DescriptionImageDropZoneProps) {
   const [isDragOver, setIsDragOver] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -384,6 +386,23 @@ export function DescriptionImageDropZone({
     [disabled, isProcessing, processFiles]
   );
 
+  // Handle Alt+Enter keyboard shortcut for form submission
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      if (disabled) return;
+
+      // Check for Alt+Enter combination
+      if (e.key === 'Enter' && e.altKey && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
+        if (onAltEnter) {
+          e.preventDefault();
+          e.stopPropagation();
+          onAltEnter();
+        }
+      }
+    },
+    [disabled, onAltEnter]
+  );
+
   return (
     <div className={cn('relative', className)} data-testid="description-image-dropzone">
       {/* Hidden file input */}
@@ -426,6 +445,7 @@ export function DescriptionImageDropZone({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           onPaste={handlePaste}
+          onKeyDown={handleKeyDown}
           disabled={disabled}
           autoFocus={autoFocus}
           aria-invalid={error}
@@ -435,19 +455,31 @@ export function DescriptionImageDropZone({
       </div>
 
       {/* Hint text */}
-      <p className="text-xs text-muted-foreground mt-1">
-        Paste, drag and drop files, or{' '}
-        <button
-          type="button"
-          onClick={handleBrowseClick}
-          className="text-primary hover:text-primary/80 underline"
-          disabled={disabled || isProcessing}
-          data-testid="description-browse-button"
-        >
-          browse
-        </button>{' '}
-        to attach context (images, .txt, .md)
-      </p>
+      <div className="flex items-center justify-between mt-1">
+        <p className="text-xs text-muted-foreground">
+          Paste, drag and drop files, or{' '}
+          <button
+            type="button"
+            onClick={handleBrowseClick}
+            className="text-primary hover:text-primary/80 underline"
+            disabled={disabled || isProcessing}
+            data-testid="description-browse-button"
+          >
+            browse
+          </button>{' '}
+          to attach context (images, .txt, .md)
+        </p>
+        {onAltEnter && (
+          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-muted/50 border border-border/30">
+              <span className="font-medium">Alt</span>
+              <span>+</span>
+              <span className="font-medium">↵</span>
+            </span>
+            <span className="hidden sm:inline">to submit</span>
+          </div>
+        )}
+      </div>
 
       {/* Processing indicator */}
       {isProcessing && (

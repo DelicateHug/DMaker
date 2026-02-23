@@ -1,6 +1,6 @@
 import { memo, useMemo } from 'react';
 import { cn } from '@/lib/utils';
-import { FeatureCardSkeleton } from './kanban-card/feature-card-skeleton';
+import { FeatureCardSkeleton } from './feature-card-skeleton';
 import { COLUMNS, getColumnsWithPipeline, type Column } from '../constants';
 import type { PipelineConfig } from '@automaker/types';
 

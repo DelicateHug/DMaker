@@ -8,7 +8,6 @@
 export type {
   ThemeMode,
   ModelAlias,
-  PlanningMode,
   ThinkingLevel,
   ModelProvider,
   KeyboardShortcuts,

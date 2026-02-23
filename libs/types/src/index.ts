@@ -154,7 +154,6 @@ export { DEFAULT_PROMPT_CUSTOMIZATION } from './prompts.js';
 export type {
   ThemeMode,
   SyntaxTheme,
-  PlanningMode,
   ThinkingLevel,
   ServerLogLevel,
   ModelProvider,
@@ -173,13 +172,6 @@ export type {
   BoardBackgroundSettings,
   WorktreeInfo,
   ProjectSettings,
-  // Event hook types
-  EventHookTrigger,
-  EventHookHttpMethod,
-  EventHookShellAction,
-  EventHookHttpAction,
-  EventHookAction,
-  EventHook,
   // Claude account types
   ClaudeAccountRef,
   // Deploy script types
@@ -199,8 +191,6 @@ export {
   PROJECT_SETTINGS_VERSION,
   THINKING_TOKEN_BUDGET,
   getThinkingTokenBudget,
-  // Event hook constants
-  EVENT_HOOK_TRIGGER_LABELS,
 } from './settings.js';
 
 // Model display constants
@@ -311,43 +301,6 @@ export type {
 // Notification types
 export type { NotificationType, Notification, NotificationsFile } from './notification.js';
 export { NOTIFICATIONS_VERSION, DEFAULT_NOTIFICATIONS_FILE } from './notification.js';
-
-// Event history types
-export type {
-  StoredEvent,
-  StoredEventIndex,
-  StoredEventSummary,
-  EventHistoryFilter,
-  EventReplayResult,
-  EventReplayHookResult,
-} from './event-history.js';
-export { EVENT_HISTORY_VERSION, DEFAULT_EVENT_HISTORY_INDEX } from './event-history.js';
-
-// Voice types
-export type {
-  VoiceInputMode,
-  VoiceOutputMode,
-  VoiceSettings,
-  VoiceSessionStatus,
-  VoiceMessage,
-  VoiceSession,
-  CreateVoiceSessionParams,
-  VoiceCommandResult,
-  VoiceEventType,
-  VoiceSessionEvent,
-  VoiceRecordingEvent,
-  VoiceTranscriptionEvent,
-  VoiceCommandEvent,
-  VoiceResponseEvent,
-  VoiceSpeakingEvent,
-  VoiceErrorEvent,
-  VoiceErrorCode,
-  VoiceEvent,
-  ProcessVoiceCommandRequest,
-  ProcessVoiceCommandResponse,
-  VoiceSessionStatusResponse,
-} from './voice.js';
-export { DEFAULT_VOICE_SETTINGS } from './voice.js';
 
 // Cache types and constants
 export type { EndpointCategory, CacheOptions } from './cache.js';

@@ -8,7 +8,7 @@
  * - Sync assignee data from GitHub onto local feature
  */
 
-import { exec } from 'child_process';
+import { exec, execFile } from 'child_process';
 import { promisify } from 'util';
 import { createLogger } from '@automaker/utils';
 import { getExtendedPath } from '@automaker/platform';
@@ -16,6 +16,7 @@ import type { Feature } from '@automaker/types';
 import type { EventEmitter } from '../lib/events.js';
 
 const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 const logger = createLogger('GitHubSync');
 
 const execEnv = {
@@ -147,10 +148,249 @@ export class GitHubSyncService {
   }
 
   /**
+   * Ensure a GitHub label exists on the repo, creating it if missing.
+   */
+  private async ensureLabel(projectPath: string, label: string): Promise<void> {
+    try {
+      await execAsync(`gh label create "${label.replace(/"/g, '\\"')}" --force`, {
+        cwd: projectPath,
+        env: execEnv,
+        timeout: 15000,
+      });
+    } catch {
+      // Label may already exist or creation may fail - non-fatal
+      logger.debug(`Label "${label}" may already exist or could not be created`);
+    }
+  }
+
+  /**
+   * Create a new GitHub issue via the gh CLI.
+   * Ensures any labels exist before creating the issue.
+   * Returns the created issue number and URL.
+   */
+  async createIssue(
+    projectPath: string,
+    title: string,
+    body?: string,
+    labels?: string[]
+  ): Promise<{ success: boolean; issueNumber?: number; url?: string; error?: string }> {
+    try {
+      // Ensure all labels exist before creating the issue
+      if (labels && labels.length > 0) {
+        await Promise.all(labels.map((l) => this.ensureLabel(projectPath, l)));
+      }
+
+      let cmd = `gh issue create --title "${title.replace(/"/g, '\\"')}"`;
+      if (body) {
+        cmd += ` --body "${body.replace(/"/g, '\\"').replace(/\n/g, '\\n')}"`;
+      }
+      if (labels && labels.length > 0) {
+        cmd += ` --label "${labels.join(',')}"`;
+      }
+
+      const { stdout } = await execAsync(cmd, {
+        cwd: projectPath,
+        env: execEnv,
+        timeout: 30000,
+      });
+
+      // gh issue create outputs the URL of the new issue
+      const url = stdout.trim();
+      const numberMatch = url.match(/\/issues\/(\d+)/);
+      const issueNumber = numberMatch ? parseInt(numberMatch[1], 10) : undefined;
+
+      logger.info(`Created GitHub issue #${issueNumber}: ${url}`);
+      return { success: true, issueNumber, url };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.error('Failed to create GitHub issue:', err);
+      return { success: false, error: msg };
+    }
+  }
+
+  /**
+   * Add and/or remove labels from a GitHub issue.
+   * Ensures added labels exist before applying them.
+   */
+  async updateIssueLabels(
+    projectPath: string,
+    issueNumber: number,
+    addLabels?: string[],
+    removeLabels?: string[]
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      // Ensure labels to add exist first
+      if (addLabels && addLabels.length > 0) {
+        await Promise.all(addLabels.map((l) => this.ensureLabel(projectPath, l)));
+      }
+
+      const args: string[] = [];
+      if (addLabels && addLabels.length > 0) {
+        args.push(`--add-label "${addLabels.join(',')}"`);
+      }
+      if (removeLabels && removeLabels.length > 0) {
+        args.push(`--remove-label "${removeLabels.join(',')}"`);
+      }
+
+      if (args.length === 0) return { success: true };
+
+      await execAsync(`gh issue edit ${issueNumber} ${args.join(' ')}`, {
+        cwd: projectPath,
+        env: execEnv,
+        timeout: 15000,
+      });
+      logger.info(
+        `Updated labels on issue #${issueNumber}: +[${addLabels?.join(',')}] -[${removeLabels?.join(',')}]`
+      );
+      return { success: true };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.error(`Failed to update labels on issue #${issueNumber}:`, err);
+      return { success: false, error: msg };
+    }
+  }
+
+  /**
+   * Post a comment on a GitHub issue.
+   */
+  async addComment(
+    projectPath: string,
+    issueNumber: number,
+    body: string
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      // Use execFile (no shell) to avoid cross-platform escaping issues
+      await execFileAsync('gh', ['issue', 'comment', String(issueNumber), '--body', body], {
+        cwd: projectPath,
+        env: execEnv,
+        timeout: 15000,
+      });
+      logger.info(`Posted comment on issue #${issueNumber}`);
+      return { success: true };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.error(`Failed to comment on issue #${issueNumber}:`, err);
+      return { success: false, error: msg };
+    }
+  }
+
+  /**
+   * Lock a GitHub issue conversation.
+   */
+  async lockIssue(
+    projectPath: string,
+    issueNumber: number
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      await execFileAsync('gh', ['issue', 'lock', String(issueNumber)], {
+        cwd: projectPath,
+        env: execEnv,
+        timeout: 15000,
+      });
+      logger.info(`Locked issue #${issueNumber}`);
+      return { success: true };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.error(`Failed to lock issue #${issueNumber}:`, err);
+      return { success: false, error: msg };
+    }
+  }
+
+  /**
+   * Unlock a GitHub issue conversation.
+   */
+  async unlockIssue(
+    projectPath: string,
+    issueNumber: number
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      await execFileAsync('gh', ['issue', 'unlock', String(issueNumber)], {
+        cwd: projectPath,
+        env: execEnv,
+        timeout: 15000,
+      });
+      logger.info(`Unlocked issue #${issueNumber}`);
+      return { success: true };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.error(`Failed to unlock issue #${issueNumber}:`, err);
+      return { success: false, error: msg };
+    }
+  }
+
+  /**
+   * Pin a GitHub issue.
+   */
+  async pinIssue(
+    projectPath: string,
+    issueNumber: number
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      await execFileAsync('gh', ['issue', 'pin', String(issueNumber)], {
+        cwd: projectPath,
+        env: execEnv,
+        timeout: 15000,
+      });
+      logger.info(`Pinned issue #${issueNumber}`);
+      return { success: true };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.error(`Failed to pin issue #${issueNumber}:`, err);
+      return { success: false, error: msg };
+    }
+  }
+
+  /**
+   * Unpin a GitHub issue.
+   */
+  async unpinIssue(
+    projectPath: string,
+    issueNumber: number
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      await execFileAsync('gh', ['issue', 'unpin', String(issueNumber)], {
+        cwd: projectPath,
+        env: execEnv,
+        timeout: 15000,
+      });
+      logger.info(`Unpinned issue #${issueNumber}`);
+      return { success: true };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.error(`Failed to unpin issue #${issueNumber}:`, err);
+      return { success: false, error: msg };
+    }
+  }
+
+  /**
+   * Delete a GitHub issue.
+   */
+  async deleteIssue(
+    projectPath: string,
+    issueNumber: number
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      await execFileAsync('gh', ['issue', 'delete', String(issueNumber), '--yes'], {
+        cwd: projectPath,
+        env: execEnv,
+        timeout: 15000,
+      });
+      logger.info(`Deleted issue #${issueNumber}`);
+      return { success: true };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.error(`Failed to delete issue #${issueNumber}:`, err);
+      return { success: false, error: msg };
+    }
+  }
+
+  /**
    * Check whether the current Automaker instance can execute a feature.
    *
    * Rules:
    * - No linked GitHub issue -> allowed (local-only feature)
+   * - Issue has owner-{otherUser} label -> BLOCKED
+   * - Issue has in-progress-{otherUser} label -> BLOCKED
    * - No assignees on issue -> allowed (unclaimed)
    * - Current user is in assignees -> allowed (claimed by me)
    * - Someone else is assigned -> BLOCKED
@@ -165,6 +405,38 @@ export class GitHubSyncService {
       // Can't determine identity – allow but warn
       logger.warn(`Cannot determine GitHub user for ${projectPath}, allowing execution`);
       return { allowed: true };
+    }
+
+    const labels = feature.githubIssue.labels ?? [];
+
+    // Check for owner-{username} labels — blocks if another user owns it
+    const ownerLabel = labels.find((l) => l.startsWith('owner-'));
+    if (ownerLabel) {
+      const owner = ownerLabel.replace('owner-', '');
+      if (owner !== currentUser) {
+        this.events.emit('feature:claim-blocked', {
+          featureId: feature.id,
+          issueNumber: feature.githubIssue.number,
+          claimedBy: owner,
+          projectPath,
+        });
+        return { allowed: false, reason: 'claimed_by_other', claimedBy: owner };
+      }
+    }
+
+    // Check for in-progress-{username} labels — blocks if another user is working on it
+    const inProgressLabel = labels.find((l) => l.startsWith('in-progress-'));
+    if (inProgressLabel) {
+      const inProgressUser = inProgressLabel.replace('in-progress-', '');
+      if (inProgressUser !== currentUser) {
+        this.events.emit('feature:claim-blocked', {
+          featureId: feature.id,
+          issueNumber: feature.githubIssue.number,
+          claimedBy: inProgressUser,
+          projectPath,
+        });
+        return { allowed: false, reason: 'claimed_by_other', claimedBy: inProgressUser };
+      }
     }
 
     const assignees = feature.githubIssue.assignees ?? [];

@@ -3,7 +3,6 @@
  */
 
 import type { ClaudeUsageResponse, CodexUsageResponse } from '@/store/app-store';
-import type { VoiceSettings, VoiceSession, VoiceSessionStatus, VoiceEvent } from '@automaker/types';
 
 export interface ImageAttachment {
   id?: string; // Optional - may not be present in messages loaded from server
@@ -250,7 +249,6 @@ export type AutoModeEvent = AutoModeEventBase &
         featureId: string;
         projectPath?: string;
         planContent: string;
-        planningMode: 'lite' | 'spec' | 'full';
         planVersion?: number;
       }
     | {
@@ -258,7 +256,6 @@ export type AutoModeEvent = AutoModeEventBase &
         featureId: string;
         projectPath?: string;
         planContent: string;
-        planningMode: 'lite' | 'spec' | 'full';
       }
     | {
         type: 'plan_approved';
@@ -396,101 +393,6 @@ export interface SpecRegenerationAPI {
   }>;
 
   onEvent: (callback: (event: SpecRegenerationEvent) => void) => () => void;
-}
-
-export interface VoiceAPI {
-  // Start a new voice session
-  startSession: (
-    projectPath: string,
-    settings?: Partial<VoiceSettings>
-  ) => Promise<{
-    success: boolean;
-    session?: VoiceSession;
-    error?: string;
-  }>;
-
-  // Stop an active voice session
-  stopSession: (sessionId: string) => Promise<{
-    success: boolean;
-    error?: string;
-  }>;
-
-  // Get a specific voice session
-  getSession: (sessionId: string) => Promise<{
-    success: boolean;
-    session?: VoiceSession;
-    error?: string;
-  }>;
-
-  // List all voice sessions
-  listSessions: (projectPath?: string) => Promise<{
-    success: boolean;
-    sessions?: VoiceSession[];
-    count?: number;
-    error?: string;
-  }>;
-
-  // Delete a voice session
-  deleteSession: (sessionId: string) => Promise<{
-    success: boolean;
-    error?: string;
-  }>;
-
-  // Process a voice command
-  processCommand: (
-    sessionId: string,
-    text: string,
-    audioDurationMs?: number,
-    confidence?: number
-  ) => Promise<{
-    success: boolean;
-    response?: string;
-    messageId?: string;
-    commandExecuted?: boolean;
-    commandResult?: {
-      success: boolean;
-      response: string;
-      commandName?: string;
-      data?: unknown;
-      error?: string;
-    };
-    error?: string;
-  }>;
-
-  // Stop processing a command
-  stopProcessing: (sessionId: string) => Promise<{
-    success: boolean;
-    error?: string;
-  }>;
-
-  // Get session status
-  getStatus: (sessionId: string) => Promise<{
-    success: boolean;
-    status?: VoiceSessionStatus;
-    session?: VoiceSession;
-    error?: string;
-  }>;
-
-  // Update session status
-  updateStatus: (
-    sessionId: string,
-    status: VoiceSessionStatus
-  ) => Promise<{
-    success: boolean;
-    error?: string;
-  }>;
-
-  // Update voice settings
-  updateSettings: (
-    sessionId: string,
-    settings: Partial<VoiceSettings>
-  ) => Promise<{
-    success: boolean;
-    error?: string;
-  }>;
-
-  // Subscribe to voice events
-  onEvent: (callback: (event: VoiceEvent) => void) => () => void;
 }
 
 export interface AutoModeAPI {
@@ -751,9 +653,6 @@ export interface ElectronAPI {
 
   // Spec Regeneration APIs
   specRegeneration: SpecRegenerationAPI;
-
-  // Voice Mode APIs
-  voice: VoiceAPI;
 }
 
 export interface WorktreeInfo {

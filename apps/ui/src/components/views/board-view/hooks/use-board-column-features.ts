@@ -57,10 +57,12 @@ export function useBoardColumnFeatures({
   const columnFeaturesMap = useMemo(() => {
     // Use a more flexible type to support dynamic pipeline statuses
     const map: Record<string, Feature[]> = {
+      local: [],
       backlog: [],
+      planning: [],
       in_progress: [],
       waiting_approval: [],
-      verified: [],
+      completed: [],
     };
 
     // Filter features by search query (case-insensitive) and favorites
@@ -172,9 +174,17 @@ export function useBoardColumnFeatures({
       // Not running: place by status (and worktree filter)
       // Filter all items by worktree, including backlog
       // This ensures backlog items with a branch assigned only show in that branch
-      if (status === 'backlog') {
+      if (status === 'local') {
+        if (matchesWorktree) {
+          map.local.push(f);
+        }
+      } else if (status === 'backlog') {
         if (matchesWorktree) {
           map.backlog.push(f);
+        }
+      } else if (status === 'planning') {
+        if (matchesWorktree) {
+          map.planning.push(f);
         }
       } else if (map[status]) {
         // Only show if matches current worktree or has no worktree assigned

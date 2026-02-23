@@ -14,9 +14,6 @@ import { getAllOpencodeModelIds, DEFAULT_OPENCODE_MODEL } from './opencode-model
 import type { PromptCustomization } from './prompts.js';
 import type { CodexSandboxMode, CodexApprovalPolicy } from './codex.js';
 import type { ReasoningEffort } from './provider.js';
-import type { VoiceSettings } from './voice.js';
-import { DEFAULT_VOICE_SETTINGS } from './voice.js';
-
 // Re-export ModelAlias for convenience
 export type { ModelAlias };
 
@@ -100,9 +97,6 @@ export type SyntaxTheme =
   | 'one-light'
   | 'catppuccin-latte';
 
-/** PlanningMode - Planning levels for feature generation workflows */
-export type PlanningMode = 'skip' | 'lite' | 'spec' | 'full';
-
 /** ServerLogLevel - Log verbosity level for the API server */
 export type ServerLogLevel = 'error' | 'warn' | 'info' | 'debug';
 
@@ -135,106 +129,6 @@ export function getThinkingTokenBudget(level: ThinkingLevel | undefined): number
 
 /** ModelProvider - AI model provider for credentials and API key management */
 export type ModelProvider = 'claude' | 'cursor' | 'codex' | 'opencode';
-
-// ============================================================================
-// Event Hooks - Custom actions triggered by system events
-// ============================================================================
-
-/**
- * EventHookTrigger - Event types that can trigger custom hooks
- *
- * - feature_created: A new feature was created
- * - feature_success: Feature completed successfully
- * - feature_error: Feature failed with an error
- * - auto_mode_complete: Auto mode finished processing all features
- * - auto_mode_error: Auto mode encountered a critical error and paused
- * - deploy_success: Deploy script completed successfully
- * - deploy_error: Deploy script failed with an error
- */
-export type EventHookTrigger =
-  | 'feature_created'
-  | 'feature_success'
-  | 'feature_error'
-  | 'auto_mode_complete'
-  | 'auto_mode_error'
-  | 'deploy_success'
-  | 'deploy_error';
-
-/** HTTP methods supported for webhook requests */
-export type EventHookHttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH';
-
-/**
- * EventHookShellAction - Configuration for executing a shell command
- *
- * Shell commands are executed in the server's working directory.
- * Supports variable substitution using {{variableName}} syntax.
- */
-export interface EventHookShellAction {
-  type: 'shell';
-  /** Shell command to execute. Supports {{variable}} substitution. */
-  command: string;
-  /** Timeout in milliseconds (default: 30000) */
-  timeout?: number;
-}
-
-/**
- * EventHookHttpAction - Configuration for making an HTTP webhook request
- *
- * Supports variable substitution in URL, headers, and body.
- */
-export interface EventHookHttpAction {
-  type: 'http';
-  /** URL to send the request to. Supports {{variable}} substitution. */
-  url: string;
-  /** HTTP method to use */
-  method: EventHookHttpMethod;
-  /** Optional headers to include. Values support {{variable}} substitution. */
-  headers?: Record<string, string>;
-  /** Optional request body (JSON string). Supports {{variable}} substitution. */
-  body?: string;
-}
-
-/** Union type for all hook action configurations */
-export type EventHookAction = EventHookShellAction | EventHookHttpAction;
-
-/**
- * EventHook - Configuration for a single event hook
- *
- * Event hooks allow users to execute custom shell commands or HTTP requests
- * when specific events occur in the system.
- *
- * Available variables for substitution:
- * - {{featureId}} - ID of the feature (if applicable)
- * - {{featureName}} - Name of the feature (if applicable)
- * - {{projectPath}} - Absolute path to the project
- * - {{projectName}} - Name of the project
- * - {{error}} - Error message (for error events)
- * - {{timestamp}} - ISO timestamp of the event
- * - {{eventType}} - The event type that triggered the hook
- */
-export interface EventHook {
-  /** Unique identifier for this hook */
-  id: string;
-  /** Which event type triggers this hook */
-  trigger: EventHookTrigger;
-  /** Whether this hook is currently enabled */
-  enabled: boolean;
-  /** The action to execute when triggered */
-  action: EventHookAction;
-  /** Optional friendly name for display */
-  name?: string;
-}
-
-/** Human-readable labels for event hook triggers */
-export const EVENT_HOOK_TRIGGER_LABELS: Record<EventHookTrigger, string> = {
-  feature_created: 'Feature created',
-  feature_success: 'Feature completed successfully',
-  feature_error: 'Feature failed with error',
-  auto_mode_complete: 'Auto mode completed all features',
-  auto_mode_error: 'Auto mode paused due to error',
-  deploy_success: 'Deploy completed successfully',
-  deploy_error: 'Deploy failed with error',
-};
 
 // ============================================================================
 // Deploy Scripts - Folder-based deployment script discovery and execution
@@ -434,8 +328,6 @@ export interface KeyboardShortcuts {
   splitTerminalDown: string;
   /** Close current terminal */
   closeTerminal: string;
-  /** Toggle voice mode */
-  voiceMode: string;
 }
 
 /**
@@ -608,10 +500,6 @@ export interface GlobalSettings {
   skipVerificationInAutoMode: boolean;
   /** Default: use git worktrees for feature branches */
   useWorktrees: boolean;
-  /** Default: planning approach (skip/lite/spec/full) */
-  defaultPlanningMode: PlanningMode;
-  /** Default: require manual approval before generating */
-  defaultRequirePlanApproval: boolean;
   /** Default model and thinking level for new feature cards */
   defaultFeatureModel: PhaseModelEntry;
 
@@ -760,21 +648,6 @@ export interface GlobalSettings {
    */
   customSubagents?: Record<string, import('./provider.js').AgentDefinition>;
 
-  // Event Hooks Configuration
-  /**
-   * Event hooks for executing custom commands or HTTP requests on events
-   * @see EventHook for configuration details
-   */
-  eventHooks?: EventHook[];
-
-  // Voice Mode Configuration
-  /**
-   * Voice mode settings for hands-free voice interaction
-   * Configures microphone, noise gate, input/output modes, and TTS preferences
-   * @see VoiceSettings for configuration details
-   */
-  voiceSettings?: VoiceSettings;
-
   // Claude Account Management
   /**
    * List of known Claude accounts detected via usage service.
@@ -887,6 +760,10 @@ export interface ProjectSettings {
   /** Default branch for this project (e.g., 'main', 'master', 'develop'). Used for display in All Projects view. */
   defaultBranch?: string;
 
+  // GitHub Configuration
+  /** Override GitHub repo for issues/PRs (e.g., "owner/repo"). When set, uses this instead of auto-detected remote. */
+  githubRepo?: string;
+
   // Worktree Management
   /** Project-specific worktree preference override */
   useWorktrees?: boolean;
@@ -931,14 +808,6 @@ export interface ProjectSettings {
    * Value: agent configuration
    */
   customSubagents?: Record<string, import('./provider.js').AgentDefinition>;
-
-  // Voice Mode Configuration
-  /**
-   * Project-specific voice mode settings for hands-free voice interaction
-   * Overrides global voiceSettings when defined
-   * @see VoiceSettings for configuration details
-   */
-  voiceSettings?: VoiceSettings;
 }
 
 /**
@@ -1001,7 +870,6 @@ export const DEFAULT_KEYBOARD_SHORTCUTS: KeyboardShortcuts = {
   splitTerminalRight: 'Alt+D',
   splitTerminalDown: 'Alt+S',
   closeTerminal: 'Alt+W',
-  voiceMode: 'Shift+V',
 };
 
 /** Default global settings used when no settings file exists */
@@ -1020,8 +888,6 @@ export const DEFAULT_GLOBAL_SETTINGS: GlobalSettings = {
   enableDependencyBlocking: true,
   skipVerificationInAutoMode: false,
   useWorktrees: true,
-  defaultPlanningMode: 'skip',
-  defaultRequirePlanApproval: false,
   defaultFeatureModel: { model: 'opus' },
   muteDoneSound: false,
   serverLogLevel: 'info',
@@ -1061,7 +927,6 @@ export const DEFAULT_GLOBAL_SETTINGS: GlobalSettings = {
   skillsSources: ['user', 'project'],
   enableSubagents: true,
   subagentsSources: ['user', 'project'],
-  voiceSettings: DEFAULT_VOICE_SETTINGS,
   claudeAccounts: [],
 };
 

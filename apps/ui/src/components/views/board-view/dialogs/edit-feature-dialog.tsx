@@ -22,17 +22,16 @@ import {
   FeatureTextFilePath as DescriptionTextFilePath,
   ImagePreviewMap,
 } from '@/components/ui/description-image-dropzone';
-import { GitBranch, Cpu, FolderKanban, Settings2 } from 'lucide-react';
+import { GitBranch, Settings2 } from 'lucide-react';
 import { useNavigate } from '@tanstack/react-router';
 import { toast } from 'sonner';
-import { cn, modelSupportsThinking } from '@/lib/utils';
-import { Feature, ModelAlias, ThinkingLevel, useAppStore, PlanningMode } from '@/store/app-store';
+import { modelSupportsThinking } from '@/lib/utils';
+import { Feature, ModelAlias, ThinkingLevel, useAppStore } from '@/store/app-store';
 import type { ReasoningEffort, PhaseModelEntry, DescriptionHistoryEntry } from '@automaker/types';
 import {
   TestingTabContent,
   PrioritySelector,
   WorkModeSelector,
-  PlanningModeSelect,
   EnhanceWithAI,
   EnhancementHistoryButton,
   PhaseModelSelector,
@@ -41,7 +40,7 @@ import {
 import type { WorkMode } from '../shared';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { DependencyTreeDialog } from './dependency-tree-dialog';
-import { isClaudeModel, supportsReasoningEffort } from '@automaker/types';
+import { supportsReasoningEffort } from '@automaker/types';
 
 const logger = createLogger('EditFeatureDialog');
 
@@ -62,8 +61,6 @@ interface EditFeatureDialogProps {
       textFilePaths: DescriptionTextFilePath[];
       branchName: string; // Can be empty string to use current branch
       priority: number;
-      planningMode: PlanningMode;
-      requirePlanApproval: boolean;
       autoDeploy: boolean;
       dependencies?: string[];
       childDependencies?: string[]; // Feature IDs that should depend on this feature
@@ -104,10 +101,6 @@ export function EditFeatureDialog({
     () => new Map()
   );
   const [showDependencyTree, setShowDependencyTree] = useState(false);
-  const [planningMode, setPlanningMode] = useState<PlanningMode>(feature?.planningMode ?? 'skip');
-  const [requirePlanApproval, setRequirePlanApproval] = useState(
-    feature?.requirePlanApproval ?? false
-  );
   const [autoDeploy, setAutoDeploy] = useState(feature?.autoDeploy ?? false);
   const [waitForDependencies, setWaitForDependencies] = useState(
     feature?.waitForDependencies ?? false
@@ -119,9 +112,6 @@ export function EditFeatureDialog({
     thinkingLevel: feature?.thinkingLevel || 'none',
     reasoningEffort: feature?.reasoningEffort || 'none',
   }));
-
-  // Check if current model supports planning mode (Claude/Anthropic only)
-  const modelSupportsPlanningMode = isClaudeModel(modelEntry.model);
 
   // Track the source of description changes for history
   const [descriptionChangeSource, setDescriptionChangeSource] = useState<
@@ -154,8 +144,6 @@ export function EditFeatureDialog({
   useEffect(() => {
     setEditingFeature(feature);
     if (feature) {
-      setPlanningMode(feature.planningMode ?? 'skip');
-      setRequirePlanApproval(feature.requirePlanApproval ?? false);
       setAutoDeploy(feature.autoDeploy ?? false);
       // Derive workMode from feature's branchName
       setWorkMode(feature.branchName ? 'custom' : 'current');
@@ -236,8 +224,6 @@ export function EditFeatureDialog({
       textFilePaths: editingFeature.textFilePaths ?? [],
       branchName: finalBranchName,
       priority: editingFeature.priority ?? 2,
-      planningMode,
-      requirePlanApproval,
       autoDeploy,
       workMode,
       dependencies: parentDependencies,
@@ -411,12 +397,12 @@ export function EditFeatureDialog({
             />
           </div>
 
-          {/* AI & Execution Section */}
+          {/* Feature Options Section */}
           <div className={cardClass}>
             <div className="flex items-center justify-between">
               <div className={sectionHeaderClass}>
-                <Cpu className="w-4 h-4 text-muted-foreground" />
-                <span>AI & Execution</span>
+                <Settings2 className="w-4 h-4 text-muted-foreground" />
+                <span>Feature Options</span>
               </div>
               <TooltipProvider>
                 <Tooltip>
@@ -450,113 +436,40 @@ export function EditFeatureDialog({
               />
             </div>
 
-            <div className="grid gap-3 grid-cols-2">
-              <div className="space-y-1.5">
-                <Label
-                  className={cn(
-                    'text-xs text-muted-foreground',
-                    !modelSupportsPlanningMode && 'opacity-50'
-                  )}
-                >
-                  Planning
-                </Label>
-                {modelSupportsPlanningMode ? (
-                  <PlanningModeSelect
-                    mode={planningMode}
-                    onModeChange={setPlanningMode}
-                    testIdPrefix="edit-feature-planning"
-                    compact
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Options</Label>
+              <div className="flex flex-col gap-2 pt-1">
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="edit-feature-skip-tests"
+                    checked={!(editingFeature.skipTests ?? false)}
+                    onCheckedChange={(checked) =>
+                      setEditingFeature({ ...editingFeature, skipTests: !checked })
+                    }
+                    data-testid="edit-feature-skip-tests-checkbox"
                   />
-                ) : (
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <div>
-                          <PlanningModeSelect
-                            mode="skip"
-                            onModeChange={() => {}}
-                            testIdPrefix="edit-feature-planning"
-                            compact
-                            disabled
-                          />
-                        </div>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Planning modes are only available for Claude Provider</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                )}
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">Options</Label>
-                <div className="flex flex-col gap-2 pt-1">
-                  <div className="flex items-center gap-2">
-                    <Checkbox
-                      id="edit-feature-skip-tests"
-                      checked={!(editingFeature.skipTests ?? false)}
-                      onCheckedChange={(checked) =>
-                        setEditingFeature({ ...editingFeature, skipTests: !checked })
-                      }
-                      data-testid="edit-feature-skip-tests-checkbox"
-                    />
-                    <Label
-                      htmlFor="edit-feature-skip-tests"
-                      className="text-xs font-normal cursor-pointer"
-                    >
-                      Run tests
-                    </Label>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Checkbox
-                      id="edit-feature-require-approval"
-                      checked={requirePlanApproval}
-                      onCheckedChange={(checked) => setRequirePlanApproval(!!checked)}
-                      disabled={
-                        !modelSupportsPlanningMode ||
-                        planningMode === 'skip' ||
-                        planningMode === 'lite'
-                      }
-                      data-testid="edit-feature-require-approval-checkbox"
-                    />
-                    <Label
-                      htmlFor="edit-feature-require-approval"
-                      className={cn(
-                        'text-xs font-normal',
-                        !modelSupportsPlanningMode ||
-                          planningMode === 'skip' ||
-                          planningMode === 'lite'
-                          ? 'cursor-not-allowed text-muted-foreground'
-                          : 'cursor-pointer'
-                      )}
-                    >
-                      Require approval
-                    </Label>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Checkbox
-                      id="edit-feature-auto-deploy"
-                      checked={autoDeploy}
-                      onCheckedChange={(checked) => setAutoDeploy(!!checked)}
-                      data-testid="edit-feature-auto-deploy-checkbox"
-                    />
-                    <Label
-                      htmlFor="edit-feature-auto-deploy"
-                      className="text-xs font-normal cursor-pointer"
-                    >
-                      Auto-deploy
-                    </Label>
-                  </div>
+                  <Label
+                    htmlFor="edit-feature-skip-tests"
+                    className="text-xs font-normal cursor-pointer"
+                  >
+                    Run tests
+                  </Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="edit-feature-auto-deploy"
+                    checked={autoDeploy}
+                    onCheckedChange={(checked) => setAutoDeploy(!!checked)}
+                    data-testid="edit-feature-auto-deploy-checkbox"
+                  />
+                  <Label
+                    htmlFor="edit-feature-auto-deploy"
+                    className="text-xs font-normal cursor-pointer"
+                  >
+                    Auto-deploy
+                  </Label>
                 </div>
               </div>
-            </div>
-          </div>
-
-          {/* Organization Section */}
-          <div className={cardClass}>
-            <div className={sectionHeaderClass}>
-              <FolderKanban className="w-4 h-4 text-muted-foreground" />
-              <span>Organization</span>
             </div>
 
             <div className="grid grid-cols-2 gap-3">

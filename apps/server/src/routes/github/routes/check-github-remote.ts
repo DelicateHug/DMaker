@@ -49,7 +49,23 @@ export interface GitHubRemoteStatus {
   repo: string | null;
 }
 
-export async function checkGitHubRemote(projectPath: string): Promise<GitHubRemoteStatus> {
+export async function checkGitHubRemote(
+  projectPath: string,
+  githubRepoOverride?: string
+): Promise<GitHubRemoteStatus> {
+  // If an override is provided (e.g., from project settings), use it directly
+  if (githubRepoOverride) {
+    const parts = githubRepoOverride.split('/');
+    if (parts.length === 2 && parts[0] && parts[1]) {
+      return {
+        hasGitHubRemote: true,
+        remoteUrl: `https://github.com/${parts[0]}/${parts[1]}`,
+        owner: parts[0],
+        repo: parts[1],
+      };
+    }
+  }
+
   const status: GitHubRemoteStatus = {
     hasGitHubRemote: false,
     remoteUrl: null,

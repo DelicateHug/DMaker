@@ -7,8 +7,6 @@ export * from './testing-tab-content';
 export * from './priority-selector';
 export * from './priority-select';
 export * from './branch-selector';
-export * from './planning-mode-selector';
-export * from './planning-mode-select';
 export * from './ancestor-context-section';
 export * from './work-mode-selector';
 export * from './enhancement';

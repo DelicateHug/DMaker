@@ -27,10 +27,6 @@ import type {
   CreateIdeaInput,
   UpdateIdeaInput,
   ConvertToFeatureOptions,
-  VoiceSettings,
-  VoiceSession,
-  VoiceSessionStatus,
-  VoiceEvent,
   SummaryHistoryEntry,
   ListSummariesResponse,
   GetSummaryResponse,
@@ -329,13 +325,21 @@ export interface GitHubAPI {
     repo?: string | null;
     error?: string;
   }>;
-  listIssues: (projectPath: string) => Promise<{
+  listIssues: (
+    projectPath: string,
+    githubRepo?: string
+  ) => Promise<{
     success: boolean;
     openIssues?: GitHubIssue[];
     closedIssues?: GitHubIssue[];
+    owner?: string;
+    repo?: string;
     error?: string;
   }>;
-  listPRs: (projectPath: string) => Promise<{
+  listPRs: (
+    projectPath: string,
+    githubRepo?: string
+  ) => Promise<{
     success: boolean;
     openPRs?: GitHubPR[];
     mergedPRs?: GitHubPR[];
@@ -414,12 +418,57 @@ export interface GitHubAPI {
     featureId: string,
     issueNumber: number
   ) => Promise<{ success: boolean; error?: string }>;
+  /** Create a new GitHub issue */
+  createIssue: (
+    projectPath: string,
+    title: string,
+    body?: string,
+    labels?: string[]
+  ) => Promise<{ success: boolean; issueNumber?: number; url?: string; error?: string }>;
   /** Sync assignee/label/state data from GitHub for a linked issue */
   syncIssue: (
     projectPath: string,
     featureId: string,
     issueNumber: number
   ) => Promise<{ success: boolean; issueData?: unknown; error?: string }>;
+  /** Add/remove labels on a GitHub issue */
+  updateIssueLabels: (
+    projectPath: string,
+    issueNumber: number,
+    addLabels?: string[],
+    removeLabels?: string[]
+  ) => Promise<{ success: boolean; error?: string }>;
+  /** Post a comment on a GitHub issue */
+  addComment: (
+    projectPath: string,
+    issueNumber: number,
+    body: string
+  ) => Promise<{ success: boolean; error?: string }>;
+  /** Lock a GitHub issue conversation */
+  lockIssue: (
+    projectPath: string,
+    issueNumber: number
+  ) => Promise<{ success: boolean; error?: string }>;
+  /** Unlock a GitHub issue conversation */
+  unlockIssue: (
+    projectPath: string,
+    issueNumber: number
+  ) => Promise<{ success: boolean; error?: string }>;
+  /** Pin a GitHub issue */
+  pinIssue: (
+    projectPath: string,
+    issueNumber: number
+  ) => Promise<{ success: boolean; error?: string }>;
+  /** Unpin a GitHub issue */
+  unpinIssue: (
+    projectPath: string,
+    issueNumber: number
+  ) => Promise<{ success: boolean; error?: string }>;
+  /** Delete a GitHub issue */
+  deleteIssue: (
+    projectPath: string,
+    issueNumber: number
+  ) => Promise<{ success: boolean; error?: string }>;
 }
 
 // Feature Suggestions types
@@ -650,13 +699,7 @@ export interface SaveImageResult {
 }
 
 // Notifications API interface
-import type {
-  Notification,
-  StoredEvent,
-  StoredEventSummary,
-  EventHistoryFilter,
-  EventReplayResult,
-} from '@automaker/types';
+import type { Notification } from '@automaker/types';
 
 export interface NotificationsAPI {
   list: (projectPath: string) => Promise<{
@@ -685,48 +728,6 @@ export interface NotificationsAPI {
     success: boolean;
     dismissed?: boolean;
     count?: number;
-    error?: string;
-  }>;
-}
-
-// Event History API interface
-export interface EventHistoryAPI {
-  list: (
-    projectPath: string,
-    filter?: EventHistoryFilter
-  ) => Promise<{
-    success: boolean;
-    events?: StoredEventSummary[];
-    total?: number;
-    error?: string;
-  }>;
-  get: (
-    projectPath: string,
-    eventId: string
-  ) => Promise<{
-    success: boolean;
-    event?: StoredEvent;
-    error?: string;
-  }>;
-  delete: (
-    projectPath: string,
-    eventId: string
-  ) => Promise<{
-    success: boolean;
-    error?: string;
-  }>;
-  clear: (projectPath: string) => Promise<{
-    success: boolean;
-    cleared?: number;
-    error?: string;
-  }>;
-  replay: (
-    projectPath: string,
-    eventId: string,
-    hookIds?: string[]
-  ) => Promise<{
-    success: boolean;
-    result?: EventReplayResult;
     error?: string;
   }>;
 }
@@ -943,7 +944,6 @@ export interface ElectronAPI {
   };
   ideation?: IdeationAPI;
   notifications?: NotificationsAPI;
-  eventHistory?: EventHistoryAPI;
   codex?: {
     getUsage: () => Promise<CodexUsageResponse>;
     getModels: (refresh?: boolean) => Promise<{
@@ -1037,79 +1037,6 @@ export interface ElectronAPI {
       }>;
       error?: string;
     }>;
-  };
-  voice?: {
-    startSession: (
-      projectPath: string,
-      settings?: Partial<VoiceSettings>
-    ) => Promise<{
-      success: boolean;
-      session?: VoiceSession;
-      error?: string;
-    }>;
-    stopSession: (sessionId: string) => Promise<{
-      success: boolean;
-      error?: string;
-    }>;
-    getSession: (sessionId: string) => Promise<{
-      success: boolean;
-      session?: VoiceSession;
-      error?: string;
-    }>;
-    listSessions: (projectPath?: string) => Promise<{
-      success: boolean;
-      sessions?: VoiceSession[];
-      count?: number;
-      error?: string;
-    }>;
-    deleteSession: (sessionId: string) => Promise<{
-      success: boolean;
-      error?: string;
-    }>;
-    processCommand: (
-      sessionId: string,
-      text: string,
-      audioDurationMs?: number,
-      confidence?: number
-    ) => Promise<{
-      success: boolean;
-      response?: string;
-      messageId?: string;
-      commandExecuted?: boolean;
-      commandResult?: {
-        success: boolean;
-        response: string;
-        commandName?: string;
-        data?: unknown;
-        error?: string;
-      };
-      error?: string;
-    }>;
-    stopProcessing: (sessionId: string) => Promise<{
-      success: boolean;
-      error?: string;
-    }>;
-    getStatus: (sessionId: string) => Promise<{
-      success: boolean;
-      status?: VoiceSessionStatus;
-      session?: VoiceSession;
-      error?: string;
-    }>;
-    updateStatus: (
-      sessionId: string,
-      status: VoiceSessionStatus
-    ) => Promise<{
-      success: boolean;
-      error?: string;
-    }>;
-    updateSettings: (
-      sessionId: string,
-      settings: Partial<VoiceSettings>
-    ) => Promise<{
-      success: boolean;
-      error?: string;
-    }>;
-    onEvent: (callback: (event: VoiceEvent) => void) => () => void;
   };
   pushEvents?: {
     onFeatureStatusChanged: (
@@ -3567,6 +3494,48 @@ function createMockGitHubAPI(): GitHubAPI {
     },
     syncIssue: async (projectPath: string, featureId: string, issueNumber: number) => {
       console.log('[Mock] Syncing issue:', { projectPath, featureId, issueNumber });
+      return { success: false, error: 'Not available in mock mode' };
+    },
+    createIssue: async (projectPath: string, title: string, body?: string, labels?: string[]) => {
+      console.log('[Mock] Creating GitHub issue:', { projectPath, title, body, labels });
+      return { success: false, error: 'Not available in mock mode' };
+    },
+    updateIssueLabels: async (
+      projectPath: string,
+      issueNumber: number,
+      addLabels?: string[],
+      removeLabels?: string[]
+    ) => {
+      console.log('[Mock] Updating issue labels:', {
+        projectPath,
+        issueNumber,
+        addLabels,
+        removeLabels,
+      });
+      return { success: false, error: 'Not available in mock mode' };
+    },
+    addComment: async (projectPath: string, issueNumber: number, body: string) => {
+      console.log('[Mock] Adding comment:', { projectPath, issueNumber, body });
+      return { success: false, error: 'Not available in mock mode' };
+    },
+    lockIssue: async (projectPath: string, issueNumber: number) => {
+      console.log('[Mock] Locking issue:', { projectPath, issueNumber });
+      return { success: false, error: 'Not available in mock mode' };
+    },
+    unlockIssue: async (projectPath: string, issueNumber: number) => {
+      console.log('[Mock] Unlocking issue:', { projectPath, issueNumber });
+      return { success: false, error: 'Not available in mock mode' };
+    },
+    pinIssue: async (projectPath: string, issueNumber: number) => {
+      console.log('[Mock] Pinning issue:', { projectPath, issueNumber });
+      return { success: false, error: 'Not available in mock mode' };
+    },
+    unpinIssue: async (projectPath: string, issueNumber: number) => {
+      console.log('[Mock] Unpinning issue:', { projectPath, issueNumber });
+      return { success: false, error: 'Not available in mock mode' };
+    },
+    deleteIssue: async (projectPath: string, issueNumber: number) => {
+      console.log('[Mock] Deleting issue:', { projectPath, issueNumber });
       return { success: false, error: 'Not available in mock mode' };
     },
   };

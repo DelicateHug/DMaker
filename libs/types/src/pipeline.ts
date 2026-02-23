@@ -20,7 +20,9 @@ export interface PipelineConfig {
 export type PipelineStatus = `pipeline_${string}`;
 
 export type FeatureStatusWithPipeline =
+  | 'local'
   | 'backlog'
+  | 'planning'
   | 'in_progress'
   | 'waiting_approval'
   | 'completed'

@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { createLogger } from '@automaker/utils/logger';
 import { CircleDot, RefreshCw, SearchX } from 'lucide-react';
 import { getElectronAPI, GitHubIssue, IssueValidationResult } from '@/lib/electron';
@@ -35,7 +35,32 @@ export function GitHubIssuesView() {
   // Filter state
   const [filterState, setFilterState] = useState<IssuesFilterState>(DEFAULT_ISSUES_FILTER_STATE);
 
+  // GitHub repo override (from project settings)
+  const [githubRepoOverride, setGithubRepoOverride] = useState<string | undefined>(undefined);
+  const [repoSettingsLoaded, setRepoSettingsLoaded] = useState(false);
+
   const { currentProject, getCurrentWorktree, worktreesByProject } = useAppStore();
+
+  // Load githubRepo from project settings on mount/project change
+  useEffect(() => {
+    if (!currentProject?.path) return;
+    const api = getElectronAPI();
+    if (api.settings?.getProject) {
+      api.settings
+        .getProject(currentProject.path)
+        .then((result) => {
+          if (result.success && result.settings?.githubRepo) {
+            setGithubRepoOverride(result.settings.githubRepo as string);
+          }
+          setRepoSettingsLoaded(true);
+        })
+        .catch(() => {
+          setRepoSettingsLoaded(true);
+        });
+    } else {
+      setRepoSettingsLoaded(true);
+    }
+  }, [currentProject?.path]);
 
   // Model override for validation
   const validationModelOverride = useModelOverride({ phase: 'validationModel' });
@@ -43,7 +68,23 @@ export function GitHubIssuesView() {
   // Extract model string for API calls (backward compatibility)
   const validationModelString = validationModelOverride.effectiveModel;
 
-  const { openIssues, closedIssues, loading, refreshing, error, refresh } = useGithubIssues();
+  const { openIssues, closedIssues, repoFullName, loading, refreshing, error, refresh } =
+    useGithubIssues(githubRepoOverride);
+
+  // Handle repo change from the header
+  const handleRepoChange = useCallback(
+    (repo: string | undefined) => {
+      setGithubRepoOverride(repo);
+      // Save to project settings
+      if (currentProject?.path) {
+        const api = getElectronAPI();
+        if (api.settings?.updateProject) {
+          api.settings.updateProject(currentProject.path, { githubRepo: repo ?? null });
+        }
+      }
+    },
+    [currentProject?.path]
+  );
 
   const { validatingIssues, cachedValidations, handleValidateIssue, handleViewCachedValidation } =
     useIssueValidation({
@@ -232,6 +273,9 @@ export function GitHubIssuesView() {
           totalOpenCount={openIssues.length}
           totalClosedCount={closedIssues.length}
           hasActiveFilter={filterResult.hasActiveFilter}
+          repoFullName={repoFullName}
+          hasRepoOverride={!!githubRepoOverride}
+          onRepoChange={handleRepoChange}
           refreshing={refreshing}
           onRefresh={refresh}
           compact={!!selectedIssue}

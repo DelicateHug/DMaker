@@ -1149,48 +1149,48 @@ export function PhaseModelSelector({
     </PopoverContent>
   );
 
-  // Thinking level dropdown for Claude models
+  // Thinking level bubble selector for Claude models
   const compactThinkingDropdown = isClaudeModel && (
-    <Select
-      value={selectedThinkingLevel}
-      onValueChange={(value) => handleThinkingLevelChange(value as ThinkingLevel)}
-      disabled={disabled}
-    >
-      <SelectTrigger
-        className={cn('h-11 w-[72px] gap-1 text-xs font-medium rounded-xl border-border px-2')}
-      >
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        {THINKING_LEVELS.map((level) => (
-          <SelectItem key={level} value={level}>
-            {THINKING_LEVEL_LABELS[level]}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+    <div className="flex items-center gap-0.5 rounded-xl border border-border p-0.5">
+      {THINKING_LEVELS.map((level) => (
+        <button
+          key={level}
+          type="button"
+          disabled={disabled}
+          onClick={() => handleThinkingLevelChange(level)}
+          className={cn(
+            'px-2 py-1.5 text-xs font-medium rounded-lg transition-colors',
+            selectedThinkingLevel === level
+              ? 'bg-primary text-primary-foreground'
+              : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+          )}
+        >
+          {THINKING_LEVEL_LABELS[level]}
+        </button>
+      ))}
+    </div>
   );
 
-  // Reasoning effort dropdown for Codex models (compact mode)
+  // Reasoning effort bubble selector for Codex models (compact mode)
   const compactReasoningDropdown = isCodexModelWithReasoning && (
-    <Select
-      value={selectedReasoningEffort}
-      onValueChange={(value) => handleReasoningEffortChange(value as ReasoningEffort)}
-      disabled={disabled}
-    >
-      <SelectTrigger
-        className={cn('h-11 w-[72px] gap-1 text-xs font-medium rounded-xl border-border px-2')}
-      >
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        {REASONING_EFFORT_LEVELS.map((effort) => (
-          <SelectItem key={effort} value={effort}>
-            {REASONING_EFFORT_LABELS[effort]}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+    <div className="flex items-center gap-0.5 rounded-xl border border-border p-0.5">
+      {REASONING_EFFORT_LEVELS.map((effort) => (
+        <button
+          key={effort}
+          type="button"
+          disabled={disabled}
+          onClick={() => handleReasoningEffortChange(effort)}
+          className={cn(
+            'px-2 py-1.5 text-xs font-medium rounded-lg transition-colors',
+            selectedReasoningEffort === effort
+              ? 'bg-primary text-primary-foreground'
+              : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+          )}
+        >
+          {REASONING_EFFORT_LABELS[effort]}
+        </button>
+      ))}
+    </div>
   );
 
   // Compact mode - just the popover with compact trigger

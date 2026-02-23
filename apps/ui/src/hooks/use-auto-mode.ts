@@ -323,7 +323,6 @@ export function useAutoMode() {
               featureId: event.featureId,
               projectPath: event.projectPath || currentProject?.path || '',
               planContent: event.planContent,
-              planningMode: event.planningMode,
             };
             // Set single pending approval for backwards compatibility
             setPendingPlanApproval(approvalData);

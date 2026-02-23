@@ -11,7 +11,6 @@ import { ApiKeysSection } from './settings-view/api-keys/api-keys-section';
 import { ModelDefaultsSection } from './settings-view/model-defaults';
 import { AppearanceSection } from './settings-view/appearance/appearance-section';
 import { TerminalSection } from './settings-view/terminal/terminal-section';
-import { AudioSection } from './settings-view/audio/audio-section';
 import { KeyboardShortcutsSection } from './settings-view/keyboard-shortcuts/keyboard-shortcuts-section';
 import { FeatureDefaultsSection } from './settings-view/feature-defaults/feature-defaults-section';
 import { WorktreesSection } from './settings-view/worktrees';
@@ -26,10 +25,8 @@ import {
 } from './settings-view/providers';
 import { MCPServersSection } from './settings-view/mcp-servers';
 import { PromptCustomizationSection } from './settings-view/prompts';
-import { EventHooksSection } from './settings-view/event-hooks';
 import { ImportExportDialog } from './settings-view/components/import-export-dialog';
 import { ProjectsSection } from './settings-view/projects/projects-section';
-import { VoiceSettingsSection } from './settings-view/voice';
 import type { Theme } from './settings-view/shared/types';
 
 // Breakpoint constant for mobile (matches Tailwind lg breakpoint)
@@ -52,12 +49,6 @@ export function SettingsView() {
     setEnableAiCommitMessages,
     useWorktrees,
     setUseWorktrees,
-    muteDoneSound,
-    setMuteDoneSound,
-    defaultPlanningMode,
-    setDefaultPlanningMode,
-    defaultRequirePlanApproval,
-    setDefaultRequirePlanApproval,
     defaultFeatureModel,
     setDefaultFeatureModel,
     autoLoadClaudeMd,
@@ -166,22 +157,12 @@ export function SettingsView() {
         return (
           <KeyboardShortcutsSection onOpenKeyboardMap={() => setShowKeyboardMapDialog(true)} />
         );
-      case 'audio':
-        return (
-          <AudioSection muteDoneSound={muteDoneSound} onMuteDoneSoundChange={setMuteDoneSound} />
-        );
-      case 'voice':
-        return <VoiceSettingsSection />;
-      case 'event-hooks':
-        return <EventHooksSection />;
       case 'defaults':
         return (
           <FeatureDefaultsSection
             defaultSkipTests={defaultSkipTests}
             enableDependencyBlocking={enableDependencyBlocking}
             skipVerificationInAutoMode={skipVerificationInAutoMode}
-            defaultPlanningMode={defaultPlanningMode}
-            defaultRequirePlanApproval={defaultRequirePlanApproval}
             enableAiCommitMessages={enableAiCommitMessages}
             defaultFeatureModel={defaultFeatureModel}
             defaultAutoDeploy={defaultAutoDeploy}
@@ -190,8 +171,6 @@ export function SettingsView() {
             onDefaultSkipTestsChange={setDefaultSkipTests}
             onEnableDependencyBlockingChange={setEnableDependencyBlocking}
             onSkipVerificationInAutoModeChange={setSkipVerificationInAutoMode}
-            onDefaultPlanningModeChange={setDefaultPlanningMode}
-            onDefaultRequirePlanApprovalChange={setDefaultRequirePlanApproval}
             onEnableAiCommitMessagesChange={setEnableAiCommitMessages}
             onDefaultFeatureModelChange={setDefaultFeatureModel}
             onDefaultAutoDeployChange={setDefaultAutoDeploy}

@@ -12,6 +12,9 @@ import {
   Wand2,
   GitFork,
   ExternalLink,
+  Github,
+  Upload,
+  Star,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -23,6 +26,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import type { Feature } from '@/store/app-store';
+import { GitHubIssueDialog } from '../../dialogs/github-issue-dialog';
 
 const RECENTLY_STARTED_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -48,6 +52,9 @@ export interface RowActionHandlers {
   onViewPlan?: () => void;
   onApprovePlan?: () => void;
   onSpawnTask?: () => void;
+  onConvertToIssue?: () => void;
+  onToggleFavorite?: () => void;
+  isFavorite?: boolean;
 }
 
 export interface RowActionsProps {
@@ -261,6 +268,7 @@ export const RowActions = memo(function RowActions({
   className,
 }: RowActionsProps) {
   const [internalOpen, setInternalOpen] = useState(false);
+  const [githubDialogOpen, setGithubDialogOpen] = useState(false);
 
   // Use controlled or uncontrolled state
   const open = isOpen ?? internalOpen;
@@ -323,6 +331,54 @@ export const RowActions = memo(function RowActions({
         </Button>
       )}
 
+      {/* GitHub issue icon / Convert to Issue button */}
+      {feature.status === 'local' && !feature.githubIssue && handlers.onConvertToIssue ? (
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          className="h-7 w-7 text-muted-foreground hover:bg-primary/10 hover:text-primary"
+          onClick={(e) => {
+            e.stopPropagation();
+            handlers.onConvertToIssue!();
+          }}
+          title="Convert to GitHub Issue"
+          data-testid={`convert-to-issue-${feature.id}`}
+        >
+          <Upload className="w-4 h-4" />
+        </Button>
+      ) : (
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          className={cn(
+            'h-7 w-7',
+            feature.githubIssue
+              ? 'text-muted-foreground hover:bg-muted hover:text-foreground'
+              : 'text-muted-foreground/25'
+          )}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (feature.githubIssue) {
+              setGithubDialogOpen(true);
+            }
+          }}
+          title={
+            feature.githubIssue ? `GitHub Issue #${feature.githubIssue.number}` : 'No GitHub issue'
+          }
+          data-testid={`github-icon-${feature.id}`}
+          disabled={!feature.githubIssue}
+        >
+          <Github className="w-4 h-4" />
+        </Button>
+      )}
+      {feature.githubIssue && (
+        <GitHubIssueDialog
+          feature={feature}
+          open={githubDialogOpen}
+          onOpenChange={setGithubDialogOpen}
+        />
+      )}
+
       {/* Secondary action buttons */}
       {secondaryActions.map((action, index) => (
         <Button
@@ -355,6 +411,18 @@ export const RowActions = memo(function RowActions({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-48">
+          {/* Favorite toggle - always available */}
+          {handlers.onToggleFavorite && (
+            <>
+              <MenuItem
+                icon={Star}
+                label={handlers.isFavorite ? 'Remove from Favorites' : 'Add to Favorites'}
+                onClick={withClose(handlers.onToggleFavorite)}
+              />
+              <DropdownMenuSeparator />
+            </>
+          )}
+
           {/* Running task actions */}
           {isCurrentAutoTask && (
             <>
@@ -392,6 +460,35 @@ export const RowActions = memo(function RowActions({
                   />
                 </>
               )}
+            </>
+          )}
+
+          {/* Local actions */}
+          {!isCurrentAutoTask && feature.status === 'local' && (
+            <>
+              <MenuItem icon={Edit} label="Edit" onClick={withClose(handlers.onEdit)} />
+              {handlers.onConvertToIssue && (
+                <MenuItem
+                  icon={Upload}
+                  label="Convert to Issue"
+                  onClick={withClose(handlers.onConvertToIssue)}
+                  variant="primary"
+                />
+              )}
+              {handlers.onSpawnTask && (
+                <MenuItem
+                  icon={GitFork}
+                  label="Spawn Sub-Task"
+                  onClick={withClose(handlers.onSpawnTask)}
+                />
+              )}
+              <DropdownMenuSeparator />
+              <MenuItem
+                icon={Trash2}
+                label="Delete"
+                onClick={withClose(handlers.onDelete)}
+                variant="destructive"
+              />
             </>
           )}
 
@@ -575,6 +672,9 @@ export function createRowActionHandlers(
     viewPlan?: (id: string) => void;
     approvePlan?: (id: string) => void;
     spawnTask?: (id: string) => void;
+    convertToIssue?: (id: string) => void;
+    toggleFavorite?: (id: string) => void;
+    isFavorite?: boolean;
   }
 ): RowActionHandlers {
   return {
@@ -590,5 +690,8 @@ export function createRowActionHandlers(
     onViewPlan: actions.viewPlan ? () => actions.viewPlan!(featureId) : undefined,
     onApprovePlan: actions.approvePlan ? () => actions.approvePlan!(featureId) : undefined,
     onSpawnTask: actions.spawnTask ? () => actions.spawnTask!(featureId) : undefined,
+    onConvertToIssue: actions.convertToIssue ? () => actions.convertToIssue!(featureId) : undefined,
+    onToggleFavorite: actions.toggleFavorite ? () => actions.toggleFavorite!(featureId) : undefined,
+    isFavorite: actions.isFavorite,
   };
 }

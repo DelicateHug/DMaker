@@ -9,11 +9,7 @@ import { AutoModeModal } from '@/components/dialogs/auto-mode-modal';
 import { PlanSettingsPopover } from './dialogs/plan-settings-popover';
 import { BoardSearchBar } from './board-search-bar';
 import { BoardControls } from './board-controls';
-import { ViewToggle, type ViewMode } from './components';
 import { HeaderMobileMenu } from './header-mobile-menu';
-import { VoiceButton } from '@/components/ui/voice-button';
-
-export type { ViewMode };
 
 /**
  * BoardHeader - Board-specific toolbar controls (Row 2 of the 2-row toolbar layout)
@@ -222,9 +218,6 @@ export function BoardHeader({
             )}
           </Button>
           <AutoModeModal open={isAutoModeModalOpen} onOpenChange={setIsAutoModeModalOpen} />
-
-          {/* Voice Mode Button */}
-          <VoiceButton variant="outline" size="sm" />
 
           {/* Plan Button with Settings */}
           <div className={controlContainerClass} data-testid="plan-button-container">

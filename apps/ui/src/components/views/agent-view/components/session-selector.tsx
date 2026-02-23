@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { createLogger } from '@automaker/utils/logger';
 import { Button } from '@/components/ui/button';
 import {
@@ -181,17 +181,27 @@ export function SessionSelector({
 
   // Validate that currentSessionId still exists in the sessions list
   // If not, clear the selection (e.g., when a session is deleted)
+  // Only run this check when the sessions list changes (after a reload),
+  // NOT when currentSessionId changes. This prevents a race condition where
+  // a newly created session gets cleared because the session list hasn't
+  // been refreshed yet (e.g., when "Start New Chat" is clicked from the
+  // empty state view, the parent sets the session ID before SessionSelector
+  // has reloaded its list).
+  const currentSessionIdRef = useRef(currentSessionId);
+  currentSessionIdRef.current = currentSessionId;
+
   useEffect(() => {
-    if (!currentSessionId) return;
+    const sessionId = currentSessionIdRef.current;
+    if (!sessionId) return;
 
     // Check if the current session exists in the filtered sessions list
-    const currentSessionExists = sessions.some((s) => s.id === currentSessionId);
+    const currentSessionExists = sessions.some((s) => s.id === sessionId);
 
-    if (!currentSessionExists) {
-      logger.info(`Current session ${currentSessionId} no longer exists, clearing selection`);
+    if (!currentSessionExists && sessions.length > 0) {
+      logger.info(`Current session ${sessionId} no longer exists, clearing selection`);
       onSelectSession(null);
     }
-  }, [currentSessionId, sessions, onSelectSession]);
+  }, [sessions, onSelectSession]);
 
   // Create new session with placeholder name (will be auto-renamed on first message)
   const handleQuickCreateSession = async () => {

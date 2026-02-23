@@ -1,5 +1,4 @@
 export { useBoardFeatures } from './use-board-features';
-export { useBoardDragDrop } from './use-board-drag-drop';
 export {
   useBoardProject,
   type UseBoardProjectOptions,
@@ -25,10 +24,3 @@ export {
   type UseBoardStatusTabsOptions,
   type UseBoardStatusTabsReturn,
 } from './use-board-status-tabs';
-export {
-  useVirtualizedColumn,
-  VIRTUALIZATION_THRESHOLD,
-  type VirtualColumnItem,
-  type UseVirtualizedColumnOptions,
-  type UseVirtualizedColumnResult,
-} from './use-virtualized-column';

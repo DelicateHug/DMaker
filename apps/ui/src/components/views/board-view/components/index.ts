@@ -1,8 +1,5 @@
-export { KanbanCard } from './kanban-card/kanban-card';
-export { KanbanColumn } from './kanban-column';
 export { SelectionActionBar } from './selection-action-bar';
 export { EmptyStateCard } from './empty-state-card';
-export { ViewToggle, type ViewMode } from './view-toggle';
 export {
   BoardStatusTabs,
   BoardStatusTabsCompact,
@@ -63,15 +60,8 @@ export {
 // Board skeleton
 export { BoardSkeleton } from './board-skeleton';
 
+// Feature card skeleton (loading placeholder)
+export { FeatureCardSkeleton } from './feature-card-skeleton';
+
 // File explorer
 export { FileExplorer } from './file-explorer';
-
-// Virtualized column content
-export {
-  VirtualizedColumnContent,
-  type CardRenderProps,
-  type VirtualizedColumnContentProps,
-} from './virtualized-column-content';
-
-// Kanban column virtualization types
-export type { KanbanColumnVirtualization } from './kanban-column';

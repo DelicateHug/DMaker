@@ -7,10 +7,11 @@ import type { Column } from '../constants';
  * These correspond to the base column IDs from constants.ts, plus special view tabs
  */
 export type StatusTabId =
+  | 'local'
   | 'backlog'
+  | 'planning'
   | 'in_progress'
   | 'waiting_approval'
-  | 'completed'
   | 'all'
   | string;
 
@@ -26,12 +27,13 @@ export interface StatusTab {
 /** Storage key for persisting active tab preference */
 const STORAGE_KEY = 'automaker:board-status-tab';
 
-/** Default status tab IDs (base columns without pipeline, plus completed and all) */
+/** Default status tab IDs (base columns without pipeline, plus all) */
 const DEFAULT_TAB_IDS: StatusTabId[] = [
+  'local',
   'backlog',
+  'planning',
   'in_progress',
   'waiting_approval',
-  'completed',
   'all',
 ];
 
@@ -44,7 +46,7 @@ const DEFAULT_ACTIVE_TAB: StatusTabId = 'waiting_approval';
  * select the first tab in this list that has features (count > 0).
  * Falls back to the first available tab if none have features.
  */
-const SMART_DEFAULT_PRIORITY: StatusTabId[] = ['waiting_approval', 'in_progress', 'completed'];
+const SMART_DEFAULT_PRIORITY: StatusTabId[] = ['waiting_approval', 'in_progress', 'planning'];
 
 /**
  * Validates that a tab ID exists in the available tabs
@@ -103,13 +105,12 @@ function getSmartDefaultTab(
 
 /** Special view tabs appended after column-based tabs */
 const SPECIAL_VIEW_TABS: StatusTab[] = [
-  { id: 'completed', label: 'Completed', colorClass: 'bg-[var(--status-completed)]' },
   { id: 'all', label: 'All Statuses', colorClass: 'bg-[var(--status-all)]' },
 ];
 
 /**
  * Convert Column definitions to StatusTab configurations.
- * Appends 'completed' and 'all' special view tabs after column-derived tabs.
+ * Appends 'all' special view tab after column-derived tabs.
  */
 function columnsToTabs(columns: Column[]): StatusTab[] {
   const columnTabs = columns.map((col) => ({
@@ -273,14 +274,15 @@ export function useBoardStatusTabs(
     }
     // Default tabs when no columns provided
     return [
+      { id: 'local', label: 'Local', colorClass: 'bg-[var(--status-local)]' },
       { id: 'backlog', label: 'Backlog', colorClass: 'bg-[var(--status-backlog)]' },
+      { id: 'planning', label: 'Planning', colorClass: 'bg-[var(--status-planning)]' },
       { id: 'in_progress', label: 'In Progress', colorClass: 'bg-[var(--status-in-progress)]' },
       {
         id: 'waiting_approval',
         label: 'Waiting Approval',
         colorClass: 'bg-[var(--status-waiting)]',
       },
-      { id: 'completed', label: 'Completed', colorClass: 'bg-[var(--status-completed)]' },
       { id: 'all', label: 'All Statuses', colorClass: 'bg-[var(--status-all)]' },
     ];
   }, [columns]);

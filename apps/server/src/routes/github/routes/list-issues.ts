@@ -60,6 +60,8 @@ export interface ListIssuesResult {
   success: boolean;
   openIssues?: GitHubIssue[];
   closedIssues?: GitHubIssue[];
+  owner?: string;
+  repo?: string;
   error?: string;
 }
 
@@ -240,15 +242,15 @@ async function fetchLinkedPRs(
 export function createListIssuesHandler() {
   return async (req: Request, res: Response): Promise<void> => {
     try {
-      const { projectPath } = req.body;
+      const { projectPath, githubRepo } = req.body;
 
       if (!projectPath) {
         res.status(400).json({ success: false, error: 'projectPath is required' });
         return;
       }
 
-      // First check if this is a GitHub repo
-      const remoteStatus = await checkGitHubRemote(projectPath);
+      // First check if this is a GitHub repo (with optional override)
+      const remoteStatus = await checkGitHubRemote(projectPath, githubRepo);
       if (!remoteStatus.hasGitHubRemote) {
         res.status(400).json({
           success: false,
@@ -322,6 +324,8 @@ export function createListIssuesHandler() {
         success: true,
         openIssues,
         closedIssues,
+        owner: remoteStatus.owner ?? undefined,
+        repo: remoteStatus.repo ?? undefined,
       });
     } catch (error) {
       logError(error, 'List GitHub issues failed');

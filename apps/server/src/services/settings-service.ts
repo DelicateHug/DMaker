@@ -610,9 +610,6 @@ export class SettingsService {
             : false,
         useWorktrees:
           appState.useWorktrees !== undefined ? (appState.useWorktrees as boolean) : true,
-        defaultPlanningMode:
-          (appState.defaultPlanningMode as GlobalSettings['defaultPlanningMode']) || 'skip',
-        defaultRequirePlanApproval: (appState.defaultRequirePlanApproval as boolean) || false,
         muteDoneSound: (appState.muteDoneSound as boolean) || false,
         enhancementModel:
           (appState.enhancementModel as GlobalSettings['enhancementModel']) || 'sonnet',

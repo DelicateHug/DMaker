@@ -27,14 +27,6 @@ export {
 } from './use-usage-tracking';
 export { useWindowState } from './use-window-state';
 export {
-  useAudioRecorder,
-  type AudioRecorderState,
-  type AudioRecorderResult,
-  type AudioRecorderOptions,
-  type AudioRecorderHook,
-} from './use-audio-recorder';
-export { useVoiceMode, useGlobalVoiceModeShortcut, type VoiceModeHook } from './use-voice-mode';
-export {
   useProjectSwitchForSessions,
   type UseProjectSwitchForSessionsOptions,
   type UseProjectSwitchForSessionsResult,

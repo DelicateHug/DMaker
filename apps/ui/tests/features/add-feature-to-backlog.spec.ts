@@ -88,4 +88,40 @@ test.describe('Feature Backlog', () => {
       expect(await featureCard.count()).toBeGreaterThan(0);
     }).toPass({ timeout: 10000 });
   });
+
+  test('should add a feature using Alt+Enter keyboard shortcut', async ({ page }) => {
+    const featureDescription = `Test feature Alt+Enter ${Date.now()}`;
+
+    await setupRealProject(page, projectPath, projectName, { setAsCurrent: true });
+
+    // Authenticate before navigating
+    await authenticateForTests(page);
+    await page.goto('/board');
+    await page.waitForLoadState('load');
+    await handleLoginScreenIfPresent(page);
+    await waitForNetworkIdle(page);
+
+    await expect(page.locator('[data-testid="board-view"]')).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('[data-testid="kanban-column-backlog"]')).toBeVisible({
+      timeout: 5000,
+    });
+
+    await clickAddFeature(page);
+
+    // Fill only the description
+    const descriptionInput = page.locator('[data-testid="add-feature-dialog"] textarea').first();
+    await descriptionInput.fill(featureDescription);
+
+    // Press Alt+Enter to submit the form
+    await descriptionInput.press('Alt+Enter');
+
+    // Wait for the feature to appear in the backlog
+    await expect(async () => {
+      const backlogColumn = page.locator('[data-testid="kanban-column-backlog"]');
+      const featureCard = backlogColumn.locator('[data-testid^="kanban-card-"]').filter({
+        hasText: featureDescription,
+      });
+      expect(await featureCard.count()).toBeGreaterThan(0);
+    }).toPass({ timeout: 10000 });
+  });
 });

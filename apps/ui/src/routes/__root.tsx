@@ -32,20 +32,16 @@ import {
 import { Toaster } from 'sonner';
 import { ThemeOption, themeOptions } from '@/config/theme-options';
 import { LoadingState } from '@/components/ui/loading-state';
+import { PersistentViewContainer } from '@/components/ui/persistent-view-container';
 import { useProjectSettingsLoader } from '@/hooks/use-project-settings-loader';
-import {
-  useVoiceMode,
-  useGlobalVoiceModeShortcut,
-  useGlobalRecordingToggleShortcut,
-} from '@/hooks/use-voice-mode';
 import type { Project } from '@/lib/electron';
 
+// Eagerly preload the board view chunk so it's ready when auth gates clear.
+// This runs at module evaluation time (before any component renders).
+void import('@/components/views/board-view');
+
 // Lazy-load heavy, conditionally-rendered components to reduce initial bundle size.
-// VoiceWidget is only shown when voice mode is enabled in settings.
 // Sandbox dialogs are only shown on first run or when not containerized.
-const VoiceWidget = lazy(() =>
-  import('@/components/voice/voice-widget').then((m) => ({ default: m.VoiceWidget }))
-);
 const SandboxRiskDialog = lazy(() =>
   import('@/components/dialogs/sandbox-risk-dialog').then((m) => ({ default: m.SandboxRiskDialog }))
 );
@@ -56,7 +52,7 @@ const SandboxRejectionScreen = lazy(() =>
 );
 
 const logger = createLogger('RootLayout');
-const SERVER_READY_MAX_ATTEMPTS = 8;
+const SERVER_READY_MAX_ATTEMPTS = 4;
 const SERVER_READY_BACKOFF_BASE_MS = 250;
 const SERVER_READY_MAX_DELAY_MS = 1500;
 const SERVER_READY_TIMEOUT_MS = 2000;
@@ -109,6 +105,40 @@ function clearCachedAuthState(): void {
   try {
     localStorage.removeItem(AUTH_CACHE_KEY);
     localStorage.removeItem(SETUP_COMPLETE_CACHE_KEY);
+  } catch {
+    // ignore
+  }
+}
+
+// --- Settings Cache ---
+// Caches the last successfully loaded settings so subsequent app loads can
+// hydrate the store instantly and render the board without waiting for the
+// server settings fetch. The cache is refreshed every time settings load.
+const SETTINGS_CACHE_KEY = 'automaker:settings-cache';
+const AUTO_OPEN_DONE_CACHE_KEY = 'automaker:auto-open-done';
+
+function getCachedSettings(): unknown | null {
+  try {
+    const cached = localStorage.getItem(SETTINGS_CACHE_KEY);
+    if (cached) return JSON.parse(cached);
+  } catch {
+    // Corrupted cache — ignore
+  }
+  return null;
+}
+
+function setCachedSettings(settings: unknown): void {
+  try {
+    localStorage.setItem(SETTINGS_CACHE_KEY, JSON.stringify(settings));
+  } catch {
+    // localStorage full or unavailable — ignore
+  }
+}
+
+function clearCachedSettings(): void {
+  try {
+    localStorage.removeItem(SETTINGS_CACHE_KEY);
+    localStorage.removeItem(AUTO_OPEN_DONE_CACHE_KEY);
   } catch {
     // ignore
   }
@@ -235,9 +265,6 @@ function RootLayoutContent() {
     skipSandboxWarning,
     setSkipSandboxWarning,
     fetchCodexModels,
-    voiceSettings,
-    voiceWidgetPosition,
-    setVoiceWidgetPosition,
   } = useAppStore(
     useShallow((state) => ({
       setIpcConnected: state.setIpcConnected,
@@ -254,9 +281,6 @@ function RootLayoutContent() {
       skipSandboxWarning: state.skipSandboxWarning,
       setSkipSandboxWarning: state.setSkipSandboxWarning,
       fetchCodexModels: state.fetchCodexModels,
-      voiceSettings: state.voiceSettings,
-      voiceWidgetPosition: state.voiceWidgetPosition,
-      setVoiceWidgetPosition: state.setVoiceWidgetPosition,
     }))
   );
   const { setupComplete, codexCliStatus } = useSetupStore();
@@ -270,18 +294,6 @@ function RootLayoutContent() {
 
   // Load project settings when switching projects
   useProjectSettingsLoader();
-
-  // Voice mode hook - provides voice session state and controls
-  const voiceMode = useVoiceMode();
-
-  // Register global Alt+M keyboard shortcut for voice mode toggle
-  // This shortcut bypasses input focus check for hands-free voice control
-  useGlobalVoiceModeShortcut(voiceMode);
-
-  // Register global Alt+N keyboard shortcut for recording toggle
-  // This shortcut only works when voice mode is visible (per acceptance criteria:
-  // "GIVEN voice mode is closed, WHEN user presses Alt+N, THEN nothing happens")
-  useGlobalRecordingToggleShortcut(voiceMode);
 
   const isSetupRoute = location.pathname === '/setup';
   const isLoginRoute = location.pathname === '/login';
@@ -457,6 +469,7 @@ function RootLayoutContent() {
     const handleLoggedOut = () => {
       logger.warn('automaker:logged-out event received!');
       clearCachedAuthState();
+      clearCachedSettings();
       useAuthStore.getState().setAuthState({ isAuthenticated: false, authChecked: true });
 
       // Navigate directly to /login instead of /logged-out
@@ -480,6 +493,7 @@ function RootLayoutContent() {
     const handleServerOffline = () => {
       logger.warn('automaker:server-offline event received!');
       clearCachedAuthState();
+      clearCachedSettings();
       useAuthStore.getState().setAuthState({ isAuthenticated: false, authChecked: true });
 
       // Navigate to login - the login page will detect server is offline and show appropriate UI
@@ -513,15 +527,26 @@ function RootLayoutContent() {
 
       // --- Optimistic fast path ---
       // If we previously completed auth+settings successfully, use cached state
-      // to immediately mark auth as checked so the app doesn't show a blank
-      // "Loading..." screen while we wait for the server readiness check.
-      // We still need to verify the session and load settings, but at least
-      // the auth check gate is lifted instantly.
+      // to immediately render the full app (including board) while we verify
+      // in the background. Both auth AND settings are restored from cache,
+      // eliminating the "Loading..." and "Loading settings..." blocking gates.
       const hasCachedAuth = getCachedAuthState();
       const hasCachedSetup = getCachedSetupComplete();
+      const cachedSettings = getCachedSettings();
 
-      if (hasCachedAuth && hasCachedSetup) {
-        logger.info('Using cached auth state for instant render');
+      if (hasCachedAuth && hasCachedSetup && cachedSettings) {
+        logger.info('Using cached auth + settings for instant render');
+        // Hydrate store from cached settings so the UI has real data immediately
+        hydrateStoreFromSettings(cachedSettings);
+        signalMigrationComplete();
+        // Mark ALL gates as passed — the app renders the board instantly
+        useAuthStore.getState().setAuthState({
+          authChecked: true,
+          isAuthenticated: true,
+          settingsLoaded: true,
+        });
+      } else if (hasCachedAuth && hasCachedSetup) {
+        logger.info('Using cached auth state for instant render (no settings cache)');
         // Mark authChecked + isAuthenticated so the router doesn't show "Loading..."
         // settingsLoaded stays false — the settings will be hydrated below.
         useAuthStore.getState().setAuthState({
@@ -537,6 +562,7 @@ function RootLayoutContent() {
         const serverReady = await waitForServerReady();
         if (!serverReady) {
           clearCachedAuthState();
+          clearCachedSettings();
           handleServerOffline();
           return;
         }
@@ -556,7 +582,7 @@ function RootLayoutContent() {
           // when the backend is still starting up or temporarily unavailable.
           const api = getHttpApiClient();
           try {
-            const maxAttempts = 8;
+            const maxAttempts = 4;
             const baseDelayMs = 250;
             let lastError: unknown = null;
 
@@ -576,6 +602,9 @@ function RootLayoutContent() {
 
                   // Hydrate store with the final settings (merged if migration occurred)
                   hydrateStoreFromSettings(finalSettings);
+
+                  // Cache settings for instant startup on next load
+                  setCachedSettings(finalSettings);
 
                   // CRITICAL: Wait for React to render the hydrated state before
                   // signaling completion. Zustand updates are synchronous, but React
@@ -624,6 +653,7 @@ function RootLayoutContent() {
             // If we can't load settings, we must NOT start syncing defaults to the server.
             // Treat as not authenticated for now (backend likely unavailable) and unblock sync hook.
             clearCachedAuthState();
+            clearCachedSettings();
             useAuthStore.getState().setAuthState({ isAuthenticated: false, authChecked: true });
             signalMigrationComplete();
             if (location.pathname !== '/login') {
@@ -738,6 +768,7 @@ function RootLayoutContent() {
           );
           logger.debug('Settings migrated, hydrating stores...');
           hydrateStoreFromSettings(finalSettings);
+          setCachedSettings(finalSettings);
           await new Promise((resolve) => setTimeout(resolve, 0));
           signalMigrationComplete();
           logger.debug('Setting settingsLoaded=true');
@@ -989,13 +1020,9 @@ function RootLayoutContent() {
     );
   }
 
-  if (shouldAutoOpen) {
-    return (
-      <main className="flex h-screen items-center justify-center" data-testid="app-container">
-        <LoadingState message="Opening project..." />
-      </main>
-    );
-  }
+  // Auto-open runs in the background — no longer blocks the UI.
+  // The board will render with whatever data is available while the
+  // project is being initialized in the background.
 
   // Show setup page (full screen, no sidebar) - authenticated only
   if (isSetupRoute) {
@@ -1045,7 +1072,7 @@ function RootLayoutContent() {
           className="flex-1 flex flex-col overflow-hidden transition-all duration-300"
           style={{ marginRight: streamerPanelOpen ? '250px' : '0' }}
         >
-          <Outlet />
+          <PersistentViewContainer />
         </div>
 
         {/* Hidden streamer panel - opens with "\" key, pushes content */}
@@ -1055,35 +1082,6 @@ function RootLayoutContent() {
           }`}
         />
         <Toaster richColors position="bottom-right" />
-
-        {/* Voice Widget - Floating voice chat widget for hands-free voice commands
-            Rendered when voice mode is enabled in settings.
-            Uses Alt+M shortcut to toggle recording (bypasses input focus check) */}
-        {voiceSettings.enabled && (
-          <Suspense fallback={null}>
-            <VoiceWidget
-              isVisible={voiceMode.isSessionActive}
-              messages={voiceMode.messages}
-              isProcessing={voiceMode.isProcessing}
-              statusText={
-                voiceMode.sessionStatus === 'transcribing'
-                  ? 'Transcribing...'
-                  : voiceMode.sessionStatus === 'responding'
-                    ? 'Thinking...'
-                    : 'Processing...'
-              }
-              isRecording={voiceMode.isRecording}
-              audioLevel={voiceMode.audioLevel}
-              recordingDurationMs={voiceMode.recordingDuration}
-              sessionStatus={voiceMode.sessionStatus}
-              onToggleRecording={voiceMode.toggleRecording}
-              error={voiceMode.error}
-              onClearError={voiceMode.clearError}
-              position={voiceWidgetPosition}
-              onPositionChange={setVoiceWidgetPosition}
-            />
-          </Suspense>
-        )}
       </main>
       {showSandboxDialog && (
         <Suspense fallback={null}>

@@ -2,7 +2,7 @@
  * Feature types for AutoMaker feature management
  */
 
-import type { PlanningMode, ThinkingLevel } from './settings.js';
+import type { ThinkingLevel } from './settings.js';
 import type { ReasoningEffort } from './provider.js';
 
 /**
@@ -146,8 +146,6 @@ export interface Feature {
   skipTests?: boolean;
   thinkingLevel?: ThinkingLevel;
   reasoningEffort?: ReasoningEffort;
-  planningMode?: PlanningMode;
-  requirePlanApproval?: boolean;
   planSpec?: {
     status: 'pending' | 'generating' | 'generated' | 'approved' | 'rejected';
     content?: string;
@@ -191,6 +189,8 @@ export interface Feature {
   };
   claimedBy?: string; // GitHub username of the person who claimed this feature
   claimedAt?: string; // ISO timestamp when the feature was claimed
+  // Source tracking for board mode filtering
+  source?: 'local' | 'github'; // Where this feature originated from
   [key: string]: unknown; // Keep catch-all for extensibility
 }
 
@@ -229,6 +229,8 @@ export interface FeatureListSummary {
   };
   claimedBy?: string;
   claimedAt?: string;
+  // Source tracking for board mode filtering
+  source?: 'local' | 'github';
 }
 
 /**

@@ -1,30 +1,6 @@
 // @ts-nocheck
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { createLogger } from '@automaker/utils/logger';
-import {
-  PointerSensor,
-  useSensor,
-  useSensors,
-  rectIntersection,
-  pointerWithin,
-  type PointerEvent as DndPointerEvent,
-} from '@dnd-kit/core';
-
-// Custom pointer sensor that ignores drag events from within dialogs
-class DialogAwarePointerSensor extends PointerSensor {
-  static activators = [
-    {
-      eventName: 'onPointerDown' as const,
-      handler: ({ nativeEvent: event }: { nativeEvent: DndPointerEvent }) => {
-        // Don't start drag if the event originated from inside a dialog
-        if ((event.target as Element)?.closest?.('[role="dialog"]')) {
-          return false;
-        }
-        return true;
-      },
-    },
-  ];
-}
 import { useShallow } from 'zustand/react/shallow';
 import { useAppStore, Feature } from '@/store/app-store';
 import { getElectronAPI } from '@/lib/electron';
@@ -71,7 +47,6 @@ import { useIsTablet } from '@/hooks/use-media-query';
 // Board-view specific imports
 // BoardHeader is now integrated into top-nav-bar
 // import { BoardHeader } from './board-view/board-header';
-import { KanbanBoard } from './board-view/kanban-board';
 import {
   AddFeatureDialog,
   AgentOutputModal,
@@ -95,7 +70,6 @@ import type { PRInfo, WorktreeInfo } from './board-view/worktree-panel/types';
 import { COLUMNS, getColumnsWithPipeline } from './board-view/constants';
 import {
   useBoardFeatures,
-  useBoardDragDrop,
   useBoardActions,
   useBoardKeyboardShortcuts,
   useBoardColumnFeatures,
@@ -107,6 +81,7 @@ import {
   useListViewState,
 } from './board-view/hooks';
 import { useBoardStatusTabs } from './board-view/hooks/use-board-status-tabs';
+import { useGithubBoardIssues } from './board-view/hooks/use-github-board-issues';
 import { ALL_PROJECTS_ID } from './board-view/components/board-project-dropdown';
 import {
   SelectionActionBar,
@@ -420,6 +395,26 @@ export function BoardView() {
   // null means "all projects" (no filtering), otherwise contains specific project IDs
   const [multiSelectedProjectIds, setMultiSelectedProjectIds] = useState<string[] | null>(null);
 
+  // Board mode state (local, github, or both for hybrid) - persisted in localStorage
+  const [activeModes, setActiveModes] = useState<('local' | 'github')[]>(() => {
+    try {
+      const stored = localStorage.getItem('automaker-board-modes');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return ['local'];
+  });
+  // Persist mode changes to localStorage
+  useEffect(() => {
+    localStorage.setItem('automaker-board-modes', JSON.stringify(activeModes));
+  }, [activeModes]);
+
+  const handleModeChange = useCallback((modes: ('local' | 'github')[]) => {
+    setActiveModes(modes.length === 0 ? ['local'] : modes);
+  }, []);
+
   // Handle project selection from dropdown
   // Uses board-scoped state instead of global state to allow browsing
   // features from different projects without affecting agent sessions
@@ -511,8 +506,8 @@ export function BoardView() {
   } = useSelectionMode();
   const [showMassEditDialog, setShowMassEditDialog] = useState(false);
 
-  // View mode state (kanban vs list)
-  const { viewMode, setViewMode, isListView, sortConfig, setSortColumn } = useListViewState();
+  // Sort state for list view
+  const { sortConfig, setSortColumn } = useListViewState();
 
   // Filter features by selected projects when multi-project filter is active.
   // When multiSelectedProjectIds is set, only show features from those specific projects.
@@ -796,14 +791,6 @@ export function BoardView() {
       });
   }, [currentProject?.path]);
 
-  const sensors = useSensors(
-    useSensor(DialogAwarePointerSensor, {
-      activationConstraint: {
-        distance: 8,
-      },
-    })
-  );
-
   // Get unique categories from existing features AND persisted categories for autocomplete suggestions
   const categorySuggestions = useMemo(() => {
     const featureCategories = hookFeatures.map((f) => f.category).filter(Boolean);
@@ -847,23 +834,6 @@ export function BoardView() {
 
     fetchBranches();
   }, [currentProject, worktreeRefreshKey]);
-
-  // Custom collision detection that prioritizes columns over cards
-  const collisionDetectionStrategy = useCallback((args: any) => {
-    // First, check if pointer is within a column
-    const pointerCollisions = pointerWithin(args);
-    const columnCollisions = pointerCollisions.filter((collision: any) =>
-      COLUMNS.some((col) => col.id === collision.id)
-    );
-
-    // If we found a column collision, use that
-    if (columnCollisions.length > 0) {
-      return columnCollisions;
-    }
-
-    // Otherwise, use rectangle intersection for cards
-    return rectIntersection(args);
-  }, []);
 
   // Use persistence hook
   const { persistFeatureCreate, persistFeatureUpdate, persistFeatureDelete } = useBoardPersistence({
@@ -1301,8 +1271,6 @@ export function BoardView() {
         branchName: worktree.branch,
         workMode: 'custom' as const, // Use the worktree's branch
         priority: 1, // High priority for PR feedback
-        planningMode: 'skip' as const,
-        requirePlanApproval: false,
       };
 
       // Capture existing feature IDs before adding
@@ -1344,8 +1312,6 @@ export function BoardView() {
         branchName: worktree.branch,
         workMode: 'custom' as const, // Use the worktree's branch
         priority: 1, // High priority for conflict resolution
-        planningMode: 'skip' as const,
-        requirePlanApproval: false,
       };
 
       // Capture existing feature IDs before adding
@@ -1389,6 +1355,85 @@ export function BoardView() {
       }
     },
     [handleAddFeature, handleStartImplementation]
+  );
+
+  // Handler for converting a local feature to a GitHub issue (moves to backlog)
+  const handleConvertToIssue = useCallback(
+    async (feature: Feature) => {
+      const projectPath =
+        (feature as any).projectPath || boardSelectedProject?.path || currentProject?.path;
+      if (!projectPath) {
+        toast.error('No project path available');
+        return;
+      }
+
+      try {
+        const api = getElectronAPI();
+        if (!api?.github?.createIssue) {
+          toast.error('GitHub API not available');
+          return;
+        }
+
+        const statusLabel = 'label-backlog';
+        const issueTitle =
+          (feature.title || '').trim() || (feature.description || '').slice(0, 100);
+        const firstParagraph = (feature.description || '').split('\n\n')[0] || '';
+        const issueSummary =
+          firstParagraph.length > 200 ? firstParagraph.slice(0, 200) + '...' : firstParagraph;
+
+        const result = await api.github.createIssue(projectPath, issueTitle, issueSummary, [
+          statusLabel,
+        ]);
+
+        if (result.success && result.issueNumber) {
+          const updates = {
+            status: 'backlog' as const,
+            source: 'github' as const,
+            githubIssue: {
+              number: result.issueNumber,
+              url: result.url || '',
+              assignees: [] as string[],
+              labels: [statusLabel],
+              state: 'open' as const,
+              syncedAt: new Date().toISOString(),
+            },
+          };
+          updateFeature(feature.id, updates);
+          persistFeatureUpdate(feature.id, updates);
+          toast.success(`Converted to GitHub issue #${result.issueNumber}`);
+
+          // Post description as first comment (non-blocking)
+          if (api.github.addComment && feature.description) {
+            const optionLines = [
+              `- **Model**: ${feature.model || 'default'}`,
+              `- **Category**: ${feature.category || 'Uncategorized'}`,
+            ];
+            const commentBody = [
+              '## Description',
+              '',
+              feature.description,
+              '',
+              '## Feature Options',
+              '',
+              ...optionLines,
+            ].join('\n');
+            api.github
+              .addComment(projectPath, result.issueNumber, commentBody)
+              .catch((err: unknown) =>
+                logger.error('Failed to post feature details comment:', err)
+              );
+          }
+        } else if (!result.success) {
+          toast.error('Failed to create GitHub issue', { description: result.error });
+        }
+      } catch (error) {
+        logger.error('Error converting to GitHub issue:', error);
+        toast.error('Failed to convert to GitHub issue', {
+          description: error instanceof Error ? error.message : 'An error occurred',
+        });
+      }
+    },
+    [boardSelectedProject, currentProject, updateFeature, persistFeatureUpdate]
   );
 
   // Client-side auto mode: periodically check for backlog items and move them to in-progress
@@ -1744,10 +1789,9 @@ export function BoardView() {
     onStartNextFeatures: handleStartNextFeatures,
     onViewOutput: handleViewOutput,
     onToggleAutoMode: () => setShowAutoModeModal(true),
-    // Tab navigation shortcuts - only active in Kanban view mode
-    onNextTab: !isListView ? nextStatusTab : undefined,
-    onPreviousTab: !isListView ? previousStatusTab : undefined,
-    onGoToTab: !isListView ? handleStatusTabChange : undefined,
+    onNextTab: nextStatusTab,
+    onPreviousTab: previousStatusTab,
+    onGoToTab: handleStatusTabChange,
     tabs: statusTabs,
     // Board panel toggle shortcuts
     onToggleFileExplorer: () => setShowFileExplorer((prev) => !prev),
@@ -1756,23 +1800,71 @@ export function BoardView() {
     onToggleDeployPanel: () => setDeployPanelCollapsed(!isDeployPanelCollapsed),
   });
 
-  // Use drag and drop hook
-  const { activeFeature, handleDragStart, handleDragEnd } = useBoardDragDrop({
-    features: hookFeatures,
-    currentProject,
-    runningAutoTasks,
-    persistFeatureUpdate,
-    handleStartImplementation,
-  });
-
   // Get pipeline config for column features hook (uses board-scoped project)
   const pipelineConfig = boardSelectedProject?.path
     ? pipelineConfigByProject[boardSelectedProject.path] || null
     : null;
 
+  // Fetch GitHub issues when GitHub mode is active
+  const isGithubModeActive = activeModes.includes('github');
+  const isLocalModeActive = activeModes.includes('local');
+
+  // Compute project infos for GitHub issue fetching
+  // In multi-project mode, fetch from all selected projects
+  const githubProjectInfos = useMemo(() => {
+    if (multiSelectedProjectIds && multiSelectedProjectIds.length > 0) {
+      return projects
+        .filter((p) => multiSelectedProjectIds.includes(p.id))
+        .map((p) => ({ path: p.path, name: p.name }));
+    }
+    if (showAllProjectsInBoard) {
+      return projects.map((p) => ({ path: p.path, name: p.name }));
+    }
+    return [];
+  }, [multiSelectedProjectIds, showAllProjectsInBoard, projects]);
+
+  const { githubFeatures, isLoading: isGithubLoading } = useGithubBoardIssues({
+    enabled: isGithubModeActive,
+    projectPath: boardSelectedProject?.path || currentProject?.path || null,
+    projectInfos: githubProjectInfos.length > 0 ? githubProjectInfos : undefined,
+    statusTabs,
+  });
+
+  // Merge features based on active modes
+  // Local features with linked githubIssue are preferred over virtual synced features
+  // so that Make/Run works (virtual features don't exist on disk).
+  const modeFilteredFeatures = useMemo(() => {
+    if (!isGithubModeActive) {
+      // Local only mode (default)
+      return projectFilteredFeatures;
+    }
+
+    // Build a set of GitHub issue numbers that have local features linked
+    const localLinkedIssueNumbers = new Set<number>();
+    for (const f of projectFilteredFeatures) {
+      if (f.githubIssue?.number) {
+        localLinkedIssueNumbers.add(f.githubIssue.number);
+      }
+    }
+
+    // Filter out virtual GitHub features that already have a local counterpart
+    const uniqueGithubFeatures = githubFeatures.filter(
+      (gf) => !gf.githubIssue?.number || !localLinkedIssueNumbers.has(gf.githubIssue.number)
+    );
+
+    if (isLocalModeActive) {
+      // Hybrid mode: local features + unmatched GitHub issues
+      return [...projectFilteredFeatures, ...uniqueGithubFeatures];
+    }
+
+    // GitHub only mode: local features with GitHub links + unmatched synced issues
+    const localGithubFeatures = projectFilteredFeatures.filter((f) => f.githubIssue);
+    return [...localGithubFeatures, ...uniqueGithubFeatures];
+  }, [projectFilteredFeatures, githubFeatures, isLocalModeActive, isGithubModeActive]);
+
   // Use column features hook with single-column mode support
   const { getColumnFeatures, columnFeaturesMap, columnCounts } = useBoardColumnFeatures({
-    features: projectFilteredFeatures,
+    features: modeFilteredFeatures,
     runningAutoTasks,
     searchQuery,
     showFavoritesOnly,
@@ -1810,10 +1902,6 @@ export function BoardView() {
       // Favorites
       showFavoritesOnly,
       onShowFavoritesOnlyChange: setShowFavoritesOnly,
-
-      // View toggle
-      viewMode,
-      onViewModeChange: setViewMode,
 
       // Board background
       onShowBoardBackground: () => setShowBoardBackgroundModal(true),
@@ -1853,7 +1941,10 @@ export function BoardView() {
       onDeleteStatus: handleDeleteStatus,
       statusTabs,
       statusTabCounts: columnCounts,
-      isListView,
+
+      // Mode filter
+      activeModes,
+      onModeChange: handleModeChange,
 
       // Deploy panel
       isDeployPanelCollapsed,
@@ -1882,7 +1973,6 @@ export function BoardView() {
     isCreatingSpec,
     creatingSpecProjectPath,
     showFavoritesOnly,
-    viewMode,
     autoMode.isRunning,
     runningAutoTasks.length,
     maxConcurrency,
@@ -1892,7 +1982,6 @@ export function BoardView() {
     clearBoardControls,
     setSearchQuery,
     setShowFavoritesOnly,
-    setViewMode,
     setShowBoardBackgroundModal,
     setMaxConcurrency,
     autoMode,
@@ -1912,7 +2001,9 @@ export function BoardView() {
     toggleStatusTab,
     statusTabs,
     columnCounts,
-    isListView,
+    // Mode filter deps
+    activeModes,
+    handleModeChange,
     // Deploy panel deps
     isDeployPanelCollapsed,
     setDeployPanelCollapsed,
@@ -2052,17 +2143,11 @@ export function BoardView() {
     (feature: Feature) => {
       if (!feature.planSpec?.content || !currentProject) return;
 
-      // Determine the planning mode for approval (skip should never have a plan requiring approval)
-      const mode = feature.planningMode;
-      const approvalMode: 'lite' | 'spec' | 'full' =
-        mode === 'lite' || mode === 'spec' || mode === 'full' ? mode : 'spec';
-
       // Re-open the approval dialog with the feature's plan data
       setPendingPlanApproval({
         featureId: feature.id,
         projectPath: currentProject.path,
         planContent: feature.planSpec.content,
-        planningMode: approvalMode,
       });
     },
     [currentProject, setPendingPlanApproval]
@@ -2077,7 +2162,7 @@ export function BoardView() {
   }
 
   // NOTE: We intentionally do NOT have an early return for isLoading here.
-  // The isLoading state is now handled within the KanbanBoard/ListView rendering
+  // The isLoading state is now handled within the ListView rendering
   // to prevent unmounting the AgentChatPanel and RunningAgentsPanel during
   // project switches. This ensures agent chat sessions remain stable.
 
@@ -2163,7 +2248,7 @@ export function BoardView() {
                       activeStatusTab={activeStatusTab}
                       activeStatusTabs={activeStatusTabs}
                     />
-                  ) : isListView ? (
+                  ) : (
                     <ListView
                       columnFeaturesMap={columnFeaturesMap}
                       allFeatures={hookFeatures}
@@ -2187,9 +2272,20 @@ export function BoardView() {
                         },
                         onToggleFavorite: (feature) => {
                           const updates = { isFavorite: !feature.isFavorite };
-                          updateFeature(feature.id, updates);
-                          persistFeatureUpdate(feature.id, updates);
+                          const storeFeatures = useAppStore.getState().features;
+                          if (!storeFeatures.some((f) => f.id === feature.id)) {
+                            // Virtual feature (e.g. GitHub issue) not in store - add it and create on server
+                            const newFeature = { ...feature, ...updates };
+                            useAppStore.setState({
+                              features: [...storeFeatures, newFeature],
+                            });
+                            persistFeatureCreate(newFeature);
+                          } else {
+                            updateFeature(feature.id, updates);
+                            persistFeatureUpdate(feature.id, updates);
+                          }
                         },
+                        onConvertToIssue: handleConvertToIssue,
                       }}
                       runningAutoTasks={runningAutoTasks}
                       pipelineConfig={pipelineConfig}
@@ -2204,60 +2300,6 @@ export function BoardView() {
                           handleViewOutput(feature);
                         }
                       }}
-                      className="transition-opacity duration-200"
-                      singleColumnMode={!isAllStatusMode}
-                      activeStatusTab={activeStatusTab}
-                      activeStatusTabs={activeStatusTabs}
-                      showAllProjects={showAllProjectsInBoard}
-                      currentGitHubUser={currentGitHubUser}
-                    />
-                  ) : (
-                    <KanbanBoard
-                      sensors={sensors}
-                      collisionDetectionStrategy={collisionDetectionStrategy}
-                      onDragStart={handleDragStart}
-                      onDragEnd={handleDragEnd}
-                      activeFeature={activeFeature}
-                      getColumnFeatures={getColumnFeatures}
-                      backgroundImageStyle={backgroundImageStyle}
-                      backgroundSettings={backgroundSettings}
-                      onEdit={(feature) => setEditingFeature(feature)}
-                      onDelete={(featureId) => handleDeleteFeature(featureId)}
-                      onViewOutput={handleViewOutput}
-                      onVerify={handleVerifyFeature}
-                      onResume={handleResumeFeature}
-                      onForceStop={handleForceStopFeature}
-                      onManualVerify={handleManualVerify}
-                      onMoveBackToInProgress={handleMoveBackToInProgress}
-                      onMoveBackToBacklog={handleMoveBackToBacklog}
-                      onFollowUp={handleOpenFollowUp}
-                      onComplete={handleCompleteFeature}
-                      onImplement={handleStartImplementation}
-                      onViewPlan={(feature) => setViewPlanFeature(feature)}
-                      onApprovePlan={handleOpenApprovalDialog}
-                      onSpawnTask={(feature) => {
-                        setSpawnParentFeature(feature);
-                        setShowAddDialog(true);
-                      }}
-                      onToggleFavorite={(feature) => {
-                        const updates = { isFavorite: !feature.isFavorite };
-                        updateFeature(feature.id, updates);
-                        persistFeatureUpdate(feature.id, updates);
-                      }}
-                      featuresWithContext={featuresWithContext}
-                      runningAutoTasks={runningAutoTasks}
-                      onCompleteAllWaiting={() => setShowCompleteAllWaitingDialog(true)}
-                      onAddFeature={() => setShowAddDialog(true)}
-                      pipelineConfig={pipelineConfig}
-                      onOpenPipelineSettings={() => setShowPipelineSettings(true)}
-                      isSelectionMode={isSelectionMode}
-                      selectionTarget={selectionTarget}
-                      selectedFeatureIds={selectedFeatureIds}
-                      onToggleFeatureSelection={toggleFeatureSelection}
-                      onToggleSelectionMode={toggleSelectionMode}
-                      viewMode={viewMode}
-                      isDragging={activeFeature !== null}
-                      onAiSuggest={() => setShowPlanDialog(true)}
                       className="transition-opacity duration-200"
                       singleColumnMode={!isAllStatusMode}
                       activeStatusTab={activeStatusTab}
@@ -2421,7 +2463,7 @@ export function BoardView() {
                           activeStatusTab={activeStatusTab}
                           activeStatusTabs={activeStatusTabs}
                         />
-                      ) : isListView ? (
+                      ) : (
                         <ListView
                           columnFeaturesMap={columnFeaturesMap}
                           allFeatures={hookFeatures}
@@ -2445,9 +2487,19 @@ export function BoardView() {
                             },
                             onToggleFavorite: (feature) => {
                               const updates = { isFavorite: !feature.isFavorite };
-                              updateFeature(feature.id, updates);
-                              persistFeatureUpdate(feature.id, updates);
+                              const storeFeatures = useAppStore.getState().features;
+                              if (!storeFeatures.some((f) => f.id === feature.id)) {
+                                const newFeature = { ...feature, ...updates };
+                                useAppStore.setState({
+                                  features: [...storeFeatures, newFeature],
+                                });
+                                persistFeatureCreate(newFeature);
+                              } else {
+                                updateFeature(feature.id, updates);
+                                persistFeatureUpdate(feature.id, updates);
+                              }
                             },
+                            onConvertToIssue: handleConvertToIssue,
                           }}
                           runningAutoTasks={runningAutoTasks}
                           pipelineConfig={pipelineConfig}
@@ -2462,59 +2514,6 @@ export function BoardView() {
                               handleViewOutput(feature);
                             }
                           }}
-                          className="transition-opacity duration-200"
-                          singleColumnMode={!isAllStatusMode}
-                          activeStatusTab={activeStatusTab}
-                          activeStatusTabs={activeStatusTabs}
-                          showAllProjects={showAllProjectsInBoard}
-                        />
-                      ) : (
-                        <KanbanBoard
-                          sensors={sensors}
-                          collisionDetectionStrategy={collisionDetectionStrategy}
-                          onDragStart={handleDragStart}
-                          onDragEnd={handleDragEnd}
-                          activeFeature={activeFeature}
-                          getColumnFeatures={getColumnFeatures}
-                          backgroundImageStyle={backgroundImageStyle}
-                          backgroundSettings={backgroundSettings}
-                          onEdit={(feature) => setEditingFeature(feature)}
-                          onDelete={(featureId) => handleDeleteFeature(featureId)}
-                          onViewOutput={handleViewOutput}
-                          onVerify={handleVerifyFeature}
-                          onResume={handleResumeFeature}
-                          onForceStop={handleForceStopFeature}
-                          onManualVerify={handleManualVerify}
-                          onMoveBackToInProgress={handleMoveBackToInProgress}
-                          onMoveBackToBacklog={handleMoveBackToBacklog}
-                          onFollowUp={handleOpenFollowUp}
-                          onComplete={handleCompleteFeature}
-                          onImplement={handleStartImplementation}
-                          onViewPlan={(feature) => setViewPlanFeature(feature)}
-                          onApprovePlan={handleOpenApprovalDialog}
-                          onSpawnTask={(feature) => {
-                            setSpawnParentFeature(feature);
-                            setShowAddDialog(true);
-                          }}
-                          onToggleFavorite={(feature) => {
-                            const updates = { isFavorite: !feature.isFavorite };
-                            updateFeature(feature.id, updates);
-                            persistFeatureUpdate(feature.id, updates);
-                          }}
-                          featuresWithContext={featuresWithContext}
-                          runningAutoTasks={runningAutoTasks}
-                          onCompleteAllWaiting={() => setShowCompleteAllWaitingDialog(true)}
-                          onAddFeature={() => setShowAddDialog(true)}
-                          pipelineConfig={pipelineConfig}
-                          onOpenPipelineSettings={() => setShowPipelineSettings(true)}
-                          isSelectionMode={isSelectionMode}
-                          selectionTarget={selectionTarget}
-                          selectedFeatureIds={selectedFeatureIds}
-                          onToggleFeatureSelection={toggleFeatureSelection}
-                          onToggleSelectionMode={toggleSelectionMode}
-                          viewMode={viewMode}
-                          isDragging={activeFeature !== null}
-                          onAiSuggest={() => setShowPlanDialog(true)}
                           className="transition-opacity duration-200"
                           singleColumnMode={!isAllStatusMode}
                           activeStatusTab={activeStatusTab}
@@ -2769,6 +2768,8 @@ export function BoardView() {
           projects,
           selectedProject: boardSelectedProject,
           showAllProjectsMode: showAllProjectsInBoard,
+          // Pass active modes so dialog can default source selection
+          activeModes,
         }}
       />
 

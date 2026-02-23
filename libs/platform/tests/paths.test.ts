@@ -40,11 +40,6 @@ import {
   getIdeationDraftsDir,
   getIdeationAnalysisPath,
   ensureIdeationDir,
-  // Event history paths
-  getEventHistoryDir,
-  getEventHistoryIndexPath,
-  getEventPath,
-  ensureEventHistoryDir,
   // Status-based paths
   getFeatureStatusDir,
   isStatusDir,
@@ -277,7 +272,9 @@ describe('paths.ts', () => {
 
   describe('isStatusDir', () => {
     it('should return true for valid status directory names', () => {
+      expect(isStatusDir('local')).toBe(true);
       expect(isStatusDir('backlog')).toBe(true);
+      expect(isStatusDir('planning')).toBe(true);
       expect(isStatusDir('in_progress')).toBe(true);
       expect(isStatusDir('waiting_approval')).toBe(true);
       expect(isStatusDir('completed')).toBe(true);
@@ -595,53 +592,6 @@ describe('paths.ts', () => {
     });
   });
 
-  describe('Event history path construction', () => {
-    it('should return event history directory path', () => {
-      const result = getEventHistoryDir(projectPath);
-      expect(result).toBe(path.join(projectPath, '.automaker', 'events'));
-    });
-
-    it('should return event history index file path', () => {
-      const result = getEventHistoryIndexPath(projectPath);
-      expect(result).toBe(path.join(projectPath, '.automaker', 'events', 'index.json'));
-    });
-
-    it('should return specific event file path', () => {
-      const result = getEventPath(projectPath, 'evt-12345');
-      expect(result).toBe(path.join(projectPath, '.automaker', 'events', 'evt-12345.json'));
-    });
-
-    it('should have all event paths under event history dir', () => {
-      const eventsDir = getEventHistoryDir(projectPath);
-      const paths = [getEventHistoryIndexPath(projectPath), getEventPath(projectPath, 'evt-1')];
-
-      paths.forEach((p) => {
-        expect(p.startsWith(eventsDir)).toBe(true);
-      });
-    });
-  });
-
-  describe('Event history directory creation', () => {
-    it('should create event history directory', async () => {
-      const eventsDir = await ensureEventHistoryDir(projectPath);
-
-      expect(eventsDir).toBe(path.join(projectPath, '.automaker', 'events'));
-
-      const stats = await fs.stat(eventsDir);
-      expect(stats.isDirectory()).toBe(true);
-    });
-
-    it('should be idempotent when creating event history directory', async () => {
-      const firstResult = await ensureEventHistoryDir(projectPath);
-      const secondResult = await ensureEventHistoryDir(projectPath);
-
-      expect(firstResult).toBe(secondResult);
-
-      const stats = await fs.stat(firstResult);
-      expect(stats.isDirectory()).toBe(true);
-    });
-  });
-
   describe('Path relationships', () => {
     it('should have feature dir as child of features dir', () => {
       const featuresDir = getFeaturesDir(projectPath);
@@ -665,7 +615,6 @@ describe('paths.ts', () => {
         getExecutionStatePath(projectPath),
         getProjectSettingsPath(projectPath),
         getIdeationDir(projectPath),
-        getEventHistoryDir(projectPath),
       ];
 
       paths.forEach((p) => {

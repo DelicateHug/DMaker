@@ -440,9 +440,7 @@ export function AgentOutputModal({
         }
         case 'plan_approval_required':
           // Show when plan requires approval
-          if ('planningMode' in event) {
-            newContent = `\n${formatTimestamp()}⏸️ Plan generated - waiting for your approval...\n`;
-          }
+          newContent = `\n${formatTimestamp()}⏸️ Plan generated - waiting for your approval...\n`;
           break;
         case 'plan_approved':
           // Show when plan is manually approved

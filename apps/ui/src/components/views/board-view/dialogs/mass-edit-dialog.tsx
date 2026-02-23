@@ -12,18 +12,11 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { AlertCircle } from 'lucide-react';
 import { modelSupportsThinking } from '@/lib/utils';
-import { Feature, ModelAlias, ThinkingLevel, PlanningMode } from '@/store/app-store';
-import {
-  TestingTabContent,
-  PrioritySelect,
-  PlanningModeSelect,
-  WorkModeSelector,
-  PhaseModelSelector,
-} from '../shared';
+import { Feature, ModelAlias, ThinkingLevel } from '@/store/app-store';
+import { TestingTabContent, PrioritySelect, WorkModeSelector, PhaseModelSelector } from '../shared';
 import type { WorkMode } from '../shared';
-import { isCursorModel, isClaudeModel, type PhaseModelEntry } from '@automaker/types';
+import { isCursorModel, type PhaseModelEntry } from '@automaker/types';
 import { cn } from '@/lib/utils';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface MassEditDialogProps {
   open: boolean;
@@ -38,8 +31,6 @@ interface MassEditDialogProps {
 interface ApplyState {
   model: boolean;
   thinkingLevel: boolean;
-  planningMode: boolean;
-  requirePlanApproval: boolean;
   priority: boolean;
   skipTests: boolean;
   branchName: boolean;
@@ -51,10 +42,6 @@ function getMixedValues(features: Feature[]): Record<string, boolean> {
   return {
     model: !features.every((f) => f.model === first.model),
     thinkingLevel: !features.every((f) => f.thinkingLevel === first.thinkingLevel),
-    planningMode: !features.every((f) => f.planningMode === first.planningMode),
-    requirePlanApproval: !features.every(
-      (f) => f.requirePlanApproval === first.requirePlanApproval
-    ),
     priority: !features.every((f) => f.priority === first.priority),
     skipTests: !features.every((f) => f.skipTests === first.skipTests),
     branchName: !features.every((f) => f.branchName === first.branchName),
@@ -123,8 +110,6 @@ export function MassEditDialog({
   const [applyState, setApplyState] = useState<ApplyState>({
     model: false,
     thinkingLevel: false,
-    planningMode: false,
-    requirePlanApproval: false,
     priority: false,
     skipTests: false,
     branchName: false,
@@ -133,8 +118,6 @@ export function MassEditDialog({
   // Field values
   const [model, setModel] = useState<ModelAlias>('sonnet');
   const [thinkingLevel, setThinkingLevel] = useState<ThinkingLevel>('none');
-  const [planningMode, setPlanningMode] = useState<PlanningMode>('skip');
-  const [requirePlanApproval, setRequirePlanApproval] = useState(false);
   const [priority, setPriority] = useState(2);
   const [skipTests, setSkipTests] = useState(false);
 
@@ -159,16 +142,12 @@ export function MassEditDialog({
       setApplyState({
         model: false,
         thinkingLevel: false,
-        planningMode: false,
-        requirePlanApproval: false,
         priority: false,
         skipTests: false,
         branchName: false,
       });
       setModel(getInitialValue(selectedFeatures, 'model', 'sonnet') as ModelAlias);
       setThinkingLevel(getInitialValue(selectedFeatures, 'thinkingLevel', 'none') as ThinkingLevel);
-      setPlanningMode(getInitialValue(selectedFeatures, 'planningMode', 'skip') as PlanningMode);
-      setRequirePlanApproval(getInitialValue(selectedFeatures, 'requirePlanApproval', false));
       setPriority(getInitialValue(selectedFeatures, 'priority', 2));
       setSkipTests(getInitialValue(selectedFeatures, 'skipTests', false));
       // Reset work mode and branch name
@@ -183,8 +162,6 @@ export function MassEditDialog({
 
     if (applyState.model) updates.model = model;
     if (applyState.thinkingLevel) updates.thinkingLevel = thinkingLevel;
-    if (applyState.planningMode) updates.planningMode = planningMode;
-    if (applyState.requirePlanApproval) updates.requirePlanApproval = requirePlanApproval;
     if (applyState.priority) updates.priority = priority;
     if (applyState.skipTests) updates.skipTests = skipTests;
     if (applyState.branchName) {
@@ -211,8 +188,6 @@ export function MassEditDialog({
   const hasAnyApply = Object.values(applyState).some(Boolean);
   const isCurrentModelCursor = isCursorModel(model);
   const modelAllowsThinking = !isCurrentModelCursor && modelSupportsThinking(model);
-  const modelSupportsPlanningMode = isClaudeModel(model);
-
   return (
     <Dialog open={open} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-2xl" data-testid="mass-edit-dialog">
@@ -248,66 +223,6 @@ export function MassEditDialog({
 
           {/* Separator */}
           <div className="border-t border-border" />
-
-          {/* Planning Mode */}
-          {modelSupportsPlanningMode ? (
-            <FieldWrapper
-              label="Planning Mode"
-              isMixed={mixedValues.planningMode || mixedValues.requirePlanApproval}
-              willApply={applyState.planningMode || applyState.requirePlanApproval}
-              onApplyChange={(apply) =>
-                setApplyState((prev) => ({
-                  ...prev,
-                  planningMode: apply,
-                  requirePlanApproval: apply,
-                }))
-              }
-            >
-              <PlanningModeSelect
-                mode={planningMode}
-                onModeChange={(newMode) => {
-                  setPlanningMode(newMode);
-                  // Auto-suggest approval based on mode, but user can override
-                  setRequirePlanApproval(newMode === 'spec' || newMode === 'full');
-                }}
-                requireApproval={requirePlanApproval}
-                onRequireApprovalChange={setRequirePlanApproval}
-                testIdPrefix="mass-edit-planning"
-              />
-            </FieldWrapper>
-          ) : (
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <div
-                    className={cn(
-                      'p-3 rounded-lg border transition-colors border-border bg-muted/20 opacity-50 cursor-not-allowed'
-                    )}
-                  >
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-2">
-                        <Checkbox checked={false} disabled className="opacity-50" />
-                        <Label className="text-sm font-medium text-muted-foreground">
-                          Planning Mode
-                        </Label>
-                      </div>
-                    </div>
-                    <div className="opacity-50 pointer-events-none">
-                      <PlanningModeSelect
-                        mode="skip"
-                        onModeChange={() => {}}
-                        testIdPrefix="mass-edit-planning"
-                        disabled
-                      />
-                    </div>
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Planning modes are only available for Claude Provider</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          )}
 
           {/* Priority */}
           <FieldWrapper

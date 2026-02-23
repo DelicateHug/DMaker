@@ -28,11 +28,6 @@ export {
   getBranchTrackingPath,
   getExecutionStatePath,
   getNotificationsPath,
-  // Event history paths
-  getEventHistoryDir,
-  getEventHistoryIndexPath,
-  getEventPath,
-  ensureEventHistoryDir,
   ensureAutomakerDir,
   getGlobalSettingsPath,
   getCredentialsPath,

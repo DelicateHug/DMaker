@@ -79,16 +79,10 @@ import { pipelineService } from './services/pipeline-service.js';
 import { createIdeationRoutes } from './routes/ideation/index.js';
 import { IdeationService } from './services/ideation-service.js';
 import { getDevServerService } from './services/dev-server-service.js';
-import { eventHookService } from './services/event-hook-service.js';
 import { createNotificationsRoutes } from './routes/notifications/index.js';
 import { getNotificationService } from './services/notification-service.js';
-import { createEventHistoryRoutes } from './routes/event-history/index.js';
-import { getEventHistoryService } from './services/event-history-service.js';
 import { createDeployRoutes } from './routes/deploy/index.js';
 import { deployScriptRunner } from './services/deploy-service.js';
-import { createVoiceRoutes } from './routes/voice/index.js';
-import { VoiceService } from './services/voice-service.js';
-
 // Load environment variables
 dotenv.config();
 
@@ -232,8 +226,6 @@ const codexModelCacheService = new CodexModelCacheService(DATA_DIR, codexAppServ
 const codexUsageService = new CodexUsageService(codexAppServerService);
 const mcpTestService = new MCPTestService(settingsService);
 const ideationService = new IdeationService(events, settingsService, featureLoader);
-const voiceService = new VoiceService(DATA_DIR, events, settingsService);
-
 // Initialize DevServerService with event emitter for real-time log streaming
 const devServerService = getDevServerService();
 devServerService.setEventEmitter(events);
@@ -241,12 +233,6 @@ devServerService.setEventEmitter(events);
 // Initialize Notification Service with event emitter for real-time updates
 const notificationService = getNotificationService();
 notificationService.setEventEmitter(events);
-
-// Initialize Event History Service
-const eventHistoryService = getEventHistoryService();
-
-// Initialize Event Hook Service for custom event triggers (with history storage)
-eventHookService.initialize(events, settingsService, eventHistoryService);
 
 // DeployScriptRunner requires no initialization – it's a simple
 // stateless service that discovers and runs scripts from the deploy folder.
@@ -270,9 +256,6 @@ eventHookService.initialize(events, settingsService, eventHistoryService);
 
   await agentService.initialize();
   logger.info('Agent service initialized');
-
-  await voiceService.initialize();
-  logger.info('Voice service initialized');
 
   // Bootstrap Codex model cache in background (don't block server startup)
   void codexModelCacheService.getModels().catch((err) => {
@@ -332,10 +315,7 @@ app.use('/api/mcp', createMCPRoutes(mcpTestService));
 app.use('/api/pipeline', createPipelineRoutes(pipelineService));
 app.use('/api/ideation', createIdeationRoutes(events, ideationService, featureLoader));
 app.use('/api/notifications', createNotificationsRoutes(notificationService));
-app.use('/api/event-history', createEventHistoryRoutes(eventHistoryService, settingsService));
 app.use('/api/deploy', createDeployRoutes(deployScriptRunner, events));
-app.use('/api/voice', createVoiceRoutes(voiceService));
-
 // Create HTTP server
 const server = createServer(app);
 

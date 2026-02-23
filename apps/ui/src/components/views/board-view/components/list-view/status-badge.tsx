@@ -17,11 +17,23 @@ interface StatusDisplay {
  * Base status display configurations using CSS variables
  */
 const BASE_STATUS_DISPLAY: Record<string, StatusDisplay> = {
+  local: {
+    label: 'Local',
+    colorClass: 'text-[var(--status-local)]',
+    bgClass: 'bg-[var(--status-local)]/15',
+    borderClass: 'border-[var(--status-local)]/30',
+  },
   backlog: {
     label: 'Backlog',
     colorClass: 'text-[var(--status-backlog)]',
     bgClass: 'bg-[var(--status-backlog)]/15',
     borderClass: 'border-[var(--status-backlog)]/30',
+  },
+  planning: {
+    label: 'Planning',
+    colorClass: 'text-[var(--status-planning)]',
+    bgClass: 'bg-[var(--status-planning)]/15',
+    borderClass: 'border-[var(--status-planning)]/30',
   },
   in_progress: {
     label: 'In Progress',
@@ -35,11 +47,11 @@ const BASE_STATUS_DISPLAY: Record<string, StatusDisplay> = {
     bgClass: 'bg-[var(--status-waiting)]/15',
     borderClass: 'border-[var(--status-waiting)]/30',
   },
-  verified: {
-    label: 'Verified',
-    colorClass: 'text-[var(--status-success)]',
-    bgClass: 'bg-[var(--status-success)]/15',
-    borderClass: 'border-[var(--status-success)]/30',
+  completed: {
+    label: 'Completed',
+    colorClass: 'text-[var(--status-completed)]',
+    bgClass: 'bg-[var(--status-completed)]/15',
+    borderClass: 'border-[var(--status-completed)]/30',
   },
 };
 
@@ -203,10 +215,12 @@ export function getStatusLabel(
  */
 export function getStatusOrder(status: FeatureStatusWithPipeline): number {
   const baseOrder: Record<string, number> = {
+    local: -1,
     backlog: 0,
+    planning: 0.5,
     in_progress: 1,
     waiting_approval: 2,
-    verified: 3,
+    completed: 3,
   };
 
   if (isPipelineStatus(status)) {

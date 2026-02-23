@@ -46,8 +46,6 @@ const E2E_SETTINGS = {
   enableDependencyBlocking: true,
   skipVerificationInAutoMode: false,
   useWorktrees: true,
-  defaultPlanningMode: 'skip',
-  defaultRequirePlanApproval: false,
   muteDoneSound: false,
   phaseModels: {
     enhancementModel: { model: 'sonnet' },

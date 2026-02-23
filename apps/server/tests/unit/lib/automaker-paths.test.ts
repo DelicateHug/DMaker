@@ -37,11 +37,6 @@ import {
   getIdeationDraftsDir,
   getIdeationAnalysisPath,
   ensureIdeationDir,
-  // Event history paths
-  getEventHistoryDir,
-  getEventHistoryIndexPath,
-  getEventPath,
-  ensureEventHistoryDir,
 } from '@automaker/platform';
 
 describe('automaker-paths.ts', () => {
@@ -250,24 +245,6 @@ describe('automaker-paths.ts', () => {
     });
   });
 
-  describe('Event history paths', () => {
-    it('should return path to event history directory', () => {
-      expect(getEventHistoryDir(projectPath)).toBe(path.join(projectPath, '.automaker', 'events'));
-    });
-
-    it('should return path to event history index file', () => {
-      expect(getEventHistoryIndexPath(projectPath)).toBe(
-        path.join(projectPath, '.automaker', 'events', 'index.json')
-      );
-    });
-
-    it('should return path to specific event file', () => {
-      expect(getEventPath(projectPath, 'evt-12345')).toBe(
-        path.join(projectPath, '.automaker', 'events', 'evt-12345.json')
-      );
-    });
-  });
-
   describe('ensureIdeationDir', () => {
     let testDir: string;
 
@@ -299,40 +276,6 @@ describe('automaker-paths.ts', () => {
       const result = await ensureIdeationDir(testDir);
 
       expect(result).toBe(ideationDir);
-    });
-  });
-
-  describe('ensureEventHistoryDir', () => {
-    let testDir: string;
-
-    beforeEach(async () => {
-      testDir = path.join(os.tmpdir(), `event-history-dir-test-${Date.now()}`);
-      await fs.mkdir(testDir, { recursive: true });
-    });
-
-    afterEach(async () => {
-      try {
-        await fs.rm(testDir, { recursive: true, force: true });
-      } catch {
-        // Ignore cleanup errors
-      }
-    });
-
-    it('should create event history directory and return path', async () => {
-      const result = await ensureEventHistoryDir(testDir);
-
-      expect(result).toBe(path.join(testDir, '.automaker', 'events'));
-      const stats = await fs.stat(result);
-      expect(stats.isDirectory()).toBe(true);
-    });
-
-    it('should succeed if directory already exists', async () => {
-      const eventsDir = path.join(testDir, '.automaker', 'events');
-      await fs.mkdir(eventsDir, { recursive: true });
-
-      const result = await ensureEventHistoryDir(testDir);
-
-      expect(result).toBe(eventsDir);
     });
   });
 

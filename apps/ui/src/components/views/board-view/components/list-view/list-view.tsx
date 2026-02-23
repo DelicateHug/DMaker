@@ -46,6 +46,7 @@ export interface ListViewActionHandlers {
   onApprovePlan?: (feature: Feature) => void;
   onSpawnTask?: (feature: Feature) => void;
   onToggleFavorite?: (feature: Feature) => void;
+  onConvertToIssue?: (feature: Feature) => void;
 }
 
 export interface ListViewProps {
@@ -783,6 +784,19 @@ export const ListView = memo(function ListView({
               if (f) actionHandlers.onSpawnTask?.(f);
             }
           : undefined,
+        convertToIssue: actionHandlers.onConvertToIssue
+          ? (id) => {
+              const f = allFeatures.find((f) => f.id === id);
+              if (f) actionHandlers.onConvertToIssue?.(f);
+            }
+          : undefined,
+        toggleFavorite: actionHandlers.onToggleFavorite
+          ? (id) => {
+              const f = allFeatures.find((f) => f.id === id);
+              if (f) actionHandlers.onToggleFavorite?.(f);
+            }
+          : undefined,
+        isFavorite: feature.isFavorite,
       });
     },
     [actionHandlers, allFeatures]

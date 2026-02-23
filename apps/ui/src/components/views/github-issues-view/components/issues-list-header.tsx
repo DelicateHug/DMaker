@@ -1,5 +1,8 @@
-import { CircleDot, RefreshCw } from 'lucide-react';
+import { useState } from 'react';
+import { CircleDot, Pencil, RefreshCw, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import type { IssuesStateFilter } from '../types';
 import { IssuesFilterControls } from './issues-filter-controls';
@@ -13,6 +16,12 @@ interface IssuesListHeaderProps {
   totalClosedCount?: number;
   /** Whether any filter is currently active */
   hasActiveFilter?: boolean;
+  /** GitHub repository full name (e.g., "owner/repo") */
+  repoFullName?: string | null;
+  /** Whether a custom repo override is active */
+  hasRepoOverride?: boolean;
+  /** Called when the user changes the repo override */
+  onRepoChange?: (repo: string | undefined) => void;
   refreshing: boolean;
   onRefresh: () => void;
   /** Whether the list is in compact mode (e.g., when detail panel is open) */
@@ -33,12 +42,17 @@ export function IssuesListHeader({
   totalOpenCount,
   totalClosedCount,
   hasActiveFilter = false,
+  repoFullName,
+  hasRepoOverride = false,
+  onRepoChange,
   refreshing,
   onRefresh,
   compact = false,
   filterProps,
 }: IssuesListHeaderProps) {
   const totalIssues = openCount + closedCount;
+  const [popoverOpen, setPopoverOpen] = useState(false);
+  const [repoInput, setRepoInput] = useState('');
 
   // Format the counts subtitle based on filter state
   const getCountsSubtitle = () => {
@@ -63,6 +77,20 @@ export function IssuesListHeader({
     return `${openCount} open, ${closedCount} closed`;
   };
 
+  const handleRepoSubmit = () => {
+    const trimmed = repoInput.trim();
+    if (trimmed && /^[^/]+\/[^/]+$/.test(trimmed)) {
+      onRepoChange?.(trimmed);
+      setPopoverOpen(false);
+    }
+  };
+
+  const handleResetRepo = () => {
+    onRepoChange?.(undefined);
+    setPopoverOpen(false);
+    setRepoInput('');
+  };
+
   return (
     <div className="border-b border-border">
       {/* Top row: Title and refresh button */}
@@ -72,7 +100,67 @@ export function IssuesListHeader({
             <CircleDot className="h-5 w-5 text-green-500" />
           </div>
           <div>
-            <h1 className="text-lg font-bold">Issues</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-lg font-bold">Issues</h1>
+              {repoFullName && onRepoChange ? (
+                <Popover
+                  open={popoverOpen}
+                  onOpenChange={(open) => {
+                    setPopoverOpen(open);
+                    if (open) setRepoInput(repoFullName || '');
+                  }}
+                >
+                  <PopoverTrigger asChild>
+                    <button className="inline-flex items-center gap-1 text-xs text-muted-foreground font-normal hover:text-foreground transition-colors">
+                      {repoFullName}
+                      <Pencil className="h-3 w-3" />
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-72 p-3" align="start">
+                    <div className="space-y-2">
+                      <p className="text-xs text-muted-foreground">Change GitHub repository</p>
+                      <form
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          handleRepoSubmit();
+                        }}
+                      >
+                        <Input
+                          value={repoInput}
+                          onChange={(e) => setRepoInput(e.target.value)}
+                          placeholder="owner/repo"
+                          className="h-8 text-sm"
+                          autoFocus
+                        />
+                      </form>
+                      <div className="flex items-center justify-between">
+                        {hasRepoOverride && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 text-xs px-2"
+                            onClick={handleResetRepo}
+                          >
+                            <X className="h-3 w-3 mr-1" />
+                            Reset to auto-detect
+                          </Button>
+                        )}
+                        <Button
+                          size="sm"
+                          className="h-7 text-xs px-3 ml-auto"
+                          onClick={handleRepoSubmit}
+                          disabled={!repoInput.trim() || !/^[^/]+\/[^/]+$/.test(repoInput.trim())}
+                        >
+                          Save
+                        </Button>
+                      </div>
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              ) : repoFullName ? (
+                <span className="text-xs text-muted-foreground font-normal">{repoFullName}</span>
+              ) : null}
+            </div>
             <p className="text-xs text-muted-foreground">{getCountsSubtitle()}</p>
           </div>
         </div>

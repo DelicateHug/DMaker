@@ -301,6 +301,16 @@ export function UsagePopover() {
     }
   }, [isCodexStale, isCodexAuthenticated, fetchCodexUsage]);
 
+  // Background refresh: always fetch every 30s so data is ready when popover opens
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      if (isClaudeAuthenticated) fetchClaudeUsage(true);
+      if (isCodexAuthenticated) fetchCodexUsage(true);
+    }, REFRESH_INTERVAL_SECONDS * 1000);
+
+    return () => clearInterval(intervalId);
+  }, [isClaudeAuthenticated, isCodexAuthenticated, fetchClaudeUsage, fetchCodexUsage]);
+
   // Countdown timer for next refresh
   const [refreshCountdown, setRefreshCountdown] = useState(REFRESH_INTERVAL_SECONDS);
 

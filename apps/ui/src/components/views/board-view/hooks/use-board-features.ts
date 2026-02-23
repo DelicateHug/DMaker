@@ -17,8 +17,9 @@ const BOARD_STATUS_FILTER = { excludeStatuses: ['completed'] };
 // Debounce delay for task progress updates (ms)
 const TASK_PROGRESS_DEBOUNCE_MS = 500;
 
-// Interval for periodic background polling (ms)
-const POLL_INTERVAL_MS = 10_000;
+// Polling intervals: faster when board is visible, slower when hidden
+const POLL_INTERVAL_ACTIVE_MS = 10_000;
+const POLL_INTERVAL_BACKGROUND_MS = 30_000;
 
 /**
  * Merge server features with the current local store, preserving local state
@@ -44,6 +45,7 @@ function mergeServerFeatures(serverFeatures: Feature[], localFeatures: Feature[]
           status: local.status,
           completedAt: local.completedAt ?? sf.completedAt,
           startedAt: local.startedAt ?? sf.startedAt,
+          isFavorite: local.isFavorite ?? sf.isFavorite,
         };
       }
     }
@@ -101,6 +103,8 @@ function summaryToFeature(
     githubIssue: summary.githubIssue,
     claimedBy: summary.claimedBy,
     claimedAt: summary.claimedAt,
+    // Source tracking
+    source: 'local' as const,
     // Project info for multi-project support
     projectPath,
     projectName,
@@ -111,14 +115,27 @@ export function useBoardFeatures({
   currentProject: currentProjectProp,
   projects = [],
 }: UseBoardFeaturesProps = {}) {
-  const { features, setFeatures } = useAppStore(
+  const {
+    features,
+    setFeatures,
+    featuresLoading: isLoading,
+    setFeaturesLoading: setIsLoading,
+    featuresFullyLoaded: isFullyLoaded,
+    setFeaturesFullyLoaded: setIsFullyLoaded,
+    featuresLastLoadedProject,
+    setFeaturesLastLoadedProject,
+  } = useAppStore(
     useShallow((state) => ({
       features: state.features,
       setFeatures: state.setFeatures,
+      featuresLoading: state.featuresLoading,
+      setFeaturesLoading: state.setFeaturesLoading,
+      featuresFullyLoaded: state.featuresFullyLoaded,
+      setFeaturesFullyLoaded: state.setFeaturesFullyLoaded,
+      featuresLastLoadedProject: state.featuresLastLoadedProject,
+      setFeaturesLastLoadedProject: state.setFeaturesLastLoadedProject,
     }))
   );
-  const [isLoading, setIsLoading] = useState(false);
-  const [isFullyLoaded, setIsFullyLoaded] = useState(false);
   const [persistedCategories, setPersistedCategories] = useState<string[]>([]);
 
   // Board-scoped project selection (independent of global currentProject)
@@ -152,6 +169,16 @@ export function useBoardFeatures({
   // to run as soon as the current one finishes.
   const pendingReloadRef = useRef(false);
 
+  // If features were already loaded for this project (e.g., component stayed mounted
+  // via PersistentViewContainer), skip Phase 1 on "re-mount" to avoid flash.
+  useEffect(() => {
+    const currentPath = effectiveProject?.path ?? null;
+    if (currentPath && currentPath === featuresLastLoadedProject && features.length > 0) {
+      // We already have data for this project — skip initial load
+      isInitialLoadRef.current = false;
+    }
+  }, []); // Intentionally empty — only runs on first mount
+
   // Clear and reload features when board-selected project changes
   // This ensures stale data from a previous project is not displayed
   useEffect(() => {
@@ -160,18 +187,13 @@ export function useBoardFeatures({
 
     // Only trigger on actual project change (not initial mount)
     if (previousPath !== null && currentPath !== previousPath) {
-      logger.info(
-        `Board project changed from ${previousPath} to ${currentPath}, clearing features`
-      );
+      logger.info(`Board project changed from ${previousPath} to ${currentPath}`);
 
-      // Immediately clear features to prevent showing stale data
-      setFeatures([]);
-      setPersistedCategories([]);
-
-      // Mark as switching and reset loading state
+      // Mark as switching so Phase 1 runs — but DON'T clear features or show
+      // a skeleton.  Phase 1 will atomically replace features when summaries
+      // arrive, avoiding a visible blank flash.
       isSwitchingProjectRef.current = true;
       isInitialLoadRef.current = true;
-      setIsLoading(true);
       setIsFullyLoaded(false);
 
       // Invalidate any in-flight loads
@@ -180,7 +202,7 @@ export function useBoardFeatures({
 
     // Update ref for next comparison
     prevProjectPathRef.current = currentPath;
-  }, [effectiveProject?.path, setFeatures]);
+  }, [effectiveProject?.path, setIsFullyLoaded]);
 
   // Reset loading state when toggling between single-project and all-projects mode.
   // Without this, Phase 1 (fast summaries) is skipped and the board stays stuck
@@ -193,19 +215,16 @@ export function useBoardFeatures({
       );
       prevShowAllRef.current = showAllProjectsInBoard;
 
-      // Reset so Phase 1 runs, giving immediate visual feedback
+      // Reset so Phase 1 runs — keep existing features visible until
+      // new data arrives to avoid a blank flash.
       isInitialLoadRef.current = true;
       isSwitchingProjectRef.current = true;
-      setIsLoading(true);
       setIsFullyLoaded(false);
-
-      // Clear stale single-project features
-      setFeatures([]);
 
       // Invalidate any in-flight loads from the previous mode
       loadGenerationRef.current += 1;
     }
-  }, [showAllProjectsInBoard, setFeatures]);
+  }, [showAllProjectsInBoard, setIsFullyLoaded]);
 
   /**
    * Phase 2: Load full feature data in the background.
@@ -246,6 +265,7 @@ export function useBoardFeatures({
                 startedAt: f.startedAt,
                 model: f.model || 'opus',
                 thinkingLevel: f.thinkingLevel || 'none',
+                source: f.source || 'local',
                 projectPath: project.path,
                 projectName: project.name,
               }));
@@ -303,6 +323,7 @@ export function useBoardFeatures({
           startedAt: f.startedAt,
           model: f.model || 'opus',
           thinkingLevel: f.thinkingLevel || 'none',
+          source: f.source || 'local',
           projectPath: effectiveProject.path,
           projectName: (effectiveProject as { name?: string }).name,
         }));
@@ -311,6 +332,7 @@ export function useBoardFeatures({
         if (myGeneration === loadGenerationRef.current) {
           setFeatures(mergeServerFeatures(featuresWithIds, useAppStore.getState().features));
           setIsFullyLoaded(true);
+          setFeaturesLastLoadedProject(effectiveProject.path);
           logger.info(`Phase 2: Loaded ${featuresWithIds.length} full features`);
         } else {
           logger.info('Phase 2: Discarding stale single-project result (generation changed)');
@@ -339,7 +361,14 @@ export function useBoardFeatures({
         loadFullFeatures();
       }
     }
-  }, [effectiveProject, setFeatures, showAllProjectsInBoard, allProjects]);
+  }, [
+    effectiveProject,
+    setFeatures,
+    setIsFullyLoaded,
+    setFeaturesLastLoadedProject,
+    showAllProjectsInBoard,
+    allProjects,
+  ]);
 
   /**
    * Two-phase feature loading:
@@ -359,11 +388,6 @@ export function useBoardFeatures({
     if (showAllProjectsInBoard && allProjects.length > 0) {
       // On initial load / project switch: run Phase 1 (summaries) first
       if (isInitialLoadRef.current) {
-        // Only show skeleton on project switches, not on initial app startup.
-        // This prevents the heavy skeleton from flashing before features populate.
-        if (isSwitchingProjectRef.current) {
-          setIsLoading(true);
-        }
         setIsFullyLoaded(false);
 
         try {
@@ -425,11 +449,6 @@ export function useBoardFeatures({
 
     // On initial load / project switch: run Phase 1 (summaries) first
     if (isInitialLoadRef.current) {
-      // Only show skeleton on project switches, not on initial app startup.
-      // This prevents the heavy skeleton from flashing before features populate.
-      if (isSwitchingProjectRef.current) {
-        setIsLoading(true);
-      }
       setIsFullyLoaded(false);
 
       try {
@@ -451,6 +470,7 @@ export function useBoardFeatures({
             summaryToFeature(s, effectiveProject.path, (effectiveProject as { name?: string }).name)
           );
           setFeatures(summaryFeatures);
+          setFeaturesLastLoadedProject(effectiveProject.path);
 
           logger.info(`Phase 1: Loaded ${summaryFeatures.length} feature summaries`);
         } else if (!summaryResult.success && 'error' in summaryResult) {
@@ -471,7 +491,16 @@ export function useBoardFeatures({
 
     // Subsequent reloads: skip Phase 1, just refresh full data silently
     loadFullFeatures();
-  }, [effectiveProject, setFeatures, showAllProjectsInBoard, allProjects, loadFullFeatures]);
+  }, [
+    effectiveProject,
+    setFeatures,
+    setIsLoading,
+    setIsFullyLoaded,
+    setFeaturesLastLoadedProject,
+    showAllProjectsInBoard,
+    allProjects,
+    loadFullFeatures,
+  ]);
 
   // Load persisted categories from file
   const loadCategories = useCallback(async () => {
@@ -702,26 +731,54 @@ export function useBoardFeatures({
     loadCategories();
   }, [loadCategories]);
 
-  // ─── Periodic background polling (every 10 seconds) ───────────────
+  // ─── Adaptive periodic background polling ──────────────────────────
+  // Uses faster polling (10s) when the browser tab is visible, slower (30s) when
+  // the tab is hidden. When the tab becomes visible again, triggers an immediate
+  // refresh so data is current.
   // Supplements WebSocket events for reliability. Skips when:
   //   - No project is selected
   //   - A full load is already in-flight
-  //   - The browser tab is hidden
+  //   - The browser tab is hidden (completely, for the fast interval)
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   useEffect(() => {
     if (!effectiveProject) return;
 
-    const intervalId = setInterval(() => {
-      // Skip if already loading or tab is hidden
-      if (fullLoadInFlightRef.current) return;
-      if (document.visibilityState === 'hidden') return;
+    let intervalId: ReturnType<typeof setInterval> | null = null;
 
-      logger.debug('Periodic poll: refreshing features');
-      loadFullFeatures();
-    }, POLL_INTERVAL_MS);
+    const startPolling = () => {
+      if (intervalId) clearInterval(intervalId);
 
-    return () => clearInterval(intervalId);
+      const isVisible = document.visibilityState === 'visible';
+      const pollInterval = isVisible ? POLL_INTERVAL_ACTIVE_MS : POLL_INTERVAL_BACKGROUND_MS;
+
+      intervalId = setInterval(() => {
+        // Skip if already loading
+        if (fullLoadInFlightRef.current) return;
+
+        logger.debug('Periodic poll: refreshing features');
+        loadFullFeatures();
+      }, pollInterval);
+    };
+
+    startPolling();
+
+    // Re-evaluate polling interval when visibility changes
+    const handleVisibilityChange = () => {
+      startPolling();
+      // If the page just became visible, trigger an immediate refresh
+      if (document.visibilityState === 'visible' && !fullLoadInFlightRef.current) {
+        logger.debug('Tab became visible, triggering immediate refresh');
+        loadFullFeatures();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, [effectiveProject, loadFullFeatures]);
 
   // Manual refresh callback (for the refresh button)
