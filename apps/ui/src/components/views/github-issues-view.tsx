@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { useState, useCallback, useMemo, useEffect } from 'react';
-import { createLogger } from '@automaker/utils/logger';
+import { createLogger } from '@dmaker/utils/logger';
 import { CircleDot, RefreshCw, SearchX } from 'lucide-react';
 import { getElectronAPI, GitHubIssue, IssueValidationResult } from '@/lib/electron';
 import { useAppStore } from '@/store/app-store';

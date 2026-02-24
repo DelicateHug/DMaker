@@ -24,10 +24,10 @@ import type {
   ModelDefinition,
   InstallationStatus,
   ContentBlock,
-} from '@automaker/types';
-import { stripProviderPrefix } from '@automaker/types';
-import { type SubprocessOptions, getOpenCodeAuthIndicators } from '@automaker/platform';
-import { createLogger } from '@automaker/utils';
+} from '@dmaker/types';
+import { stripProviderPrefix } from '@dmaker/types';
+import { type SubprocessOptions, getOpenCodeAuthIndicators } from '@dmaker/platform';
+import { createLogger } from '@dmaker/utils';
 
 // Create logger for OpenCode operations
 const opencodeLogger = createLogger('OpencodeProvider');

@@ -1,0 +1,40 @@
+{
+  "category": "Uncategorized",
+  "description": "I should be able to see my username or when logged in  and under the usage",
+  "title": "Display username and usage info when logged in",
+  "images": [],
+  "imagePaths": [
+    {
+      "id": "img-1770727026573-op746f10r",
+      "path": "C:\\Users\\dylan\\Downloads\\automaker-pr\\.automaker\\features\\feature-1770727051396-j0z9hzh6h\\images\\pasted-image-2026-02-10T12-37-06-254Z-1770727026477.png",
+      "filename": "pasted-image-2026-02-10T12-37-06-254Z.png",
+      "mimeType": "image/png"
+    }
+  ],
+  "textFilePaths": [],
+  "skipTests": true,
+  "model": "opus",
+  "thinkingLevel": "medium",
+  "reasoningEffort": "none",
+  "priority": 2,
+  "planningMode": "full",
+  "requirePlanApproval": false,
+  "autoDeploy": false,
+  "deployEnvironment": "development",
+  "dependencies": [],
+  "workMode": "current",
+  "selectedProjectPath": "C:\\Users\\dylan\\Downloads\\automaker-pr",
+  "titleGenerating": false,
+  "status": "in_progress",
+  "projectPath": "C:\\Users\\dylan\\Downloads\\automaker-pr",
+  "id": "feature-1770727051396-j0z9hzh6h",
+  "descriptionHistory": [
+    {
+      "description": "I should be able to see my username or when logged in  and under the usage",
+      "timestamp": "2026-02-10T12:37:37.598Z",
+      "source": "initial"
+    }
+  ],
+  "startedAt": "2026-02-10T12:49:36.266Z",
+  "updatedAt": "2026-02-10T12:49:40.689Z"
+}

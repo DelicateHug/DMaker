@@ -17,8 +17,8 @@ import type {
   OpencodeProvider,
   OpencodeModelConfig,
   ModelDefinition,
-} from '@automaker/types';
-import { OPENCODE_MODELS, OPENCODE_MODEL_CONFIG_MAP } from '@automaker/types';
+} from '@dmaker/types';
+import { OPENCODE_MODELS, OPENCODE_MODEL_CONFIG_MAP } from '@dmaker/types';
 import type { OpenCodeProviderInfo } from '../cli-status/opencode-cli-status';
 import {
   OpenCodeIcon,

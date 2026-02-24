@@ -22,7 +22,7 @@ describe('feature-loader.ts', () => {
       const result = loader.getFeaturesDir(testProjectPath);
       expect(result).toContain('test');
       expect(result).toContain('project');
-      expect(result).toContain('.automaker');
+      expect(result).toContain('.dmaker');
       expect(result).toContain('features');
     });
   });
@@ -39,14 +39,14 @@ describe('feature-loader.ts', () => {
   describe('getFeatureDir', () => {
     it('should return flat path for old-format feature IDs', () => {
       const result = loader.getFeatureDir(testProjectPath, 'feature-123');
-      expect(result).toBe(path.join(testProjectPath, '.automaker', 'features', 'feature-123'));
+      expect(result).toBe(path.join(testProjectPath, '.dmaker', 'features', 'feature-123'));
     });
 
     it('should return month-based path for new-format feature IDs (dd-MM-YYYY-slug)', () => {
       const featureId = '17-02-2026-add_dark_mode';
       const result = loader.getFeatureDir(testProjectPath, featureId);
       expect(result).toBe(
-        path.join(testProjectPath, '.automaker', 'features', '2026-february', featureId)
+        path.join(testProjectPath, '.dmaker', 'features', '2026-february', featureId)
       );
     });
 
@@ -54,7 +54,7 @@ describe('feature-loader.ts', () => {
       const featureId = '01-01-2026-new_feature';
       const result = loader.getFeatureDir(testProjectPath, featureId);
       expect(result).toBe(
-        path.join(testProjectPath, '.automaker', 'features', '2026-january', featureId)
+        path.join(testProjectPath, '.dmaker', 'features', '2026-january', featureId)
       );
     });
 
@@ -62,19 +62,19 @@ describe('feature-loader.ts', () => {
       const featureId = '25-12-2025-holiday_update';
       const result = loader.getFeatureDir(testProjectPath, featureId);
       expect(result).toBe(
-        path.join(testProjectPath, '.automaker', 'features', '2025-december', featureId)
+        path.join(testProjectPath, '.dmaker', 'features', '2025-december', featureId)
       );
     });
 
     it('should return flat path for arbitrary string IDs', () => {
       const result = loader.getFeatureDir(testProjectPath, 'auth-feature');
-      expect(result).toBe(path.join(testProjectPath, '.automaker', 'features', 'auth-feature'));
+      expect(result).toBe(path.join(testProjectPath, '.dmaker', 'features', 'auth-feature'));
     });
 
     it('should return flat path for legacy timestamp IDs', () => {
       const result = loader.getFeatureDir(testProjectPath, 'feature-1708300000000-abc');
       expect(result).toBe(
-        path.join(testProjectPath, '.automaker', 'features', 'feature-1708300000000-abc')
+        path.join(testProjectPath, '.dmaker', 'features', 'feature-1708300000000-abc')
       );
     });
   });

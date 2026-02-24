@@ -11,7 +11,7 @@
  */
 
 import type { Request, Response } from 'express';
-import type { FeatureListSummary } from '@automaker/types';
+import type { FeatureListSummary } from '@dmaker/types';
 import { FeatureLoader } from '../../../services/feature-loader.js';
 import { getErrorMessage, logError, featuresCache } from '../common.js';
 

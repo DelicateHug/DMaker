@@ -1,0 +1,230 @@
+{
+  "category": "Uncategorized",
+  "description": "A lot of times I need to do like you know deploy front end deploy Lambda code deploy AWS IAC Please make a location or button for deploy script and add that as a feature so that the AI can know at the end of all of its features if auto deploy was enabled that you know that it would be auto deployed based on the deploy scripts also add the ability on each feature to mark it as auto deploy or deploy and in the settings you should be able to set a default for that. You should have a production deploy scripts and development deploy scripts. Another feature is removing both left sidebar menus so do not include the feature or location there Preferably it would be at the top of the header where workflow and stuff is",
+  "title": "Add auto-deploy feature with production and development scripts",
+  "images": [],
+  "imagePaths": [],
+  "textFilePaths": [],
+  "skipTests": true,
+  "model": "opus",
+  "thinkingLevel": "none",
+  "reasoningEffort": "none",
+  "priority": 2,
+  "planningMode": "full",
+  "requirePlanApproval": false,
+  "dependencies": [],
+  "workMode": "current",
+  "titleGenerating": false,
+  "status": "completed",
+  "id": "feature-1769987126184-4heccf6k0",
+  "descriptionHistory": [
+    {
+      "description": "A lot of times I need to do like you know deploy front end deploy Lambda code deploy AWS IAC Please make a location or button for deploy script and add that as a feature so that the AI can know at the end of all of its features if auto deploy was enabled that you know that it would be auto deployed based on the deploy scripts also add the ability on each feature to mark it as auto deploy or deploy and in the settings you should be able to set a default for that. You should have a production deploy scripts and development deploy scripts",
+      "timestamp": "2026-02-01T23:05:26.225Z",
+      "source": "initial"
+    },
+    {
+      "description": "A lot of times I need to do like you know deploy front end deploy Lambda code deploy AWS IAC Please make a location or button for deploy script and add that as a feature so that the AI can know at the end of all of its features if auto deploy was enabled that you know that it would be auto deployed based on the deploy scripts also add the ability on each feature to mark it as auto deploy or deploy and in the settings you should be able to set a default for that. You should have a production deploy scripts and development deploy scripts. Another feature is removing both left sidebar menus so do not include the feature or location there Preferably it would be at the top of the header where workflow and stuff is",
+      "timestamp": "2026-02-01T23:07:46.837Z",
+      "source": "edit"
+    }
+  ],
+  "startedAt": "2026-02-01T23:07:48.219Z",
+  "updatedAt": "2026-02-02T00:44:06.147Z",
+  "planSpec": {
+    "status": "approved",
+    "version": 1,
+    "reviewedByUser": false,
+    "content": "🔧 Tool: Task\nInput: {\n  \"description\": \"Explore codebase structure\",\n  \"prompt\": \"Explore the codebase to understand:\\n1. The settings system - how settings are stored, saved, and loaded (both global and project-level)\\n2. The header/top navigation structure where \\\"workflow\\\" and other items are located\\n3. The feature types and how features are managed\\n4. The sidebar structure to understand what will be removed\\n5. Auto-mode and how features are processed/completed\\n\\nFocus on:\\n- apps/ui/src/components/layout/ - for header and navigation\\n- apps/ui/src/store/ - for state management\\n- apps/server/src/ - for backend settings handling\\n- libs/types/ - for type definitions\\n- How deploy scripts would fit into the existing architecture\\n\\nReturn a comprehensive summary of the relevant files and their purposes.\",\n  \"subagent_type\": \"Explore\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"apps/ui/src/components/layout/**/*.{ts,tsx}\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"apps/ui/src/store/**/*.{ts,tsx}\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"apps/server/src/**/*.{ts,tsx}\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"libs/types/src/**/*.{ts,tsx}\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\layout\\\\index.ts\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\layout\\\\top-nav-bar.tsx\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\layout\\\\sidebar.tsx\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\layout\\\\sidebar\\\\constants.ts\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\ui\\\\src\\\\store\\\\app-store.ts\",\n  \"limit\": 150\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\libs\\\\types\\\\src\\\\settings.ts\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\libs\\\\types\\\\src\\\\feature.ts\"\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"find \\\"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\server\\\\src\\\\routes\\\\settings\\\" -type f -name \\\"*.ts\\\" 2>/dev/null | head -20\",\n  \"description\": \"Find settings-related route files\"\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"find \\\"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\server\\\\src\\\\services\\\" -type f -name \\\"*.ts\\\" 2>/dev/null | head -20\",\n  \"description\": \"Find service files in server\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\server\\\\src\\\\services\\\\settings-service.ts\",\n  \"limit\": 200\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\server\\\\src\\\\services\\\\auto-mode-service.ts\",\n  \"limit\": 150\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\server\\\\src\\\\routes\\\\settings\\\\index.ts\"\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"ls -la \\\"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\server\\\\src\\\\routes\\\\auto-mode\\\\routes\\\" 2>/dev/null | head -20\",\n  \"description\": \"List auto-mode route handlers\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\server\\\\src\\\\routes\\\\auto-mode\\\\index.ts\"\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"ls -la \\\"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\ui\\\\src\\\\routes\\\" 2>/dev/null\",\n  \"description\": \"List frontend routes\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\layout\\\\sidebar\\\\hooks\\\\use-navigation.ts\",\n  \"limit\": 200\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"ls -la \\\"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\" 2>/dev/null | head -30\",\n  \"description\": \"List main view components\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\server\\\\src\\\\services\\\\pipeline-service.ts\",\n  \"limit\": 150\n}\n\n🔧 Tool: Grep\nInput: {\n  \"pattern\": \"export (interface|type|class) Pipeline\",\n  \"path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\libs\\\\types\\\\src\\\\pipeline.ts\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\libs\\\\types\\\\src\\\\pipeline.ts\",\n  \"limit\": 100\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"cd \\\"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\" && git log --oneline -10\",\n  \"description\": \"Show recent commits\"\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"cd \\\"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\" && git diff --name-status HEAD\",\n  \"description\": \"Show git status file changes\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\libs\\\\types\\\\src\\\\settings.ts\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\libs\\\\types\\\\src\\\\feature.ts\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\layout\\\\top-nav-bar.tsx\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\settings-view\\\\config\\\\navigation.ts\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\server\\\\src\\\\services\\\\auto-mode-service.ts\",\n  \"limit\": 200\n}\n\n🔧 Tool: Grep\nInput: {\n  \"pattern\": \"feature.*success|feature_success|auto_mode_complete\",\n  \"path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\server\\\\src\\\\services\",\n  \"output_mode\": \"content\",\n  \"-n\": true\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\settings-view\\\\hooks\\\\use-settings-view.ts\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\server\\\\src\\\\services\\\\event-hook-service.ts\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"**/sidebar/**/*.ts*\",\n  \"path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\layout\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\layout\\\\sidebar.tsx\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\ui\\\\src\\\\routes\\\\__root.tsx\"\n}\n\n🔧 Tool: Grep\nInput: {\n  \"pattern\": \"deploy|autoDeploy\",\n  \"path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\libs\\\\types\",\n  \"output_mode\": \"files_with_matches\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\settings-view\\\\hooks\\\\use-settings-view.ts\"\n}\nNow I have a comprehensive understanding of the codebase. Let me generate the specification.\n\n---\n\n# Feature Specification: Deploy Scripts Configuration and Auto-Deploy System\n\n## 1. Problem Statement\n\nUsers need a convenient way to run deployment scripts (frontend, Lambda, AWS IAC) after features are completed. Currently, there's no built-in deploy functionality, forcing users to manually execute deploy commands outside the application. Additionally, the left sidebar menus are redundant with the new top navigation bar and should be removed.\n\n## 2. User Story\n\nAs a developer, I want to configure production and development deploy scripts for my projects and have features auto-deploy when completed, so that my deployment workflow is automated and integrated into the feature development lifecycle.\n\n## 3. Acceptance Criteria\n\n### Happy Path\n- **GIVEN** a user on the project settings page, **WHEN** they navigate to the Deploy Scripts section, **THEN** they can add/edit production and development deploy scripts with shell commands or webhook URLs\n- **GIVEN** a feature is completed successfully, **WHEN** auto-deploy is enabled globally AND on the feature, **THEN** the appropriate deploy script is executed\n- **GIVEN** the new top navigation bar exists, **WHEN** loading the app, **THEN** no left sidebars are visible and navigation is entirely through the top header\n\n### Edge Cases\n- **GIVEN** no deploy scripts are configured, **WHEN** a feature with auto-deploy completes, **THEN** deployment is skipped silently with a log message\n- **GIVEN** both global default and per-feature deploy settings, **WHEN** determining deploy behavior, **THEN** per-feature setting takes precedence over global default\n\n### Error Handling\n- **GIVEN** a deploy script fails, **WHEN** execution completes, **THEN** the error is logged and surfaced via a notification without blocking feature completion\n- **GIVEN** an invalid deploy script command, **WHEN** user tries to save, **THEN** a validation error is shown\n\n## 4. Technical Context\n\n| Aspect | Value |\n|--------|-------|\n| Affected Files | `libs/types/src/settings.ts`, `libs/types/src/feature.ts`, `apps/ui/src/components/views/settings-view/config/navigation.ts`, `apps/ui/src/components/layout/top-nav-bar.tsx`, `apps/ui/src/routes/__root.tsx`, `apps/server/src/services/auto-mode-service.ts`, `apps/server/src/services/event-hook-service.ts` |\n| Dependencies | None (builds on existing event hooks system) |\n| Constraints | Deploy scripts reuse the existing `EventHookShellAction` and `EventHookHttpAction` patterns |\n| Patterns to Follow | Event hooks system for execution, settings migration for versioning, existing top-nav-bar component patterns |\n\n## 5. Non-Goals\n\n- CI/CD integration (GitHub Actions, AWS CodePipeline) - out of scope\n- Deploy history/logging UI - just notifications for now\n- Multi-environment support beyond production/development\n- Deploy rollback functionality\n- Real-time deploy progress streaming\n\n## 6. Implementation Tasks\n\n```tasks\n## Phase 1: Type Definitions & Settings\n- [ ] T001: Add DeployScript, DeploySettings types to settings.ts | File: libs/types/src/settings.ts\n- [ ] T002: Add deploySettings field to GlobalSettings interface | File: libs/types/src/settings.ts\n- [ ] T003: Add deploySettings field to ProjectSettings interface | File: libs/types/src/settings.ts\n- [ ] T004: Add autoDeploy and deployEnvironment fields to Feature interface | File: libs/types/src/feature.ts\n- [ ] T005: Add defaultAutoDeploy field to GlobalSettings for feature default | File: libs/types/src/settings.ts\n\n## Phase 2: Backend Deploy Execution\n- [ ] T006: Add deploy_success and deploy_error event hook triggers | File: libs/types/src/settings.ts\n- [ ] T007: Create DeployService to execute deploy scripts | File: apps/server/src/services/deploy-service.ts\n- [ ] T008: Integrate DeployService with auto-mode-service on feature completion | File: apps/server/src/services/auto-mode-service.ts\n- [ ] T009: Add deploy API routes for manual trigger and status | File: apps/server/src/routes/deploy/index.ts\n- [ ] T010: Register deploy routes in main router | File: apps/server/src/routes/index.ts\n\n## Phase 3: UI - Deploy Settings Section\n- [ ] T011: Add 'deploy' to SettingsViewId type | File: apps/ui/src/components/views/settings-view/hooks/use-settings-view.ts\n- [ ] T012: Add Deploy Scripts navigation item to settings config | File: apps/ui/src/components/views/settings-view/config/navigation.ts\n- [ ] T013: Create DeploySettingsSection component for managing scripts | File: apps/ui/src/components/views/settings-view/deploy/deploy-settings-section.tsx\n- [ ] T014: Create DeployScriptEditor component for script configuration | File: apps/ui/src/components/views/settings-view/deploy/deploy-script-editor.tsx\n- [ ] T015: Register DeploySettingsSection in settings-view.tsx | File: apps/ui/src/components/views/settings-view.tsx\n\n## Phase 4: UI - Feature Card Deploy Options\n- [ ] T016: Add autoDeploy checkbox to feature card/modal | File: apps/ui/src/components/views/board-view/dialogs/feature-modal.tsx\n- [ ] T017: Add deployEnvironment selector to feature card/modal | File: apps/ui/src/components/views/board-view/dialogs/feature-modal.tsx\n- [ ] T018: Add defaultAutoDeploy toggle to Feature Defaults settings | File: apps/ui/src/components/views/settings-view/feature-defaults-section.tsx\n\n## Phase 5: UI - Top Nav Deploy Button\n- [ ] T019: Add Deploy button to TopNavigationBar header | File: apps/ui/src/components/layout/top-nav-bar.tsx\n- [ ] T020: Create DeployButton popover with script selection and trigger | File: apps/ui/src/components/layout/deploy-button.tsx\n\n## Phase 6: Remove Left Sidebars\n- [ ] T021: Remove Sidebar component from __root.tsx layout | File: apps/ui/src/routes/__root.tsx\n- [ ] T022: Add TopNavigationBar component to __root.tsx layout | File: apps/ui/src/routes/__root.tsx\n- [ ] T023: Remove sidebar-related keyboard shortcut handlers | File: apps/ui/src/routes/__root.tsx\n- [ ] T024: Update mobile responsive layout for top-nav only | File: apps/ui/src/routes/__root.tsx\n\n## Phase 7: Testing & Validation\n- [ ] T025: Rebuild packages to verify type exports | File: package.json\n- [ ] T026: Verify settings migration handles new fields | File: apps/server/src/services/settings-service.ts\n```\n\n## 7. Success Metrics\n\n- Deploy scripts can be configured in project settings with production/development environments\n- Features have visible auto-deploy toggle and environment selector in their card/modal\n- Global default for auto-deploy can be set in Feature Defaults settings\n- Deploy button appears in top header and can manually trigger deploys\n- Left sidebar is completely removed; all navigation is via top header\n- Successful feature completion triggers appropriate deploy script when auto-deploy is enabled\n- Failed deploy scripts generate notifications without blocking feature status\n\n## 8. Risks & Mitigations\n\n| Risk | Mitigation |\n|------|------------|\n| Deploy scripts could run destructive commands | Deploy scripts use same security model as event hooks (user-configured commands trusted) |\n| Removing sidebar may break keyboard shortcuts | Audit and remove/relocate shortcuts to header or global handlers |\n| Settings migration could fail for existing users | Add version check and migration logic; default new fields gracefully |\n| Long-running deploys could timeout | Use configurable timeout from EventHookShellAction pattern (default 30s) |\n\n---",
+    "generatedAt": "2026-02-01T23:12:31.108Z",
+    "tasks": [
+      {
+        "id": "T001",
+        "description": "Add DeployScript, DeploySettings types to settings.ts",
+        "filePath": "libs/types/src/settings.ts",
+        "phase": "Phase 1: Type Definitions & Settings",
+        "status": "pending"
+      },
+      {
+        "id": "T002",
+        "description": "Add deploySettings field to GlobalSettings interface",
+        "filePath": "libs/types/src/settings.ts",
+        "phase": "Phase 1: Type Definitions & Settings",
+        "status": "pending"
+      },
+      {
+        "id": "T003",
+        "description": "Add deploySettings field to ProjectSettings interface",
+        "filePath": "libs/types/src/settings.ts",
+        "phase": "Phase 1: Type Definitions & Settings",
+        "status": "pending"
+      },
+      {
+        "id": "T004",
+        "description": "Add autoDeploy and deployEnvironment fields to Feature interface",
+        "filePath": "libs/types/src/feature.ts",
+        "phase": "Phase 1: Type Definitions & Settings",
+        "status": "pending"
+      },
+      {
+        "id": "T005",
+        "description": "Add defaultAutoDeploy field to GlobalSettings for feature default",
+        "filePath": "libs/types/src/settings.ts",
+        "phase": "Phase 1: Type Definitions & Settings",
+        "status": "pending"
+      },
+      {
+        "id": "T006",
+        "description": "Add deploy_success and deploy_error event hook triggers",
+        "filePath": "libs/types/src/settings.ts",
+        "phase": "Phase 2: Backend Deploy Execution",
+        "status": "pending"
+      },
+      {
+        "id": "T007",
+        "description": "Create DeployService to execute deploy scripts",
+        "filePath": "apps/server/src/services/deploy-service.ts",
+        "phase": "Phase 2: Backend Deploy Execution",
+        "status": "pending"
+      },
+      {
+        "id": "T008",
+        "description": "Integrate DeployService with auto-mode-service on feature completion",
+        "filePath": "apps/server/src/services/auto-mode-service.ts",
+        "phase": "Phase 2: Backend Deploy Execution",
+        "status": "pending"
+      },
+      {
+        "id": "T009",
+        "description": "Add deploy API routes for manual trigger and status",
+        "filePath": "apps/server/src/routes/deploy/index.ts",
+        "phase": "Phase 2: Backend Deploy Execution",
+        "status": "pending"
+      },
+      {
+        "id": "T010",
+        "description": "Register deploy routes in main router",
+        "filePath": "apps/server/src/routes/index.ts",
+        "phase": "Phase 2: Backend Deploy Execution",
+        "status": "pending"
+      },
+      {
+        "id": "T011",
+        "description": "Add 'deploy' to SettingsViewId type",
+        "filePath": "apps/ui/src/components/views/settings-view/hooks/use-settings-view.ts",
+        "phase": "Phase 3: UI - Deploy Settings Section",
+        "status": "pending"
+      },
+      {
+        "id": "T012",
+        "description": "Add Deploy Scripts navigation item to settings config",
+        "filePath": "apps/ui/src/components/views/settings-view/config/navigation.ts",
+        "phase": "Phase 3: UI - Deploy Settings Section",
+        "status": "pending"
+      },
+      {
+        "id": "T013",
+        "description": "Create DeploySettingsSection component for managing scripts",
+        "filePath": "apps/ui/src/components/views/settings-view/deploy/deploy-settings-section.tsx",
+        "phase": "Phase 3: UI - Deploy Settings Section",
+        "status": "pending"
+      },
+      {
+        "id": "T014",
+        "description": "Create DeployScriptEditor component for script configuration",
+        "filePath": "apps/ui/src/components/views/settings-view/deploy/deploy-script-editor.tsx",
+        "phase": "Phase 3: UI - Deploy Settings Section",
+        "status": "pending"
+      },
+      {
+        "id": "T015",
+        "description": "Register DeploySettingsSection in settings-view.tsx",
+        "filePath": "apps/ui/src/components/views/settings-view.tsx",
+        "phase": "Phase 3: UI - Deploy Settings Section",
+        "status": "pending"
+      },
+      {
+        "id": "T016",
+        "description": "Add autoDeploy checkbox to feature card/modal",
+        "filePath": "apps/ui/src/components/views/board-view/dialogs/feature-modal.tsx",
+        "phase": "Phase 4: UI - Feature Card Deploy Options",
+        "status": "pending"
+      },
+      {
+        "id": "T017",
+        "description": "Add deployEnvironment selector to feature card/modal",
+        "filePath": "apps/ui/src/components/views/board-view/dialogs/feature-modal.tsx",
+        "phase": "Phase 4: UI - Feature Card Deploy Options",
+        "status": "pending"
+      },
+      {
+        "id": "T018",
+        "description": "Add defaultAutoDeploy toggle to Feature Defaults settings",
+        "filePath": "apps/ui/src/components/views/settings-view/feature-defaults-section.tsx",
+        "phase": "Phase 4: UI - Feature Card Deploy Options",
+        "status": "pending"
+      },
+      {
+        "id": "T019",
+        "description": "Add Deploy button to TopNavigationBar header",
+        "filePath": "apps/ui/src/components/layout/top-nav-bar.tsx",
+        "phase": "Phase 5: UI - Top Nav Deploy Button",
+        "status": "pending"
+      },
+      {
+        "id": "T020",
+        "description": "Create DeployButton popover with script selection and trigger",
+        "filePath": "apps/ui/src/components/layout/deploy-button.tsx",
+        "phase": "Phase 5: UI - Top Nav Deploy Button",
+        "status": "pending"
+      },
+      {
+        "id": "T021",
+        "description": "Remove Sidebar component from __root.tsx layout",
+        "filePath": "apps/ui/src/routes/__root.tsx",
+        "phase": "Phase 6: Remove Left Sidebars",
+        "status": "pending"
+      },
+      {
+        "id": "T022",
+        "description": "Add TopNavigationBar component to __root.tsx layout",
+        "filePath": "apps/ui/src/routes/__root.tsx",
+        "phase": "Phase 6: Remove Left Sidebars",
+        "status": "pending"
+      },
+      {
+        "id": "T023",
+        "description": "Remove sidebar-related keyboard shortcut handlers",
+        "filePath": "apps/ui/src/routes/__root.tsx",
+        "phase": "Phase 6: Remove Left Sidebars",
+        "status": "pending"
+      },
+      {
+        "id": "T024",
+        "description": "Update mobile responsive layout for top-nav only",
+        "filePath": "apps/ui/src/routes/__root.tsx",
+        "phase": "Phase 6: Remove Left Sidebars",
+        "status": "pending"
+      },
+      {
+        "id": "T025",
+        "description": "Rebuild packages to verify type exports",
+        "filePath": "package.json",
+        "phase": "Phase 7: Testing & Validation",
+        "status": "pending"
+      },
+      {
+        "id": "T026",
+        "description": "Verify settings migration handles new fields",
+        "filePath": "apps/server/src/services/settings-service.ts",
+        "phase": "Phase 7: Testing & Validation",
+        "status": "pending"
+      }
+    ],
+    "tasksTotal": 26,
+    "tasksCompleted": 26,
+    "approvedAt": "2026-02-01T23:12:31.111Z",
+    "currentTaskId": "T026"
+  },
+  "justFinishedAt": "2026-02-02T00:44:06.147Z"
+}

@@ -1,0 +1,40 @@
+{
+  "category": "Uncategorized",
+  "description": "INFO  [Server] POST /api/deploy/stream 200\nINFO  [Server] OPTIONS /api/deploy/stream 204\nINFO  [Server] INFO  [Deploy] Starting streaming deploy for project: C:\\Users\\DylanSmart\\Downloads\\automaker-pr, environment: development\nINFO  [Server] INFO  [Deploy] Client disconnected from deploy stream\nINFO  [Server] INFO  [DeployService] Streaming 1 deploy script(s) for environment: development\nINFO  [Server] INFO  [DeployService] Executing deploy command (streaming): \"C:\\Users\\DylanSmart\\OneDrive - Personal\\Desktop\\Projects\\Github2\\CyberChampion-1-1-2026\\scripts\\helloworld.ps1\"\nINFO  [Server] INFO  [Server] Event received: {\nINFO  [Server] type: 'deploy:output',\nINFO  [Server] hasPayload: true,\nINFO  [Server] payloadKeys: [ 'scriptId', 'stream', 'data' ],\nINFO  [Server] wsReadyState: 1,\nINFO  [Server] wsOpen: true\nINFO  [Server] }\nINFO  [Server] INFO  [Server] Sending event to client: { type: 'deploy:output', messageLength: 237, sessionId: undefined }\nINFO  [Server] INFO  [Server] Event received: {\nINFO  [Server] type: 'deploy:success',\nINFO  [Server] hasPayload: true,\nINFO  [Server] payloadKeys: [\nINFO  [Server] 'type',       'scriptId',\nINFO  [Server] 'scriptName', 'environment',\nINFO  [Server] 'message',    'error',\nINFO  [Server] 'duration',   'projectPath',\nINFO  [Server] 'featureId',  'featureName'\nINFO  [Server] ],\nINFO  [Server] wsReadyState: 1,\nINFO  [Server] wsOpen: true\nINFO  [Server] }\nINFO  [Server] INFO  [Server] Sending event to client: { type: 'deploy:success', messageLength: 315, sessionId: undefined }\n\nEverytime i try to run scripts it does not woprk or show me output and sytays stuck on still running",
+  "title": "Implement streaming deploy output display",
+  "images": [],
+  "imagePaths": [
+    {
+      "id": "img-1771092599481-zrj40mxh9",
+      "path": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr\\.automaker\\features\\feature-1771092622267-0qc7qr1ex\\images\\pasted-image-2026-02-14T18-09-59-385Z-1771092599452.png",
+      "filename": "pasted-image-2026-02-14T18-09-59-385Z.png",
+      "mimeType": "image/png"
+    }
+  ],
+  "textFilePaths": [],
+  "skipTests": true,
+  "model": "opus",
+  "thinkingLevel": "ultrathink",
+  "reasoningEffort": "none",
+  "priority": 2,
+  "planningMode": "skip",
+  "requirePlanApproval": false,
+  "autoDeploy": false,
+  "deployEnvironment": "development",
+  "dependencies": [],
+  "workMode": "current",
+  "selectedProjectPath": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr",
+  "titleGenerating": false,
+  "status": "in_progress",
+  "projectPath": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr",
+  "id": "feature-1771092622267-0qc7qr1ex",
+  "descriptionHistory": [
+    {
+      "description": "INFO  [Server] POST /api/deploy/stream 200\nINFO  [Server] OPTIONS /api/deploy/stream 204\nINFO  [Server] INFO  [Deploy] Starting streaming deploy for project: C:\\Users\\DylanSmart\\Downloads\\automaker-pr, environment: development\nINFO  [Server] INFO  [Deploy] Client disconnected from deploy stream\nINFO  [Server] INFO  [DeployService] Streaming 1 deploy script(s) for environment: development\nINFO  [Server] INFO  [DeployService] Executing deploy command (streaming): \"C:\\Users\\DylanSmart\\OneDrive - Personal\\Desktop\\Projects\\Github2\\CyberChampion-1-1-2026\\scripts\\helloworld.ps1\"\nINFO  [Server] INFO  [Server] Event received: {\nINFO  [Server] type: 'deploy:output',\nINFO  [Server] hasPayload: true,\nINFO  [Server] payloadKeys: [ 'scriptId', 'stream', 'data' ],\nINFO  [Server] wsReadyState: 1,\nINFO  [Server] wsOpen: true\nINFO  [Server] }\nINFO  [Server] INFO  [Server] Sending event to client: { type: 'deploy:output', messageLength: 237, sessionId: undefined }\nINFO  [Server] INFO  [Server] Event received: {\nINFO  [Server] type: 'deploy:success',\nINFO  [Server] hasPayload: true,\nINFO  [Server] payloadKeys: [\nINFO  [Server] 'type',       'scriptId',\nINFO  [Server] 'scriptName', 'environment',\nINFO  [Server] 'message',    'error',\nINFO  [Server] 'duration',   'projectPath',\nINFO  [Server] 'featureId',  'featureName'\nINFO  [Server] ],\nINFO  [Server] wsReadyState: 1,\nINFO  [Server] wsOpen: true\nINFO  [Server] }\nINFO  [Server] INFO  [Server] Sending event to client: { type: 'deploy:success', messageLength: 315, sessionId: undefined }\n\nEverytime i try to run scripts it does not woprk or show me output and sytays stuck on still running",
+      "timestamp": "2026-02-14T18:10:22.614Z",
+      "source": "initial"
+    }
+  ],
+  "startedAt": "2026-02-14T18:10:22.677Z",
+  "updatedAt": "2026-02-14T18:10:22.824Z"
+}

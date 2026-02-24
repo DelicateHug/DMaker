@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback } from 'react';
-import { createLogger } from '@automaker/utils/logger';
+import { createLogger } from '@dmaker/utils/logger';
 import { cn } from '@/lib/utils';
 
 const logger = createLogger('DescriptionImageDropZone');
@@ -119,7 +119,7 @@ export function DescriptionImageDropZone({
         if (!api.saveImageToTemp) {
           // Fallback path when saveImageToTemp is not available
           logger.info('Using fallback path for image');
-          return `.automaker/images/${Date.now()}_${filename}`;
+          return `.dmaker/images/${Date.now()}_${filename}`;
         }
 
         // Get projectPath from the store if available

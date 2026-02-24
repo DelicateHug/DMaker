@@ -14,7 +14,7 @@
  * 6. Returns a promise that resolves when hydration is complete
  *
  * IMPORTANT: localStorage values are intentionally NOT deleted after migration.
- * This allows users to switch back to older versions of Automaker if needed.
+ * This allows users to switch back to older versions of DMaker if needed.
  *
  * Sync functions for incremental updates:
  * - syncSettingsToServer: Writes global settings to file
@@ -23,16 +23,12 @@
  */
 
 import { useEffect, useState, useRef } from 'react';
-import { createLogger } from '@automaker/utils/logger';
+import { createLogger } from '@dmaker/utils/logger';
 import { getHttpApiClient, waitForApiKeyInit } from '@/lib/http-api-client';
 import { getItem, setItem } from '@/lib/storage';
 import { useAppStore, THEME_STORAGE_KEY } from '@/store/app-store';
 import { useSetupStore } from '@/store/setup-store';
-import {
-  DEFAULT_OPENCODE_MODEL,
-  getAllOpencodeModelIds,
-  type GlobalSettings,
-} from '@automaker/types';
+import { DEFAULT_OPENCODE_MODEL, getAllOpencodeModelIds, type GlobalSettings } from '@dmaker/types';
 
 const logger = createLogger('SettingsMigration');
 
@@ -52,15 +48,15 @@ interface MigrationState {
  * localStorage keys that may contain settings to migrate
  */
 const LOCALSTORAGE_KEYS = [
-  'automaker-storage',
-  'automaker-setup',
+  'dmaker-storage',
+  'dmaker-setup',
   'worktree-panel-collapsed',
   'file-browser-recent-folders',
-  'automaker:lastProjectDir',
+  'dmaker:lastProjectDir',
 ] as const;
 
 // NOTE: We intentionally do NOT clear any localStorage keys after migration.
-// This allows users to switch back to older versions of Automaker that relied on localStorage.
+// This allows users to switch back to older versions of DMaker that relied on localStorage.
 // The `localStorageMigrated` flag in server settings prevents re-migration on subsequent app loads.
 
 // Global promise that resolves when migration is complete
@@ -114,27 +110,25 @@ export function resetMigrationState(): void {
  */
 export function parseLocalStorageSettings(): Partial<GlobalSettings> | null {
   try {
-    const automakerStorage = getItem('automaker-storage');
-    if (!automakerStorage) {
+    const dmakerStorage = getItem('dmaker-storage');
+    if (!dmakerStorage) {
       return null;
     }
 
-    const parsed = JSON.parse(automakerStorage) as Record<string, unknown>;
+    const parsed = JSON.parse(dmakerStorage) as Record<string, unknown>;
     // Zustand persist stores state under 'state' key
     const state = (parsed.state as Record<string, unknown> | undefined) || parsed;
 
     // Setup wizard state (previously stored in its own persist key)
-    const automakerSetup = getItem('automaker-setup');
-    const setupParsed = automakerSetup
-      ? (JSON.parse(automakerSetup) as Record<string, unknown>)
-      : null;
+    const dmakerSetup = getItem('dmaker-setup');
+    const setupParsed = dmakerSetup ? (JSON.parse(dmakerSetup) as Record<string, unknown>) : null;
     const setupState =
       (setupParsed?.state as Record<string, unknown> | undefined) || setupParsed || {};
 
     // Also check for standalone localStorage keys
     const worktreePanelCollapsed = getItem('worktree-panel-collapsed');
     const recentFolders = getItem('file-browser-recent-folders');
-    const lastProjectDir = getItem('automaker:lastProjectDir');
+    const lastProjectDir = getItem('dmaker:lastProjectDir');
 
     return {
       setupComplete: setupState.setupComplete as boolean,
@@ -464,7 +458,7 @@ export function useSettingsMigration(): MigrationState {
             if (result.success) {
               logger.info('Synced merged settings to server with migration marker');
               // NOTE: We intentionally do NOT clear localStorage values
-              // This allows users to switch back to older versions of Automaker
+              // This allows users to switch back to older versions of DMaker
             } else {
               logger.warn('Failed to sync merged settings to server:', result.error);
             }

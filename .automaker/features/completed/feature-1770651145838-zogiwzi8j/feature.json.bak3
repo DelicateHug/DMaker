@@ -1,0 +1,36 @@
+{
+  "category": "Uncategorized",
+  "description": "does not start",
+  "title": "Enable Feature Flag for Gradual Rollout",
+  "images": [],
+  "imagePaths": [
+    {
+      "id": "img-1770651141930-8e7ysk8nz",
+      "path": "C:\\Users\\dylan\\Downloads\\automaker-pr\\.automaker\\features\\feature-1770651145838-zogiwzi8j\\images\\pasted-image-2026-02-09T15-32-21-905Z-1770651141925.png",
+      "filename": "pasted-image-2026-02-09T15-32-21-905Z.png",
+      "mimeType": "image/png"
+    }
+  ],
+  "textFilePaths": [],
+  "skipTests": true,
+  "model": "sonnet",
+  "thinkingLevel": "none",
+  "reasoningEffort": "none",
+  "priority": 2,
+  "planningMode": "skip",
+  "requirePlanApproval": false,
+  "dependencies": [],
+  "workMode": "current",
+  "titleGenerating": false,
+  "status": "in_progress",
+  "id": "feature-1770651145838-zogiwzi8j",
+  "descriptionHistory": [
+    {
+      "description": "does not start",
+      "timestamp": "2026-02-09T15:32:25.888Z",
+      "source": "initial"
+    }
+  ],
+  "startedAt": "2026-02-09T15:32:25.921Z",
+  "updatedAt": "2026-02-09T15:44:46.612Z"
+}

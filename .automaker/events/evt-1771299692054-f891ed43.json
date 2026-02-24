@@ -1,0 +1,10 @@
+{
+  "id": "evt-1771299692054-f891ed43",
+  "trigger": "feature_error",
+  "timestamp": "2026-02-17T03:41:32.054Z",
+  "projectPath": "C:\\Users\\DylanSmart\\Downloads\\dmaker-pr",
+  "projectName": "dmaker-pr",
+  "featureId": "feature-1771299678413-eutxbod18",
+  "error": "Operation was cancelled",
+  "errorType": "cancellation"
+}

@@ -5,9 +5,9 @@ import { OpencodeCliStatus, OpencodeCliStatusSkeleton } from '../cli-status/open
 import { OpencodeModelConfiguration } from './opencode-model-configuration';
 import { ProviderToggle } from './provider-toggle';
 import { getElectronAPI } from '@/lib/electron';
-import { createLogger } from '@automaker/utils/logger';
+import { createLogger } from '@dmaker/utils/logger';
 import type { CliStatus as SharedCliStatus } from '../shared/types';
-import type { OpencodeModelId } from '@automaker/types';
+import type { OpencodeModelId } from '@dmaker/types';
 import type { OpencodeAuthStatus, OpenCodeProviderInfo } from '../cli-status/opencode-cli-status';
 
 const logger = createLogger('OpencodeSettings');

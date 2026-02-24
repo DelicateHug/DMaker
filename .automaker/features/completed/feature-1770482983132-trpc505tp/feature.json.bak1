@@ -1,0 +1,161 @@
+{
+  "category": "Uncategorized",
+  "description": "move backlog, in progress and waiting approval to one board that can be swapped by pressing buttons. move agent runner into kanban view with the increased space. In agent view allow running scripts easily that are placed in the deploy folder, primarily python and ps1",
+  "title": "Implement unified kanban board with role-based view switching",
+  "images": [],
+  "imagePaths": [],
+  "textFilePaths": [],
+  "skipTests": true,
+  "model": "opus",
+  "thinkingLevel": "none",
+  "reasoningEffort": "none",
+  "priority": 2,
+  "planningMode": "full",
+  "requirePlanApproval": false,
+  "dependencies": [],
+  "workMode": "current",
+  "titleGenerating": false,
+  "status": "in_progress",
+  "id": "feature-1770482983132-trpc505tp",
+  "descriptionHistory": [
+    {
+      "description": "move backlog, in progress and waiting approval to one board that can be swapped by pressing buttons. move agent runner into kanban view with the increased space. In agent view allow running scripts easily that are placed in the deploy folder, primarily python and ps1",
+      "timestamp": "2026-02-07T16:49:43.172Z",
+      "source": "initial"
+    }
+  ],
+  "startedAt": "2026-02-07T16:49:43.205Z",
+  "updatedAt": "2026-02-07T17:15:48.853Z",
+  "planSpec": {
+    "status": "approved",
+    "version": 1,
+    "reviewedByUser": false,
+    "content": "🔧 Tool: Glob\nInput: {\n  \"pattern\": \"apps/ui/src/components/views/board-view/**/*.tsx\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"apps/ui/src/components/views/running-agents-view*\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"apps/server/src/routes/deploy/**/*\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\board-view\\\\kanban-board.tsx\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\running-agents-view.tsx\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\board-view.tsx\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\board-view\\\\constants.ts\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\automaker-pr\\\\apps\\\\server\\\\src\\\\routes\\\\deploy\\\\routes\\\\scripts.ts\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\automaker-pr\\\\apps\\\\server\\\\src\\\\routes\\\\deploy\\\\index.ts\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\automaker-pr\\\\apps\\\\server\\\\src\\\\services\\\\deploy-service.ts\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\board-view\\\\components\\\\kanban-column.tsx\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"apps/ui/src/routes/*.tsx\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\routes\\\\board.tsx\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"apps/ui/src/components/views/board-view/hooks/*.ts\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\hooks\\\\use-running-agents.ts\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\automaker-pr\\\\libs\\\\types\\\\src\\\\settings.ts\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\board-view\\\\hooks\\\\use-board-column-features.ts\"\n}\nNow I have a good understanding of the codebase. Let me generate the specification.\n\n---\n\n## Specification: Consolidated Board View with Embedded Agent Runner and Deploy Scripts\n\n### 1. Problem Statement\nUsers currently have multiple columns (Backlog, In Progress, Waiting Approval) displayed simultaneously on the Kanban board, which takes significant horizontal space and reduces usability on smaller screens. Additionally, the Running Agents view is a separate route that forces users to navigate away from the board, and there's no easy way to run deploy scripts (Python and PS1 files from the deploy folder) from the UI.\n\n### 2. User Story\nAs a **developer using Automaker**, I want **to view one status category at a time with tab-based switching, have the agent runner integrated directly in the board view, and easily execute deploy scripts**, so that **I can maximize workspace efficiency, monitor running agents without navigation, and trigger deployments with minimal friction**.\n\n### 3. Acceptance Criteria\n\n**Happy Path - Tab Navigation:**\n- GIVEN the user is on the board view\n- WHEN they view the Kanban board\n- THEN they see only one status category (Backlog, In Progress, or Waiting Approval) at a time with toggle buttons to switch between them\n\n**Happy Path - Agent Runner Integration:**\n- GIVEN the user is viewing the board with increased horizontal space\n- WHEN there are running agents\n- THEN they see an embedded agent runner panel showing running agents directly in the board view\n\n**Happy Path - Deploy Scripts:**\n- GIVEN the user is in the agent view/board view\n- WHEN they want to run a deploy script\n- THEN they can see available Python and PS1 scripts from the deploy folder and execute them with one click\n\n**Edge Case - No Running Agents:**\n- GIVEN the user is viewing the board\n- WHEN there are no running agents\n- THEN the agent runner panel shows an empty state with helpful messaging\n\n**Edge Case - No Deploy Scripts:**\n- GIVEN the user wants to run deploy scripts\n- WHEN no scripts exist in the deploy folder\n- THEN they see a message indicating no scripts are available\n\n**Error Handling - Script Execution Failure:**\n- GIVEN a deploy script is executed\n- WHEN the script fails\n- THEN the user sees an error message with the failure output\n\n### 4. Technical Context\n\n| Aspect | Value |\n|--------|-------|\n| Affected Files | `apps/ui/src/components/views/board-view.tsx`, `apps/ui/src/components/views/board-view/kanban-board.tsx`, `apps/ui/src/components/views/board-view/constants.ts`, `apps/ui/src/components/views/running-agents-view.tsx`, `apps/server/src/routes/deploy/` |\n| Dependencies | Existing deploy service, running agents hook, Electron API |\n| Constraints | Must maintain drag-and-drop functionality, must work in both Electron and web modes |\n| Patterns to Follow | Existing tab components (Tabs, TabsList, TabsTrigger from UI library), existing hooks pattern for state management |\n\n### 5. Non-Goals\n- Removing the separate Running Agents route entirely (keep for standalone access)\n- Modifying the existing deploy service core logic\n- Supporting script types other than Python (.py) and PowerShell (.ps1)\n- Real-time script output streaming (initial implementation will show final result)\n\n### 6. Implementation Tasks\n\n```tasks\n## Phase 1: Foundation - Board Status Tab Switching\n\n- [ ] T001: Create new board status tab state hook | File: apps/ui/src/components/views/board-view/hooks/use-board-status-tabs.ts\n- [ ] T002: Update constants to define tab configurations for status groups | File: apps/ui/src/components/views/board-view/constants.ts\n- [ ] T003: Create BoardStatusTabs component for tab switching UI | File: apps/ui/src/components/views/board-view/components/board-status-tabs.tsx\n\n## Phase 2: Core Implementation - Single-Column View with Tabs\n\n- [ ] T004: Modify KanbanBoard to display single column based on active tab | File: apps/ui/src/components/views/board-view/kanban-board.tsx\n- [ ] T005: Update board-view.tsx to integrate tab state and pass to KanbanBoard | File: apps/ui/src/components/views/board-view.tsx\n- [ ] T006: Update useBoardColumnFeatures to work with single-column mode | File: apps/ui/src/components/views/board-view/hooks/use-board-column-features.ts\n\n## Phase 3: Agent Runner Integration\n\n- [ ] T007: Create embedded RunningAgentsPanel component for board view | File: apps/ui/src/components/views/board-view/components/running-agents-panel.tsx\n- [ ] T008: Integrate RunningAgentsPanel into board-view layout | File: apps/ui/src/components/views/board-view.tsx\n- [ ] T009: Add responsive layout handling for agent panel and kanban area | File: apps/ui/src/components/views/board-view.tsx\n\n## Phase 4: Deploy Scripts Feature\n\n- [ ] T010: Add server endpoint to list deploy folder scripts (py, ps1) | File: apps/server/src/routes/deploy/routes/folder-scripts.ts\n- [ ] T011: Add server endpoint to execute deploy folder script | File: apps/server/src/routes/deploy/routes/run-folder-script.ts\n- [ ] T012: Update deploy routes index to include new endpoints | File: apps/server/src/routes/deploy/index.ts\n- [ ] T013: Create DeployScriptsPanel component for script listing and execution | File: apps/ui/src/components/views/board-view/components/deploy-scripts-panel.tsx\n- [ ] T014: Integrate DeployScriptsPanel into agent runner area | File: apps/ui/src/components/views/board-view/components/running-agents-panel.tsx\n\n## Phase 5: Integration & Polish\n\n- [ ] T015: Update hooks index to export new board status tabs hook | File: apps/ui/src/components/views/board-view/hooks/index.ts\n- [ ] T016: Update components index to export new components | File: apps/ui/src/components/views/board-view/components/index.ts\n- [ ] T017: Add keyboard shortcuts for tab switching | File: apps/ui/src/components/views/board-view/hooks/use-board-keyboard-shortcuts.ts\n```\n\n### 7. Success Metrics\n\n| Metric | Measurement |\n|--------|-------------|\n| Tab Switching | User can toggle between Backlog, In Progress, and Waiting Approval with visible buttons |\n| Single Column Display | Only one status group is shown at a time, maximizing horizontal space |\n| Agent Panel Visible | Running agents panel is displayed alongside the board when agents are running |\n| Script Execution | Deploy folder scripts can be listed and executed from the UI |\n| No Regressions | Existing drag-and-drop, filtering, and selection modes continue to work |\n\n### 8. Risks & Mitigations\n\n| Risk | Mitigation |\n|------|------------|\n| Breaking existing drag-and-drop functionality | Careful testing of drag/drop after changes; columns still use same droppable IDs |\n| Script execution security concerns | Scripts only executed from designated deploy folder; no arbitrary command execution |\n| Layout issues on different screen sizes | Use existing responsive hooks and test on various viewport sizes |\n| State synchronization between tab view and full board | Store active tab in component state; no persistence needed across sessions initially |",
+    "generatedAt": "2026-02-07T16:52:45.401Z",
+    "tasks": [
+      {
+        "id": "T001",
+        "description": "Create new board status tab state hook",
+        "filePath": "apps/ui/src/components/views/board-view/hooks/use-board-status-tabs.ts",
+        "phase": "Phase 1: Foundation - Board Status Tab Switching",
+        "status": "pending"
+      },
+      {
+        "id": "T002",
+        "description": "Update constants to define tab configurations for status groups",
+        "filePath": "apps/ui/src/components/views/board-view/constants.ts",
+        "phase": "Phase 1: Foundation - Board Status Tab Switching",
+        "status": "pending"
+      },
+      {
+        "id": "T003",
+        "description": "Create BoardStatusTabs component for tab switching UI",
+        "filePath": "apps/ui/src/components/views/board-view/components/board-status-tabs.tsx",
+        "phase": "Phase 1: Foundation - Board Status Tab Switching",
+        "status": "pending"
+      },
+      {
+        "id": "T004",
+        "description": "Modify KanbanBoard to display single column based on active tab",
+        "filePath": "apps/ui/src/components/views/board-view/kanban-board.tsx",
+        "phase": "Phase 2: Core Implementation - Single-Column View with Tabs",
+        "status": "pending"
+      },
+      {
+        "id": "T005",
+        "description": "Update board-view.tsx to integrate tab state and pass to KanbanBoard",
+        "filePath": "apps/ui/src/components/views/board-view.tsx",
+        "phase": "Phase 2: Core Implementation - Single-Column View with Tabs",
+        "status": "pending"
+      },
+      {
+        "id": "T006",
+        "description": "Update useBoardColumnFeatures to work with single-column mode",
+        "filePath": "apps/ui/src/components/views/board-view/hooks/use-board-column-features.ts",
+        "phase": "Phase 2: Core Implementation - Single-Column View with Tabs",
+        "status": "pending"
+      },
+      {
+        "id": "T007",
+        "description": "Create embedded RunningAgentsPanel component for board view",
+        "filePath": "apps/ui/src/components/views/board-view/components/running-agents-panel.tsx",
+        "phase": "Phase 3: Agent Runner Integration",
+        "status": "pending"
+      },
+      {
+        "id": "T008",
+        "description": "Integrate RunningAgentsPanel into board-view layout",
+        "filePath": "apps/ui/src/components/views/board-view.tsx",
+        "phase": "Phase 3: Agent Runner Integration",
+        "status": "pending"
+      },
+      {
+        "id": "T009",
+        "description": "Add responsive layout handling for agent panel and kanban area",
+        "filePath": "apps/ui/src/components/views/board-view.tsx",
+        "phase": "Phase 3: Agent Runner Integration",
+        "status": "pending"
+      },
+      {
+        "id": "T010",
+        "description": "Add server endpoint to list deploy folder scripts (py, ps1)",
+        "filePath": "apps/server/src/routes/deploy/routes/folder-scripts.ts",
+        "phase": "Phase 4: Deploy Scripts Feature",
+        "status": "pending"
+      },
+      {
+        "id": "T011",
+        "description": "Add server endpoint to execute deploy folder script",
+        "filePath": "apps/server/src/routes/deploy/routes/run-folder-script.ts",
+        "phase": "Phase 4: Deploy Scripts Feature",
+        "status": "pending"
+      },
+      {
+        "id": "T012",
+        "description": "Update deploy routes index to include new endpoints",
+        "filePath": "apps/server/src/routes/deploy/index.ts",
+        "phase": "Phase 4: Deploy Scripts Feature",
+        "status": "pending"
+      },
+      {
+        "id": "T013",
+        "description": "Create DeployScriptsPanel component for script listing and execution",
+        "filePath": "apps/ui/src/components/views/board-view/components/deploy-scripts-panel.tsx",
+        "phase": "Phase 4: Deploy Scripts Feature",
+        "status": "pending"
+      },
+      {
+        "id": "T014",
+        "description": "Integrate DeployScriptsPanel into agent runner area",
+        "filePath": "apps/ui/src/components/views/board-view/components/running-agents-panel.tsx",
+        "phase": "Phase 4: Deploy Scripts Feature",
+        "status": "pending"
+      },
+      {
+        "id": "T015",
+        "description": "Update hooks index to export new board status tabs hook",
+        "filePath": "apps/ui/src/components/views/board-view/hooks/index.ts",
+        "phase": "Phase 5: Integration & Polish",
+        "status": "pending"
+      },
+      {
+        "id": "T016",
+        "description": "Update components index to export new components",
+        "filePath": "apps/ui/src/components/views/board-view/components/index.ts",
+        "phase": "Phase 5: Integration & Polish",
+        "status": "pending"
+      },
+      {
+        "id": "T017",
+        "description": "Add keyboard shortcuts for tab switching",
+        "filePath": "apps/ui/src/components/views/board-view/hooks/use-board-keyboard-shortcuts.ts",
+        "phase": "Phase 5: Integration & Polish",
+        "status": "pending"
+      }
+    ],
+    "tasksTotal": 17,
+    "tasksCompleted": 6,
+    "approvedAt": "2026-02-07T16:52:45.403Z",
+    "currentTaskId": "T007"
+  }
+}

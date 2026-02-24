@@ -1,0 +1,37 @@
+{
+  "category": "Uncategorized",
+  "description": "The deploy tab It should Automatically match the chosen project of the kanban view unless kanban view is all projects at that point the deploy script should show a drop down menu for project and then you would click it to expand but whenever you change the kanban view it should automatically change the deploy view to not have drop downs but to just show the scripts like it does currently",
+  "title": "Sync deploy tab project selection with kanban view",
+  "images": [],
+  "imagePaths": [
+    {
+      "id": "img-1770603048306-c0tqxqhws",
+      "path": "C:\\Users\\dylan\\Downloads\\dmaker-pr\\.dmaker\\features\\feature-1770603143534-9c6vgtlk9\\images\\pasted-image-2026-02-09T02-10-48-212Z-1770603048272.png",
+      "filename": "pasted-image-2026-02-09T02-10-48-212Z.png",
+      "mimeType": "image/png"
+    }
+  ],
+  "textFilePaths": [],
+  "skipTests": true,
+  "model": "opus",
+  "thinkingLevel": "none",
+  "reasoningEffort": "none",
+  "priority": 2,
+  "planningMode": "full",
+  "requirePlanApproval": false,
+  "dependencies": [],
+  "workMode": "current",
+  "titleGenerating": false,
+  "status": "completed",
+  "id": "feature-1770603143534-9c6vgtlk9",
+  "descriptionHistory": [
+    {
+      "description": "The deploy tab It should Automatically match the chosen project of the kanban view unless kanban view is all projects at that point the deploy script should show a drop down menu for project and then you would click it to expand but whenever you change the kanban view it should automatically change the deploy view to not have drop downs but to just show the scripts like it does currently",
+      "timestamp": "2026-02-09T02:12:23.597Z",
+      "source": "initial"
+    }
+  ],
+  "startedAt": "2026-02-09T02:12:23.650Z",
+  "updatedAt": "2026-02-09T02:34:42.308Z",
+  "justFinishedAt": "2026-02-09T02:34:42.308Z"
+}

@@ -15,13 +15,8 @@
  */
 
 import { ProviderFactory } from './provider-factory.js';
-import type {
-  ProviderMessage,
-  ContentBlock,
-  ThinkingLevel,
-  ReasoningEffort,
-} from '@automaker/types';
-import { stripProviderPrefix } from '@automaker/types';
+import type { ProviderMessage, ContentBlock, ThinkingLevel, ReasoningEffort } from '@dmaker/types';
+import { stripProviderPrefix } from '@dmaker/types';
 
 /**
  * Options for simple query execution

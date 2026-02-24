@@ -1,13 +1,13 @@
 import { useEffect, useCallback, useMemo } from 'react';
 import { useShallow } from 'zustand/react/shallow';
-import { createLogger } from '@automaker/utils/logger';
+import { createLogger } from '@dmaker/utils/logger';
 import { useAppStore } from '@/store/app-store';
 import { getElectronAPI } from '@/lib/electron';
 import type { AutoModeEvent } from '@/types/electron';
 
 const logger = createLogger('AutoMode');
 
-const AUTO_MODE_SESSION_KEY = 'automaker:autoModeRunningByProjectPath';
+const AUTO_MODE_SESSION_KEY = 'dmaker:autoModeRunningByProjectPath';
 
 function readAutoModeSession(): Record<string, boolean> {
   try {

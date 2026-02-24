@@ -1,0 +1,130 @@
+{
+  "id": "feature-perf-002-lucide-icon-optimization",
+  "title": "Eliminate Full Lucide-React Library Import (~200-400KB Savings)",
+  "category": "Performance",
+  "description": "## Problem\nMultiple components import the ENTIRE lucide-react library using `import * as LucideIcons from 'lucide-react'`. This imports all 1,400+ icons (~200-400KB gzipped) even though only a handful are used at any time. This is one of the single largest contributors to bundle bloat.\n\n## Current Behavior\nThe following files use `import * as LucideIcons from 'lucide-react'`:\n- `apps/ui/src/components/views/board-view.tsx` (line 39)\n- `apps/ui/src/components/layout/top-nav-bar.tsx` (line 4)\n- `apps/ui/src/components/views/dashboard-view.tsx` (line 30)\n- `apps/ui/src/components/views/agent-view/components/session-selector.tsx` (line 13)\n- `apps/ui/src/components/ui/icon-picker.tsx` (line 3)\n- `apps/ui/src/components/views/settings-view/components/edit-project-dialog.tsx` (line 14)\n- `apps/ui/src/components/views/settings-view/projects/projects-section.tsx` (line 24)\n- `apps/ui/src/components/views/board-view/dialogs/add-feature-dialog.tsx` (line 61)\n- `apps/ui/src/components/views/board-view/components/agent-chat-panel.tsx` (line 15)\n\nThe pattern is used to dynamically render project icons by name:\n```typescript\nif (project?.icon && project.icon in LucideIcons) {\n  return (LucideIcons as unknown as Record<string, LucideIcon>)[project.icon];\n}\n```\n\n## Required Changes\n1. Create a curated icon map (`apps/ui/src/lib/icon-registry.ts`) with only the ~50-80 icons that are offered in the icon picker, plus commonly used UI icons\n2. Replace all `import * as LucideIcons` with imports from the curated registry\n3. Update `icon-picker.tsx` to use the curated list instead of the full library\n4. For any component that just renders a project icon by name, use the registry lookup\n5. Keep individual named imports (e.g., `import { Search, Plus } from 'lucide-react'`) as these ARE tree-shakeable\n\n## Pattern to Follow\n```typescript\n// apps/ui/src/lib/icon-registry.ts\nimport { Folder, FolderCode, Code, Star, Rocket, ... } from 'lucide-react';\nimport type { LucideIcon } from 'lucide-react';\n\nexport const ICON_REGISTRY: Record<string, LucideIcon> = {\n  Folder, FolderCode, Code, Star, Rocket, ...\n};\n\nexport function getProjectIcon(iconName: string | undefined): LucideIcon | null {\n  if (!iconName) return null;\n  return ICON_REGISTRY[iconName] ?? null;\n}\n\nexport const AVAILABLE_ICON_NAMES = Object.keys(ICON_REGISTRY);\n```\n\n## Files to Modify\n- Create: `apps/ui/src/lib/icon-registry.ts` - Curated icon map\n- `apps/ui/src/components/ui/icon-picker.tsx` - Use curated list instead of full import\n- `apps/ui/src/components/views/board-view.tsx` - Replace `* as LucideIcons`\n- `apps/ui/src/components/layout/top-nav-bar.tsx` - Replace `* as LucideIcons`\n- `apps/ui/src/components/views/dashboard-view.tsx` - Replace `* as LucideIcons`\n- `apps/ui/src/components/views/agent-view/components/session-selector.tsx` - Replace `* as LucideIcons`\n- `apps/ui/src/components/views/settings-view/components/edit-project-dialog.tsx` - Replace `* as LucideIcons`\n- `apps/ui/src/components/views/settings-view/projects/projects-section.tsx` - Replace `* as LucideIcons`\n- `apps/ui/src/components/views/board-view/dialogs/add-feature-dialog.tsx` - Replace `* as LucideIcons`\n- `apps/ui/src/components/views/board-view/components/agent-chat-panel.tsx` - Replace `* as LucideIcons`\n\n## Expected Impact\n- Bundle size reduction of 200-400KB (gzipped)\n- Faster parsing and execution on initial load\n- Icon picker still works but with a curated, sensible subset\n\n## Acceptance Criteria\n- No `import * as LucideIcons` anywhere in the codebase\n- Icon picker shows all available project icons from the curated registry\n- Project icons display correctly throughout the app\n- Bundle analyzer confirms lucide-react chunk is dramatically smaller\n- All existing icon selections continue to work (backward compatible)",
+  "images": [],
+  "imagePaths": [],
+  "textFilePaths": [],
+  "skipTests": true,
+  "priority": 1,
+  "planningMode": "full",
+  "requirePlanApproval": false,
+  "autoDeploy": false,
+  "dependencies": [],
+  "status": "in_progress",
+  "projectPath": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr",
+  "descriptionHistory": [
+    {
+      "description": "Eliminate full lucide-react wildcard import across 9+ files, replacing with curated icon registry",
+      "timestamp": "2026-02-12T10:00:01.000Z",
+      "source": "initial"
+    }
+  ],
+  "model": "opus",
+  "thinkingLevel": "none",
+  "reasoningEffort": "none",
+  "deployEnvironment": "development",
+  "workMode": "current",
+  "waitForDependencies": false,
+  "remoteModified": false,
+  "startedAt": "2026-02-13T00:35:16.505Z",
+  "updatedAt": "2026-02-13T00:35:16.617Z",
+  "planSpec": {
+    "status": "approved",
+    "version": 1,
+    "reviewedByUser": false,
+    "content": "I'll analyze the codebase to understand the current icon usage patterns, then generate the specification.\n\n[timestamp:2026-02-12T22:06:48.158Z] 🔧 Tool: Task\nInput: {\n  \"description\": \"Explore icon usage patterns\",\n  \"prompt\": \"I need to understand how lucide-react icons are used across this codebase. Please do the following:\\n\\n1. Find ALL files that use `import * as LucideIcons from 'lucide-react'` and show me the surrounding code (how LucideIcons is used in each file)\\n2. Find the icon-picker.tsx component and show me its full contents - I need to know what icons are offered to users\\n3. Find any places where project icons are stored/referenced by name (string icon names like \\\"Folder\\\", \\\"Code\\\", etc.)\\n4. Find all individual named imports from lucide-react across the UI codebase (e.g., `import { Search, Plus } from 'lucide-react'`) - just list the unique icon names imported\\n5. Check if there's any existing icon registry or icon utility file\\n\\nSearch thoroughly across:\\n- apps/ui/src/components/\\n- apps/ui/src/lib/\\n- apps/ui/src/hooks/\\n\\nThis is research only - do not write any code.\",\n  \"subagent_type\": \"Explore\"\n}\n\n[timestamp:2026-02-12T22:06:51.089Z] 🔧 Tool: Grep\nInput: {\n  \"pattern\": \"import \\\\* as LucideIcons from 'lucide-react'\",\n  \"path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\"\n}\n\n[timestamp:2026-02-12T22:06:51.370Z] 🔧 Tool: Glob\nInput: {\n  \"pattern\": \"**/icon-picker.tsx\",\n  \"path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\"\n}\n\n[timestamp:2026-02-12T22:06:51.952Z] 🔧 Tool: Grep\nInput: {\n  \"pattern\": \"import \\\\{[^}]*\\\\} from 'lucide-react'\",\n  \"path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\",\n  \"output_mode\": \"files_with_matches\"\n}\n\n[timestamp:2026-02-12T22:07:07.528Z] 🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\ui\\\\icon-picker.tsx\"\n}\n\n[timestamp:2026-02-12T22:07:07.900Z] 🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\agent-view\\\\components\\\\session-selector.tsx\"\n}\n\n[timestamp:2026-02-12T22:07:08.216Z] 🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\board-view\\\\dialogs\\\\add-feature-dialog.tsx\"\n}\n\n[timestamp:2026-02-12T22:07:08.475Z] 🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\dashboard-view.tsx\"\n}\n\n[timestamp:2026-02-12T22:07:29.999Z] 🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\layout\\\\top-nav-bar.tsx\"\n}\n\n[timestamp:2026-02-12T22:07:30.267Z] 🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\board-view.tsx\",\n  \"limit\": 150\n}\n\n[timestamp:2026-02-12T22:07:30.883Z] 🔧 Tool: Grep\nInput: {\n  \"pattern\": \"from 'lucide-react'\",\n  \"path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\",\n  \"output_mode\": \"content\",\n  \"head_limit\": 50\n}\n\n[timestamp:2026-02-12T22:07:47.887Z] 🔧 Tool: Grep\nInput: {\n  \"pattern\": \"icon\",\n  \"path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\lib\",\n  \"output_mode\": \"files_with_matches\"\n}\n\n[timestamp:2026-02-12T22:07:48.216Z] 🔧 Tool: Glob\nInput: {\n  \"pattern\": \"**/icon*.tsx\",\n  \"path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\"\n}\n\n[timestamp:2026-02-12T22:08:01.872Z] 🔧 Tool: Grep\nInput: {\n  \"pattern\": \"icon\",\n  \"path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\lib\\\\electron.ts\",\n  \"output_mode\": \"content\"\n}\n\n[timestamp:2026-02-12T22:08:25.790Z] 🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\ui\\\\icon-picker.tsx\"\n}\nNow let me read the files that use `import * as LucideIcons` to understand their exact usage patterns:\n\n[timestamp:2026-02-12T22:08:34.901Z] 🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\board-view.tsx\",\n  \"limit\": 60\n}\n\n[timestamp:2026-02-12T22:08:35.686Z] 🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\layout\\\\top-nav-bar.tsx\",\n  \"limit\": 60\n}\n\n[timestamp:2026-02-12T22:08:36.336Z] 🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\dashboard-view.tsx\",\n  \"limit\": 80\n}\n\n[timestamp:2026-02-12T22:08:37.167Z] 🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\agent-view\\\\components\\\\session-selector.tsx\",\n  \"limit\": 60\n}\n\n[timestamp:2026-02-12T22:08:38.008Z] 🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\settings-view\\\\components\\\\edit-project-dialog.tsx\",\n  \"limit\": 40\n}\n\n[timestamp:2026-02-12T22:08:38.798Z] 🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\settings-view\\\\projects\\\\projects-section.tsx\",\n  \"limit\": 50\n}\n\n[timestamp:2026-02-12T22:08:39.672Z] 🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\board-view\\\\dialogs\\\\add-feature-dialog.tsx\",\n  \"limit\": 80\n}\n\n[timestamp:2026-02-12T22:08:40.466Z] 🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\board-view\\\\components\\\\agent-chat-panel.tsx\",\n  \"limit\": 40\n}\nNow let me check how `LucideIcons` is used in the remaining files (board-view.tsx and top-nav-bar.tsx) for the icon resolution pattern:\n\n[timestamp:2026-02-12T22:09:37.048Z] 🔧 Tool: Grep\nInput: {\n  \"pattern\": \"LucideIcons\",\n  \"path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\board-view.tsx\",\n  \"output_mode\": \"content\",\n  \"-n\": true,\n  \"-C\": 3\n}\n\n[timestamp:2026-02-12T22:09:37.941Z] 🔧 Tool: Grep\nInput: {\n  \"pattern\": \"LucideIcons\",\n  \"path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\layout\\\\top-nav-bar.tsx\",\n  \"output_mode\": \"content\",\n  \"-n\": true,\n  \"-C\": 3\n}\n\n[timestamp:2026-02-12T22:09:39.230Z] 🔧 Tool: Grep\nInput: {\n  \"pattern\": \"LucideIcons\",\n  \"path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\board-view\\\\dialogs\\\\add-feature-dialog.tsx\",\n  \"output_mode\": \"content\",\n  \"-n\": true,\n  \"-C\": 3\n}\nNow I have a complete understanding of the codebase. Here's the specification:\n\n---\n\n## 1. Problem Statement\n\nMultiple UI components import the entire lucide-react library (`import * as LucideIcons`) to dynamically resolve project icons by name. This pulls all 1,400+ icons (~200-400KB gzipped) into the bundle even though only ~425 icons from the picker plus a handful of UI icons are actually used. This is a major contributor to bundle bloat, slowing initial load and parse times.\n\n## 2. User Story\n\nAs a **developer/user of Automaker**, I want **the application to load faster and use less bandwidth**, so that **the UI feels snappy and responsive, especially on slower connections**.\n\n## 3. Acceptance Criteria\n\n- **Happy Path**: GIVEN a project with a Lucide icon set via the icon picker, WHEN the project is displayed in any view (board, dashboard, nav bar, session selector, add-feature dialog, settings), THEN the correct icon renders identically to current behavior.\n- **Icon Picker**: GIVEN the user opens the icon picker in project settings, WHEN they browse or search icons, THEN all ~425 curated icons are available and selectable, identical to current behavior.\n- **Fallback**: GIVEN a project with no icon set or an icon name not in the registry, WHEN the project is displayed, THEN the `Folder` fallback icon is shown.\n- **Backward Compatibility**: GIVEN a project with an icon name previously selected from the full Lucide library that is NOT in the curated registry, WHEN the project is displayed, THEN the `Folder` fallback icon is shown (graceful degradation).\n- **No Namespace Imports**: GIVEN the codebase is searched for `import * as LucideIcons`, WHEN the search completes, THEN zero matches are found.\n- **Named Imports Unchanged**: GIVEN components that use individual named imports like `import { Search, Plus } from 'lucide-react'`, WHEN the bundle is built, THEN these remain tree-shakeable and unchanged.\n\n## 4. Technical Context\n\n| Aspect | Value |\n|--------|-------|\n| Affected Files | 9 existing files + 1 new file (see task list) |\n| Dependencies | `lucide-react` (existing, no new deps) |\n| Constraints | Must maintain all ~425 icons from `POPULAR_ICONS` in icon-picker; backward compatible with stored icon names |\n| Patterns to Follow | Existing `getIconComponent` / `getProjectIconComponent` pattern; centralized registry in `apps/ui/src/lib/` |\n\n## 5. Non-Goals\n\n- Changing the icon picker UI/UX or its categories\n- Adding lazy-loading or code-splitting for icons (future optimization)\n- Modifying how icon names are stored in project data\n- Changing individual named imports (`import { Search } from 'lucide-react'`) which are already tree-shakeable\n- Removing icons from the picker selection (maintaining existing ~425 icons)\n\n## 6. Implementation Tasks\n\n```tasks\n## Phase 1: Foundation\n- [ ] T001: Create icon registry module with curated icon map and lookup utility | File: apps/ui/src/lib/icon-registry.ts\n- [ ] T002: Export POPULAR_ICONS list from registry and getProjectIcon helper | File: apps/ui/src/lib/icon-registry.ts\n\n## Phase 2: Core Migration\n- [ ] T003: Refactor icon-picker.tsx to use icon registry instead of namespace import | File: apps/ui/src/components/ui/icon-picker.tsx\n- [ ] T004: Refactor board-view.tsx to use icon registry instead of namespace import | File: apps/ui/src/components/views/board-view.tsx\n- [ ] T005: Refactor top-nav-bar.tsx to use icon registry instead of namespace import | File: apps/ui/src/components/layout/top-nav-bar.tsx\n- [ ] T006: Refactor dashboard-view.tsx to use icon registry instead of namespace import | File: apps/ui/src/components/views/dashboard-view.tsx\n- [ ] T007: Refactor session-selector.tsx to use icon registry instead of namespace import | File: apps/ui/src/components/views/agent-view/components/session-selector.tsx\n- [ ] T008: Refactor edit-project-dialog.tsx to use icon registry instead of namespace import | File: apps/ui/src/components/views/settings-view/components/edit-project-dialog.tsx\n- [ ] T009: Refactor projects-section.tsx to use icon registry instead of namespace import | File: apps/ui/src/components/views/settings-view/projects/projects-section.tsx\n- [ ] T010: Refactor add-feature-dialog.tsx to use icon registry instead of namespace import | File: apps/ui/src/components/views/board-view/dialogs/add-feature-dialog.tsx\n- [ ] T011: Refactor agent-chat-panel.tsx to use icon registry instead of namespace import | File: apps/ui/src/components/views/board-view/components/agent-chat-panel.tsx\n\n## Phase 3: Verification\n- [ ] T012: Verify no remaining namespace imports and build succeeds | File: apps/ui/src/\n```\n\n## 7. Success Metrics\n\n- Zero occurrences of `import * as LucideIcons from 'lucide-react'` in the codebase\n- All ~425 project icons render correctly throughout the application\n- Icon picker displays all icons with search/filter working\n- Build completes without errors\n- Bundle size for lucide-react chunk reduced (tree-shaking eliminates unused icons)\n\n## 8. Risks & Mitigations\n\n| Risk | Mitigation |\n|------|------------|\n| Some icon names in POPULAR_ICONS may not exist in lucide-react (typos, removed icons) | The icon picker already filters these out with null checks; registry will do the same |\n| Users may have previously selected an icon not in the curated list | Graceful fallback to `Folder` icon (same behavior as current `in` check failure) |\n| Large import block in icon-registry.ts | Single file, loaded once; all icons are individually imported for tree-shaking compatibility |",
+    "generatedAt": "2026-02-12T22:10:32.637Z",
+    "tasks": [
+      {
+        "id": "T001",
+        "description": "Create icon registry module with curated icon map and lookup utility",
+        "filePath": "apps/ui/src/lib/icon-registry.ts",
+        "phase": "Phase 1: Foundation",
+        "status": "pending"
+      },
+      {
+        "id": "T002",
+        "description": "Export POPULAR_ICONS list from registry and getProjectIcon helper",
+        "filePath": "apps/ui/src/lib/icon-registry.ts",
+        "phase": "Phase 1: Foundation",
+        "status": "pending"
+      },
+      {
+        "id": "T003",
+        "description": "Refactor icon-picker.tsx to use icon registry instead of namespace import",
+        "filePath": "apps/ui/src/components/ui/icon-picker.tsx",
+        "phase": "Phase 2: Core Migration",
+        "status": "pending"
+      },
+      {
+        "id": "T004",
+        "description": "Refactor board-view.tsx to use icon registry instead of namespace import",
+        "filePath": "apps/ui/src/components/views/board-view.tsx",
+        "phase": "Phase 2: Core Migration",
+        "status": "pending"
+      },
+      {
+        "id": "T005",
+        "description": "Refactor top-nav-bar.tsx to use icon registry instead of namespace import",
+        "filePath": "apps/ui/src/components/layout/top-nav-bar.tsx",
+        "phase": "Phase 2: Core Migration",
+        "status": "pending"
+      },
+      {
+        "id": "T006",
+        "description": "Refactor dashboard-view.tsx to use icon registry instead of namespace import",
+        "filePath": "apps/ui/src/components/views/dashboard-view.tsx",
+        "phase": "Phase 2: Core Migration",
+        "status": "pending"
+      },
+      {
+        "id": "T007",
+        "description": "Refactor session-selector.tsx to use icon registry instead of namespace import",
+        "filePath": "apps/ui/src/components/views/agent-view/components/session-selector.tsx",
+        "phase": "Phase 2: Core Migration",
+        "status": "pending"
+      },
+      {
+        "id": "T008",
+        "description": "Refactor edit-project-dialog.tsx to use icon registry instead of namespace import",
+        "filePath": "apps/ui/src/components/views/settings-view/components/edit-project-dialog.tsx",
+        "phase": "Phase 2: Core Migration",
+        "status": "pending"
+      },
+      {
+        "id": "T009",
+        "description": "Refactor projects-section.tsx to use icon registry instead of namespace import",
+        "filePath": "apps/ui/src/components/views/settings-view/projects/projects-section.tsx",
+        "phase": "Phase 2: Core Migration",
+        "status": "pending"
+      },
+      {
+        "id": "T010",
+        "description": "Refactor add-feature-dialog.tsx to use icon registry instead of namespace import",
+        "filePath": "apps/ui/src/components/views/board-view/dialogs/add-feature-dialog.tsx",
+        "phase": "Phase 2: Core Migration",
+        "status": "pending"
+      },
+      {
+        "id": "T011",
+        "description": "Refactor agent-chat-panel.tsx to use icon registry instead of namespace import",
+        "filePath": "apps/ui/src/components/views/board-view/components/agent-chat-panel.tsx",
+        "phase": "Phase 2: Core Migration",
+        "status": "pending"
+      },
+      {
+        "id": "T012",
+        "description": "Verify no remaining namespace imports and build succeeds",
+        "filePath": "apps/ui/src/",
+        "phase": "Phase 3: Verification",
+        "status": "pending"
+      }
+    ],
+    "tasksTotal": 12,
+    "tasksCompleted": 4,
+    "approvedAt": "2026-02-12T22:10:32.713Z",
+    "currentTaskId": "T005"
+  }
+}

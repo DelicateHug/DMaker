@@ -10,9 +10,9 @@
 
 import { exec, execFile } from 'child_process';
 import { promisify } from 'util';
-import { createLogger } from '@automaker/utils';
-import { getExtendedPath } from '@automaker/platform';
-import type { Feature } from '@automaker/types';
+import { createLogger } from '@dmaker/utils';
+import { getExtendedPath } from '@dmaker/platform';
+import type { Feature } from '@dmaker/types';
 import type { EventEmitter } from '../lib/events.js';
 
 const execAsync = promisify(exec);
@@ -385,7 +385,7 @@ export class GitHubSyncService {
   }
 
   /**
-   * Check whether the current Automaker instance can execute a feature.
+   * Check whether the current DMaker instance can execute a feature.
    *
    * Rules:
    * - No linked GitHub issue -> allowed (local-only feature)

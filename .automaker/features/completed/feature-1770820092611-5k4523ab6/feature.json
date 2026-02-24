@@ -1,0 +1,42 @@
+{
+  "category": "Uncategorized",
+  "description": "There should be a button to tasks that are in progress and then that would put them in the backlog again",
+  "title": "Move in-progress tasks back to backlog",
+  "images": [],
+  "imagePaths": [
+    {
+      "id": "img-1770820080790-oww8pdnjk",
+      "path": "C:\\Users\\DylanSmart\\Downloads\\dmaker-pr\\.dmaker\\features\\feature-1770820092611-5k4523ab6\\images\\pasted-image-2026-02-11T14-28-00-759Z-1770820080782.png",
+      "filename": "pasted-image-2026-02-11T14-28-00-759Z.png",
+      "mimeType": "image/png"
+    }
+  ],
+  "textFilePaths": [],
+  "skipTests": true,
+  "model": "sonnet",
+  "thinkingLevel": "none",
+  "reasoningEffort": "none",
+  "priority": 2,
+  "planningMode": "skip",
+  "requirePlanApproval": false,
+  "autoDeploy": false,
+  "deployEnvironment": "development",
+  "dependencies": [],
+  "workMode": "current",
+  "selectedProjectPath": "C:\\Users\\DylanSmart\\Downloads\\dmaker-pr",
+  "titleGenerating": false,
+  "status": "completed",
+  "projectPath": "C:\\Users\\DylanSmart\\Downloads\\dmaker-pr",
+  "id": "feature-1770820092611-5k4523ab6",
+  "descriptionHistory": [
+    {
+      "description": "There should be a button to tasks that are in progress and then that would put them in the backlog again",
+      "timestamp": "2026-02-11T14:28:13.405Z",
+      "source": "initial"
+    }
+  ],
+  "startedAt": "2026-02-11T14:28:13.477Z",
+  "updatedAt": "2026-02-11T14:42:10.590Z",
+  "justFinishedAt": "2026-02-11T14:42:10.590Z",
+  "completedAt": "2026-02-11T19:19:38.356Z"
+}

@@ -11,7 +11,7 @@ import { useAppStore } from '@/store/app-store';
 import { getElectronAPI } from '@/lib/electron';
 import { toast } from 'sonner';
 import { useNavigate } from '@tanstack/react-router';
-import type { IdeaCategory, IdeationPrompt } from '@automaker/types';
+import type { IdeaCategory, IdeationPrompt } from '@dmaker/types';
 
 interface PromptListProps {
   category: IdeaCategory;

@@ -1,0 +1,35 @@
+{
+  "category": "Uncategorized",
+  "description": "At the top whenever you hit the other buttons like Deploy git and Github and then you click off they close but when you click tools and click off it does not automatically collapse the menu",
+  "title": "Fix tools menu not collapsing on click",
+  "images": [],
+  "imagePaths": [],
+  "textFilePaths": [],
+  "skipTests": true,
+  "model": "opus",
+  "thinkingLevel": "medium",
+  "reasoningEffort": "none",
+  "priority": 2,
+  "planningMode": "skip",
+  "requirePlanApproval": false,
+  "autoDeploy": false,
+  "deployEnvironment": "development",
+  "dependencies": [],
+  "workMode": "current",
+  "selectedProjectPath": "C:\\Users\\DylanSmart\\Downloads\\dmaker-pr",
+  "titleGenerating": false,
+  "status": "completed",
+  "projectPath": "C:\\Users\\DylanSmart\\Downloads\\dmaker-pr",
+  "id": "feature-1770847348536-rugup4m9a",
+  "descriptionHistory": [
+    {
+      "description": "At the top whenever you hit the other buttons like Deploy git and Github and then you click off they close but when you click tools and click off it does not automatically collapse the menu",
+      "timestamp": "2026-02-11T22:02:28.806Z",
+      "source": "initial"
+    }
+  ],
+  "startedAt": "2026-02-11T22:07:16.814Z",
+  "updatedAt": "2026-02-11T22:08:30.322Z",
+  "justFinishedAt": "2026-02-11T22:08:30.322Z",
+  "completedAt": "2026-02-11T22:30:49.488Z"
+}

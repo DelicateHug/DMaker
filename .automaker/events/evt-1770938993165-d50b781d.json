@@ -1,0 +1,10 @@
+{
+  "id": "evt-1770938993165-d50b781d",
+  "trigger": "feature_error",
+  "timestamp": "2026-02-12T23:29:53.166Z",
+  "projectPath": "C:\\Users\\DylanSmart\\Downloads\\dmaker-pr",
+  "projectName": "dmaker-pr",
+  "featureId": "feature-perf-012-image-lazy-loading",
+  "error": "Claude Code process exited with code 1",
+  "errorType": "execution"
+}

@@ -1,0 +1,31 @@
+{
+  "category": "Uncategorized",
+  "description": "In Board selecting all projects does not actually work and also whenever you're doing Add feature you should be able to select the project but that project should default to the selected project of the board and it should also tell you very clearly both in the selection and in the text as to which project that you're making it in",
+  "title": "",
+  "images": [],
+  "imagePaths": [],
+  "textFilePaths": [],
+  "skipTests": true,
+  "model": "opus",
+  "thinkingLevel": "none",
+  "reasoningEffort": "none",
+  "priority": 2,
+  "planningMode": "skip",
+  "requirePlanApproval": false,
+  "autoDeploy": false,
+  "deployEnvironment": "development",
+  "dependencies": [],
+  "workMode": "current",
+  "titleGenerating": "In Board selecting all projects does not actually work and also whenever you're doing Add feature you should be able to select the project but that project should default to the selected project of the board and it should also tell you very clearly both in the selection and in the text as to which project that you're making it in",
+  "status": "in_progress",
+  "id": "feature-1770649360937-nfatjn9ln",
+  "descriptionHistory": [
+    {
+      "description": "In Board selecting all projects does not actually work and also whenever you're doing Add feature you should be able to select the project but that project should default to the selected project of the board and it should also tell you very clearly both in the selection and in the text as to which project that you're making it in",
+      "timestamp": "2026-02-09T15:02:41.772Z",
+      "source": "initial"
+    }
+  ],
+  "startedAt": "2026-02-09T15:14:51.867Z",
+  "updatedAt": "2026-02-09T15:14:51.942Z"
+}

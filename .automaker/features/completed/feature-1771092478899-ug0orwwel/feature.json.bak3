@@ -1,0 +1,40 @@
+{
+  "category": "Uncategorized",
+  "description": "When deleting the chat it still shows the chat title in top right",
+  "title": "",
+  "images": [],
+  "imagePaths": [
+    {
+      "id": "img-1771092458525-td9240d3p",
+      "path": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr\\.automaker\\features\\feature-1771092478899-ug0orwwel\\images\\pasted-image-2026-02-14T18-07-38-398Z-1771092458473.png",
+      "filename": "pasted-image-2026-02-14T18-07-38-398Z.png",
+      "mimeType": "image/png"
+    }
+  ],
+  "textFilePaths": [],
+  "skipTests": true,
+  "model": "sonnet",
+  "thinkingLevel": "none",
+  "reasoningEffort": "none",
+  "priority": 2,
+  "planningMode": "skip",
+  "requirePlanApproval": false,
+  "autoDeploy": false,
+  "deployEnvironment": "development",
+  "dependencies": [],
+  "workMode": "current",
+  "selectedProjectPath": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr",
+  "titleGenerating": "When deleting the chat it still shows the chat title in top right",
+  "status": "in_progress",
+  "projectPath": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr",
+  "id": "feature-1771092478899-ug0orwwel",
+  "descriptionHistory": [
+    {
+      "description": "When deleting the chat it still shows the chat title in top right",
+      "timestamp": "2026-02-14T18:07:59.280Z",
+      "source": "initial"
+    }
+  ],
+  "startedAt": "2026-02-14T18:07:59.324Z",
+  "updatedAt": "2026-02-14T18:07:59.601Z"
+}

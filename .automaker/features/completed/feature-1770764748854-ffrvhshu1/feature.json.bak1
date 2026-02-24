@@ -1,0 +1,33 @@
+{
+  "category": "Uncategorized",
+  "description": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr\\dev-restart.ps1 is still using info level logs to terminal, it should not",
+  "title": "",
+  "images": [],
+  "imagePaths": [],
+  "textFilePaths": [],
+  "skipTests": true,
+  "model": "opus",
+  "thinkingLevel": "none",
+  "reasoningEffort": "none",
+  "priority": 2,
+  "planningMode": "skip",
+  "requirePlanApproval": false,
+  "autoDeploy": false,
+  "deployEnvironment": "development",
+  "dependencies": [],
+  "workMode": "current",
+  "selectedProjectPath": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr",
+  "titleGenerating": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr\\dev-restart.ps1 is still using info level logs to terminal, it should not",
+  "status": "waiting_approval",
+  "projectPath": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr",
+  "id": "feature-1770764748854-ffrvhshu1",
+  "descriptionHistory": [
+    {
+      "description": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr\\dev-restart.ps1 is still using info level logs to terminal, it should not",
+      "timestamp": "2026-02-10T23:05:49.236Z",
+      "source": "initial"
+    }
+  ],
+  "updatedAt": "2026-02-10T23:07:48.113Z",
+  "justFinishedAt": "2026-02-10T23:07:48.113Z"
+}

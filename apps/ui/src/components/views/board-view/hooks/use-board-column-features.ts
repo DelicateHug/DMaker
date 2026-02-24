@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { useMemo, useCallback } from 'react';
 import { Feature, useAppStore } from '@/store/app-store';
-import { resolveDependencies, getBlockingDependencies } from '@automaker/dependency-resolver';
+import { resolveDependencies, getBlockingDependencies } from '@dmaker/dependency-resolver';
 import type { StatusTabId } from './use-board-status-tabs';
 
 type ColumnId = Feature['status'];

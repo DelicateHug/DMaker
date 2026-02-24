@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { createLogger } from '@automaker/utils/logger';
+import { createLogger } from '@dmaker/utils/logger';
 import { useNavigate } from '@tanstack/react-router';
 import { useShallow } from 'zustand/react/shallow';
 import { useAppStore, type ThemeMode } from '@/store/app-store';
@@ -277,7 +277,7 @@ export function DashboardView() {
       }
 
       await api.writeFile(
-        `${projectPath}/.automaker/app_spec.txt`,
+        `${projectPath}/.dmaker/app_spec.txt`,
         `<project_specification>
   <project_name>${projectName}</project_name>
 
@@ -358,7 +358,7 @@ export function DashboardView() {
       }
 
       await api.writeFile(
-        `${projectPath}/.automaker/app_spec.txt`,
+        `${projectPath}/.dmaker/app_spec.txt`,
         `<project_specification>
   <project_name>${projectName}</project_name>
 
@@ -435,7 +435,7 @@ export function DashboardView() {
       }
 
       await api.writeFile(
-        `${projectPath}/.automaker/app_spec.txt`,
+        `${projectPath}/.dmaker/app_spec.txt`,
         `<project_specification>
   <project_name>${projectName}</project_name>
 
@@ -547,7 +547,7 @@ export function DashboardView() {
             </svg>
             <div className="flex flex-col">
               <span className="font-bold text-foreground text-xl sm:text-2xl tracking-tight leading-none">
-                automaker<span className="text-brand-500">.</span>
+                dmaker<span className="text-brand-500">.</span>
               </span>
               <span className="text-xs text-muted-foreground leading-none font-medium mt-1">
                 v{appVersion} {versionSuffix}

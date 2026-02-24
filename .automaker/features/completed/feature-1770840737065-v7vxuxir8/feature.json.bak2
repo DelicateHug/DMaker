@@ -1,0 +1,40 @@
+{
+  "category": "Uncategorized",
+  "description": "And deploy edgecrit from files still asking for project directory I don't know why what it should be asking for is the path to a file and then that would be the deployed script",
+  "title": "Update edgecrit file path input handling",
+  "images": [],
+  "imagePaths": [
+    {
+      "id": "img-1770840722707-jjkau4s97",
+      "path": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr\\.automaker\\features\\feature-1770840737065-v7vxuxir8\\images\\pasted-image-2026-02-11T20-12-02-673Z-1770840722703.png",
+      "filename": "pasted-image-2026-02-11T20-12-02-673Z.png",
+      "mimeType": "image/png"
+    }
+  ],
+  "textFilePaths": [],
+  "skipTests": true,
+  "model": "opus",
+  "thinkingLevel": "none",
+  "reasoningEffort": "none",
+  "priority": 2,
+  "planningMode": "skip",
+  "requirePlanApproval": false,
+  "autoDeploy": false,
+  "deployEnvironment": "development",
+  "dependencies": [],
+  "workMode": "current",
+  "selectedProjectPath": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr",
+  "titleGenerating": false,
+  "status": "in_progress",
+  "projectPath": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr",
+  "id": "feature-1770840737065-v7vxuxir8",
+  "descriptionHistory": [
+    {
+      "description": "And deploy edgecrit from files still asking for project directory I don't know why what it should be asking for is the path to a file and then that would be the deployed script",
+      "timestamp": "2026-02-11T20:12:17.133Z",
+      "source": "initial"
+    }
+  ],
+  "startedAt": "2026-02-11T20:12:30.375Z",
+  "updatedAt": "2026-02-11T20:29:55.775Z"
+}

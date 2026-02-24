@@ -12,14 +12,14 @@ import type { Request, Response, NextFunction } from 'express';
 import crypto from 'crypto';
 import path from 'path';
 import * as secureFs from './secure-fs.js';
-import { createLogger } from '@automaker/utils';
+import { createLogger } from '@dmaker/utils';
 
 const logger = createLogger('Auth');
 
 const DATA_DIR = process.env.DATA_DIR || './data';
 const API_KEY_FILE = path.join(DATA_DIR, '.api-key');
 const SESSIONS_FILE = path.join(DATA_DIR, '.sessions');
-const SESSION_COOKIE_NAME = 'automaker_session';
+const SESSION_COOKIE_NAME = 'dmaker_session';
 const SESSION_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 const WS_TOKEN_MAX_AGE_MS = 5 * 60 * 1000; // 5 minutes for WebSocket connection tokens
 
@@ -97,9 +97,9 @@ loadSessions();
  */
 function ensureApiKey(): string {
   // First check environment variable (Electron passes it this way)
-  if (process.env.AUTOMAKER_API_KEY) {
+  if (process.env.DMAKER_API_KEY) {
     logger.info('Using API key from environment variable');
-    return process.env.AUTOMAKER_API_KEY;
+    return process.env.DMAKER_API_KEY;
   }
 
   // Try to read from file
@@ -131,7 +131,7 @@ function ensureApiKey(): string {
 const API_KEY = ensureApiKey();
 
 // Print API key to console for web mode users (unless suppressed for production logging)
-if (process.env.AUTOMAKER_HIDE_API_KEY !== 'true') {
+if (process.env.DMAKER_HIDE_API_KEY !== 'true') {
   logger.info(`
 ╔═══════════════════════════════════════════════════════════════════════╗
 ║  🔐 API Key for Web Mode Authentication                               ║
@@ -143,11 +143,11 @@ if (process.env.AUTOMAKER_HIDE_API_KEY !== 'true') {
 ║                                                                       ║
 ║  In Electron mode, authentication is handled automatically.          ║
 ║                                                                       ║
-║  💡 Tip: Set AUTOMAKER_API_KEY env var to use a fixed key for dev    ║
+║  💡 Tip: Set DMAKER_API_KEY env var to use a fixed key for dev    ║
 ╚═══════════════════════════════════════════════════════════════════════╝
 `);
 } else {
-  logger.info('API key banner hidden (AUTOMAKER_HIDE_API_KEY=true)');
+  logger.info('API key banner hidden (DMAKER_HIDE_API_KEY=true)');
 }
 
 /**

@@ -32,7 +32,7 @@ import { Markdown } from '@/components/ui/markdown';
 import { useAppStore } from '@/store/app-store';
 import { extractSummary, extractAllSummaries, type SummaryEntry } from '@/lib/log-parser';
 import type { AutoModeEvent } from '@/types/electron';
-import type { SummaryHistoryEntry } from '@automaker/types';
+import type { SummaryHistoryEntry } from '@dmaker/types';
 
 /** Generates a timestamp marker in the format recognized by the log-parser: [timestamp:ISO8601] */
 function formatTimestamp(): string {

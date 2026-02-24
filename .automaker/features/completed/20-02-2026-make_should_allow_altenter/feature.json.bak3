@@ -1,0 +1,40 @@
+{
+  "category": "Uncategorized",
+  "description": "make should allow alt+enter. add feature should be named backlog feature",
+  "title": "Add Alt+Enter keyboard shortcut for backlog",
+  "images": [],
+  "imagePaths": [
+    {
+      "id": "img-1771568877473-pfy8fjf02",
+      "path": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr\\.automaker\\features\\backlog\\20-02-2026-make_should_allow_altenter\\images\\pasted-image-2026-02-20T06-27-57-086Z-1771568877422.png",
+      "filename": "pasted-image-2026-02-20T06-27-57-086Z.png",
+      "mimeType": "image/png"
+    }
+  ],
+  "textFilePaths": [],
+  "skipTests": true,
+  "model": "sonnet",
+  "thinkingLevel": "none",
+  "reasoningEffort": "none",
+  "priority": 2,
+  "planningMode": "skip",
+  "requirePlanApproval": false,
+  "autoDeploy": false,
+  "dependencies": [],
+  "workMode": "current",
+  "selectedProjectPath": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr",
+  "titleGenerating": false,
+  "status": "in_progress",
+  "projectPath": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr",
+  "id": "20-02-2026-make_should_allow_altenter",
+  "descriptionHistory": [
+    {
+      "description": "make should allow alt+enter. add feature should be named backlog feature",
+      "timestamp": "2026-02-20T06:28:32.983Z",
+      "source": "initial"
+    }
+  ],
+  "startedAt": "2026-02-20T06:52:51.017Z",
+  "updatedAt": "2026-02-20T06:40:26.707Z",
+  "justFinishedAt": "2026-02-20T06:40:26.707Z"
+}

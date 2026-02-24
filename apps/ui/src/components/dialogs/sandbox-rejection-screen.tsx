@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 export function SandboxRejectionScreen() {
   const handleReload = () => {
     // Clear the rejection state and reload
-    sessionStorage.removeItem('automaker-sandbox-denied');
+    sessionStorage.removeItem('dmaker-sandbox-denied');
     window.location.reload();
   };
 

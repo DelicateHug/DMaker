@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { createLogger } from '@automaker/utils/logger';
+import { createLogger } from '@dmaker/utils/logger';
 import { useAppStore } from '@/store/app-store';
 import { useShallow } from 'zustand/react/shallow';
 
@@ -23,7 +23,7 @@ export function useSpecSave() {
     setIsSaving(true);
     try {
       const api = getElectronAPI();
-      await api.writeFile(`${currentProject.path}/.automaker/app_spec.txt`, appSpec);
+      await api.writeFile(`${currentProject.path}/.dmaker/app_spec.txt`, appSpec);
       setHasChanges(false);
     } catch (error) {
       logger.error('Failed to save spec:', error);

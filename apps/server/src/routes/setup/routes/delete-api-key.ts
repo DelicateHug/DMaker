@@ -3,9 +3,9 @@
  */
 
 import type { Request, Response } from 'express';
-import { createLogger } from '@automaker/utils';
+import { createLogger } from '@dmaker/utils';
 import path from 'path';
-import { secureFs } from '@automaker/platform';
+import { secureFs } from '@dmaker/platform';
 
 const logger = createLogger('Setup');
 

@@ -7,7 +7,7 @@ import {
   dependencyExists,
   shouldBlockOnDependencies,
 } from '../src/resolver';
-import type { Feature } from '@automaker/types';
+import type { Feature } from '@dmaker/types';
 
 // Helper to create test features
 function createFeature(

@@ -2,7 +2,7 @@ import { create } from 'zustand';
 // Note: persist middleware removed - settings now sync via API (use-settings-sync.ts)
 import type { Project, TrashedProject, RunningAgent } from '@/lib/electron';
 import { getElectronAPI } from '@/lib/electron';
-import { createLogger } from '@automaker/utils/logger';
+import { createLogger } from '@dmaker/utils/logger';
 import { setItem, getItem } from '@/lib/storage';
 import { generateFeatureId } from '@/lib/utils';
 import {
@@ -33,14 +33,14 @@ import type {
   ServerLogLevel,
   ClaudeAccountRef,
   SyntaxTheme,
-} from '@automaker/types';
+} from '@dmaker/types';
 import {
   getAllCursorModelIds,
   getAllCodexModelIds,
   getAllOpencodeModelIds,
   DEFAULT_PHASE_MODELS,
   DEFAULT_OPENCODE_MODEL,
-} from '@automaker/types';
+} from '@dmaker/types';
 
 const logger = createLogger('AppStore');
 const OPENCODE_BEDROCK_PROVIDER_ID = 'amazon-bedrock';
@@ -119,10 +119,10 @@ export type ThemeMode =
   | 'feather';
 
 // LocalStorage keys for persistence (fallback when server settings aren't available)
-export const THEME_STORAGE_KEY = 'automaker:theme';
-export const SYNTAX_THEME_STORAGE_KEY = 'automaker:syntax-theme';
-export const FONT_SANS_STORAGE_KEY = 'automaker:font-sans';
-export const FONT_MONO_STORAGE_KEY = 'automaker:font-mono';
+export const THEME_STORAGE_KEY = 'dmaker:theme';
+export const SYNTAX_THEME_STORAGE_KEY = 'dmaker:syntax-theme';
+export const FONT_SANS_STORAGE_KEY = 'dmaker:font-sans';
+export const FONT_MONO_STORAGE_KEY = 'dmaker:font-mono';
 
 // Maximum number of output lines to keep in init script state (prevents unbounded memory growth)
 export const MAX_INIT_OUTPUT_LINES = 500;
@@ -139,7 +139,7 @@ export function getStoredTheme(): ThemeMode | null {
   // We intentionally keep reading it as a fallback so users don't get a "default theme flash"
   // on login/logged-out pages if THEME_STORAGE_KEY hasn't been written yet.
   try {
-    const legacy = getItem('automaker-storage');
+    const legacy = getItem('dmaker-storage');
     if (!legacy) return null;
     const parsed = JSON.parse(legacy) as { state?: { theme?: unknown } } | { theme?: unknown };
     const theme = (parsed as any)?.state?.theme ?? (parsed as any)?.theme;
@@ -775,7 +775,7 @@ export interface AppState {
   boardBackgroundByProject: Record<
     string,
     {
-      imagePath: string | null; // Path to background image in .automaker directory
+      imagePath: string | null; // Path to background image in .dmaker directory
       imageVersion?: number; // Timestamp to bust browser cache when image is updated
       cardOpacity: number; // Opacity of cards (0-100)
       columnOpacity: number; // Opacity of columns (0-100)
@@ -2209,7 +2209,7 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
           id: 'welcome',
           role: 'assistant',
           content:
-            "Hello! I'm the Automaker Agent. I can help you build software autonomously. What would you like to create today?",
+            "Hello! I'm the DMaker Agent. I can help you build software autonomously. What would you like to create today?",
           timestamp: now,
         },
       ],

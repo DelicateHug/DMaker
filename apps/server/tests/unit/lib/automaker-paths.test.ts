@@ -3,7 +3,7 @@ import path from 'path';
 import fs from 'fs/promises';
 import os from 'os';
 import {
-  getAutomakerDir,
+  getDmakerDir,
   getFeaturesDir,
   getFeatureDir,
   getFeatureImagesDir,
@@ -21,7 +21,7 @@ import {
   getNotificationsPath,
   getBranchTrackingPath,
   getExecutionStatePath,
-  ensureAutomakerDir,
+  ensureDmakerDir,
   getGlobalSettingsPath,
   getCredentialsPath,
   getProjectSettingsPath,
@@ -37,38 +37,38 @@ import {
   getIdeationDraftsDir,
   getIdeationAnalysisPath,
   ensureIdeationDir,
-} from '@automaker/platform';
+} from '@dmaker/platform';
 
-describe('automaker-paths.ts', () => {
+describe('dmaker-paths.ts', () => {
   const projectPath = path.join('/test', 'project');
 
-  describe('getAutomakerDir', () => {
-    it('should return path to .automaker directory', () => {
-      expect(getAutomakerDir(projectPath)).toBe(path.join(projectPath, '.automaker'));
+  describe('getDmakerDir', () => {
+    it('should return path to .dmaker directory', () => {
+      expect(getDmakerDir(projectPath)).toBe(path.join(projectPath, '.dmaker'));
     });
 
     it('should handle paths with trailing slashes', () => {
       const pathWithSlash = path.join('/test', 'project') + path.sep;
-      expect(getAutomakerDir(pathWithSlash)).toBe(path.join(pathWithSlash, '.automaker'));
+      expect(getDmakerDir(pathWithSlash)).toBe(path.join(pathWithSlash, '.dmaker'));
     });
   });
 
   describe('getFeaturesDir', () => {
     it('should return path to features directory', () => {
-      expect(getFeaturesDir(projectPath)).toBe(path.join(projectPath, '.automaker', 'features'));
+      expect(getFeaturesDir(projectPath)).toBe(path.join(projectPath, '.dmaker', 'features'));
     });
   });
 
   describe('getFeatureDir', () => {
     it('should return path to specific feature directory', () => {
       expect(getFeatureDir(projectPath, 'feature-123')).toBe(
-        path.join(projectPath, '.automaker', 'features', 'feature-123')
+        path.join(projectPath, '.dmaker', 'features', 'feature-123')
       );
     });
 
     it('should handle feature IDs with special characters', () => {
       expect(getFeatureDir(projectPath, 'my-feature_v2')).toBe(
-        path.join(projectPath, '.automaker', 'features', 'my-feature_v2')
+        path.join(projectPath, '.dmaker', 'features', 'my-feature_v2')
       );
     });
   });
@@ -76,41 +76,39 @@ describe('automaker-paths.ts', () => {
   describe('getFeatureImagesDir', () => {
     it('should return path to feature images directory', () => {
       expect(getFeatureImagesDir(projectPath, 'feature-123')).toBe(
-        path.join(projectPath, '.automaker', 'features', 'feature-123', 'images')
+        path.join(projectPath, '.dmaker', 'features', 'feature-123', 'images')
       );
     });
   });
 
   describe('getBoardDir', () => {
     it('should return path to board directory', () => {
-      expect(getBoardDir(projectPath)).toBe(path.join(projectPath, '.automaker', 'board'));
+      expect(getBoardDir(projectPath)).toBe(path.join(projectPath, '.dmaker', 'board'));
     });
   });
 
   describe('getImagesDir', () => {
     it('should return path to images directory', () => {
-      expect(getImagesDir(projectPath)).toBe(path.join(projectPath, '.automaker', 'images'));
+      expect(getImagesDir(projectPath)).toBe(path.join(projectPath, '.dmaker', 'images'));
     });
   });
 
   describe('getWorktreesDir', () => {
     it('should return path to worktrees directory', () => {
-      expect(getWorktreesDir(projectPath)).toBe(path.join(projectPath, '.automaker', 'worktrees'));
+      expect(getWorktreesDir(projectPath)).toBe(path.join(projectPath, '.dmaker', 'worktrees'));
     });
   });
 
   describe('getAppSpecPath', () => {
     it('should return path to app_spec.txt file', () => {
-      expect(getAppSpecPath(projectPath)).toBe(
-        path.join(projectPath, '.automaker', 'app_spec.txt')
-      );
+      expect(getAppSpecPath(projectPath)).toBe(path.join(projectPath, '.dmaker', 'app_spec.txt'));
     });
   });
 
   describe('getBranchTrackingPath', () => {
     it('should return path to active-branches.json file', () => {
       expect(getBranchTrackingPath(projectPath)).toBe(
-        path.join(projectPath, '.automaker', 'active-branches.json')
+        path.join(projectPath, '.dmaker', 'active-branches.json')
       );
     });
   });
@@ -118,14 +116,14 @@ describe('automaker-paths.ts', () => {
   describe('getNotificationsPath', () => {
     it('should return path to notifications.json file', () => {
       expect(getNotificationsPath(projectPath)).toBe(
-        path.join(projectPath, '.automaker', 'notifications.json')
+        path.join(projectPath, '.dmaker', 'notifications.json')
       );
     });
 
     it('should handle paths with trailing slashes', () => {
       const pathWithSlash = path.join('/test', 'project') + path.sep;
       expect(getNotificationsPath(pathWithSlash)).toBe(
-        path.join(pathWithSlash, '.automaker', 'notifications.json')
+        path.join(pathWithSlash, '.dmaker', 'notifications.json')
       );
     });
   });
@@ -133,114 +131,110 @@ describe('automaker-paths.ts', () => {
   describe('getExecutionStatePath', () => {
     it('should return path to execution-state.json file', () => {
       expect(getExecutionStatePath(projectPath)).toBe(
-        path.join(projectPath, '.automaker', 'execution-state.json')
+        path.join(projectPath, '.dmaker', 'execution-state.json')
       );
     });
 
     it('should handle paths with trailing slashes', () => {
       const pathWithSlash = path.join('/test', 'project') + path.sep;
       expect(getExecutionStatePath(pathWithSlash)).toBe(
-        path.join(pathWithSlash, '.automaker', 'execution-state.json')
+        path.join(pathWithSlash, '.dmaker', 'execution-state.json')
       );
     });
   });
 
   describe('getContextDir', () => {
     it('should return path to context directory', () => {
-      expect(getContextDir(projectPath)).toBe(path.join(projectPath, '.automaker', 'context'));
+      expect(getContextDir(projectPath)).toBe(path.join(projectPath, '.dmaker', 'context'));
     });
   });
 
   describe('Feature subdirectory paths', () => {
     it('should return path to feature summaries directory', () => {
       expect(getFeatureSummariesDir(projectPath, 'feature-123')).toBe(
-        path.join(projectPath, '.automaker', 'features', 'feature-123', 'summaries')
+        path.join(projectPath, '.dmaker', 'features', 'feature-123', 'summaries')
       );
     });
 
     it('should return path to feature logs directory', () => {
       expect(getFeatureLogsDir(projectPath, 'feature-123')).toBe(
-        path.join(projectPath, '.automaker', 'features', 'feature-123', 'logs')
+        path.join(projectPath, '.dmaker', 'features', 'feature-123', 'logs')
       );
     });
 
     it('should return path to feature backups directory', () => {
       expect(getFeatureBackupsDir(projectPath, 'feature-123')).toBe(
-        path.join(projectPath, '.automaker', 'features', 'feature-123', 'backups')
+        path.join(projectPath, '.dmaker', 'features', 'feature-123', 'backups')
       );
     });
   });
 
   describe('Validation paths', () => {
     it('should return path to validations directory', () => {
-      expect(getValidationsDir(projectPath)).toBe(
-        path.join(projectPath, '.automaker', 'validations')
-      );
+      expect(getValidationsDir(projectPath)).toBe(path.join(projectPath, '.dmaker', 'validations'));
     });
 
     it('should return path to specific validation directory', () => {
       expect(getValidationDir(projectPath, 42)).toBe(
-        path.join(projectPath, '.automaker', 'validations', '42')
+        path.join(projectPath, '.dmaker', 'validations', '42')
       );
     });
 
     it('should return path to validation.json file', () => {
       expect(getValidationPath(projectPath, 42)).toBe(
-        path.join(projectPath, '.automaker', 'validations', '42', 'validation.json')
+        path.join(projectPath, '.dmaker', 'validations', '42', 'validation.json')
       );
     });
   });
 
   describe('Ideation paths', () => {
     it('should return path to ideation directory', () => {
-      expect(getIdeationDir(projectPath)).toBe(path.join(projectPath, '.automaker', 'ideation'));
+      expect(getIdeationDir(projectPath)).toBe(path.join(projectPath, '.dmaker', 'ideation'));
     });
 
     it('should return path to ideas directory', () => {
-      expect(getIdeasDir(projectPath)).toBe(
-        path.join(projectPath, '.automaker', 'ideation', 'ideas')
-      );
+      expect(getIdeasDir(projectPath)).toBe(path.join(projectPath, '.dmaker', 'ideation', 'ideas'));
     });
 
     it('should return path to specific idea directory', () => {
       expect(getIdeaDir(projectPath, 'idea-1')).toBe(
-        path.join(projectPath, '.automaker', 'ideation', 'ideas', 'idea-1')
+        path.join(projectPath, '.dmaker', 'ideation', 'ideas', 'idea-1')
       );
     });
 
     it('should return path to idea.json file', () => {
       expect(getIdeaPath(projectPath, 'idea-1')).toBe(
-        path.join(projectPath, '.automaker', 'ideation', 'ideas', 'idea-1', 'idea.json')
+        path.join(projectPath, '.dmaker', 'ideation', 'ideas', 'idea-1', 'idea.json')
       );
     });
 
     it('should return path to idea attachments directory', () => {
       expect(getIdeaAttachmentsDir(projectPath, 'idea-1')).toBe(
-        path.join(projectPath, '.automaker', 'ideation', 'ideas', 'idea-1', 'attachments')
+        path.join(projectPath, '.dmaker', 'ideation', 'ideas', 'idea-1', 'attachments')
       );
     });
 
     it('should return path to ideation sessions directory', () => {
       expect(getIdeationSessionsDir(projectPath)).toBe(
-        path.join(projectPath, '.automaker', 'ideation', 'sessions')
+        path.join(projectPath, '.dmaker', 'ideation', 'sessions')
       );
     });
 
     it('should return path to specific session file', () => {
       expect(getIdeationSessionPath(projectPath, 'session-abc')).toBe(
-        path.join(projectPath, '.automaker', 'ideation', 'sessions', 'session-abc.json')
+        path.join(projectPath, '.dmaker', 'ideation', 'sessions', 'session-abc.json')
       );
     });
 
     it('should return path to ideation drafts directory', () => {
       expect(getIdeationDraftsDir(projectPath)).toBe(
-        path.join(projectPath, '.automaker', 'ideation', 'drafts')
+        path.join(projectPath, '.dmaker', 'ideation', 'drafts')
       );
     });
 
     it('should return path to ideation analysis file', () => {
       expect(getIdeationAnalysisPath(projectPath)).toBe(
-        path.join(projectPath, '.automaker', 'ideation', 'analysis.json')
+        path.join(projectPath, '.dmaker', 'ideation', 'analysis.json')
       );
     });
   });
@@ -264,13 +258,13 @@ describe('automaker-paths.ts', () => {
     it('should create ideation directory structure and return path', async () => {
       const result = await ensureIdeationDir(testDir);
 
-      expect(result).toBe(path.join(testDir, '.automaker', 'ideation'));
+      expect(result).toBe(path.join(testDir, '.dmaker', 'ideation'));
       const stats = await fs.stat(result);
       expect(stats.isDirectory()).toBe(true);
     });
 
     it('should succeed if directory already exists', async () => {
-      const ideationDir = path.join(testDir, '.automaker', 'ideation');
+      const ideationDir = path.join(testDir, '.dmaker', 'ideation');
       await fs.mkdir(ideationDir, { recursive: true });
 
       const result = await ensureIdeationDir(testDir);
@@ -279,11 +273,11 @@ describe('automaker-paths.ts', () => {
     });
   });
 
-  describe('ensureAutomakerDir', () => {
+  describe('ensureDmakerDir', () => {
     let testDir: string;
 
     beforeEach(async () => {
-      testDir = path.join(os.tmpdir(), `automaker-paths-test-${Date.now()}`);
+      testDir = path.join(os.tmpdir(), `dmaker-paths-test-${Date.now()}`);
       await fs.mkdir(testDir, { recursive: true });
     });
 
@@ -295,21 +289,21 @@ describe('automaker-paths.ts', () => {
       }
     });
 
-    it('should create automaker directory and return path', async () => {
-      const result = await ensureAutomakerDir(testDir);
+    it('should create dmaker directory and return path', async () => {
+      const result = await ensureDmakerDir(testDir);
 
-      expect(result).toBe(path.join(testDir, '.automaker'));
+      expect(result).toBe(path.join(testDir, '.dmaker'));
       const stats = await fs.stat(result);
       expect(stats.isDirectory()).toBe(true);
     });
 
     it('should succeed if directory already exists', async () => {
-      const automakerDir = path.join(testDir, '.automaker');
-      await fs.mkdir(automakerDir, { recursive: true });
+      const dmakerDir = path.join(testDir, '.dmaker');
+      await fs.mkdir(dmakerDir, { recursive: true });
 
-      const result = await ensureAutomakerDir(testDir);
+      const result = await ensureDmakerDir(testDir);
 
-      expect(result).toBe(automakerDir);
+      expect(result).toBe(dmakerDir);
     });
   });
 
@@ -342,16 +336,16 @@ describe('automaker-paths.ts', () => {
   });
 
   describe('getProjectSettingsPath', () => {
-    it('should return path to settings.json in project .automaker directory', () => {
+    it('should return path to settings.json in project .dmaker directory', () => {
       const projectPath = '/test/project';
       const result = getProjectSettingsPath(projectPath);
-      expect(result).toBe(path.join(projectPath, '.automaker', 'settings.json'));
+      expect(result).toBe(path.join(projectPath, '.dmaker', 'settings.json'));
     });
 
     it('should handle paths with trailing slashes', () => {
       const projectPath = '/test/project' + path.sep;
       const result = getProjectSettingsPath(projectPath);
-      expect(result).toBe(path.join(projectPath, '.automaker', 'settings.json'));
+      expect(result).toBe(path.join(projectPath, '.dmaker', 'settings.json'));
     });
   });
 

@@ -13,7 +13,7 @@
  * - Font readiness check via document.fonts API when available
  */
 
-import { createLogger } from '@automaker/utils/logger';
+import { createLogger } from '@dmaker/utils/logger';
 
 const logger = createLogger('FontLoader');
 

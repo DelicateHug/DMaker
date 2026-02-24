@@ -19,8 +19,8 @@ import type {
   FeatureStatusWithPipeline,
   PipelineConfig,
   ThinkingLevel,
-} from '@automaker/types';
-import { DEFAULT_PHASE_MODELS, isClaudeModel, stripProviderPrefix } from '@automaker/types';
+} from '@dmaker/types';
+import { DEFAULT_PHASE_MODELS, isClaudeModel, stripProviderPrefix } from '@dmaker/types';
 import {
   buildPromptWithImages,
   classifyError,
@@ -32,23 +32,23 @@ import {
   readJsonWithRecovery,
   logRecoveryWarning,
   DEFAULT_BACKUP_COUNT,
-} from '@automaker/utils';
+} from '@dmaker/utils';
 
 const logger = createLogger('AutoMode');
-import { resolveModelString, resolvePhaseModel, DEFAULT_MODELS } from '@automaker/model-resolver';
+import { resolveModelString, resolvePhaseModel, DEFAULT_MODELS } from '@dmaker/model-resolver';
 import {
   resolveDependencies,
   areDependenciesSatisfied,
   shouldBlockOnDependencies,
-} from '@automaker/dependency-resolver';
+} from '@dmaker/dependency-resolver';
 import {
-  getAutomakerDir,
+  getDmakerDir,
   getFeaturesDir,
   getExecutionStatePath,
-  ensureAutomakerDir,
+  ensureDmakerDir,
   isMonthDir,
   isStatusDir,
-} from '@automaker/platform';
+} from '@dmaker/platform';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import path from 'path';
@@ -1081,7 +1081,7 @@ Complete the pipeline step instructions above. Review the previous work and appl
     }
 
     // Normal resume flow for non-pipeline features
-    // Check if context exists in .automaker directory
+    // Check if context exists in .dmaker directory
     const resolvedDir = await this.featureLoader.resolveFeatureDir(projectPath, featureId);
     const featureDir = resolvedDir || this.featureLoader.getFeatureDir(projectPath, featureId);
     const contextPath = path.join(featureDir, 'logs', 'agent-output.md');
@@ -1730,7 +1730,7 @@ Address the follow-up instructions above. Review the previous work and make the 
       const commitMessage = feature
         ? `feat: ${this.extractTitleFromDescription(
             feature.description
-          )}\n\nImplemented by Automaker auto-mode`
+          )}\n\nImplemented by DMaker auto-mode`
         : `feat: Feature ${featureId}`;
 
       // Stage and commit
@@ -1764,7 +1764,7 @@ Address the follow-up instructions above. Review the previous work and make the 
    * Check if context exists for a feature
    */
   async contextExists(projectPath: string, featureId: string): Promise<boolean> {
-    // Context is stored in .automaker directory - use resolveFeatureDir for correct status-based path
+    // Context is stored in .dmaker directory - use resolveFeatureDir for correct status-based path
     const resolvedDir = await this.featureLoader.resolveFeatureDir(projectPath, featureId);
     const featureDir = resolvedDir || this.featureLoader.getFeatureDir(projectPath, featureId);
     const contextPath = path.join(featureDir, 'logs', 'agent-output.md');
@@ -1863,10 +1863,10 @@ Format your response as a structured markdown document.`;
         }
       }
 
-      // Save analysis to .automaker directory
-      const automakerDir = getAutomakerDir(projectPath);
-      const analysisPath = path.join(automakerDir, 'project-analysis.md');
-      await secureFs.mkdir(automakerDir, { recursive: true });
+      // Save analysis to .dmaker directory
+      const dmakerDir = getDmakerDir(projectPath);
+      const analysisPath = path.join(dmakerDir, 'project-analysis.md');
+      await secureFs.mkdir(dmakerDir, { recursive: true });
       await secureFs.writeFile(analysisPath, analysisResult);
 
       this.emitAutoModeEvent('auto_mode_feature_complete', {
@@ -2256,7 +2256,7 @@ Format your response as a structured markdown document.`;
     featureId: string,
     status: string
   ): Promise<void> {
-    // Features are stored in .automaker directory — resolve from cache or scan
+    // Features are stored in .dmaker directory — resolve from cache or scan
     const resolvedDir = await this.featureLoader.resolveFeatureDir(projectPath, featureId);
     const featureDir = resolvedDir || this.featureLoader.getFeatureDir(projectPath, featureId);
     const featurePath = path.join(featureDir, 'feature.json');
@@ -2441,7 +2441,7 @@ Format your response as a structured markdown document.`;
     blockedByDependencies: number;
     blockedFeatureNames: string[];
   }> {
-    // Features are stored in .automaker directory
+    // Features are stored in .dmaker directory
     const featuresDir = getFeaturesDir(projectPath);
 
     try {
@@ -2690,9 +2690,9 @@ You can use the Read tool to view these images at any time during implementation
     const planningModeRequiresApproval = true;
     const requiresApproval = false;
 
-    // CI/CD Mock Mode: Return early with mock response when AUTOMAKER_MOCK_AGENT is set
+    // CI/CD Mock Mode: Return early with mock response when DMAKER_MOCK_AGENT is set
     // This prevents actual API calls during automated testing
-    if (process.env.AUTOMAKER_MOCK_AGENT === 'true') {
+    if (process.env.DMAKER_MOCK_AGENT === 'true') {
       logger.info(`MOCK MODE: Skipping real agent execution for feature ${featureId}`);
 
       // Simulate some work being done
@@ -2737,7 +2737,7 @@ This is a mock agent response for CI/CD testing.
 - Created \`yellow.txt\` with content "yellow"
 
 ## Notes
-This mock response was generated because AUTOMAKER_MOCK_AGENT=true was set.
+This mock response was generated because DMAKER_MOCK_AGENT=true was set.
 `;
 
       await secureFs.mkdir(path.dirname(outputPath), { recursive: true });
@@ -2828,17 +2828,16 @@ This mock response was generated because AUTOMAKER_MOCK_AGENT=true was set.
     this.featureOutputBuffers.set(featureId, responseText);
     let specDetected = false;
 
-    // Agent output goes to .automaker directory
+    // Agent output goes to .dmaker directory
     // Note: We use projectPath here, not workDir, because workDir might be a worktree path
     const featureDirForOutput = this.featureLoader.getFeatureDir(projectPath, featureId);
     const outputPath = path.join(featureDirForOutput, 'logs', 'agent-output.md');
     const rawOutputPath = path.join(featureDirForOutput, 'logs', 'raw-output.jsonl');
 
     // Raw output logging is configurable via environment variable
-    // Set AUTOMAKER_DEBUG_RAW_OUTPUT=true to enable raw stream event logging
+    // Set DMAKER_DEBUG_RAW_OUTPUT=true to enable raw stream event logging
     const enableRawOutput =
-      process.env.AUTOMAKER_DEBUG_RAW_OUTPUT === 'true' ||
-      process.env.AUTOMAKER_DEBUG_RAW_OUTPUT === '1';
+      process.env.DMAKER_DEBUG_RAW_OUTPUT === 'true' || process.env.DMAKER_DEBUG_RAW_OUTPUT === '1';
 
     // Incremental file writing state
     let writeTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -3804,7 +3803,7 @@ After generating the revised spec, output:
    */
   private async saveExecutionState(projectPath: string): Promise<void> {
     try {
-      await ensureAutomakerDir(projectPath);
+      await ensureDmakerDir(projectPath);
       const statePath = getExecutionStatePath(projectPath);
       const state: ExecutionState = {
         version: 1,

@@ -1,7 +1,7 @@
 /**
- * Enhancement Prompts - Re-exported from @automaker/prompts
+ * Enhancement Prompts - Re-exported from @dmaker/prompts
  *
- * This file now re-exports enhancement prompts from the shared @automaker/prompts package
+ * This file now re-exports enhancement prompts from the shared @dmaker/prompts package
  * to maintain backward compatibility with existing imports in the server codebase.
  */
 
@@ -20,6 +20,6 @@ export {
   buildUserPrompt,
   isValidEnhancementMode,
   getAvailableEnhancementModes,
-} from '@automaker/prompts';
+} from '@dmaker/prompts';
 
-export type { EnhancementMode, EnhancementExample } from '@automaker/prompts';
+export type { EnhancementMode, EnhancementExample } from '@dmaker/prompts';

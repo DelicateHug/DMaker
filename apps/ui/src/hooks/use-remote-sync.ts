@@ -2,12 +2,12 @@
  * Remote Sync Hook - Auto-pull feature for team collaboration
  *
  * This hook provides automatic synchronization of features from remote repositories.
- * It periodically checks for changes to the .automaker directory and pulls updates
+ * It periodically checks for changes to the .dmaker directory and pulls updates
  * when detected, enabling team collaboration on features.
  *
  * Features:
  * - Automatic polling for remote changes at configurable intervals
- * - Detection of remote modifications to .automaker directory
+ * - Detection of remote modifications to .dmaker directory
  * - Graceful pull with conflict detection
  * - Sync status indicators for UI feedback
  * - Manual sync trigger support
@@ -15,7 +15,7 @@
 
 import { useEffect, useCallback, useRef, useState, useMemo } from 'react';
 import { useShallow } from 'zustand/react/shallow';
-import { createLogger } from '@automaker/utils/logger';
+import { createLogger } from '@dmaker/utils/logger';
 import { useAppStore } from '@/store/app-store';
 import { getElectronAPI } from '@/lib/electron';
 import { toast } from 'sonner';

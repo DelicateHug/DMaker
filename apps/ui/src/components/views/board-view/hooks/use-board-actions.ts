@@ -2,15 +2,15 @@
 import { useCallback, useState } from 'react';
 import { Feature, FeatureImage, ModelAlias, ThinkingLevel, useAppStore } from '@/store/app-store';
 import { useShallow } from 'zustand/react/shallow';
-import type { ReasoningEffort } from '@automaker/types';
+import type { ReasoningEffort } from '@dmaker/types';
 import { FeatureImagePath as DescriptionImagePath } from '@/components/ui/description-image-dropzone';
 import { getElectronAPI } from '@/lib/electron';
 import { isConnectionError, handleServerOffline } from '@/lib/http-api-client';
 import { toast } from 'sonner';
 import { useAutoMode } from '@/hooks/use-auto-mode';
 import { truncateDescription } from '@/lib/utils';
-import { getBlockingDependencies, shouldBlockOnDependencies } from '@automaker/dependency-resolver';
-import { createLogger } from '@automaker/utils/logger';
+import { getBlockingDependencies, shouldBlockOnDependencies } from '@dmaker/dependency-resolver';
+import { createLogger } from '@dmaker/utils/logger';
 
 const logger = createLogger('BoardActions');
 

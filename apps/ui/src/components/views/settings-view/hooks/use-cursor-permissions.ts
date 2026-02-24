@@ -1,10 +1,10 @@
 import { useState, useCallback } from 'react';
-import { createLogger } from '@automaker/utils/logger';
+import { createLogger } from '@dmaker/utils/logger';
 import { toast } from 'sonner';
 
 const logger = createLogger('CursorPermissions');
 import { getHttpApiClient } from '@/lib/http-api-client';
-import type { CursorPermissionProfile } from '@automaker/types';
+import type { CursorPermissionProfile } from '@dmaker/types';
 
 export interface PermissionsData {
   activeProfile: CursorPermissionProfile | null;

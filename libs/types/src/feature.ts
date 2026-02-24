@@ -1,5 +1,5 @@
 /**
- * Feature types for AutoMaker feature management
+ * Feature types for DMaker feature management
  */
 
 import type { ThinkingLevel } from './settings.js';
@@ -27,7 +27,7 @@ export interface DescriptionHistoryEntry {
  * A single entry in the summary history for tracking agent output summaries over time.
  *
  * Summary files are stored as individual markdown files in the summaries directory:
- *   {projectPath}/.automaker/features/{featureId}/summaries/{timestamp}.md
+ *   {projectPath}/.dmaker/features/{featureId}/summaries/{timestamp}.md
  *
  * The timestamp in the filename is sanitized for filesystem safety (colons replaced with dashes).
  */

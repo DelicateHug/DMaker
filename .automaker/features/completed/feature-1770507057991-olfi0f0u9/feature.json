@@ -1,0 +1,281 @@
+{
+  "category": "Uncategorized",
+  "description": "add voice mode, it should allow me to conversate about tasks, files, script, folders, features, tests, using playwright to validate. Essentially I want to be able to add, adjust, test, understand, check status and all other feature managment via talking to AI. I dont neccassarily want pre-defined responses but if they help in some cases you can make a folder for ai voice mode with scripts that allows the ai to not have to manually check, stuff like list all feature titles, search descriptions, check status to save me some tokens",
+  "title": "Add AI voice mode for conversational task management",
+  "images": [],
+  "imagePaths": [],
+  "textFilePaths": [],
+  "skipTests": true,
+  "model": "opus",
+  "thinkingLevel": "medium",
+  "reasoningEffort": "none",
+  "priority": 2,
+  "planningMode": "full",
+  "requirePlanApproval": false,
+  "dependencies": [],
+  "workMode": "current",
+  "titleGenerating": false,
+  "status": "completed",
+  "id": "feature-1770507057991-olfi0f0u9",
+  "descriptionHistory": [
+    {
+      "description": "add voice mode, it should allow me to conversate about tasks, files, script, folders, features, tests, using playwright to validate. Essentially I want to be able to add, adjust, test, understand, check status and all other feature managment via talking to AI. I dont neccassarily want pre-defined responses but if they help in some cases you can make a folder for ai voice mode with scripts that allows the ai to not have to manually check, stuff like list all feature titles, search descriptions, check status to save me some tokens",
+      "timestamp": "2026-02-07T23:30:58.021Z",
+      "source": "initial"
+    }
+  ],
+  "startedAt": "2026-02-08T03:35:26.657Z",
+  "updatedAt": "2026-02-08T03:55:52.118Z",
+  "planSpec": {
+    "status": "approved",
+    "version": 1,
+    "reviewedByUser": false,
+    "content": "🔧 Tool: Task\nInput: {\n  \"description\": \"Explore voice mode implementation\",\n  \"prompt\": \"I need to understand the codebase structure for implementing a voice mode feature. Please explore:\\n\\n1. The UI component structure in apps/ui/src/components/\\n2. How features are managed (feature types, API endpoints, services)\\n3. The existing hooks and state management patterns\\n4. The server API structure for features\\n5. Any existing audio/media capabilities\\n6. The WebSocket/real-time communication setup\\n7. How the AI agent communication works\\n\\nFocus on finding:\\n- Feature management patterns (CRUD operations)\\n- How the UI communicates with the server\\n- State management approach (Zustand stores)\\n- Existing dialog/modal patterns\\n- API client usage\\n\\nBe thorough - this is for a comprehensive specification.\",\n  \"subagent_type\": \"Explore\"\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"cd /c/Users/dylan/Downloads/dmaker-pr && find . -type f -name \\\"*.ts\\\" -o -name \\\"*.tsx\\\" | head -20\",\n  \"description\": \"Verify working directory and check file structure\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"apps/ui/src/components/**/*.tsx\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"apps/ui/src/hooks/*.ts\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"apps/server/src/routes/**/*.ts\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"apps/server/src/services/*.ts\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\libs\\\\types\\\\src\\\\index.ts\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\ui\\\\src\\\\store\\\\app-store.ts\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\ui\\\\src\\\\lib\\\\http-api-client.ts\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\server\\\\src\\\\index.ts\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\ui\\\\src\\\\store\\\\app-store.ts\",\n  \"offset\": 1,\n  \"limit\": 100\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\libs\\\\types\\\\src\\\\feature.ts\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"apps/ui/src/components/dialogs/*.tsx\"\n}\n\n🔧 Tool: Grep\nInput: {\n  \"pattern\": \"feature\\\\s*\\\\(\\\\|export.*Feature\",\n  \"type\": \"ts\",\n  \"head_limit\": 20\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\dialogs\\\\auto-mode-modal.tsx\",\n  \"limit\": 80\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"cd /c/Users/dylan/Downloads/dmaker-pr && find apps/ui/src/components -name \\\"*settings*\\\" -o -name \\\"*modal*\\\" -o -name \\\"*dialog*\\\" | head -20\",\n  \"description\": \"Find dialog and settings components\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\server\\\\src\\\\routes\\\\features\\\\routes\\\\create.ts\",\n  \"limit\": 100\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\server\\\\src\\\\routes\\\\auto-mode\\\\routes\\\\run-feature.ts\",\n  \"limit\": 80\n}\n\n🔧 Tool: Grep\nInput: {\n  \"pattern\": \"onEvent|subscribe|WebSocket|emit\\\\(\",\n  \"type\": \"ts\",\n  \"path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\server\\\\src\\\\lib\",\n  \"head_limit\": 5\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\server\\\\src\\\\lib\\\\events.ts\",\n  \"limit\": 100\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"cd /c/Users/dylan/Downloads/dmaker-pr && find apps/ui -name \\\"use-*\\\" -type f | head -15\",\n  \"description\": \"Find custom hooks\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\ui\\\\src\\\\hooks\\\\use-auto-mode.ts\",\n  \"limit\": 100\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\board-view\\\\board-view.tsx\",\n  \"limit\": 80\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"cd /c/Users/dylan/Downloads/dmaker-pr && find apps/server/src/routes -name \\\"*.ts\\\" | grep -E \\\"agent|features\\\" | head -10\",\n  \"description\": \"Find agent and feature routes\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\server\\\\src\\\\routes\\\\agent\\\\routes\\\\send.ts\",\n  \"limit\": 80\n}\n\n🔧 Tool: Grep\nInput: {\n  \"pattern\": \"emit\\\\(.*audio|voice|sound\",\n  \"type\": \"ts\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\settings-view\\\\audio\\\\audio-section.tsx\"\n}\n\n🔧 Tool: Grep\nInput: {\n  \"pattern\": \"audio|voice|sound|speech|microphone\",\n  \"type\": \"ts\",\n  \"head_limit\": 30\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"cd /c/Users/dylan/Downloads/dmaker-pr && find . -name \\\"*audio*\\\" -o -name \\\"*voice*\\\" | grep -v node_modules | head -15\",\n  \"description\": \"Find audio/voice related files\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\server\\\\src\\\\routes\\\\features\\\\routes\\\\update.ts\",\n  \"limit\": 100\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\ui\\\\src\\\\lib\\\\electron.ts\",\n  \"offset\": 1,\n  \"limit\": 100\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"cd /c/Users/dylan/Downloads/dmaker-pr && grep -r \\\"enum.*Event\\\\|type.*Event\\\" libs/types/src/event.ts | head -20\",\n  \"description\": \"Check event types\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\libs\\\\types\\\\src\\\\event.ts\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\server\\\\src\\\\services\\\\agent-service.ts\",\n  \"offset\": 1,\n  \"limit\": 120\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"cd /c/Users/dylan/Downloads/dmaker-pr && grep -r \\\"agent:stream\\\\|emit.*stream\\\" apps/server/src/services/agent-service.ts | head -10\",\n  \"description\": \"Find streaming emit patterns\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\board-view\\\\board-view.tsx\",\n  \"offset\": 1,\n  \"limit\": 120\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"cd /c/Users/dylan/Downloads/dmaker-pr && find apps/server/src/routes -type d | sort\",\n  \"description\": \"List all server routes structure\"\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"cd /c/Users/dylan/Downloads/dmaker-pr && grep -r \\\"class.*Dialog\\\\|export.*Dialog\\\" apps/ui/src/components/dialogs --include=\\\"*.tsx\\\" | head -10\",\n  \"description\": \"Check dialog pattern\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\ui\\\\src\\\\routes\\\\__root.tsx\",\n  \"limit\": 80\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"cd /c/Users/dylan/Downloads/dmaker-pr && find libs/types/src -name \\\"*.ts\\\" -type f | sort\",\n  \"description\": \"List all type definitions\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\settings-view\\\\hooks\\\\use-settings-view.ts\",\n  \"limit\": 60\n}\n# Voice Mode Feature Specification\n\n## 1. Problem Statement\n\nUsers currently need to manually type all their interactions with DMaker, which slows down workflow when managing features, checking statuses, or running tests. A voice interface would allow hands-free, conversational control of the entire feature management lifecycle, enabling faster iteration and a more natural interaction pattern.\n\n## 2. User Story\n\nAs a **developer using DMaker**, I want **to converse with an AI assistant using voice commands**, so that **I can manage features, run tests, check statuses, and navigate my project without typing**.\n\n## 3. Acceptance Criteria\n\n### Happy Path\n- **GIVEN** I am in the board view, **WHEN** I click the microphone button and speak \"list all features\", **THEN** the AI transcribes my speech and displays a formatted list of all feature titles\n- **GIVEN** voice mode is active, **WHEN** I say \"create a new feature called user authentication\", **THEN** the feature is created and I receive voice confirmation\n- **GIVEN** voice mode is active, **WHEN** I say \"run playwright tests for feature 123\", **THEN** the tests execute and I receive a spoken status update\n\n### Edge Cases\n- **GIVEN** ambient noise is present, **WHEN** I speak a command, **THEN** the system uses noise cancellation and prompts for clarification if confidence is low\n- **GIVEN** I'm recording, **WHEN** 30 seconds pass without speech, **THEN** recording auto-stops with a timeout notification\n- **GIVEN** I speak an ambiguous command, **WHEN** multiple features match, **THEN** the AI asks for clarification before acting\n\n### Error Handling\n- **GIVEN** no microphone is available, **WHEN** I try to start voice mode, **THEN** I see an error message with troubleshooting steps\n- **GIVEN** the transcription API fails, **WHEN** I finish recording, **THEN** I see a retry option and the audio is preserved\n- **GIVEN** network connectivity is lost, **WHEN** voice mode is active, **THEN** the session gracefully degrades with an offline notification\n\n## 4. Technical Context\n\n| Aspect | Value |\n|--------|-------|\n| Affected Files | ~30 files across types, server, and UI |\n| Dependencies | Web Audio API (browser), Claude API for AI responses |\n| Constraints | Must work in both Electron and web modes; streaming required for real-time feedback |\n| Patterns to Follow | Zustand stores, WebSocket events, HttpApiClient namespace pattern |\n\n## 5. Non-Goals\n\n- **Real-time voice-to-voice streaming**: Initial implementation uses discrete record → transcribe → respond → synthesize flow\n- **Wake word detection**: User must manually initiate voice mode via button/shortcut\n- **Multi-language support**: Initial release targets English only\n- **Offline transcription**: Requires API connectivity for transcription\n- **Voice authentication**: No speaker identification or voice-based auth\n\n## 6. Implementation Tasks\n\n```tasks\n## Phase 1: Foundation - Types & Server Infrastructure\n\n- [ ] T001: Create voice types with VoiceSettings, VoiceSession, VoiceEvent interfaces | File: libs/types/src/voice.ts\n- [ ] T002: Export voice types from types package index | File: libs/types/src/index.ts\n- [ ] T003: Add voice event types to EventType union | File: libs/types/src/event.ts\n- [ ] T004: Add voiceSettings to GlobalSettings and ProjectSettings interfaces | File: libs/types/src/settings.ts\n- [ ] T005: Create voice service with session management and AI integration | File: apps/server/src/services/voice-service.ts\n- [ ] T006: Create voice route handlers (start-session, stop-session, process-command, get-status) | File: apps/server/src/routes/voice/routes/\n- [ ] T007: Create voice routes index and register with Express app | File: apps/server/src/routes/voice/index.ts\n- [ ] T008: Register voice routes in main server index | File: apps/server/src/index.ts\n\n## Phase 2: AI Voice Scripts & Command Processing\n\n- [ ] T009: Create voice command scripts directory with feature listing script | File: apps/server/src/voice-scripts/list-features.ts\n- [ ] T010: Create search features script for description/title searching | File: apps/server/src/voice-scripts/search-features.ts\n- [ ] T011: Create check status script for feature status queries | File: apps/server/src/voice-scripts/check-status.ts\n- [ ] T012: Create run tests script for Playwright test execution | File: apps/server/src/voice-scripts/run-tests.ts\n- [ ] T013: Create feature management scripts (create, update, delete) | File: apps/server/src/voice-scripts/feature-management.ts\n- [ ] T014: Create script registry and command dispatcher | File: apps/server/src/voice-scripts/index.ts\n- [ ] T015: Create AI command interpreter that routes natural language to scripts | File: apps/server/src/services/voice-command-interpreter.ts\n\n## Phase 3: UI State Management & API Client\n\n- [ ] T016: Add voice state and actions to app-store (voiceSettings, voiceSessionActive, etc.) | File: apps/ui/src/store/app-store.ts\n- [ ] T017: Add voice API namespace to HttpApiClient | File: apps/ui/src/lib/http-api-client.ts\n- [ ] T018: Create useVoiceMode hook with recording, transcription, and session management | File: apps/ui/src/hooks/use-voice-mode.ts\n- [ ] T019: Create useAudioRecorder hook for Web Audio API integration | File: apps/ui/src/hooks/use-audio-recorder.ts\n- [ ] T020: Export new voice hooks from hooks index | File: apps/ui/src/hooks/index.ts\n\n## Phase 4: UI Components\n\n- [ ] T021: Create VoiceModeDialog component with conversation interface | File: apps/ui/src/components/dialogs/voice-mode-dialog.tsx\n- [ ] T022: Create VoiceButton component for triggering voice mode | File: apps/ui/src/components/ui/voice-button.tsx\n- [ ] T023: Create RecordingIndicator component for visual feedback | File: apps/ui/src/components/ui/recording-indicator.tsx\n- [ ] T024: Create VoiceTranscript component for displaying conversation | File: apps/ui/src/components/ui/voice-transcript.tsx\n- [ ] T025: Create VoiceSettingsSection component for settings view | File: apps/ui/src/components/views/settings-view/voice/voice-settings-section.tsx\n- [ ] T026: Export VoiceSettingsSection and add to settings navigation | File: apps/ui/src/components/views/settings-view/config/navigation.ts\n\n## Phase 5: Integration & Polish\n\n- [ ] T027: Add VoiceButton to board-header for global access | File: apps/ui/src/components/views/board-view/board-header.tsx\n- [ ] T028: Add keyboard shortcut (Ctrl+Shift+V) for voice mode toggle | File: apps/ui/src/components/ui/keyboard-map.tsx\n- [ ] T029: Add voice mode event handling to use-settings-sync hook | File: apps/ui/src/hooks/use-settings-sync.ts\n- [ ] T030: Update electron.d.ts with voice API types | File: apps/ui/src/types/electron.d.ts\n\n## Phase 6: Testing\n\n- [ ] T031: Create voice service unit tests | File: apps/server/tests/unit/services/voice-service.test.ts\n- [ ] T032: Create voice command interpreter unit tests | File: apps/server/tests/unit/services/voice-command-interpreter.test.ts\n- [ ] T033: Create voice route handler unit tests | File: apps/server/tests/unit/routes/voice.test.ts\n- [ ] T034: Create voice mode E2E test (mocked audio) | File: apps/ui/tests/voice/voice-mode.spec.ts\n```\n\n## 7. Success Metrics\n\n| Metric | Target |\n|--------|--------|\n| Voice command recognition accuracy | >90% for predefined commands |\n| End-to-end response latency | <3 seconds from speech end to AI response |\n| Feature listing/search commands | Work without needing additional API calls |\n| Playwright test execution via voice | Successfully triggers and reports results |\n| Settings persistence | Voice preferences saved and restored across sessions |\n| Keyboard shortcut activation | Ctrl+Shift+V toggles voice mode consistently |\n\n## 8. Risks & Mitigations\n\n| Risk | Mitigation |\n|------|------------|\n| Browser audio API inconsistencies | Use proven AudioWorklet pattern with fallback to deprecated APIs |\n| High latency from multiple API roundtrips | Pre-cache common responses; use streaming where possible |\n| Token cost from AI interpretation | Voice scripts handle common queries without AI calls |\n| Ambient noise affects accuracy | Implement noise gate threshold in recording settings |\n| Electron vs Web audio handling differences | Abstract audio capture behind common interface in useAudioRecorder |\n| Complex commands may be misinterpreted | Require explicit confirmation for destructive actions (delete, bulk update) |\n\n---",
+    "generatedAt": "2026-02-07T23:36:01.981Z",
+    "tasks": [
+      {
+        "id": "T001",
+        "description": "Create voice types with VoiceSettings, VoiceSession, VoiceEvent interfaces",
+        "filePath": "libs/types/src/voice.ts",
+        "phase": "Phase 1: Foundation - Types & Server Infrastructure",
+        "status": "pending"
+      },
+      {
+        "id": "T002",
+        "description": "Export voice types from types package index",
+        "filePath": "libs/types/src/index.ts",
+        "phase": "Phase 1: Foundation - Types & Server Infrastructure",
+        "status": "pending"
+      },
+      {
+        "id": "T003",
+        "description": "Add voice event types to EventType union",
+        "filePath": "libs/types/src/event.ts",
+        "phase": "Phase 1: Foundation - Types & Server Infrastructure",
+        "status": "pending"
+      },
+      {
+        "id": "T004",
+        "description": "Add voiceSettings to GlobalSettings and ProjectSettings interfaces",
+        "filePath": "libs/types/src/settings.ts",
+        "phase": "Phase 1: Foundation - Types & Server Infrastructure",
+        "status": "pending"
+      },
+      {
+        "id": "T005",
+        "description": "Create voice service with session management and AI integration",
+        "filePath": "apps/server/src/services/voice-service.ts",
+        "phase": "Phase 1: Foundation - Types & Server Infrastructure",
+        "status": "pending"
+      },
+      {
+        "id": "T006",
+        "description": "Create voice route handlers (start-session, stop-session, process-command, get-status)",
+        "filePath": "apps/server/src/routes/voice/routes/",
+        "phase": "Phase 1: Foundation - Types & Server Infrastructure",
+        "status": "pending"
+      },
+      {
+        "id": "T007",
+        "description": "Create voice routes index and register with Express app",
+        "filePath": "apps/server/src/routes/voice/index.ts",
+        "phase": "Phase 1: Foundation - Types & Server Infrastructure",
+        "status": "pending"
+      },
+      {
+        "id": "T008",
+        "description": "Register voice routes in main server index",
+        "filePath": "apps/server/src/index.ts",
+        "phase": "Phase 1: Foundation - Types & Server Infrastructure",
+        "status": "pending"
+      },
+      {
+        "id": "T009",
+        "description": "Create voice command scripts directory with feature listing script",
+        "filePath": "apps/server/src/voice-scripts/list-features.ts",
+        "phase": "Phase 2: AI Voice Scripts & Command Processing",
+        "status": "pending"
+      },
+      {
+        "id": "T010",
+        "description": "Create search features script for description/title searching",
+        "filePath": "apps/server/src/voice-scripts/search-features.ts",
+        "phase": "Phase 2: AI Voice Scripts & Command Processing",
+        "status": "pending"
+      },
+      {
+        "id": "T011",
+        "description": "Create check status script for feature status queries",
+        "filePath": "apps/server/src/voice-scripts/check-status.ts",
+        "phase": "Phase 2: AI Voice Scripts & Command Processing",
+        "status": "pending"
+      },
+      {
+        "id": "T012",
+        "description": "Create run tests script for Playwright test execution",
+        "filePath": "apps/server/src/voice-scripts/run-tests.ts",
+        "phase": "Phase 2: AI Voice Scripts & Command Processing",
+        "status": "pending"
+      },
+      {
+        "id": "T013",
+        "description": "Create feature management scripts (create, update, delete)",
+        "filePath": "apps/server/src/voice-scripts/feature-management.ts",
+        "phase": "Phase 2: AI Voice Scripts & Command Processing",
+        "status": "pending"
+      },
+      {
+        "id": "T014",
+        "description": "Create script registry and command dispatcher",
+        "filePath": "apps/server/src/voice-scripts/index.ts",
+        "phase": "Phase 2: AI Voice Scripts & Command Processing",
+        "status": "pending"
+      },
+      {
+        "id": "T015",
+        "description": "Create AI command interpreter that routes natural language to scripts",
+        "filePath": "apps/server/src/services/voice-command-interpreter.ts",
+        "phase": "Phase 2: AI Voice Scripts & Command Processing",
+        "status": "pending"
+      },
+      {
+        "id": "T016",
+        "description": "Add voice state and actions to app-store (voiceSettings, voiceSessionActive, etc.)",
+        "filePath": "apps/ui/src/store/app-store.ts",
+        "phase": "Phase 3: UI State Management & API Client",
+        "status": "pending"
+      },
+      {
+        "id": "T017",
+        "description": "Add voice API namespace to HttpApiClient",
+        "filePath": "apps/ui/src/lib/http-api-client.ts",
+        "phase": "Phase 3: UI State Management & API Client",
+        "status": "pending"
+      },
+      {
+        "id": "T018",
+        "description": "Create useVoiceMode hook with recording, transcription, and session management",
+        "filePath": "apps/ui/src/hooks/use-voice-mode.ts",
+        "phase": "Phase 3: UI State Management & API Client",
+        "status": "pending"
+      },
+      {
+        "id": "T019",
+        "description": "Create useAudioRecorder hook for Web Audio API integration",
+        "filePath": "apps/ui/src/hooks/use-audio-recorder.ts",
+        "phase": "Phase 3: UI State Management & API Client",
+        "status": "pending"
+      },
+      {
+        "id": "T020",
+        "description": "Export new voice hooks from hooks index",
+        "filePath": "apps/ui/src/hooks/index.ts",
+        "phase": "Phase 3: UI State Management & API Client",
+        "status": "pending"
+      },
+      {
+        "id": "T021",
+        "description": "Create VoiceModeDialog component with conversation interface",
+        "filePath": "apps/ui/src/components/dialogs/voice-mode-dialog.tsx",
+        "phase": "Phase 4: UI Components",
+        "status": "pending"
+      },
+      {
+        "id": "T022",
+        "description": "Create VoiceButton component for triggering voice mode",
+        "filePath": "apps/ui/src/components/ui/voice-button.tsx",
+        "phase": "Phase 4: UI Components",
+        "status": "pending"
+      },
+      {
+        "id": "T023",
+        "description": "Create RecordingIndicator component for visual feedback",
+        "filePath": "apps/ui/src/components/ui/recording-indicator.tsx",
+        "phase": "Phase 4: UI Components",
+        "status": "pending"
+      },
+      {
+        "id": "T024",
+        "description": "Create VoiceTranscript component for displaying conversation",
+        "filePath": "apps/ui/src/components/ui/voice-transcript.tsx",
+        "phase": "Phase 4: UI Components",
+        "status": "pending"
+      },
+      {
+        "id": "T025",
+        "description": "Create VoiceSettingsSection component for settings view",
+        "filePath": "apps/ui/src/components/views/settings-view/voice/voice-settings-section.tsx",
+        "phase": "Phase 4: UI Components",
+        "status": "pending"
+      },
+      {
+        "id": "T026",
+        "description": "Export VoiceSettingsSection and add to settings navigation",
+        "filePath": "apps/ui/src/components/views/settings-view/config/navigation.ts",
+        "phase": "Phase 4: UI Components",
+        "status": "pending"
+      },
+      {
+        "id": "T027",
+        "description": "Add VoiceButton to board-header for global access",
+        "filePath": "apps/ui/src/components/views/board-view/board-header.tsx",
+        "phase": "Phase 5: Integration & Polish",
+        "status": "pending"
+      },
+      {
+        "id": "T028",
+        "description": "Add keyboard shortcut (Ctrl+Shift+V) for voice mode toggle",
+        "filePath": "apps/ui/src/components/ui/keyboard-map.tsx",
+        "phase": "Phase 5: Integration & Polish",
+        "status": "pending"
+      },
+      {
+        "id": "T029",
+        "description": "Add voice mode event handling to use-settings-sync hook",
+        "filePath": "apps/ui/src/hooks/use-settings-sync.ts",
+        "phase": "Phase 5: Integration & Polish",
+        "status": "pending"
+      },
+      {
+        "id": "T030",
+        "description": "Update electron.d.ts with voice API types",
+        "filePath": "apps/ui/src/types/electron.d.ts",
+        "phase": "Phase 5: Integration & Polish",
+        "status": "pending"
+      },
+      {
+        "id": "T031",
+        "description": "Create voice service unit tests",
+        "filePath": "apps/server/tests/unit/services/voice-service.test.ts",
+        "phase": "Phase 6: Testing",
+        "status": "pending"
+      },
+      {
+        "id": "T032",
+        "description": "Create voice command interpreter unit tests",
+        "filePath": "apps/server/tests/unit/services/voice-command-interpreter.test.ts",
+        "phase": "Phase 6: Testing",
+        "status": "pending"
+      },
+      {
+        "id": "T033",
+        "description": "Create voice route handler unit tests",
+        "filePath": "apps/server/tests/unit/routes/voice.test.ts",
+        "phase": "Phase 6: Testing",
+        "status": "pending"
+      },
+      {
+        "id": "T034",
+        "description": "Create voice mode E2E test (mocked audio)",
+        "filePath": "apps/ui/tests/voice/voice-mode.spec.ts",
+        "phase": "Phase 6: Testing",
+        "status": "pending"
+      }
+    ],
+    "tasksTotal": 34,
+    "tasksCompleted": 16,
+    "approvedAt": "2026-02-07T23:36:01.986Z",
+    "currentTaskId": "T017"
+  },
+  "justFinishedAt": "2026-02-08T03:55:52.118Z"
+}

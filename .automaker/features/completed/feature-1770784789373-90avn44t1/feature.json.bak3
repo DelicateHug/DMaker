@@ -1,0 +1,41 @@
+{
+  "category": "Uncategorized",
+  "description": "when i hit verify on Awaiting approval they're not being placed into the complete state",
+  "title": "Fix verify button not completing awaiting approval items",
+  "images": [],
+  "imagePaths": [
+    {
+      "id": "img-1770784757559-hbbnqp9xj",
+      "path": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr\\.automaker\\features\\feature-1770784789373-90avn44t1\\images\\pasted-image-2026-02-11T04-39-17-309Z-1770784757495.png",
+      "filename": "pasted-image-2026-02-11T04-39-17-309Z.png",
+      "mimeType": "image/png"
+    }
+  ],
+  "textFilePaths": [],
+  "skipTests": true,
+  "model": "opus",
+  "thinkingLevel": "medium",
+  "reasoningEffort": "none",
+  "priority": 2,
+  "planningMode": "skip",
+  "requirePlanApproval": false,
+  "autoDeploy": false,
+  "deployEnvironment": "development",
+  "dependencies": [],
+  "workMode": "current",
+  "selectedProjectPath": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr",
+  "titleGenerating": false,
+  "status": "waiting_approval",
+  "projectPath": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr",
+  "id": "feature-1770784789373-90avn44t1",
+  "descriptionHistory": [
+    {
+      "description": "when i hit verify on Awaiting approval they're not being placed into the complete state",
+      "timestamp": "2026-02-11T04:39:49.556Z",
+      "source": "initial"
+    }
+  ],
+  "startedAt": "2026-02-11T04:39:49.704Z",
+  "updatedAt": "2026-02-11T05:27:54.378Z",
+  "justFinishedAt": "2026-02-11T05:27:54.378Z"
+}

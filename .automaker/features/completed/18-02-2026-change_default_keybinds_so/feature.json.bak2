@@ -1,0 +1,33 @@
+{
+  "category": "Uncategorized",
+  "description": "change default keybinds so that i can press the following buttons to collapse and exp[and tabs in kanban view so i dont have to click collapse and expand menu. \n\nfiles = left control + q\nboard = left control + w\nagent chat = left control + e\ndeploy =  left control + r",
+  "title": "Add keyboard shortcuts for Kanban tab navigation",
+  "images": [],
+  "imagePaths": [],
+  "textFilePaths": [],
+  "skipTests": true,
+  "model": "opus",
+  "thinkingLevel": "none",
+  "reasoningEffort": "none",
+  "priority": 2,
+  "planningMode": "skip",
+  "requirePlanApproval": false,
+  "autoDeploy": false,
+  "dependencies": [],
+  "workMode": "current",
+  "selectedProjectPath": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr",
+  "titleGenerating": false,
+  "status": "waiting_approval",
+  "projectPath": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr",
+  "id": "18-02-2026-change_default_keybinds_so",
+  "descriptionHistory": [
+    {
+      "description": "change default keybinds so that i can press the following buttons to collapse and exp[and tabs in kanban view so i dont have to click collapse and expand menu. \n\nfiles = left control + q\nboard = left control + w\nagent chat = left control + e\ndeploy =  left control + r",
+      "timestamp": "2026-02-18T04:14:04.051Z",
+      "source": "initial"
+    }
+  ],
+  "startedAt": "2026-02-18T04:15:14.658Z",
+  "updatedAt": "2026-02-18T05:12:46.192Z",
+  "justFinishedAt": "2026-02-18T05:12:46.192Z"
+}

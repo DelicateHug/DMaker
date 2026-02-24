@@ -1,0 +1,38 @@
+{
+  "category": "Uncategorized",
+  "description": "Remove the extra space that's at the top of the header and also I should have voice mode next to settings but after usage",
+  "title": "",
+  "images": [],
+  "imagePaths": [
+    {
+      "id": "img-1770648885512-aeyf8ncng",
+      "path": "C:\\Users\\dylan\\Downloads\\automaker-pr\\.automaker\\features\\feature-1770648927990-8j7p7ajlh\\images\\pasted-image-2026-02-09T14-54-45-473Z-1770648885504.png",
+      "filename": "pasted-image-2026-02-09T14-54-45-473Z.png",
+      "mimeType": "image/png"
+    }
+  ],
+  "textFilePaths": [],
+  "skipTests": true,
+  "model": "sonnet",
+  "thinkingLevel": "none",
+  "reasoningEffort": "none",
+  "priority": 2,
+  "planningMode": "skip",
+  "requirePlanApproval": false,
+  "autoDeploy": false,
+  "deployEnvironment": "development",
+  "dependencies": [],
+  "workMode": "current",
+  "titleGenerating": "Remove the extra space that's at the top of the header and also I should have voice mode next to settings but after usage",
+  "status": "in_progress",
+  "id": "feature-1770648927990-8j7p7ajlh",
+  "descriptionHistory": [
+    {
+      "description": "Remove the extra space that's at the top of the header and also I should have voice mode next to settings but after usage",
+      "timestamp": "2026-02-09T14:55:28.567Z",
+      "source": "initial"
+    }
+  ],
+  "startedAt": "2026-02-09T14:55:28.693Z",
+  "updatedAt": "2026-02-09T14:55:28.934Z"
+}

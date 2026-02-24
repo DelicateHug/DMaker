@@ -1,6 +1,6 @@
 /**
- * @automaker/dependency-resolver
- * Feature dependency resolution for AutoMaker
+ * @dmaker/dependency-resolver
+ * Feature dependency resolution for DMaker
  */
 
 export {

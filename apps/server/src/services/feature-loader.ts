@@ -1,7 +1,7 @@
 /**
  * Feature Loader - Handles loading and managing features from individual feature folders
  *
- * Features are organised under `.automaker/features/{status}/{featureId}/feature.json`
+ * Features are organised under `.dmaker/features/{status}/{featureId}/feature.json`
  * where `{status}` is one of: backlog, in_progress, waiting_approval, completed, pipeline_*
  *
  * Legacy layouts (flat and month-based) are auto-migrated on first access.
@@ -13,24 +13,24 @@ import type {
   DescriptionHistoryEntry,
   SummaryHistoryEntry,
   FeatureListSummary,
-} from '@automaker/types';
+} from '@dmaker/types';
 import {
   createLogger,
   atomicWriteJson,
   readJsonWithRecovery,
   logRecoveryWarning,
   DEFAULT_BACKUP_COUNT,
-} from '@automaker/utils';
+} from '@dmaker/utils';
 import * as secureFs from '../lib/secure-fs.js';
 import {
   getFeaturesDir,
   getFeatureDir,
   getFeatureStatusDir,
   getAppSpecPath,
-  ensureAutomakerDir,
+  ensureDmakerDir,
   isMonthDir,
   isStatusDir,
-} from '@automaker/platform';
+} from '@dmaker/platform';
 import { addImplementedFeature, type ImplementedFeature } from '../lib/xml-extractor.js';
 
 const logger = createLogger('FeatureLoader');
@@ -1045,8 +1045,8 @@ export class FeatureLoader {
     // Place the new feature directly in the status-based directory
     const featureDir = getFeatureStatusDir(projectPath, status, featureId);
 
-    // Ensure automaker directory exists
-    await ensureAutomakerDir(projectPath);
+    // Ensure dmaker directory exists
+    await ensureDmakerDir(projectPath);
 
     // Create feature directory and all standard subfolders
     await secureFs.mkdir(featureDir, { recursive: true });

@@ -1,0 +1,134 @@
+{
+  "category": "Uncategorized",
+  "description": "I have other features running so please make your first pass to sleep for 60 minutes after that start to work improving the dependency tree and auto modes so that whenever I create task or am in auto mode I can choose that a task is only started once all of its dependencies are met",
+  "title": "Auto-start tasks when all dependencies met",
+  "images": [],
+  "imagePaths": [],
+  "textFilePaths": [],
+  "skipTests": true,
+  "model": "opus",
+  "thinkingLevel": "medium",
+  "reasoningEffort": "none",
+  "priority": 2,
+  "planningMode": "full",
+  "requirePlanApproval": false,
+  "dependencies": [],
+  "workMode": "current",
+  "titleGenerating": false,
+  "status": "completed",
+  "id": "feature-1769988039623-mwgvmlkwo",
+  "descriptionHistory": [
+    {
+      "description": "I have other features running so please make your first pass to sleep for 60 minutes after that start to work improving the dependency tree and auto modes so that whenever I create task or am in auto mode I can choose that a task is only started once all of its dependencies are met",
+      "timestamp": "2026-02-01T23:20:39.675Z",
+      "source": "initial"
+    }
+  ],
+  "startedAt": "2026-02-01T23:20:46.997Z",
+  "updatedAt": "2026-02-02T01:31:40.464Z",
+  "planSpec": {
+    "status": "approved",
+    "version": 1,
+    "reviewedByUser": false,
+    "content": "I'll wait for 60 minutes as requested before starting work on the dependency-aware task execution feature. Let me set up the wait now.\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"echo \\\"Starting 60-minute wait at $(date)\\\" && sleep 3600 && echo \\\"Wait completed at $(date)\\\"\",\n  \"description\": \"Sleep for 60 minutes before starting work\",\n  \"timeout\": 3660000\n}\nNow that the wait is complete, let me explore the codebase to understand the existing dependency system and auto mode implementation.\n\n🔧 Tool: Task\nInput: {\n  \"prompt\": \"Explore the codebase thoroughly to understand:\\n1. How the dependency resolver works in libs/dependency-resolver/\\n2. How auto mode is implemented in apps/server/src/routes/ and apps/server/src/services/\\n3. How features are stored and managed (the Feature type in libs/types/)\\n4. How the frontend displays and manages dependencies in apps/ui/\\n5. How tasks/features are started and scheduled\\n\\nFocus on understanding:\\n- The current dependency resolution logic\\n- How auto mode decides which tasks to run\\n- The Feature type and its dependency-related fields\\n- Any existing UI for managing dependencies\\n- WebSocket events related to features and auto mode\\n\\nProvide detailed findings including file paths and relevant code sections.\",\n  \"subagent_type\": \"Explore\",\n  \"description\": \"Explore dependency and auto mode systems\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"**/*.ts\",\n  \"path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\libs\\\\dependency-resolver\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"**/*.ts\",\n  \"path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\libs\\\\types\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"**/*.ts\",\n  \"path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\server\\\\src\\\\services\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"**/*.ts\",\n  \"path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\server\\\\src\\\\routes\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\libs\\\\dependency-resolver\\\\src\\\\resolver.ts\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\libs\\\\types\\\\src\\\\feature.ts\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\libs\\\\dependency-resolver\\\\src\\\\index.ts\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\server\\\\src\\\\services\\\\auto-mode-service.ts\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\server\\\\src\\\\services\\\\auto-mode-service.ts\",\n  \"offset\": 1,\n  \"limit\": 200\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\server\\\\src\\\\services\\\\auto-mode-service.ts\",\n  \"offset\": 200,\n  \"limit\": 200\n}\n\n🔧 Tool: Grep\nInput: {\n  \"pattern\": \"resolveDependencies|areDependenciesSatisfied|getBlockingDependencies\",\n  \"path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\server\\\\src\\\\services\",\n  \"output_mode\": \"files_with_matches\"\n}\n\n🔧 Tool: Grep\nInput: {\n  \"pattern\": \"areDependenciesSatisfied|blockedFeatures|getBlockingDependencies\",\n  \"path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\server\\\\src\\\\services\\\\auto-mode-service.ts\",\n  \"output_mode\": \"content\",\n  \"head_limit\": 30\n}\n\n🔧 Tool: Grep\nInput: {\n  \"pattern\": \"nextFeatures|getNextFeature|selectFeature|pickFeature\",\n  \"path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\server\\\\src\\\\services\\\\auto-mode-service.ts\",\n  \"output_mode\": \"content\",\n  \"head_limit\": 30\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\server\\\\src\\\\services\\\\auto-mode-service.ts\",\n  \"offset\": 2300,\n  \"limit\": 150\n}\n\n🔧 Tool: Grep\nInput: {\n  \"pattern\": \"async.*Loop|startAutoLoop|runNextFeature|executeFeature\",\n  \"path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\server\\\\src\\\\services\\\\auto-mode-service.ts\",\n  \"output_mode\": \"content\",\n  \"head_limit\": 20\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\server\\\\src\\\\routes\\\\auto-mode\\\\index.ts\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"**/*.tsx\",\n  \"path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\ui\\\\src\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\ui\\\\dependency-selector.tsx\"\n}\n\n🔧 Tool: Grep\nInput: {\n  \"pattern\": \"dependencies|dependency|Dependencies\",\n  \"path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\board-view\\\\components\\\\kanban-card\",\n  \"output_mode\": \"files_with_matches\"\n}\n\n🔧 Tool: Grep\nInput: {\n  \"pattern\": \"WebSocket|emit|on\\\\(|subscribe\",\n  \"path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\server\\\\src\\\\lib\\\\events.ts\",\n  \"output_mode\": \"files_with_matches\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\board-view\\\\components\\\\kanban-card\\\\card-badges.tsx\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\server\\\\src\\\\lib\\\\events.ts\"\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"find \\\"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\" -name \\\"*event*\\\" -type f | grep -E \\\"\\\\.(ts|tsx)$\\\" | grep -v node_modules | head -20\",\n  \"description\": \"Find event-related files excluding node_modules\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\libs\\\\dependency-resolver\\\\tests\\\\resolver.test.ts\"\n}\n\n🔧 Tool: Grep\nInput: {\n  \"pattern\": \"feature_started|feature_completed|feature_failed|auto_mode|dependency\",\n  \"path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\libs\\\\types\\\\src\\\\event.ts\",\n  \"output_mode\": \"content\",\n  \"head_limit\": 50\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\libs\\\\types\\\\src\\\\event.ts\"\n}\n\n🔧 Tool: Grep\nInput: {\n  \"pattern\": \"resolveDependencies|dependencies|feature_\",\n  \"path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\ui\\\\src\\\\store\",\n  \"output_mode\": \"files_with_matches\"\n}\n\n🔧 Tool: Grep\nInput: {\n  \"pattern\": \"dependencies|enableDependencyBlocking\",\n  \"path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\ui\\\\src\\\\store\\\\app-store.ts\",\n  \"output_mode\": \"content\",\n  \"head_limit\": 100\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"find \\\"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\ui\\\\src\\\" -name \\\"*feature*\\\" -type f | grep -E \\\"\\\\.(ts|tsx)$\\\" | head -15\",\n  \"description\": \"Find feature-related UI files\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\board-view\\\\dialogs\\\\edit-feature-dialog.tsx\",\n  \"limit\": 200\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"grep -n \\\"DependencySelector\\\\|dependencies\\\" \\\"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\board-view\\\\dialogs\\\\edit-feature-dialog.tsx\\\" | head -30\",\n  \"description\": \"Search for DependencySelector usage in edit dialog\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\server\\\\src\\\\services\\\\auto-mode-service.ts\",\n  \"offset\": 435,\n  \"limit\": 150\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\server\\\\src\\\\services\\\\auto-mode-service.ts\",\n  \"offset\": 2280,\n  \"limit\": 100\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"find \\\"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\ui\\\\src\\\" -name \\\"*dependency*\\\" -type f | grep -E \\\"\\\\.(ts|tsx)$\\\"\",\n  \"description\": \"Find all dependency-related UI files\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\board-view\\\\dialogs\\\\dependency-tree-dialog.tsx\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\server\\\\src\\\\routes\\\\features\\\\routes\\\\update.ts\"\n}\n\n🔧 Tool: Grep\nInput: {\n  \"pattern\": \"dependencies|childDependencies\",\n  \"path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\server\\\\src\\\\routes\\\\features\\\\routes\\\\update.ts\",\n  \"output_mode\": \"content\",\n  \"head_limit\": 50\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"grep -n \\\"childDependencies\\\\|dependencies\\\" \\\"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\server\\\\src\\\\services\\\\feature-loader.ts\\\" | head -30\",\n  \"description\": \"Search for dependency handling in feature-loader\"\n}\n\n🔧 Tool: Grep\nInput: {\n  \"pattern\": \"async update|async get\\\\(\",\n  \"path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\server\\\\src\\\\services\\\\feature-loader.ts\",\n  \"output_mode\": \"content\",\n  \"head_limit\": 20\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\server\\\\src\\\\services\\\\feature-loader.ts\",\n  \"offset\": 385,\n  \"limit\": 200\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"grep -rn \\\"childDependencies\\\" \\\"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\server\\\\src\\\" --include=\\\"*.ts\\\"\",\n  \"description\": \"Search for childDependencies in server code\"\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"grep -rn \\\"childDependencies\\\" \\\"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\ui\\\\src\\\" --include=\\\"*.tsx\\\" --include=\\\"*.ts\\\" | head -20\",\n  \"description\": \"Search for childDependencies in UI code\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\board-view\\\\hooks\\\\use-board-actions.ts\",\n  \"offset\": 330,\n  \"limit\": 100\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"grep -n \\\"enableDependencyBlocking\\\\|skipVerificationInAutoMode\\\" \\\"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\ui\\\\src\\\\store\\\\app-store.ts\\\" | head -15\",\n  \"description\": \"Find dependency-related settings in app store\"\n}\n# Specification: Dependency-Aware Task Execution in Auto Mode\n\n## 1. Problem Statement\n\nCurrently, while DMaker has dependency resolution logic, users lack granular control over when tasks should wait for their dependencies. The system has global settings (`enableDependencyBlocking`, `skipVerificationInAutoMode`) but users need per-task control and better visibility into why tasks are blocked. Users want to ensure that when creating tasks or running auto mode, they can explicitly choose that a task only starts after all its dependencies are successfully completed.\n\n## 2. User Story\n\n**As a** project manager using DMaker's auto mode, **I want** to configure tasks to only start when all their dependencies are completed, **so that** I can ensure proper sequencing of related work and prevent wasted effort from running tasks that depend on incomplete prerequisites.\n\n## 3. Acceptance Criteria\n\n### Happy Path\n- **GIVEN** a feature with dependencies configured\n- **WHEN** I enable \"Wait for dependencies\" on that feature\n- **THEN** auto mode will not start that feature until all dependencies have status 'completed' or 'verified'\n\n### Happy Path - Auto Mode\n- **GIVEN** auto mode is running with multiple pending features\n- **WHEN** some features have \"Wait for dependencies\" enabled and unsatisfied dependencies\n- **THEN** auto mode skips blocked features and runs only those with satisfied dependencies\n\n### Happy Path - Manual Run\n- **GIVEN** a feature with unsatisfied dependencies and \"Wait for dependencies\" enabled\n- **WHEN** I attempt to manually run that feature\n- **THEN** I receive a warning showing which dependencies are incomplete and can choose to proceed or cancel\n\n### Edge Case - All Blocked\n- **GIVEN** all pending features have unsatisfied dependencies\n- **WHEN** auto mode checks for work\n- **THEN** auto mode enters idle state with a message indicating features are blocked by dependencies\n\n### Edge Case - Dependency Fails\n- **GIVEN** a feature waiting for dependency A\n- **WHEN** dependency A fails\n- **THEN** the dependent feature remains blocked and shows the failed dependency in its blocked status\n\n### Error Handling\n- **GIVEN** a circular dependency configuration\n- **WHEN** I try to add a dependency that would create a cycle\n- **THEN** the system prevents the addition and displays a warning\n\n## 4. Technical Context\n\n| Aspect | Value |\n|--------|-------|\n| Affected Files | `libs/types/src/feature.ts`, `libs/dependency-resolver/src/resolver.ts`, `apps/server/src/services/auto-mode-service.ts`, `apps/ui/src/components/views/board-view/dialogs/edit-feature-dialog.tsx`, `apps/ui/src/components/views/board-view/dialogs/add-feature-dialog.tsx`, `apps/ui/src/components/views/board-view/components/kanban-card/card-badges.tsx` |\n| Dependencies | None (uses existing patterns) |\n| Constraints | Must maintain backward compatibility with existing features that don't have the new field |\n| Patterns to Follow | Existing Feature field patterns, existing dialog checkbox patterns, existing badge patterns |\n\n## 5. Non-Goals\n\n- Automatic dependency detection based on code analysis\n- Time-based scheduling (start after X time)\n- Complex dependency expressions (AND/OR logic between dependencies)\n- Cross-project dependencies\n- Dependency priority ordering beyond existing topological sort\n\n## 6. Implementation Tasks\n\n```tasks\n## Phase 1: Foundation - Type and Resolver Updates\n\n- [ ] T001: Add `waitForDependencies` boolean field to Feature interface | File: libs/types/src/feature.ts\n- [ ] T002: Update `areDependenciesSatisfied` to use per-feature `waitForDependencies` setting | File: libs/dependency-resolver/src/resolver.ts\n- [ ] T003: Add helper function `shouldBlockOnDependencies` combining global and per-feature settings | File: libs/dependency-resolver/src/resolver.ts\n- [ ] T004: Add unit tests for new `waitForDependencies` field behavior | File: libs/dependency-resolver/tests/resolver.test.ts\n\n## Phase 2: Server Updates - Auto Mode Integration\n\n- [ ] T005: Update `loadPendingFeatures` to respect per-feature `waitForDependencies` | File: apps/server/src/services/auto-mode-service.ts\n- [ ] T006: Add idle state message when all features blocked by dependencies | File: apps/server/src/services/auto-mode-service.ts\n- [ ] T007: Update manual feature run to check and warn about unsatisfied dependencies | File: apps/server/src/routes/auto-mode/index.ts\n\n## Phase 3: Frontend - UI Updates\n\n- [ ] T008: Add `waitForDependencies` checkbox to EditFeatureDialog | File: apps/ui/src/components/views/board-view/dialogs/edit-feature-dialog.tsx\n- [ ] T009: Add `waitForDependencies` checkbox to AddFeatureDialog | File: apps/ui/src/components/views/board-view/dialogs/add-feature-dialog.tsx\n- [ ] T010: Update CardBadges to show \"waiting for dependencies\" visual when feature has `waitForDependencies` enabled | File: apps/ui/src/components/views/board-view/components/kanban-card/card-badges.tsx\n- [ ] T011: Add confirmation dialog when manually running feature with unsatisfied dependencies | File: apps/ui/src/components/views/board-view/hooks/use-board-actions.ts\n\n## Phase 4: Testing and Polish\n\n- [ ] T012: Add E2E test for dependency blocking in auto mode | File: apps/e2e/tests/auto-mode-dependencies.spec.ts\n- [ ] T013: Update DependencyTreeDialog to show waitForDependencies status | File: apps/ui/src/components/views/board-view/dialogs/dependency-tree-dialog.tsx\n```\n\n## 7. Success Metrics\n\n- [ ] Features with `waitForDependencies: true` do not execute in auto mode until all dependencies are 'completed' or 'verified'\n- [ ] UI clearly indicates when a feature is waiting for dependencies\n- [ ] Manual run of a blocked feature shows a confirmation warning\n- [ ] Auto mode idle state correctly reports when all pending features are blocked\n- [ ] Existing features without the new field continue to work (backward compatible)\n- [ ] All unit tests pass\n- [ ] No regression in existing dependency resolution logic\n\n## 8. Risks & Mitigations\n\n| Risk | Mitigation |\n|------|------------|\n| Breaking existing features without the new field | Default `waitForDependencies` to `false` (or use global setting as fallback) for backward compatibility |\n| Auto mode stuck if all features blocked | Clear idle messaging and event emission so users understand why nothing is running |\n| UI confusion with multiple dependency settings | Clear labeling and tooltips explaining per-feature vs global settings |\n| Circular dependency causing deadlock | Existing circular dependency detection prevents this scenario |\n\n---",
+    "generatedAt": "2026-02-02T00:25:48.927Z",
+    "tasks": [
+      {
+        "id": "T001",
+        "description": "Add `waitForDependencies` boolean field to Feature interface",
+        "filePath": "libs/types/src/feature.ts",
+        "phase": "Phase 1: Foundation - Type and Resolver Updates",
+        "status": "pending"
+      },
+      {
+        "id": "T002",
+        "description": "Update `areDependenciesSatisfied` to use per-feature `waitForDependencies` setting",
+        "filePath": "libs/dependency-resolver/src/resolver.ts",
+        "phase": "Phase 1: Foundation - Type and Resolver Updates",
+        "status": "pending"
+      },
+      {
+        "id": "T003",
+        "description": "Add helper function `shouldBlockOnDependencies` combining global and per-feature settings",
+        "filePath": "libs/dependency-resolver/src/resolver.ts",
+        "phase": "Phase 1: Foundation - Type and Resolver Updates",
+        "status": "pending"
+      },
+      {
+        "id": "T004",
+        "description": "Add unit tests for new `waitForDependencies` field behavior",
+        "filePath": "libs/dependency-resolver/tests/resolver.test.ts",
+        "phase": "Phase 1: Foundation - Type and Resolver Updates",
+        "status": "pending"
+      },
+      {
+        "id": "T005",
+        "description": "Update `loadPendingFeatures` to respect per-feature `waitForDependencies`",
+        "filePath": "apps/server/src/services/auto-mode-service.ts",
+        "phase": "Phase 2: Server Updates - Auto Mode Integration",
+        "status": "pending"
+      },
+      {
+        "id": "T006",
+        "description": "Add idle state message when all features blocked by dependencies",
+        "filePath": "apps/server/src/services/auto-mode-service.ts",
+        "phase": "Phase 2: Server Updates - Auto Mode Integration",
+        "status": "pending"
+      },
+      {
+        "id": "T007",
+        "description": "Update manual feature run to check and warn about unsatisfied dependencies",
+        "filePath": "apps/server/src/routes/auto-mode/index.ts",
+        "phase": "Phase 2: Server Updates - Auto Mode Integration",
+        "status": "pending"
+      },
+      {
+        "id": "T008",
+        "description": "Add `waitForDependencies` checkbox to EditFeatureDialog",
+        "filePath": "apps/ui/src/components/views/board-view/dialogs/edit-feature-dialog.tsx",
+        "phase": "Phase 3: Frontend - UI Updates",
+        "status": "pending"
+      },
+      {
+        "id": "T009",
+        "description": "Add `waitForDependencies` checkbox to AddFeatureDialog",
+        "filePath": "apps/ui/src/components/views/board-view/dialogs/add-feature-dialog.tsx",
+        "phase": "Phase 3: Frontend - UI Updates",
+        "status": "pending"
+      },
+      {
+        "id": "T010",
+        "description": "Update CardBadges to show \"waiting for dependencies\" visual when feature has `waitForDependencies` enabled",
+        "filePath": "apps/ui/src/components/views/board-view/components/kanban-card/card-badges.tsx",
+        "phase": "Phase 3: Frontend - UI Updates",
+        "status": "pending"
+      },
+      {
+        "id": "T011",
+        "description": "Add confirmation dialog when manually running feature with unsatisfied dependencies",
+        "filePath": "apps/ui/src/components/views/board-view/hooks/use-board-actions.ts",
+        "phase": "Phase 3: Frontend - UI Updates",
+        "status": "pending"
+      },
+      {
+        "id": "T012",
+        "description": "Add E2E test for dependency blocking in auto mode",
+        "filePath": "apps/e2e/tests/auto-mode-dependencies.spec.ts",
+        "phase": "Phase 4: Testing and Polish",
+        "status": "pending"
+      },
+      {
+        "id": "T013",
+        "description": "Update DependencyTreeDialog to show waitForDependencies status",
+        "filePath": "apps/ui/src/components/views/board-view/dialogs/dependency-tree-dialog.tsx",
+        "phase": "Phase 4: Testing and Polish",
+        "status": "pending"
+      }
+    ],
+    "tasksTotal": 13,
+    "tasksCompleted": 13,
+    "approvedAt": "2026-02-02T00:25:48.930Z",
+    "currentTaskId": "T013"
+  },
+  "justFinishedAt": "2026-02-02T01:31:40.464Z"
+}

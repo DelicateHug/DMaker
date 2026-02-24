@@ -11,7 +11,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useAppStore } from '@/store/app-store';
-import type { AgentDefinition } from '@automaker/types';
+import type { AgentDefinition } from '@dmaker/types';
 import { getElectronAPI } from '@/lib/electron';
 
 export type SubagentScope = 'global' | 'project';

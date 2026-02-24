@@ -5,7 +5,7 @@ import os from 'os';
 import {
   getMonthName,
   isMonthDir,
-  getAutomakerDir,
+  getDmakerDir,
   getFeaturesDir,
   getFeatureMonthDir,
   getFeatureDir,
@@ -24,7 +24,7 @@ import {
   getNotificationsPath,
   getBranchTrackingPath,
   getExecutionStatePath,
-  ensureAutomakerDir,
+  ensureDmakerDir,
   getGlobalSettingsPath,
   getCredentialsPath,
   getProjectSettingsPath,
@@ -68,71 +68,71 @@ describe('paths.ts', () => {
   });
 
   describe('Project-level path construction', () => {
-    it('should return automaker directory path', () => {
-      const result = getAutomakerDir(projectPath);
-      expect(result).toBe(path.join(projectPath, '.automaker'));
+    it('should return dmaker directory path', () => {
+      const result = getDmakerDir(projectPath);
+      expect(result).toBe(path.join(projectPath, '.dmaker'));
     });
 
     it('should return features directory path', () => {
       const result = getFeaturesDir(projectPath);
-      expect(result).toBe(path.join(projectPath, '.automaker', 'features'));
+      expect(result).toBe(path.join(projectPath, '.dmaker', 'features'));
     });
 
     it('should return feature directory path', () => {
       const featureId = 'auth-feature';
       const result = getFeatureDir(projectPath, featureId);
-      expect(result).toBe(path.join(projectPath, '.automaker', 'features', featureId));
+      expect(result).toBe(path.join(projectPath, '.dmaker', 'features', featureId));
     });
 
     it('should return feature images directory path', () => {
       const featureId = 'auth-feature';
       const result = getFeatureImagesDir(projectPath, featureId);
-      expect(result).toBe(path.join(projectPath, '.automaker', 'features', featureId, 'images'));
+      expect(result).toBe(path.join(projectPath, '.dmaker', 'features', featureId, 'images'));
     });
 
     it('should return board directory path', () => {
       const result = getBoardDir(projectPath);
-      expect(result).toBe(path.join(projectPath, '.automaker', 'board'));
+      expect(result).toBe(path.join(projectPath, '.dmaker', 'board'));
     });
 
     it('should return images directory path', () => {
       const result = getImagesDir(projectPath);
-      expect(result).toBe(path.join(projectPath, '.automaker', 'images'));
+      expect(result).toBe(path.join(projectPath, '.dmaker', 'images'));
     });
 
     it('should return context directory path', () => {
       const result = getContextDir(projectPath);
-      expect(result).toBe(path.join(projectPath, '.automaker', 'context'));
+      expect(result).toBe(path.join(projectPath, '.dmaker', 'context'));
     });
 
     it('should return worktrees directory path', () => {
       const result = getWorktreesDir(projectPath);
-      expect(result).toBe(path.join(projectPath, '.automaker', 'worktrees'));
+      expect(result).toBe(path.join(projectPath, '.dmaker', 'worktrees'));
     });
 
     it('should return app spec file path', () => {
       const result = getAppSpecPath(projectPath);
-      expect(result).toBe(path.join(projectPath, '.automaker', 'app_spec.txt'));
+      expect(result).toBe(path.join(projectPath, '.dmaker', 'app_spec.txt'));
     });
 
     it('should return branch tracking file path', () => {
       const result = getBranchTrackingPath(projectPath);
-      expect(result).toBe(path.join(projectPath, '.automaker', 'active-branches.json'));
+      expect(result).toBe(path.join(projectPath, '.dmaker', 'active-branches.json'));
     });
 
     it('should return project settings file path', () => {
       const result = getProjectSettingsPath(projectPath);
-      expect(result).toBe(path.join(projectPath, '.automaker', 'settings.json'));
+      expect(result).toBe(path.join(projectPath, '.dmaker', 'settings.json'));
     });
 
     it('should return notifications file path', () => {
       const result = getNotificationsPath(projectPath);
-      expect(result).toBe(path.join(projectPath, '.automaker', 'notifications.json'));
+      expect(result).toBe(path.join(projectPath, '.dmaker', 'notifications.json'));
     });
 
     it('should return execution state file path', () => {
       const result = getExecutionStatePath(projectPath);
-      expect(result).toBe(path.join(projectPath, '.automaker', 'execution-state.json'));
+      expect(result).toBe(path.join(projectPath, '.dmaker', 'execution-state.json'));
     });
   });
 
@@ -149,21 +149,21 @@ describe('paths.ts', () => {
   });
 
   describe('Directory creation', () => {
-    it('should create automaker directory', async () => {
-      const automakerDir = await ensureAutomakerDir(projectPath);
+    it('should create dmaker directory', async () => {
+      const dmakerDir = await ensureDmakerDir(projectPath);
 
-      expect(automakerDir).toBe(path.join(projectPath, '.automaker'));
+      expect(dmakerDir).toBe(path.join(projectPath, '.dmaker'));
 
-      const stats = await fs.stat(automakerDir);
+      const stats = await fs.stat(dmakerDir);
       expect(stats.isDirectory()).toBe(true);
     });
 
-    it('should be idempotent when creating automaker directory', async () => {
+    it('should be idempotent when creating dmaker directory', async () => {
       // Create directory first time
-      const firstResult = await ensureAutomakerDir(projectPath);
+      const firstResult = await ensureDmakerDir(projectPath);
 
       // Create directory second time
-      const secondResult = await ensureAutomakerDir(projectPath);
+      const secondResult = await ensureDmakerDir(projectPath);
 
       expect(firstResult).toBe(secondResult);
 
@@ -197,9 +197,9 @@ describe('paths.ts', () => {
       const deepProjectPath = path.join(tempDir, 'nested', 'deep', 'project');
       await fs.mkdir(deepProjectPath, { recursive: true });
 
-      const automakerDir = await ensureAutomakerDir(deepProjectPath);
+      const dmakerDir = await ensureDmakerDir(deepProjectPath);
 
-      const stats = await fs.stat(automakerDir);
+      const stats = await fs.stat(dmakerDir);
       expect(stats.isDirectory()).toBe(true);
     });
   });
@@ -213,8 +213,8 @@ describe('paths.ts', () => {
 
     it('should handle paths with spaces', () => {
       const pathWithSpaces = path.join(tempDir, 'path with spaces');
-      const result = getAutomakerDir(pathWithSpaces);
-      expect(result).toBe(path.join(pathWithSpaces, '.automaker'));
+      const result = getDmakerDir(pathWithSpaces);
+      expect(result).toBe(path.join(pathWithSpaces, '.dmaker'));
     });
   });
 
@@ -297,15 +297,13 @@ describe('paths.ts', () => {
   describe('getFeatureStatusDir', () => {
     it('should return status-based path', () => {
       const result = getFeatureStatusDir(projectPath, 'backlog', 'feature-123');
-      expect(result).toBe(
-        path.join(projectPath, '.automaker', 'features', 'backlog', 'feature-123')
-      );
+      expect(result).toBe(path.join(projectPath, '.dmaker', 'features', 'backlog', 'feature-123'));
     });
 
     it('should handle pipeline step statuses', () => {
       const result = getFeatureStatusDir(projectPath, 'pipeline_test', 'feature-456');
       expect(result).toBe(
-        path.join(projectPath, '.automaker', 'features', 'pipeline_test', 'feature-456')
+        path.join(projectPath, '.dmaker', 'features', 'pipeline_test', 'feature-456')
       );
     });
   });
@@ -313,7 +311,7 @@ describe('paths.ts', () => {
   describe('getFeatureMonthDir', () => {
     it('should return month directory for new-format IDs', () => {
       const result = getFeatureMonthDir(projectPath, '17-02-2026-add_dark_mode');
-      expect(result).toBe(path.join(projectPath, '.automaker', 'features', '2026-february'));
+      expect(result).toBe(path.join(projectPath, '.dmaker', 'features', '2026-february'));
     });
 
     it('should return null for old-format IDs', () => {
@@ -333,12 +331,12 @@ describe('paths.ts', () => {
 
     it('should return month directory for January (01)', () => {
       const result = getFeatureMonthDir(projectPath, '01-01-2026-new_feature');
-      expect(result).toBe(path.join(projectPath, '.automaker', 'features', '2026-january'));
+      expect(result).toBe(path.join(projectPath, '.dmaker', 'features', '2026-january'));
     });
 
     it('should return month directory for December (12)', () => {
       const result = getFeatureMonthDir(projectPath, '25-12-2025-holiday_update');
-      expect(result).toBe(path.join(projectPath, '.automaker', 'features', '2025-december'));
+      expect(result).toBe(path.join(projectPath, '.dmaker', 'features', '2025-december'));
     });
   });
 
@@ -347,49 +345,47 @@ describe('paths.ts', () => {
       const featureId = '17-02-2026-add_dark_mode';
       const result = getFeatureDir(projectPath, featureId);
       expect(result).toBe(
-        path.join(projectPath, '.automaker', 'features', '2026-february', featureId)
+        path.join(projectPath, '.dmaker', 'features', '2026-february', featureId)
       );
     });
 
     it('should use month-based path for January', () => {
       const featureId = '01-01-2026-new_feature';
       const result = getFeatureDir(projectPath, featureId);
-      expect(result).toBe(
-        path.join(projectPath, '.automaker', 'features', '2026-january', featureId)
-      );
+      expect(result).toBe(path.join(projectPath, '.dmaker', 'features', '2026-january', featureId));
     });
 
     it('should use month-based path for December', () => {
       const featureId = '25-12-2025-holiday_update';
       const result = getFeatureDir(projectPath, featureId);
       expect(result).toBe(
-        path.join(projectPath, '.automaker', 'features', '2025-december', featureId)
+        path.join(projectPath, '.dmaker', 'features', '2025-december', featureId)
       );
     });
 
     it('should fall back to flat structure for old-format IDs (dd-YYYY-slug)', () => {
       const featureId = '17-2026-add_dark_mode';
       const result = getFeatureDir(projectPath, featureId);
-      expect(result).toBe(path.join(projectPath, '.automaker', 'features', featureId));
+      expect(result).toBe(path.join(projectPath, '.dmaker', 'features', featureId));
     });
 
     it('should fall back to flat structure for arbitrary string IDs', () => {
       const featureId = 'auth-feature';
       const result = getFeatureDir(projectPath, featureId);
-      expect(result).toBe(path.join(projectPath, '.automaker', 'features', featureId));
+      expect(result).toBe(path.join(projectPath, '.dmaker', 'features', featureId));
     });
 
     it('should fall back to flat structure for manually crafted IDs', () => {
       const featureId = 'dep-feature-manual-1708300000000';
       const result = getFeatureDir(projectPath, featureId);
-      expect(result).toBe(path.join(projectPath, '.automaker', 'features', featureId));
+      expect(result).toBe(path.join(projectPath, '.dmaker', 'features', featureId));
     });
 
     it('should propagate month-based path to feature images dir', () => {
       const featureId = '17-02-2026-add_dark_mode';
       const result = getFeatureImagesDir(projectPath, featureId);
       expect(result).toBe(
-        path.join(projectPath, '.automaker', 'features', '2026-february', featureId, 'images')
+        path.join(projectPath, '.dmaker', 'features', '2026-february', featureId, 'images')
       );
     });
 
@@ -397,7 +393,7 @@ describe('paths.ts', () => {
       const featureId = '17-02-2026-add_dark_mode';
       const result = getFeatureSummariesDir(projectPath, featureId);
       expect(result).toBe(
-        path.join(projectPath, '.automaker', 'features', '2026-february', featureId, 'summaries')
+        path.join(projectPath, '.dmaker', 'features', '2026-february', featureId, 'summaries')
       );
     });
 
@@ -405,7 +401,7 @@ describe('paths.ts', () => {
       const featureId = '17-02-2026-add_dark_mode';
       const result = getFeatureLogsDir(projectPath, featureId);
       expect(result).toBe(
-        path.join(projectPath, '.automaker', 'features', '2026-february', featureId, 'logs')
+        path.join(projectPath, '.dmaker', 'features', '2026-february', featureId, 'logs')
       );
     });
 
@@ -413,7 +409,7 @@ describe('paths.ts', () => {
       const featureId = '17-02-2026-add_dark_mode';
       const result = getFeatureBackupsDir(projectPath, featureId);
       expect(result).toBe(
-        path.join(projectPath, '.automaker', 'features', '2026-february', featureId, 'backups')
+        path.join(projectPath, '.dmaker', 'features', '2026-february', featureId, 'backups')
       );
     });
 
@@ -428,19 +424,19 @@ describe('paths.ts', () => {
     it('should return feature summaries directory path', () => {
       const featureId = 'auth-feature';
       const result = getFeatureSummariesDir(projectPath, featureId);
-      expect(result).toBe(path.join(projectPath, '.automaker', 'features', featureId, 'summaries'));
+      expect(result).toBe(path.join(projectPath, '.dmaker', 'features', featureId, 'summaries'));
     });
 
     it('should return feature logs directory path', () => {
       const featureId = 'auth-feature';
       const result = getFeatureLogsDir(projectPath, featureId);
-      expect(result).toBe(path.join(projectPath, '.automaker', 'features', featureId, 'logs'));
+      expect(result).toBe(path.join(projectPath, '.dmaker', 'features', featureId, 'logs'));
     });
 
     it('should return feature backups directory path', () => {
       const featureId = 'auth-feature';
       const result = getFeatureBackupsDir(projectPath, featureId);
-      expect(result).toBe(path.join(projectPath, '.automaker', 'features', featureId, 'backups'));
+      expect(result).toBe(path.join(projectPath, '.dmaker', 'features', featureId, 'backups'));
     });
 
     it('should have all feature subdirectories under the feature directory', () => {
@@ -462,18 +458,18 @@ describe('paths.ts', () => {
   describe('Validation path construction', () => {
     it('should return validations directory path', () => {
       const result = getValidationsDir(projectPath);
-      expect(result).toBe(path.join(projectPath, '.automaker', 'validations'));
+      expect(result).toBe(path.join(projectPath, '.dmaker', 'validations'));
     });
 
     it('should return validation directory for a specific issue', () => {
       const result = getValidationDir(projectPath, 42);
-      expect(result).toBe(path.join(projectPath, '.automaker', 'validations', '42'));
+      expect(result).toBe(path.join(projectPath, '.dmaker', 'validations', '42'));
     });
 
     it('should return validation file path for a specific issue', () => {
       const result = getValidationPath(projectPath, 42);
       expect(result).toBe(
-        path.join(projectPath, '.automaker', 'validations', '42', 'validation.json')
+        path.join(projectPath, '.dmaker', 'validations', '42', 'validation.json')
       );
     });
 
@@ -493,53 +489,53 @@ describe('paths.ts', () => {
   describe('Ideation path construction', () => {
     it('should return ideation directory path', () => {
       const result = getIdeationDir(projectPath);
-      expect(result).toBe(path.join(projectPath, '.automaker', 'ideation'));
+      expect(result).toBe(path.join(projectPath, '.dmaker', 'ideation'));
     });
 
     it('should return ideas directory path', () => {
       const result = getIdeasDir(projectPath);
-      expect(result).toBe(path.join(projectPath, '.automaker', 'ideation', 'ideas'));
+      expect(result).toBe(path.join(projectPath, '.dmaker', 'ideation', 'ideas'));
     });
 
     it('should return idea directory for a specific idea', () => {
       const result = getIdeaDir(projectPath, 'idea-1');
-      expect(result).toBe(path.join(projectPath, '.automaker', 'ideation', 'ideas', 'idea-1'));
+      expect(result).toBe(path.join(projectPath, '.dmaker', 'ideation', 'ideas', 'idea-1'));
     });
 
     it('should return idea file path', () => {
       const result = getIdeaPath(projectPath, 'idea-1');
       expect(result).toBe(
-        path.join(projectPath, '.automaker', 'ideation', 'ideas', 'idea-1', 'idea.json')
+        path.join(projectPath, '.dmaker', 'ideation', 'ideas', 'idea-1', 'idea.json')
       );
     });
 
     it('should return idea attachments directory path', () => {
       const result = getIdeaAttachmentsDir(projectPath, 'idea-1');
       expect(result).toBe(
-        path.join(projectPath, '.automaker', 'ideation', 'ideas', 'idea-1', 'attachments')
+        path.join(projectPath, '.dmaker', 'ideation', 'ideas', 'idea-1', 'attachments')
       );
     });
 
     it('should return ideation sessions directory path', () => {
       const result = getIdeationSessionsDir(projectPath);
-      expect(result).toBe(path.join(projectPath, '.automaker', 'ideation', 'sessions'));
+      expect(result).toBe(path.join(projectPath, '.dmaker', 'ideation', 'sessions'));
     });
 
     it('should return ideation session file path', () => {
       const result = getIdeationSessionPath(projectPath, 'session-abc');
       expect(result).toBe(
-        path.join(projectPath, '.automaker', 'ideation', 'sessions', 'session-abc.json')
+        path.join(projectPath, '.dmaker', 'ideation', 'sessions', 'session-abc.json')
       );
     });
 
     it('should return ideation drafts directory path', () => {
       const result = getIdeationDraftsDir(projectPath);
-      expect(result).toBe(path.join(projectPath, '.automaker', 'ideation', 'drafts'));
+      expect(result).toBe(path.join(projectPath, '.dmaker', 'ideation', 'drafts'));
     });
 
     it('should return ideation analysis file path', () => {
       const result = getIdeationAnalysisPath(projectPath);
-      expect(result).toBe(path.join(projectPath, '.automaker', 'ideation', 'analysis.json'));
+      expect(result).toBe(path.join(projectPath, '.dmaker', 'ideation', 'analysis.json'));
     });
 
     it('should have all ideation paths under ideation dir', () => {
@@ -565,7 +561,7 @@ describe('paths.ts', () => {
     it('should create ideation directory structure', async () => {
       const ideationDir = await ensureIdeationDir(projectPath);
 
-      expect(ideationDir).toBe(path.join(projectPath, '.automaker', 'ideation'));
+      expect(ideationDir).toBe(path.join(projectPath, '.dmaker', 'ideation'));
 
       const stats = await fs.stat(ideationDir);
       expect(stats.isDirectory()).toBe(true);
@@ -600,8 +596,8 @@ describe('paths.ts', () => {
       expect(featureDir.startsWith(featuresDir)).toBe(true);
     });
 
-    it('should have all project paths under automaker dir', () => {
-      const automakerDir = getAutomakerDir(projectPath);
+    it('should have all project paths under dmaker dir', () => {
+      const dmakerDir = getDmakerDir(projectPath);
       const paths = [
         getFeaturesDir(projectPath),
         getBoardDir(projectPath),
@@ -618,7 +614,7 @@ describe('paths.ts', () => {
       ];
 
       paths.forEach((p) => {
-        expect(p.startsWith(automakerDir)).toBe(true);
+        expect(p.startsWith(dmakerDir)).toBe(true);
       });
     });
   });

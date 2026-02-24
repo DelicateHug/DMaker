@@ -1,0 +1,42 @@
+{
+  "category": "Uncategorized",
+  "description": "Remove the deploy at the top also the deploy that's in the kanban view I don't see a way to set the environment like you can with the button at the top Also when hovering over the script there should be a trash icon so I can remove the script from deploy this does not actually delete this script",
+  "title": "Remove deploy button from kanban and top",
+  "images": [],
+  "imagePaths": [
+    {
+      "id": "img-1770846946352-dbhhrwwpx",
+      "path": "C:\\Users\\DylanSmart\\Downloads\\dmaker-pr\\.dmaker\\features\\feature-1770846980530-vu4bnhm5l\\images\\pasted-image-2026-02-11T21-55-46-302Z-1770846946337.png",
+      "filename": "pasted-image-2026-02-11T21-55-46-302Z.png",
+      "mimeType": "image/png"
+    }
+  ],
+  "textFilePaths": [],
+  "skipTests": true,
+  "model": "opus",
+  "thinkingLevel": "none",
+  "reasoningEffort": "none",
+  "priority": 2,
+  "planningMode": "skip",
+  "requirePlanApproval": false,
+  "autoDeploy": false,
+  "deployEnvironment": "development",
+  "dependencies": [],
+  "workMode": "current",
+  "selectedProjectPath": "C:\\Users\\DylanSmart\\Downloads\\dmaker-pr",
+  "titleGenerating": false,
+  "status": "completed",
+  "projectPath": "C:\\Users\\DylanSmart\\Downloads\\dmaker-pr",
+  "id": "feature-1770846980530-vu4bnhm5l",
+  "descriptionHistory": [
+    {
+      "description": "Remove the deploy at the top also the deploy that's in the kanban view I don't see a way to set the environment like you can with the button at the top Also when hovering over the script there should be a trash icon so I can remove the script from deploy this does not actually delete this script",
+      "timestamp": "2026-02-11T21:56:20.600Z",
+      "source": "initial"
+    }
+  ],
+  "startedAt": "2026-02-11T21:57:31.991Z",
+  "updatedAt": "2026-02-11T22:08:19.582Z",
+  "justFinishedAt": "2026-02-11T22:08:19.582Z",
+  "completedAt": "2026-02-11T22:30:49.059Z"
+}

@@ -1,0 +1,42 @@
+{
+  "category": "Uncategorized",
+  "description": "The line that exists above All statuses should also exist above all projects However the line below all statuses should be removed because I only want one line for both for the projects and statuses that have already been defined above the line there should always be at least 6 slots It can just be empty white space if there's not six projects or six statuses and then it should also be scrollable if there's seven or more",
+  "title": "Add scrollable project/status layout with consistent spacing",
+  "images": [],
+  "imagePaths": [
+    {
+      "id": "img-1771328054387-0mjmtll6j",
+      "path": "C:\\Users\\DylanSmart\\Downloads\\dmaker-pr\\.dmaker\\features\\feature-1771328060375-b1gyess76\\images\\pasted-image-2026-02-17T11-34-14-355Z-1771328054381.png",
+      "filename": "pasted-image-2026-02-17T11-34-14-355Z.png",
+      "mimeType": "image/png"
+    }
+  ],
+  "textFilePaths": [],
+  "skipTests": true,
+  "model": "opus",
+  "thinkingLevel": "none",
+  "reasoningEffort": "none",
+  "priority": 2,
+  "planningMode": "full",
+  "requirePlanApproval": false,
+  "autoDeploy": false,
+  "deployEnvironment": "development",
+  "dependencies": [],
+  "workMode": "current",
+  "selectedProjectPath": "C:\\Users\\DylanSmart\\Downloads\\dmaker-pr",
+  "titleGenerating": false,
+  "status": "completed",
+  "projectPath": "C:\\Users\\DylanSmart\\Downloads\\dmaker-pr",
+  "id": "feature-1771328060375-b1gyess76",
+  "descriptionHistory": [
+    {
+      "description": "The line that exists above All statuses should also exist above all projects However the line below all statuses should be removed because I only want one line for both for the projects and statuses that have already been defined above the line there should always be at least 6 slots It can just be empty white space if there's not six projects or six statuses and then it should also be scrollable if there's seven or more",
+      "timestamp": "2026-02-17T11:34:20.429Z",
+      "source": "initial"
+    }
+  ],
+  "startedAt": "2026-02-17T11:35:03.869Z",
+  "updatedAt": "2026-02-17T11:39:01.181Z",
+  "justFinishedAt": "2026-02-17T11:39:01.181Z",
+  "completedAt": "2026-02-17T20:20:32.799Z"
+}

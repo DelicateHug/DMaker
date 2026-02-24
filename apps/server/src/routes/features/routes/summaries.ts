@@ -10,7 +10,7 @@ import type {
   ListSummariesResponse,
   GetSummaryResponse,
   SummaryErrorResponse,
-} from '@automaker/types';
+} from '@dmaker/types';
 import { FeatureLoader } from '../../../services/feature-loader.js';
 import { getErrorMessage, logError } from '../common.js';
 

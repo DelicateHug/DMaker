@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { createLogger } from '@automaker/utils/logger';
+import { createLogger } from '@dmaker/utils/logger';
 
 const logger = createLogger('SessionManager');
 import { Button } from '@/components/ui/button';

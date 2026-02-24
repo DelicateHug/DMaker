@@ -6,8 +6,8 @@
 import path from 'path';
 import * as secureFs from '../lib/secure-fs.js';
 import type { EventEmitter } from '../lib/events.js';
-import type { ExecuteOptions, ThinkingLevel, ReasoningEffort } from '@automaker/types';
-import { stripProviderPrefix } from '@automaker/types';
+import type { ExecuteOptions, ThinkingLevel, ReasoningEffort } from '@dmaker/types';
+import { stripProviderPrefix } from '@dmaker/types';
 import {
   readImageAsBase64,
   buildPromptWithImages,
@@ -16,10 +16,10 @@ import {
   createLogger,
   classifyError,
   getUserFriendlyErrorMessage,
-} from '@automaker/utils';
+} from '@dmaker/utils';
 import { ProviderFactory } from '../providers/provider-factory.js';
 import { createChatOptions, validateWorkingDirectory } from '../lib/sdk-options.js';
-import { PathNotAllowedError } from '@automaker/platform';
+import { PathNotAllowedError } from '@dmaker/platform';
 import type { SettingsService } from './settings-service.js';
 import {
   getAutoLoadClaudeMdSetting,
@@ -31,7 +31,7 @@ import {
   getCustomSubagents,
 } from '../lib/settings-helpers.js';
 import { simpleQuery } from '../providers/simple-query-service.js';
-import { resolveModelString } from '@automaker/model-resolver';
+import { resolveModelString } from '@dmaker/model-resolver';
 
 interface Message {
   id: string;

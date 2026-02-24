@@ -15,8 +15,8 @@ export function getWorkspaceRoot(): string {
 
 const WORKSPACE_ROOT = getWorkspaceRoot();
 const FIXTURE_PATH = path.join(WORKSPACE_ROOT, 'test/fixtures/projectA');
-const SPEC_FILE_PATH = path.join(FIXTURE_PATH, '.automaker/app_spec.txt');
-const CONTEXT_PATH = path.join(FIXTURE_PATH, '.automaker/context');
+const SPEC_FILE_PATH = path.join(FIXTURE_PATH, '.dmaker/app_spec.txt');
+const CONTEXT_PATH = path.join(FIXTURE_PATH, '.dmaker/context');
 
 // Original spec content for resetting between tests
 const ORIGINAL_SPEC_CONTENT = `<app_spec>
@@ -97,7 +97,7 @@ export async function setupProjectWithFixture(
       version: 2, // Must match app-store.ts persist version
     };
 
-    localStorage.setItem('automaker-storage', JSON.stringify(mockState));
+    localStorage.setItem('dmaker-storage', JSON.stringify(mockState));
 
     // Also mark setup as complete (fallback for when NEXT_PUBLIC_SKIP_SETUP isn't set)
     const setupState = {
@@ -109,10 +109,10 @@ export async function setupProjectWithFixture(
       },
       version: 0, // setup-store.ts doesn't specify a version, so zustand defaults to 0
     };
-    localStorage.setItem('automaker-setup', JSON.stringify(setupState));
+    localStorage.setItem('dmaker-setup', JSON.stringify(setupState));
 
     // Disable splash screen in tests
-    sessionStorage.setItem('automaker-splash-shown', 'true');
+    sessionStorage.setItem('dmaker-splash-shown', 'true');
   }, projectPath);
 }
 

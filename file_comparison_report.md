@@ -392,7 +392,7 @@
 | apps/server/tests/setup.ts                                                                               | 15         | 15             | 15           | 100%     | Identical        |
 | apps/server/tests/unit/lib/app-spec-format.test.ts                                                       | 183        | 183            | 183          | 100%     | Identical        |
 | apps/server/tests/unit/lib/auth.test.ts                                                                  | 386        | 399            | 360          | 90%      | Modified         |
-| apps/server/tests/unit/lib/automaker-paths.test.ts                                                       | 398        | 214            | 214          | 53%      | Modified         |
+| apps/server/tests/unit/lib/dmaker-paths.test.ts                                                          | 398        | 214            | 214          | 53%      | Modified         |
 | apps/server/tests/unit/lib/conversation-utils.test.ts                                                    | 224        | 224            | 224          | 100%     | Identical        |
 | apps/server/tests/unit/lib/dependency-resolver.test.ts                                                   | 480        | 432            | 394          | 82%      | Modified         |
 | apps/server/tests/unit/lib/enhancement-prompts.test.ts                                                   | 240        | 240            | 240          | 100%     | Identical        |
@@ -452,7 +452,7 @@
 | apps/ui/nginx.conf                                                                                       | 10         | 10             | 10           | 100%     | Identical        |
 | apps/ui/package.json                                                                                     | 241        | 269            | 236          | 87%      | Modified         |
 | apps/ui/playwright.config.ts                                                                             | 79         | 79             | 79           | 100%     | Identical        |
-| apps/ui/public/automaker.svg                                                                             | 27         | 27             | 27           | 100%     | Identical        |
+| apps/ui/public/dmaker.svg                                                                                | 27         | 27             | 27           | 100%     | Identical        |
 | apps/ui/public/file.svg                                                                                  | 0          | 0              | 0            | 100%     | Identical        |
 | apps/ui/public/globe.svg                                                                                 | 0          | 0              | 0            | 100%     | Identical        |
 | apps/ui/public/icon.ico                                                                                  | 86         | 86             | 86           | 100%     | Identical        |
@@ -507,7 +507,7 @@
 | apps/ui/src/components/layout/project-switcher/index.ts                                                  | 0          | 1              | 0            | 0%       | Only in upstream |
 | apps/ui/src/components/layout/project-switcher/project-switcher.tsx                                      | 0          | 531            | 0            | 0%       | Only in upstream |
 | apps/ui/src/components/layout/running-agents-indicator.tsx                                               | 1229       | 0              | 0            | 0%       | Only in fork     |
-| apps/ui/src/components/layout/sidebar/components/automaker-logo.tsx                                      | 0          | 151            | 0            | 0%       | Only in upstream |
+| apps/ui/src/components/layout/sidebar/components/dmaker-logo.tsx                                         | 0          | 151            | 0            | 0%       | Only in upstream |
 | apps/ui/src/components/layout/sidebar/components/bug-report-button.tsx                                   | 0          | 33             | 0            | 0%       | Only in upstream |
 | apps/ui/src/components/layout/sidebar/components/collapse-toggle-button.tsx                              | 0          | 68             | 0            | 0%       | Only in upstream |
 | apps/ui/src/components/layout/sidebar/components/index.ts                                                | 0          | 11             | 0            | 0%       | Only in upstream |
@@ -1442,8 +1442,8 @@
 | scripts/get-claude-token.sh                                                                              | 34         | 34             | 34           | 100%     | Identical        |
 | scripts/get-cursor-token.sh                                                                              | 69         | 69             | 69           | 100%     | Identical        |
 | scripts/lint-lockfile.mjs                                                                                | 33         | 33             | 33           | 100%     | Identical        |
-| start-automaker.mjs                                                                                      | 0          | 201            | 0            | 0%       | Only in upstream |
-| start-automaker.sh                                                                                       | 1352       | 1437           | 0            | 0%       | Modified         |
+| start-dmaker.mjs                                                                                         | 0          | 201            | 0            | 0%       | Only in upstream |
+| start-dmaker.sh                                                                                          | 1352       | 1437           | 0            | 0%       | Modified         |
 | test/agent-session-test-115699-vyk2nk2/test-project-1768743000887/package.json                           | 0          | 4              | 0            | 0%       | Only in upstream |
 | test/feature-backlog-test-114171-aysp86y/test-project-1768742910934/package.json                         | 0          | 4              | 0            | 0%       | Only in upstream |
 | test/feature-backlog-test-80497-5rxs746/test-project-1767820775187/package.json                          | 4          | 4              | 4            | 100%     | Identical        |

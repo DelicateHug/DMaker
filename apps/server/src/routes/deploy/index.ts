@@ -2,7 +2,7 @@
  * Deploy routes - HTTP API for listing and running deploy scripts
  *
  * Provides endpoints for:
- * - Listing available scripts in the project's .automaker/deploy folder
+ * - Listing available scripts in the project's .dmaker/deploy folder
  * - Running a script with real-time SSE streaming output
  * - Querying run history
  *

@@ -114,6 +114,47 @@ export const CODEX_MODELS: (ModelOption & { hasReasoning?: boolean })[] = [
 ];
 
 /**
+ * GCP/Vertex AI model options with full metadata for UI display
+ */
+export const GCP_MODELS: ModelOption[] = [
+  {
+    id: 'gcp-gemini-2.5-pro' as any,
+    label: 'Gemini 2.5 Pro',
+    description: 'Most capable Gemini model for complex tasks.',
+    badge: 'Premium',
+    provider: 'gcp',
+  },
+  {
+    id: 'gcp-gemini-2.5-flash' as any,
+    label: 'Gemini 2.5 Flash',
+    description: 'Fast and efficient with strong reasoning.',
+    badge: 'Balanced',
+    provider: 'gcp',
+  },
+  {
+    id: 'gcp-gemini-2.0-flash' as any,
+    label: 'Gemini 2.0 Flash',
+    description: 'Quick responses for simpler tasks.',
+    badge: 'Speed',
+    provider: 'gcp',
+  },
+  {
+    id: 'gcp-gemini-1.5-pro' as any,
+    label: 'Gemini 1.5 Pro',
+    description: 'Large context window for complex analysis.',
+    badge: 'Balanced',
+    provider: 'gcp',
+  },
+  {
+    id: 'gcp-gemini-1.5-flash' as any,
+    label: 'Gemini 1.5 Flash',
+    description: 'Lightweight and fast for simple queries.',
+    badge: 'Speed',
+    provider: 'gcp',
+  },
+];
+
+/**
  * Thinking level options with display labels
  *
  * Ordered from least to most intensive reasoning.
@@ -199,6 +240,11 @@ export function getModelDisplayName(model: ModelAlias | string): string {
     [CODEX_MODEL_MAP.gpt51CodexMini]: 'GPT-5.1-Codex-Mini',
     [CODEX_MODEL_MAP.gpt52]: 'GPT-5.2',
     [CODEX_MODEL_MAP.gpt51]: 'GPT-5.1',
+    'gcp-gemini-2.5-pro': 'Gemini 2.5 Pro',
+    'gcp-gemini-2.5-flash': 'Gemini 2.5 Flash',
+    'gcp-gemini-2.0-flash': 'Gemini 2.0 Flash',
+    'gcp-gemini-1.5-pro': 'Gemini 1.5 Pro',
+    'gcp-gemini-1.5-flash': 'Gemini 1.5 Flash',
   };
   return displayNames[model] || model;
 }

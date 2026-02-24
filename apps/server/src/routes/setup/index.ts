@@ -24,6 +24,8 @@ import { createDeauthCursorHandler } from './routes/deauth-cursor.js';
 import { createAuthOpencodeHandler } from './routes/auth-opencode.js';
 import { createDeauthOpencodeHandler } from './routes/deauth-opencode.js';
 import { createOpencodeStatusHandler } from './routes/opencode-status.js';
+import { createAuthGcpHandler } from './routes/auth-gcp.js';
+import { createDeauthGcpHandler } from './routes/deauth-gcp.js';
 import {
   createGetOpencodeModelsHandler,
   createRefreshOpencodeModelsHandler,
@@ -71,6 +73,10 @@ export function createSetupRoutes(): Router {
   router.get('/opencode-status', createOpencodeStatusHandler());
   router.post('/auth-opencode', createAuthOpencodeHandler());
   router.post('/deauth-opencode', createDeauthOpencodeHandler());
+
+  // GCP/Vertex AI routes
+  router.post('/auth-gcp', createAuthGcpHandler());
+  router.post('/deauth-gcp', createDeauthGcpHandler());
 
   // OpenCode Dynamic Model Discovery routes
   router.get('/opencode/models', createGetOpencodeModelsHandler());

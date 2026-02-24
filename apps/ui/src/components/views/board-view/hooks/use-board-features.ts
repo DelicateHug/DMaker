@@ -3,11 +3,11 @@ import { useAppStore, Feature } from '@/store/app-store';
 import { useShallow } from 'zustand/react/shallow';
 import { getElectronAPI } from '@/lib/electron';
 import { toast } from 'sonner';
-import { createLogger } from '@automaker/utils/logger';
+import { createLogger } from '@dmaker/utils/logger';
 import { useBoardProject } from './use-board-project';
 import { pendingPersistIds, protectOptimisticUpdate } from './use-board-persistence';
 import type { Project } from '@/lib/electron';
-import type { FeatureListSummary } from '@automaker/types';
+import type { FeatureListSummary } from '@dmaker/types';
 
 const logger = createLogger('BoardFeatures');
 
@@ -508,7 +508,7 @@ export function useBoardFeatures({
 
     try {
       const api = getElectronAPI();
-      const result = await api.readFile(`${effectiveProject.path}/.automaker/categories.json`);
+      const result = await api.readFile(`${effectiveProject.path}/.dmaker/categories.json`);
 
       if (result.success && result.content) {
         const parsed = JSON.parse(result.content);
@@ -544,7 +544,7 @@ export function useBoardFeatures({
 
           // Write back to file
           await api.writeFile(
-            `${effectiveProject.path}/.automaker/categories.json`,
+            `${effectiveProject.path}/.dmaker/categories.json`,
             JSON.stringify(categories, null, 2)
           );
 

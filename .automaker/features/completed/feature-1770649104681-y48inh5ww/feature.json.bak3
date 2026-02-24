@@ -1,0 +1,36 @@
+{
+  "category": "Uncategorized",
+  "description": "I still don't see an option in the agent chat to select the project",
+  "title": "Add project selection option to agent chat",
+  "images": [],
+  "imagePaths": [
+    {
+      "id": "img-1770649092280-lir3kmrrp",
+      "path": "C:\\Users\\dylan\\Downloads\\automaker-pr\\.automaker\\features\\feature-1770649104681-y48inh5ww\\images\\pasted-image-2026-02-09T14-58-12-246Z-1770649092275.png",
+      "filename": "pasted-image-2026-02-09T14-58-12-246Z.png",
+      "mimeType": "image/png"
+    }
+  ],
+  "textFilePaths": [],
+  "skipTests": true,
+  "model": "opus",
+  "thinkingLevel": "none",
+  "reasoningEffort": "none",
+  "priority": 2,
+  "planningMode": "skip",
+  "requirePlanApproval": false,
+  "autoDeploy": false,
+  "deployEnvironment": "development",
+  "dependencies": [],
+  "workMode": "current",
+  "titleGenerating": false,
+  "status": "backlog",
+  "id": "feature-1770649104681-y48inh5ww",
+  "descriptionHistory": [
+    {
+      "description": "I still don't see an option in the agent chat to select the project",
+      "timestamp": "2026-02-09T14:58:25.207Z",
+      "source": "initial"
+    }
+  ]
+}

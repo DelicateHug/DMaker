@@ -19,7 +19,7 @@ import {
   stripProviderPrefix,
   type PhaseModelEntry,
   type ThinkingLevel,
-} from '@automaker/types';
+} from '@dmaker/types';
 
 // Pattern definitions for Codex/OpenAI models
 const CODEX_MODEL_PREFIXES = ['codex-', 'gpt-'];
@@ -71,7 +71,7 @@ export function resolveModelString(
 
   // OpenCode model (static or dynamic) - pass through unchanged
   // This handles models like:
-  // - opencode-* (Automaker routing prefix)
+  // - opencode-* (DMaker routing prefix)
   // - opencode/* (free tier models)
   // - amazon-bedrock/* (AWS Bedrock models)
   // - provider/model-name (dynamic models like github-copilot/gpt-4o, google/gemini-2.5-pro)

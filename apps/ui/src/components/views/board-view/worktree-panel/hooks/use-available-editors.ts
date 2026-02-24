@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { createLogger } from '@automaker/utils/logger';
+import { createLogger } from '@dmaker/utils/logger';
 import { getElectronAPI } from '@/lib/electron';
 import { useAppStore } from '@/store/app-store';
-import type { EditorInfo } from '@automaker/types';
+import type { EditorInfo } from '@dmaker/types';
 
 const logger = createLogger('AvailableEditors');
 

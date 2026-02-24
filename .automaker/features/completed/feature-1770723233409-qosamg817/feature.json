@@ -1,0 +1,41 @@
+{
+  "category": "Uncategorized",
+  "description": "where it says adding to i should be able to click it like a drop down and change the project",
+  "title": "",
+  "images": [],
+  "imagePaths": [
+    {
+      "id": "img-1770723220340-gyh4bzoke",
+      "path": "C:\\Users\\dylan\\Downloads\\dmaker-pr\\.dmaker\\features\\feature-1770723233409-qosamg817\\images\\pasted-image-2026-02-10T11-33-38-303Z-1770723220053.png",
+      "filename": "pasted-image-2026-02-10T11-33-38-303Z.png",
+      "mimeType": "image/png"
+    }
+  ],
+  "textFilePaths": [],
+  "skipTests": true,
+  "model": "opus",
+  "thinkingLevel": "none",
+  "reasoningEffort": "none",
+  "priority": 2,
+  "planningMode": "skip",
+  "requirePlanApproval": false,
+  "autoDeploy": false,
+  "deployEnvironment": "development",
+  "dependencies": [],
+  "workMode": "current",
+  "selectedProjectPath": "C:\\Users\\dylan\\Downloads\\dmaker-pr",
+  "titleGenerating": "where it says adding to i should be able to click it like a drop down and change the project",
+  "status": "completed",
+  "projectPath": "C:\\Users\\dylan\\Downloads\\dmaker-pr",
+  "id": "feature-1770723233409-qosamg817",
+  "descriptionHistory": [
+    {
+      "description": "where it says adding to i should be able to click it like a drop down and change the project",
+      "timestamp": "2026-02-10T11:33:53.494Z",
+      "source": "initial"
+    }
+  ],
+  "updatedAt": "2026-02-10T11:41:49.247Z",
+  "justFinishedAt": "2026-02-10T11:41:49.247Z",
+  "completedAt": "2026-02-11T01:11:47.737Z"
+}

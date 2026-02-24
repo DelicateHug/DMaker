@@ -1,0 +1,39 @@
+{
+  "category": "Uncategorized",
+  "description": "deploy does not work, all its supposed to do is run the script, put output to a file or memory, then show the result of running the script. But instead of terminal you can click",
+  "title": "",
+  "images": [],
+  "imagePaths": [
+    {
+      "id": "img-1771187401976-davs37f7v",
+      "path": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr\\.automaker\\features\\feature-1771187433965-xc2genols\\images\\pasted-image-2026-02-15T20-30-01-932Z-1771187401969.png",
+      "filename": "pasted-image-2026-02-15T20-30-01-932Z.png",
+      "mimeType": "image/png"
+    }
+  ],
+  "textFilePaths": [],
+  "skipTests": true,
+  "model": "opus",
+  "thinkingLevel": "ultrathink",
+  "reasoningEffort": "none",
+  "priority": 2,
+  "planningMode": "skip",
+  "requirePlanApproval": false,
+  "autoDeploy": false,
+  "deployEnvironment": "development",
+  "dependencies": [],
+  "workMode": "current",
+  "selectedProjectPath": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr",
+  "titleGenerating": "deploy does not work, all its supposed to do is run the script, put output to a file or memory, then show the result of running the script. But instead of terminal you can click",
+  "status": "in_progress",
+  "projectPath": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr",
+  "id": "feature-1771187433965-xc2genols",
+  "descriptionHistory": [
+    {
+      "description": "deploy does not work, all its supposed to do is run the script, put output to a file or memory, then show the result of running the script. But instead of terminal you can click",
+      "timestamp": "2026-02-15T20:30:34.609Z",
+      "source": "initial"
+    }
+  ],
+  "startedAt": "2026-02-15T20:30:34.627Z"
+}

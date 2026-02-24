@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { createLogger } from '@automaker/utils/logger';
+import { createLogger } from '@dmaker/utils/logger';
 import { useAppStore } from '@/store/app-store';
 
 const logger = createLogger('SpecLoading');
@@ -34,7 +34,7 @@ export function useSpecLoading() {
 
       // Always try to load the spec file, even if generation is running
       // This allows users to view their existing spec while generating features
-      const result = await api.readFile(`${currentProject.path}/.automaker/app_spec.txt`);
+      const result = await api.readFile(`${currentProject.path}/.dmaker/app_spec.txt`);
 
       if (result.success && result.content) {
         setAppSpec(result.content);

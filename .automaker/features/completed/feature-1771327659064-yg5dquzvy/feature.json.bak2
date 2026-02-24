@@ -1,0 +1,40 @@
+{
+  "category": "Uncategorized",
+  "description": "If multiple projects are selected there should be they should be like the top level thing on the board so there would actually be multiple waiting for approvals or multiple backlogs you know depending on the status as they checked But all the tasks would not be grouped together they'd be separated by project even on the board if there's multiple project selected",
+  "title": "Display tasks grouped by project on board view",
+  "images": [],
+  "imagePaths": [
+    {
+      "id": "img-1771327623978-x0zkyn889",
+      "path": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr\\.automaker\\features\\feature-1771327659064-yg5dquzvy\\images\\pasted-image-2026-02-17T11-27-03-941Z-1771327623969.png",
+      "filename": "pasted-image-2026-02-17T11-27-03-941Z.png",
+      "mimeType": "image/png"
+    }
+  ],
+  "textFilePaths": [],
+  "skipTests": true,
+  "model": "opus",
+  "thinkingLevel": "low",
+  "reasoningEffort": "none",
+  "priority": 2,
+  "planningMode": "lite",
+  "requirePlanApproval": false,
+  "autoDeploy": false,
+  "deployEnvironment": "development",
+  "dependencies": [],
+  "workMode": "current",
+  "selectedProjectPath": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr",
+  "titleGenerating": false,
+  "status": "in_progress",
+  "projectPath": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr",
+  "id": "feature-1771327659064-yg5dquzvy",
+  "descriptionHistory": [
+    {
+      "description": "If multiple projects are selected there should be they should be like the top level thing on the board so there would actually be multiple waiting for approvals or multiple backlogs you know depending on the status as they checked But all the tasks would not be grouped together they'd be separated by project even on the board if there's multiple project selected",
+      "timestamp": "2026-02-17T11:27:39.119Z",
+      "source": "initial"
+    }
+  ],
+  "startedAt": "2026-02-17T11:28:03.638Z",
+  "updatedAt": "2026-02-17T11:28:03.800Z"
+}

@@ -2,9 +2,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AgentService } from '@/services/agent-service.js';
 import { ProviderFactory } from '@/providers/provider-factory.js';
 import * as fs from 'fs/promises';
-import * as imageHandler from '@automaker/utils';
-import * as promptBuilder from '@automaker/utils';
-import * as contextLoader from '@automaker/utils';
+import * as imageHandler from '@dmaker/utils';
+import * as promptBuilder from '@dmaker/utils';
+import * as contextLoader from '@dmaker/utils';
 import { collectAsyncGenerator } from '../../utils/helpers.js';
 
 // Create a shared mock logger instance for assertions using vi.hoisted
@@ -17,8 +17,8 @@ const mockLogger = vi.hoisted(() => ({
 
 vi.mock('fs/promises');
 vi.mock('@/providers/provider-factory.js');
-vi.mock('@automaker/utils', async () => {
-  const actual = await vi.importActual<typeof import('@automaker/utils')>('@automaker/utils');
+vi.mock('@dmaker/utils', async () => {
+  const actual = await vi.importActual<typeof import('@dmaker/utils')>('@dmaker/utils');
   return {
     ...actual,
     loadContextFiles: vi.fn(),
@@ -392,7 +392,7 @@ describe('agent-service.ts', () => {
 
       // Re-import platform to initialize with new env var
       vi.resetModules();
-      const { initAllowedPaths } = await import('@automaker/platform');
+      const { initAllowedPaths } = await import('@dmaker/platform');
       initAllowedPaths();
 
       const { AgentService } = await import('@/services/agent-service.js');
@@ -411,7 +411,7 @@ describe('agent-service.ts', () => {
         delete process.env.ALLOWED_ROOT_DIRECTORY;
       }
       vi.resetModules();
-      const { initAllowedPaths: reinit } = await import('@automaker/platform');
+      const { initAllowedPaths: reinit } = await import('@dmaker/platform');
       reinit();
     });
   });

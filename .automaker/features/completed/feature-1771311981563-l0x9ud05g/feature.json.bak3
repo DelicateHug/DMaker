@@ -1,0 +1,32 @@
+{
+  "category": "Uncategorized",
+  "description": "remove deploy button from header",
+  "title": "",
+  "images": [],
+  "imagePaths": [],
+  "textFilePaths": [],
+  "skipTests": true,
+  "model": "haiku",
+  "thinkingLevel": "none",
+  "reasoningEffort": "none",
+  "priority": 2,
+  "planningMode": "skip",
+  "requirePlanApproval": false,
+  "autoDeploy": false,
+  "deployEnvironment": "development",
+  "dependencies": [],
+  "workMode": "current",
+  "selectedProjectPath": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr",
+  "titleGenerating": "remove deploy button from header",
+  "status": "in_progress",
+  "projectPath": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr",
+  "id": "feature-1771311981563-l0x9ud05g",
+  "descriptionHistory": [
+    {
+      "description": "remove deploy button from header",
+      "timestamp": "2026-02-17T07:06:22.246Z",
+      "source": "initial"
+    }
+  ],
+  "startedAt": "2026-02-17T07:06:22.286Z"
+}

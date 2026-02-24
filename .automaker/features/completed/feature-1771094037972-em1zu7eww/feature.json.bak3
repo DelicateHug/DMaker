@@ -1,0 +1,39 @@
+{
+  "category": "Uncategorized",
+  "description": "running agents is not using actual title of featurtes",
+  "title": "Fix agent task titles to show actual feature names",
+  "images": [],
+  "imagePaths": [
+    {
+      "id": "img-1771094026006-p0iqfcadm",
+      "path": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr\\.automaker\\features\\feature-1771094037972-em1zu7eww\\images\\pasted-image-2026-02-14T18-33-45-941Z-1771094025988.png",
+      "filename": "pasted-image-2026-02-14T18-33-45-941Z.png",
+      "mimeType": "image/png"
+    }
+  ],
+  "textFilePaths": [],
+  "skipTests": true,
+  "model": "opus",
+  "thinkingLevel": "ultrathink",
+  "reasoningEffort": "none",
+  "priority": 2,
+  "planningMode": "skip",
+  "requirePlanApproval": false,
+  "autoDeploy": false,
+  "deployEnvironment": "development",
+  "dependencies": [],
+  "workMode": "current",
+  "selectedProjectPath": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr",
+  "titleGenerating": false,
+  "status": "in_progress",
+  "projectPath": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr",
+  "id": "feature-1771094037972-em1zu7eww",
+  "descriptionHistory": [
+    {
+      "description": "running agents is not using actual title of featurtes",
+      "timestamp": "2026-02-14T18:33:58.324Z",
+      "source": "initial"
+    }
+  ],
+  "startedAt": "2026-02-14T18:33:58.428Z"
+}

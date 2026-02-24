@@ -171,8 +171,8 @@ export const CSS_SELECTORS = {
  * localStorage keys used by the application
  */
 export const STORAGE_KEYS = {
-  appStorage: 'automaker-storage',
-  setupStorage: 'automaker-setup',
+  appStorage: 'dmaker-storage',
+  setupStorage: 'dmaker-setup',
 } as const;
 
 // ============================================================================

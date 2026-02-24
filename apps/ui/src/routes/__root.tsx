@@ -1,6 +1,6 @@
 import { createRootRoute, Outlet, useLocation, useNavigate } from '@tanstack/react-router';
 import { lazy, Suspense, useEffect, useState, useCallback, useDeferredValue, useRef } from 'react';
-import { createLogger } from '@automaker/utils/logger';
+import { createLogger } from '@dmaker/utils/logger';
 import { loadFontByFamily } from '@/lib/font-loader';
 import { loadTheme } from '@/lib/theme-loader';
 import { TopNavigationBar } from '@/components/layout/top-nav-bar';
@@ -65,8 +65,8 @@ const DEFAULT_LAST_OPENED_TIME_MS = 0;
 // Caches successful auth+settings state so subsequent app loads can skip
 // the "Loading..." screens and render the app immediately while verifying
 // in the background. The cache is invalidated on logout or auth failure.
-const AUTH_CACHE_KEY = 'automaker:auth-cached';
-const SETUP_COMPLETE_CACHE_KEY = 'automaker:setup-complete-cached';
+const AUTH_CACHE_KEY = 'dmaker:auth-cached';
+const SETUP_COMPLETE_CACHE_KEY = 'dmaker:setup-complete-cached';
 
 function getCachedAuthState(): boolean {
   try {
@@ -114,8 +114,8 @@ function clearCachedAuthState(): void {
 // Caches the last successfully loaded settings so subsequent app loads can
 // hydrate the store instantly and render the board without waiting for the
 // server settings fetch. The cache is refreshed every time settings load.
-const SETTINGS_CACHE_KEY = 'automaker:settings-cache';
-const AUTO_OPEN_DONE_CACHE_KEY = 'automaker:auto-open-done';
+const SETTINGS_CACHE_KEY = 'dmaker:settings-cache';
+const AUTO_OPEN_DONE_CACHE_KEY = 'dmaker:auto-open-done';
 
 function getCachedSettings(): unknown | null {
   try {
@@ -467,7 +467,7 @@ function RootLayoutContent() {
   // Works for ALL modes (unified flow)
   useEffect(() => {
     const handleLoggedOut = () => {
-      logger.warn('automaker:logged-out event received!');
+      logger.warn('dmaker:logged-out event received!');
       clearCachedAuthState();
       clearCachedSettings();
       useAuthStore.getState().setAuthState({ isAuthenticated: false, authChecked: true });
@@ -480,9 +480,9 @@ function RootLayoutContent() {
       }
     };
 
-    window.addEventListener('automaker:logged-out', handleLoggedOut);
+    window.addEventListener('dmaker:logged-out', handleLoggedOut);
     return () => {
-      window.removeEventListener('automaker:logged-out', handleLoggedOut);
+      window.removeEventListener('dmaker:logged-out', handleLoggedOut);
     };
   }, [location.pathname, navigate]);
 
@@ -491,7 +491,7 @@ function RootLayoutContent() {
   // Redirects to login page which will detect server is offline and show error UI.
   useEffect(() => {
     const handleServerOffline = () => {
-      logger.warn('automaker:server-offline event received!');
+      logger.warn('dmaker:server-offline event received!');
       clearCachedAuthState();
       clearCachedSettings();
       useAuthStore.getState().setAuthState({ isAuthenticated: false, authChecked: true });
@@ -502,9 +502,9 @@ function RootLayoutContent() {
       }
     };
 
-    window.addEventListener('automaker:server-offline', handleServerOffline);
+    window.addEventListener('dmaker:server-offline', handleServerOffline);
     return () => {
-      window.removeEventListener('automaker:server-offline', handleServerOffline);
+      window.removeEventListener('dmaker:server-offline', handleServerOffline);
     };
   }, [location.pathname, navigate]);
 

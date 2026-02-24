@@ -1,0 +1,35 @@
+{
+  "category": "Uncategorized",
+  "description": "do \n\nnpm run build:packages\nnpm run build:electron\n\nuntil it works",
+  "title": "Implement retry logic for build processes",
+  "images": [],
+  "imagePaths": [],
+  "textFilePaths": [],
+  "skipTests": true,
+  "model": "opus",
+  "thinkingLevel": "none",
+  "reasoningEffort": "none",
+  "priority": 2,
+  "planningMode": "skip",
+  "requirePlanApproval": false,
+  "autoDeploy": false,
+  "deployEnvironment": "development",
+  "dependencies": [],
+  "workMode": "current",
+  "selectedProjectPath": "C:\\Users\\DylanSmart\\Downloads\\dmaker-pr",
+  "titleGenerating": false,
+  "status": "completed",
+  "projectPath": "C:\\Users\\DylanSmart\\Downloads\\dmaker-pr",
+  "id": "feature-1770793056151-tk3o3rzn2",
+  "descriptionHistory": [
+    {
+      "description": "do \n\nnpm run build:packages\nnpm run build:electron\n\nuntil it works",
+      "timestamp": "2026-02-11T06:57:36.829Z",
+      "source": "initial"
+    }
+  ],
+  "startedAt": "2026-02-11T06:57:36.902Z",
+  "updatedAt": "2026-02-11T07:31:34.773Z",
+  "justFinishedAt": "2026-02-11T07:31:34.773Z",
+  "completedAt": "2026-02-11T19:19:38.569Z"
+}

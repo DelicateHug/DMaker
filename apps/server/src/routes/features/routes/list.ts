@@ -6,7 +6,7 @@
  */
 
 import type { Request, Response } from 'express';
-import type { Feature } from '@automaker/types';
+import type { Feature } from '@dmaker/types';
 import { FeatureLoader } from '../../../services/feature-loader.js';
 import { getErrorMessage, logError, featuresCache } from '../common.js';
 

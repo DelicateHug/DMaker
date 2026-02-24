@@ -13,7 +13,7 @@
  * - Automatic cleanup of expired entries via optional periodic sweep
  */
 
-import { createLogger } from '@automaker/utils';
+import { createLogger } from '@dmaker/utils';
 
 const logger = createLogger('RequestCache');
 

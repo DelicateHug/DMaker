@@ -1,0 +1,41 @@
+{
+  "category": "Uncategorized",
+  "description": "this screen should let you know that you can shift click trash icon to skip it ",
+  "title": "Shift-click trash icon to skip items",
+  "images": [],
+  "imagePaths": [
+    {
+      "id": "img-1771314156614-n44xfiy5n",
+      "path": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr\\.automaker\\features\\feature-1771314174363-9shuu9re5\\images\\pasted-image-2026-02-17T07-42-36-558Z-1771314156593.png",
+      "filename": "pasted-image-2026-02-17T07-42-36-558Z.png",
+      "mimeType": "image/png"
+    }
+  ],
+  "textFilePaths": [],
+  "skipTests": true,
+  "model": "haiku",
+  "thinkingLevel": "none",
+  "reasoningEffort": "none",
+  "priority": 2,
+  "planningMode": "skip",
+  "requirePlanApproval": false,
+  "autoDeploy": false,
+  "deployEnvironment": "development",
+  "dependencies": [],
+  "workMode": "current",
+  "selectedProjectPath": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr",
+  "titleGenerating": false,
+  "status": "waiting_approval",
+  "projectPath": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr",
+  "id": "feature-1771314174363-9shuu9re5",
+  "descriptionHistory": [
+    {
+      "description": "this screen should let you know that you can shift click trash icon to skip it ",
+      "timestamp": "2026-02-17T07:42:54.401Z",
+      "source": "initial"
+    }
+  ],
+  "startedAt": "2026-02-17T07:42:54.500Z",
+  "updatedAt": "2026-02-17T07:51:24.650Z",
+  "justFinishedAt": "2026-02-17T07:51:24.650Z"
+}

@@ -1,0 +1,33 @@
+{
+  "category": "Uncategorized",
+  "description": "1. delete wiki\n2. I dont want to have to login, this is a local tool only and primarily will be used by one person, make all data local and not in the account. For now please just make it local and account, i will start it, then it will create the local files so that later we can delete the account functionality. I am not talking about api or ai accounts.\n",
+  "title": "",
+  "images": [],
+  "imagePaths": [],
+  "textFilePaths": [],
+  "skipTests": true,
+  "model": "opus",
+  "thinkingLevel": "none",
+  "reasoningEffort": "none",
+  "priority": 2,
+  "planningMode": "skip",
+  "requirePlanApproval": false,
+  "autoDeploy": false,
+  "deployEnvironment": "development",
+  "dependencies": [],
+  "workMode": "current",
+  "selectedProjectPath": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr",
+  "titleGenerating": "1. delete wiki\n2. I dont want to have to login, this is a local tool only and primarily will be used by one person, make all data local and not in the account. For now please just make it local and account, i will start it, then it will create the local files so that later we can delete the account functionality. I am not talking about api or ai accounts.",
+  "status": "in_progress",
+  "projectPath": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr",
+  "id": "feature-1770766207367-1voqjzmq2",
+  "descriptionHistory": [
+    {
+      "description": "1. delete wiki\n2. I dont want to have to login, this is a local tool only and primarily will be used by one person, make all data local and not in the account. For now please just make it local and account, i will start it, then it will create the local files so that later we can delete the account functionality. I am not talking about api or ai accounts.\n",
+      "timestamp": "2026-02-10T23:30:07.431Z",
+      "source": "initial"
+    }
+  ],
+  "startedAt": "2026-02-11T04:42:29.440Z",
+  "updatedAt": "2026-02-11T04:42:37.522Z"
+}

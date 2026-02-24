@@ -5,14 +5,14 @@ import os from 'os';
 import { CursorConfigManager } from '@/providers/cursor-config-manager.js';
 
 vi.mock('fs');
-vi.mock('@automaker/platform', () => ({
-  getAutomakerDir: vi.fn((projectPath: string) => path.join(projectPath, '.automaker')),
+vi.mock('@dmaker/platform', () => ({
+  getDmakerDir: vi.fn((projectPath: string) => path.join(projectPath, '.dmaker')),
 }));
 
 describe('cursor-config-manager.ts', () => {
   // Use platform-agnostic paths
   const testProjectPath = path.join(os.tmpdir(), 'test-project');
-  const expectedConfigPath = path.join(testProjectPath, '.automaker', 'cursor-config.json');
+  const expectedConfigPath = path.join(testProjectPath, '.dmaker', 'cursor-config.json');
   let manager: CursorConfigManager;
 
   beforeEach(() => {

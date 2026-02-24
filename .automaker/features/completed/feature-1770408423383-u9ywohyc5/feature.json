@@ -1,0 +1,37 @@
+{
+  "category": "Uncategorized",
+  "description": "the task that starts with \"i thought i changes this to opus 4.6 but the features still say 4.5, they should say whatevers being used, not hardcoded.\n\nAlso when selecting a model it should not be a\" says it fixed it but you can clearly see in picture npm run dev electron still has thinking sub nesting",
+  "title": "Update model version display to match selected model",
+  "images": [],
+  "imagePaths": [
+    {
+      "id": "img-1770408382302-irl1nxhnq",
+      "path": "C:\\Users\\dylan\\Downloads\\dmaker-pr\\.dmaker\\features\\feature-1770408423383-u9ywohyc5\\images\\pasted-image-2026-02-06T20-06-22-245Z-1770408382282.png",
+      "filename": "pasted-image-2026-02-06T20-06-22-245Z.png",
+      "mimeType": "image/png"
+    }
+  ],
+  "textFilePaths": [],
+  "skipTests": true,
+  "model": "opus",
+  "thinkingLevel": "none",
+  "reasoningEffort": "none",
+  "priority": 2,
+  "planningMode": "full",
+  "requirePlanApproval": false,
+  "dependencies": [],
+  "workMode": "current",
+  "titleGenerating": false,
+  "status": "completed",
+  "id": "feature-1770408423383-u9ywohyc5",
+  "descriptionHistory": [
+    {
+      "description": "the task that starts with \"i thought i changes this to opus 4.6 but the features still say 4.5, they should say whatevers being used, not hardcoded.\n\nAlso when selecting a model it should not be a\" says it fixed it but you can clearly see in picture npm run dev electron still has thinking sub nesting",
+      "timestamp": "2026-02-06T20:07:03.427Z",
+      "source": "initial"
+    }
+  ],
+  "startedAt": "2026-02-06T20:22:54.932Z",
+  "updatedAt": "2026-02-06T20:26:39.359Z",
+  "justFinishedAt": "2026-02-06T20:26:39.359Z"
+}

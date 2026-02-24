@@ -3,9 +3,9 @@
  */
 
 import type { SettingsService } from '../services/settings-service.js';
-import type { ContextFilesResult, ContextFileInfo } from '@automaker/utils';
-import { createLogger } from '@automaker/utils';
-import type { MCPServerConfig, McpServerConfig, PromptCustomization } from '@automaker/types';
+import type { ContextFilesResult, ContextFileInfo } from '@dmaker/utils';
+import { createLogger } from '@dmaker/utils';
+import type { MCPServerConfig, McpServerConfig, PromptCustomization } from '@dmaker/types';
 import {
   mergeAutoModePrompts,
   mergeAgentPrompts,
@@ -19,7 +19,7 @@ import {
   mergeContextDescriptionPrompts,
   mergeSuggestionsPrompts,
   mergeTaskExecutionPrompts,
-} from '@automaker/prompts';
+} from '@dmaker/prompts';
 
 const logger = createLogger('SettingsHelper');
 
@@ -118,7 +118,7 @@ ${formattedFiles.join('\n\n---\n\n')}
 
 /**
  * Format a single context file entry for the prompt
- * (Matches the format used in @automaker/utils/context-loader.ts)
+ * (Matches the format used in @dmaker/utils/context-loader.ts)
  */
 function formatContextFileEntry(file: ContextFileInfo): string {
   const header = `## ${file.name}`;
@@ -323,7 +323,7 @@ export async function getSubagentsConfiguration(settingsService: SettingsService
 export async function getCustomSubagents(
   settingsService: SettingsService,
   projectPath?: string
-): Promise<Record<string, import('@automaker/types').AgentDefinition> | undefined> {
+): Promise<Record<string, import('@dmaker/types').AgentDefinition> | undefined> {
   // Get global subagents
   const globalSettings = await settingsService.getGlobalSettings();
   const globalSubagents = globalSettings.customSubagents || {};

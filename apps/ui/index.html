@@ -10,7 +10,7 @@
       // Prevent theme flash - apply stored theme before React hydrates
       (function () {
         try {
-          const stored = localStorage.getItem('automaker-storage');
+          const stored = localStorage.getItem('dmaker-storage');
           if (stored) {
             const data = JSON.parse(stored);
             const theme = data.state?.theme;

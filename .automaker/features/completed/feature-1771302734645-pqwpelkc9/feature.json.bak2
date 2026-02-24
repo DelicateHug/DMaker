@@ -1,0 +1,40 @@
+{
+  "category": "Uncategorized",
+  "description": "remove tools/automode/configure and instead move the skip verification and auto mode buttons to a button on board tab called project settings that is just a drop down with square that you can click to turn blue or blank for on or off for the 2 settings. this drop down should not appear if selected project is all projects",
+  "title": "Move skip verification and auto mode to project settings",
+  "images": [],
+  "imagePaths": [
+    {
+      "id": "img-1771302649107-nt8p2h538",
+      "path": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr\\.automaker\\features\\feature-1771302734645-pqwpelkc9\\images\\pasted-image-2026-02-17T04-30-49-073Z-1771302649103.png",
+      "filename": "pasted-image-2026-02-17T04-30-49-073Z.png",
+      "mimeType": "image/png"
+    }
+  ],
+  "textFilePaths": [],
+  "skipTests": true,
+  "model": "opus",
+  "thinkingLevel": "none",
+  "reasoningEffort": "none",
+  "priority": 2,
+  "planningMode": "skip",
+  "requirePlanApproval": false,
+  "autoDeploy": false,
+  "deployEnvironment": "development",
+  "dependencies": [],
+  "workMode": "current",
+  "selectedProjectPath": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr",
+  "titleGenerating": false,
+  "status": "in_progress",
+  "projectPath": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr",
+  "id": "feature-1771302734645-pqwpelkc9",
+  "descriptionHistory": [
+    {
+      "description": "remove tools/automode/configure and instead move the skip verification and auto mode buttons to a button on board tab called project settings that is just a drop down with square that you can click to turn blue or blank for on or off for the 2 settings. this drop down should not appear if selected project is all projects",
+      "timestamp": "2026-02-17T04:32:14.713Z",
+      "source": "initial"
+    }
+  ],
+  "startedAt": "2026-02-17T04:32:14.793Z",
+  "updatedAt": "2026-02-17T04:32:14.950Z"
+}

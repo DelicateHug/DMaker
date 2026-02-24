@@ -5,7 +5,7 @@
  * but communicates with the backend server via HTTP/WebSocket.
  */
 
-import { createLogger } from '@automaker/utils/logger';
+import { createLogger } from '@dmaker/utils/logger';
 import type {
   ElectronAPI,
   FileResult,
@@ -37,7 +37,7 @@ import type {
 import type { Message, SessionListItem } from '@/types/electron';
 import type { Feature, ClaudeUsageResponse, CodexUsageResponse } from '@/store/app-store';
 import type { WorktreeAPI, GitAPI, ModelDefinition, ProviderStatus } from '@/types/electron';
-import type { ModelId, ThinkingLevel, ReasoningEffort } from '@automaker/types';
+import type { ModelId, ThinkingLevel, ReasoningEffort } from '@dmaker/types';
 import { getGlobalFileBrowser } from '@/contexts/file-browser-context';
 import {
   DEFAULT_CACHE_OPTIONS,
@@ -45,7 +45,7 @@ import {
   MODELS_CACHE_TTL_MS,
   USAGE_CACHE_TTL_MS,
   type EndpointCategory,
-} from '@automaker/types';
+} from '@dmaker/types';
 import {
   RequestCache as ClientRequestCache,
   type GetOrSetOptions as CacheGetOptions,
@@ -64,7 +64,7 @@ let cachedServerUrl: string | null = null;
 const notifyLoggedOut = (): void => {
   if (typeof window === 'undefined') return;
   try {
-    window.dispatchEvent(new CustomEvent('automaker:logged-out'));
+    window.dispatchEvent(new CustomEvent('dmaker:logged-out'));
   } catch {
     // Ignore - navigation will still be handled by failed requests in most cases
   }
@@ -95,7 +95,7 @@ const handleUnauthorized = (): void => {
 const notifyServerOffline = (): void => {
   if (typeof window === 'undefined') return;
   try {
-    window.dispatchEvent(new CustomEvent('automaker:server-offline'));
+    window.dispatchEvent(new CustomEvent('dmaker:server-offline'));
   } catch {
     // Ignore
   }
@@ -2401,11 +2401,11 @@ export class HttpApiClient implements ElectronAPI {
 
     // Migration from localStorage
     migrate: (data: {
-      'automaker-storage'?: string;
-      'automaker-setup'?: string;
+      'dmaker-storage'?: string;
+      'dmaker-setup'?: string;
       'worktree-panel-collapsed'?: string;
       'file-browser-recent-folders'?: string;
-      'automaker:lastProjectDir'?: string;
+      'dmaker:lastProjectDir'?: string;
     }): Promise<{
       success: boolean;
       migratedGlobalSettings: boolean;

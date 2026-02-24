@@ -1,0 +1,39 @@
+{
+  "category": "Uncategorized",
+  "description": "1. features should be in features/status/feature_name\n2. move all existing features into new correct folder\n3. update code to handle new scenarios\n4. update code to load stuff more effeciently As it can now skip checking which one it is because it knows which one it is by the status it should also know how many entries on the board to and then it could say loading and as it loads them in it could one by one update the cards This way we can update the much quicker and then updated overtime as we get the correct data\n5. Try to ensure these are checked at least once every 10 seconds in a lazy loading type of way but there should also be a button on the board to refresh projects so that they can initiate a manual force check\n6. If you find any other ways for user experience improvement or performance enhancements either by reducing cycles loading in the background or anything like that then please implement them because right now experience is a too slow whenever swapping projects\n",
+  "title": "Reorganize features folder structure and implement lazy loading with refresh",
+  "images": [],
+  "imagePaths": [
+    {
+      "path": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr\\.automaker\\features\\feature-1771327541021-7w12sfpv7\\images\\pasted-image-2026-02-17T20-53-56-792Z-1771361637141.png",
+      "filename": "pasted-image-2026-02-17T20-53-56-792Z-1771361637141.png",
+      "mimeType": "image/png"
+    }
+  ],
+  "textFilePaths": [],
+  "skipTests": true,
+  "model": "opus",
+  "thinkingLevel": "medium",
+  "reasoningEffort": "none",
+  "priority": 2,
+  "planningMode": "full",
+  "requirePlanApproval": false,
+  "autoDeploy": false,
+  "deployEnvironment": "development",
+  "dependencies": [],
+  "workMode": "current",
+  "selectedProjectPath": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr",
+  "titleGenerating": false,
+  "status": "in_progress",
+  "projectPath": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr",
+  "id": "feature-1771327541021-7w12sfpv7",
+  "descriptionHistory": [
+    {
+      "description": "1. features should be in features/status/feature_name\n2. move all existing features into new correct folder\n3. update code to handle new scenarios\n4. update code to load stuff more effeciently As it can now skip checking which one it is because it knows which one it is by the status it should also know how many entries on the board to and then it could say loading and as it loads them in it could one by one update the cards This way we can update the much quicker and then updated overtime as we get the correct data\n5. Try to ensure these are checked at least once every 10 seconds in a lazy loading type of way but there should also be a button on the board to refresh projects so that they can initiate a manual force check\n6. If you find any other ways for user experience improvement or performance enhancements either by reducing cycles loading in the background or anything like that then please implement them because right now experience is a too slow whenever swapping projects\n",
+      "timestamp": "2026-02-17T11:25:41.694Z",
+      "source": "initial"
+    }
+  ],
+  "startedAt": "2026-02-17T20:53:58.320Z",
+  "updatedAt": "2026-02-17T21:34:27.512Z"
+}

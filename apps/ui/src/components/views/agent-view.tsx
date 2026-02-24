@@ -2,7 +2,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import type { Virtualizer } from '@tanstack/react-virtual';
 import { useAppStore } from '@/store/app-store';
 import { useShallow } from 'zustand/react/shallow';
-import type { PhaseModelEntry } from '@automaker/types';
+import type { PhaseModelEntry } from '@dmaker/types';
 import { useElectronAgent } from '@/hooks/use-electron-agent';
 import { cn } from '@/lib/utils';
 import { getElectronAPI } from '@/lib/electron';
@@ -157,7 +157,7 @@ export function AgentView() {
             id: 'welcome',
             role: 'assistant' as const,
             content:
-              "Hello! I'm the Automaker Agent. I can help you build software autonomously. I can read and modify files in this project, run commands, and execute tests. What would you like to create today?",
+              "Hello! I'm the DMaker Agent. I can help you build software autonomously. I can read and modify files in this project, run commands, and execute tests. What would you like to create today?",
             timestamp: new Date().toISOString(),
           },
         ]

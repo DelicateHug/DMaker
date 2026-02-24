@@ -2,7 +2,7 @@
  * Deploy Script Runner Service
  *
  * Simplified deploy service that:
- * - Discovers and runs scripts from the project's .automaker/deploy folder
+ * - Discovers and runs scripts from the project's .dmaker/deploy folder
  * - Executes scripts using spawn with real-time stdout/stderr streaming
  * - Captures all output in memory
  * - Tracks run history for each script execution
@@ -14,8 +14,8 @@
 import { spawn, type ChildProcess } from 'child_process';
 import path from 'path';
 import * as secureFs from '../lib/secure-fs.js';
-import { getAutomakerDir } from '@automaker/platform';
-import { createLogger } from '@automaker/utils';
+import { getDmakerDir } from '@dmaker/platform';
+import { createLogger } from '@dmaker/utils';
 
 const logger = createLogger('DeployScriptRunner');
 
@@ -178,7 +178,7 @@ function buildSpawnArgs(scriptPath: string, extension: string): { shell: string;
 /**
  * Deploy Script Runner
  *
- * Discovers scripts in a project's `.automaker/deploy` folder, executes them
+ * Discovers scripts in a project's `.dmaker/deploy` folder, executes them
  * via `spawn`, captures stdout/stderr in memory, streams output through an
  * optional callback, and maintains an in-memory run history.
  */
@@ -197,17 +197,17 @@ export class DeployScriptRunner {
    * Get the deploy folder path for a project.
    *
    * @param projectPath - Absolute path to the project directory
-   * @returns Absolute path to `{projectPath}/.automaker/deploy`
+   * @returns Absolute path to `{projectPath}/.dmaker/deploy`
    */
   getDeployFolderPath(projectPath: string): string {
-    return path.join(getAutomakerDir(projectPath), 'deploy');
+    return path.join(getDmakerDir(projectPath), 'deploy');
   }
 
   /**
    * List available deploy scripts in the project's deploy folder.
    *
    * Recursively scans subdirectories so scripts can be organized in nested
-   * folders (e.g. `.automaker/deploy/infra/setup.sh`). Returns an empty
+   * folders (e.g. `.dmaker/deploy/infra/setup.sh`). Returns an empty
    * array if the folder does not exist. Scripts are sorted alphabetically,
    * root-level scripts first, then by folder path and name.
    *

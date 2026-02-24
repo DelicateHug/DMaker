@@ -29,7 +29,7 @@ const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute window
 const RATE_LIMIT_MAX_ATTEMPTS = 5; // Max 5 attempts per window
 
 // Check if we're in test mode - disable rate limiting for E2E tests
-const isTestMode = process.env.AUTOMAKER_MOCK_AGENT === 'true';
+const isTestMode = process.env.DMAKER_MOCK_AGENT === 'true';
 
 // In-memory rate limit tracking (resets on server restart)
 const loginAttempts = new Map<string, { count: number; windowStart: number }>();

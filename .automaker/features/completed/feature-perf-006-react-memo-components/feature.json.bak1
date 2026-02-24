@@ -1,0 +1,29 @@
+{
+  "id": "feature-perf-006-react-memo-components",
+  "title": "Add React.memo to Expensive Board and Agent Components",
+  "category": "Performance",
+  "description": "## Problem\nSeveral expensive child components in the board view and agent view are NOT wrapped in `React.memo`, causing them to re-render whenever their parent re-renders, even if their own props haven't changed. Some components like `KanbanCard` and `KanbanColumn` are already properly memoized, but their children and siblings are not.\n\n## Components Missing React.memo\n\n### Board View Components (rendered for every feature card):\n- `apps/ui/src/components/views/board-view/components/board-status-tabs.tsx`:\n  - `BoardStatusTabs` (line 97) - NOT memoized\n  - `BoardStatusTabsCompact` (line 176) - NOT memoized\n  - `BoardStatusTabButtons` (line 292) - NOT memoized\n- `apps/ui/src/components/views/board-view/components/kanban-card/card-badges.tsx`:\n  - `CardBadges` (line 21) - NOT memoized\n  - `PriorityBadges` (line 55) - NOT memoized\n  - `BranchBadge` (line 307) - NOT memoized\n- `apps/ui/src/components/views/board-view/components/kanban-card/card-actions.tsx`:\n  - `CardActions` (line 41) - NOT memoized\n- `apps/ui/src/components/views/board-view/components/kanban-card/card-header.tsx`:\n  - `CardHeaderSection` (line 45) - NOT memoized\n- `apps/ui/src/components/views/board-view/components/kanban-card/card-content-sections.tsx`:\n  - `CardContentSections` (line 10) - NOT memoized\n- `apps/ui/src/components/views/board-view/components/board-status-dropdown.tsx`:\n  - `BoardStatusDropdown` - NOT memoized\n\n### Agent View Components (rendered for every message):\n- `apps/ui/src/components/views/agent-view/components/message-bubble.tsx`:\n  - `MessageBubble` (line 21) - NOT memoized (re-renders ALL messages when list changes)\n\n### Already Properly Memoized (reference examples):\n- `KanbanCard` in `kanban-card.tsx` (line 80) - Uses `memo(function KanbanCard(...))`\n- `KanbanColumn` in `kanban-column.tsx` (line 27) - Uses `memo(function KanbanColumn(...))`\n\n## Required Changes\n1. Wrap all listed components in `React.memo()` using the named function pattern\n2. Ensure parent components use `useCallback` for event handlers passed as props\n3. Ensure parent components use `useMemo` for computed objects/arrays passed as props\n4. Replace inline style objects with useMemo'd constants where used in memoized children\n5. Verify that memoization actually prevents re-renders (use React DevTools Profiler)\n\n## Pattern to Follow\n```typescript\nimport { memo } from 'react';\n\n// BEFORE\nexport function CardBadges({ feature }: CardBadgesProps) { ... }\n\n// AFTER\nexport const CardBadges = memo(function CardBadges({ feature }: CardBadgesProps) { ... });\n```\n\n## Files to Modify\n- `apps/ui/src/components/views/board-view/components/board-status-tabs.tsx`\n- `apps/ui/src/components/views/board-view/components/board-status-dropdown.tsx`\n- `apps/ui/src/components/views/board-view/components/kanban-card/card-badges.tsx`\n- `apps/ui/src/components/views/board-view/components/kanban-card/card-actions.tsx`\n- `apps/ui/src/components/views/board-view/components/kanban-card/card-header.tsx`\n- `apps/ui/src/components/views/board-view/components/kanban-card/card-content-sections.tsx`\n- `apps/ui/src/components/views/agent-view/components/message-bubble.tsx`\n- Parent components that pass object/function props to these (to add useCallback/useMemo)\n\n## Expected Impact\n- 30-50% reduction in render work for board view with many features\n- Smoother scrolling and interaction in agent chat with many messages\n- Reduced CPU usage during board polling/updates\n\n## Acceptance Criteria\n- All listed components are wrapped in React.memo\n- React DevTools Profiler shows reduced render counts for child components\n- Scrolling through the board with 50+ features remains smooth\n- Chat with 100+ messages scrolls smoothly\n- No functional regressions in any memoized component",
+  "images": [],
+  "imagePaths": [],
+  "textFilePaths": [],
+  "skipTests": true,
+  "priority": 2,
+  "planningMode": "full",
+  "requirePlanApproval": true,
+  "autoDeploy": false,
+  "dependencies": [
+    "feature-perf-005-zustand-selector-optimization"
+  ],
+  "status": "waiting_approval",
+  "projectPath": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr",
+  "descriptionHistory": [
+    {
+      "description": "Add React.memo to expensive unmemoized board view and agent view child components",
+      "timestamp": "2026-02-12T10:00:05.000Z",
+      "source": "initial"
+    }
+  ],
+  "startedAt": "2026-02-12T22:05:54.700Z",
+  "updatedAt": "2026-02-12T22:17:27.175Z",
+  "justFinishedAt": "2026-02-12T22:17:27.175Z"
+}

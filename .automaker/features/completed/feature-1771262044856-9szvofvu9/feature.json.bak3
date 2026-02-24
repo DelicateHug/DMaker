@@ -1,0 +1,158 @@
+{
+  "category": "Uncategorized",
+  "description": "completly rework deploy functioanlity. delete all existing code. then create a deploy thing that visually works the way it did before with tab on kanban page but instead make it so that there is a project selector like how there is in agent chat and board and then in each project under scripts/deploy all scripts are runnable under the new deploy tab and all it does is run the script based on extension in a child process but it writes stdou to memory or file then at end on deploy tab it shows previous run scripts that can be either running or complete and during etiher stage you can view the current or final output(stdout)",
+  "title": "Rework deploy functionality with project selector and script runner",
+  "images": [],
+  "imagePaths": [],
+  "textFilePaths": [],
+  "skipTests": true,
+  "model": "opus",
+  "thinkingLevel": "high",
+  "reasoningEffort": "none",
+  "priority": 2,
+  "planningMode": "full",
+  "requirePlanApproval": false,
+  "autoDeploy": false,
+  "deployEnvironment": "development",
+  "dependencies": [],
+  "workMode": "current",
+  "selectedProjectPath": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr",
+  "titleGenerating": false,
+  "status": "in_progress",
+  "projectPath": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr",
+  "id": "feature-1771262044856-9szvofvu9",
+  "descriptionHistory": [
+    {
+      "description": "completly rework deploy functioanlity. delete all existing code. then create a deploy thing that visually works the way it did before with tab on kanban page but instead make it so that there is a project selector like how there is in agent chat and board and then in each project under scripts/deploy all scripts are runnable under the new deploy tab and all it does is run the script based on extension in a child process but it writes stdou to memory or file then at end on deploy tab it shows previous run scripts that can be either running or complete and during etiher stage you can view the current or final output(stdout)",
+      "timestamp": "2026-02-16T17:14:05.214Z",
+      "source": "initial"
+    }
+  ],
+  "startedAt": "2026-02-16T17:14:05.240Z",
+  "updatedAt": "2026-02-16T19:15:02.735Z",
+  "planSpec": {
+    "status": "approved",
+    "version": 1,
+    "reviewedByUser": false,
+    "content": "[timestamp:2026-02-16T17:14:23.736Z] 🔧 Tool: Task\nInput: {\n  \"description\": \"Explore existing deploy code\",\n  \"prompt\": \"Explore the codebase thoroughly to understand the existing deploy functionality. Look at:\\n\\n1. All files in apps/server/src/routes/deploy/ directory\\n2. apps/server/src/services/deploy-service.ts\\n3. apps/ui/src/components/views/board-view/components/deploy-panel.tsx\\n4. apps/ui/src/components/views/board-view/components/deploy-log-output.tsx\\n5. apps/ui/src/components/views/board-view/shared/deploy-environment-select.tsx\\n6. apps/ui/src/components/views/settings-view/deploy/ directory\\n7. apps/ui/src/components/layout/deploy-button.tsx\\n\\nAlso search for any other deploy-related files, types, hooks, and routes. I need to understand:\\n- How deploy currently works (server routes, services, UI components)\\n- What the deploy tab looks like in the board view\\n- How the project selector works in agent chat and board views\\n- The pattern for running child processes on the server\\n- How stdout streaming works (e.g., terminal view or agent output)\\n\\nReturn the full contents of all deploy-related files and describe the architecture.\",\n  \"subagent_type\": \"Explore\",\n  \"run_in_background\": true\n}\n\n[timestamp:2026-02-16T17:14:31.661Z] 🔧 Tool: Task\nInput: {\n  \"description\": \"Explore project selector pattern\",\n  \"prompt\": \"Explore how the project selector works in the agent chat and board views. Look at:\\n\\n1. apps/ui/src/components/views/agent-view/ - especially how project selection works\\n2. apps/ui/src/components/views/board-view/ - especially how project selection works\\n3. apps/ui/src/hooks/use-board-project.ts (this is new/untracked)\\n4. apps/ui/src/store/app-store.ts - look for project-related state\\n5. The board header component for project switching\\n\\nI need to understand:\\n- How projects are selected/switched in the UI\\n- What state management is used for project selection\\n- The visual pattern for project selectors\\n\\nReturn the relevant code and describe the pattern.\",\n  \"subagent_type\": \"Explore\",\n  \"run_in_background\": true\n}\n\n[timestamp:2026-02-16T17:14:35.622Z] 🔧 Tool: TaskOutput\nInput: {\n  \"task_id\": \"a048978\",\n  \"block\": true,\n  \"timeout\": 60000\n}\n\n[timestamp:2026-02-16T17:14:47.780Z] 🔧 Tool: TaskOutput\nInput: {\n  \"task_id\": \"ad25719\",\n  \"block\": true,\n  \"timeout\": 60000\n}\n\n[timestamp:2026-02-16T17:16:19.084Z] 🔧 Tool: TaskOutput\nInput: {\n  \"task_id\": \"a048978\",\n  \"block\": true,\n  \"timeout\": 120000\n}\n\n[timestamp:2026-02-16T17:16:19.680Z] 🔧 Tool: TaskOutput\nInput: {\n  \"task_id\": \"ad25719\",\n  \"block\": true,\n  \"timeout\": 120000\n}\nLet me read the key files directly while the agents complete.\n\n[timestamp:2026-02-16T17:18:38.210Z] 🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\server\\\\src\\\\services\\\\deploy-service.ts\"\n}\n\n[timestamp:2026-02-16T17:18:38.880Z] 🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\board-view\\\\components\\\\deploy-panel.tsx\"\n}\n\n[timestamp:2026-02-16T17:18:40.914Z] 🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\board-view\\\\components\\\\deploy-log-output.tsx\"\n}\nNow let me read some additional key files to understand the full picture:\n\n[timestamp:2026-02-16T17:18:58.142Z] 🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\server\\\\src\\\\routes\\\\deploy\\\\index.ts\"\n}\n\n[timestamp:2026-02-16T17:18:58.831Z] 🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\layout\\\\deploy-button.tsx\"\n}\n\n[timestamp:2026-02-16T17:18:59.400Z] 🔧 Tool: Glob\nInput: {\n  \"pattern\": \"apps/server/src/routes/deploy/routes/*.ts\"\n}\nNow let me read the remaining key files for the server deploy routes and the settings deploy section, plus understand how folder-scripts and run-folder-script work since they're closest to the new model:\n\n[timestamp:2026-02-16T17:19:16.599Z] 🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\server\\\\src\\\\routes\\\\deploy\\\\routes\\\\folder-scripts.ts\"\n}\n\n[timestamp:2026-02-16T17:19:17.115Z] 🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\server\\\\src\\\\routes\\\\deploy\\\\routes\\\\run-folder-script.ts\"\n}\n\n[timestamp:2026-02-16T17:19:17.805Z] 🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\server\\\\src\\\\routes\\\\deploy\\\\routes\\\\stream.ts\"\n}\n\n[timestamp:2026-02-16T17:19:18.581Z] 🔧 Tool: Glob\nInput: {\n  \"pattern\": \"apps/ui/src/components/views/settings-view/deploy/*\"\n}\nNow let me check the types and understand how scripts/deploy path mapping works, plus the board view integration:\n\n[timestamp:2026-02-16T17:19:40.867Z] 🔧 Tool: Grep\nInput: {\n  \"pattern\": \"DeployScript|DeployEnvironment|DeploySettings|deploySettings\",\n  \"path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\libs\\\\types\\\\src\\\\settings.ts\",\n  \"output_mode\": \"content\",\n  \"head_limit\": 40\n}\n\n[timestamp:2026-02-16T17:19:42.034Z] 🔧 Tool: Grep\nInput: {\n  \"pattern\": \"deploy|Deploy\",\n  \"path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\board-view.tsx\",\n  \"output_mode\": \"content\",\n  \"head_limit\": 30\n}\n\n[timestamp:2026-02-16T17:19:43.261Z] 🔧 Tool: Grep\nInput: {\n  \"pattern\": \"deploy|Deploy\",\n  \"path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\board-view\\\\kanban-board.tsx\",\n  \"output_mode\": \"content\",\n  \"head_limit\": 30\n}\nNow let me look at how board-view handles the resizable panels and deploy panel integration more closely, plus the settings deploy section and how the `scripts/deploy` folder concept should work:\n\n[timestamp:2026-02-16T17:20:00.960Z] 🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\board-view.tsx\",\n  \"offset\": 2050,\n  \"limit\": 200\n}\n\n[timestamp:2026-02-16T17:20:01.764Z] 🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\settings-view\\\\deploy\\\\deploy-settings-section.tsx\",\n  \"limit\": 50\n}\n\n[timestamp:2026-02-16T17:20:02.564Z] 🔧 Tool: Grep\nInput: {\n  \"pattern\": \"scripts/deploy|scripts\\\\\\\\\\\\\\\\deploy\",\n  \"output_mode\": \"files_with_matches\"\n}\nNow I have a thorough understanding of the existing code. Let me also check the `http-api-client.ts` for the deploy WebSocket events, and the board-view panel layout for the Deploy resizable panel:\n\n[timestamp:2026-02-16T17:20:22.280Z] 🔧 Tool: Grep\nInput: {\n  \"pattern\": \"deploy\",\n  \"path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\lib\\\\http-api-client.ts\",\n  \"output_mode\": \"content\",\n  \"head_limit\": 40\n}\n\n[timestamp:2026-02-16T17:20:23.207Z] 🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\board-view.tsx\",\n  \"offset\": 2400,\n  \"limit\": 200\n}\nI now have comprehensive understanding of the existing deploy system. Let me generate the specification.\n\n---\n\n## 1. Problem Statement\n\nThe current deploy functionality is overly complex with shell/HTTP webhook scripts configured through settings, environment-based filtering, and auto-deploy triggers. The user wants to completely replace this with a simpler model: each project has a `scripts/deploy` folder containing runnable scripts, and the Deploy tab on the Kanban page simply lists and executes those scripts as child processes, capturing stdout for display. A project selector (similar to the agent chat panel) lets users switch between projects.\n\n## 2. User Story\n\nAs a **developer using Automaker**, I want **to run deploy scripts from a `scripts/deploy` folder in each project with a simple UI that shows script run history and live/final output**, so that **I can quickly trigger and monitor deployments without complex configuration**.\n\n## 3. Acceptance Criteria\n\n- **Happy Path**: GIVEN a project with a `scripts/deploy` folder containing `.sh`, `.ps1`, `.py`, `.js`, `.ts`, `.bat`, `.cmd` files, WHEN I open the Deploy tab on the Kanban page and select that project, THEN I see all scripts listed and can click to run any of them.\n\n- **Script Execution**: GIVEN I click \"Run\" on a script, WHEN the script executes, THEN a child process runs the script based on its extension, stdout is captured in memory, and the Deploy tab shows the run as \"running\" with live output streaming.\n\n- **Run History**: GIVEN scripts have been run previously, WHEN I view the Deploy tab, THEN I see a list of previous runs (running or complete) with their status, and I can click any run to view its current/final stdout output.\n\n- **Project Selector**: GIVEN multiple projects exist, WHEN I open the Deploy tab, THEN I see a project selector (matching the pattern used in agent chat/board) allowing me to switch between projects.\n\n- **No Scripts Folder**: GIVEN a project without a `scripts/deploy` folder, WHEN I select that project in the Deploy tab, THEN I see a helpful empty state message.\n\n- **Error Handling**: GIVEN a script fails (non-zero exit code), WHEN the run completes, THEN the run is marked as \"error\" with the stderr/stdout available for viewing.\n\n## 4. Technical Context\n\n| Aspect | Value |\n|--------|-------|\n| Affected Files | Server: deploy service, deploy routes, types. UI: deploy panel, deploy button, deploy settings, board-view integration, http-api-client, app-store |\n| Dependencies | `child_process.spawn` (already used), existing WebSocket event system |\n| Constraints | Must maintain the Deploy tab's position in the board view panel layout. Must work on Windows (PowerShell) and Unix (bash). |\n| Patterns to Follow | Existing `folder-scripts.ts` and `run-folder-script.ts` routes for scanning/executing scripts from a folder. `DeployPanel` UI pattern for the panel shell. `AgentChatPanel` project selector pattern. SSE streaming pattern from `stream.ts`. |\n\n## 5. Non-Goals\n\n- HTTP webhook deploy scripts (removed)\n- Environment-based script filtering (production/development tabs - removed)\n- Auto-deploy on feature completion (removed)\n- Deploy script configuration in Settings UI (removed - scripts are just files in a folder)\n- Variable substitution in scripts (removed)\n- Deploy script enable/disable toggles (removed)\n\n## 6. Implementation Tasks\n\n```tasks\n## Phase 1: Server - Clean Up and Rebuild Deploy Service\n\n- [ ] T001: Delete existing deploy service and replace with new simplified DeployScriptRunner service that runs scripts from `scripts/deploy` folder using spawn, captures stdout/stderr in memory, tracks run history, and streams output via callback | File: apps/server/src/services/deploy-service.ts\n- [ ] T002: Delete all existing deploy route files (trigger, status, scripts, stream) and replace deploy router with 3 endpoints: GET /folder-scripts (list scripts in scripts/deploy), POST /run (execute a script with SSE streaming), GET /runs (get run history) | File: apps/server/src/routes/deploy/index.ts\n- [ ] T003: Update server index.ts to wire up new deploy routes and service, removing old DeployService initialization | File: apps/server/src/index.ts\n\n## Phase 2: Types - Update Shared Types\n\n- [ ] T004: Remove old deploy types (DeployScript, DeployScriptShellAction, DeployScriptHttpAction, DeployEnvironment, DeploySettings, DEPLOY_ENVIRONMENT_LABELS) from types package and add new simplified types (DeployFolderScript, DeployRun, DeployRunStatus) | File: libs/types/src/settings.ts\n- [ ] T005: Update types index.ts exports to reflect removed/added types | File: libs/types/src/index.ts\n\n## Phase 3: UI - Rebuild Deploy Panel\n\n- [ ] T006: Completely rewrite DeployPanel to: show project selector dropdown (matching agent chat pattern), list scripts from `scripts/deploy` folder, show run history (running/complete), allow viewing live/final output for any run | File: apps/ui/src/components/views/board-view/components/deploy-panel.tsx\n- [ ] T007: Keep DeployLogOutput component as-is (ANSI output + auto-scroll) since it works well for displaying script output | File: apps/ui/src/components/views/board-view/components/deploy-log-output.tsx\n- [ ] T008: Update or simplify DeployButton in top nav to just open/focus the deploy panel (remove inline deploy popover logic, environment tabs, script configuration) | File: apps/ui/src/components/layout/deploy-button.tsx\n\n## Phase 4: UI - Clean Up Settings and Related Code\n\n- [ ] T009: Remove deploy settings section from settings view (deploy-settings-section.tsx, deploy-script-dialog.tsx, deploy-script-editor.tsx) and update settings navigation to remove Deploy entry | File: apps/ui/src/components/views/settings-view/deploy/\n- [ ] T010: Remove deploy-related state from app-store (deploySettings, old deploy panel state that references environment) and clean up deploy-related WebSocket event subscriptions in http-api-client if needed | File: apps/ui/src/store/app-store.ts\n- [ ] T011: Update board-view.tsx to pass correct props to the rebuilt DeployPanel | File: apps/ui/src/components/views/board-view.tsx\n- [ ] T012: Remove DeployEnvironmentSelect component since environments are no longer used | File: apps/ui/src/components/views/board-view/shared/deploy-environment-select.tsx\n\n## Phase 5: Server - Clean Up Old Deploy Types from Settings\n\n- [ ] T013: Remove deploySettings, defaultAutoDeploy, defaultDeployEnvironment from GlobalSettings and ProjectSettings types, and remove auto-deploy logic from settings service | File: apps/server/src/types/settings.ts\n- [ ] T014: Remove auto-deploy trigger calls from agent-service or auto-mode-service if they reference the old deploy service | File: apps/server/src/services/agent-service.ts\n\n## Phase 6: Integration Testing\n\n- [ ] T015: Verify the build compiles without errors by running npm run build:packages && npm run build:server | File: package.json\n- [ ] T016: Run existing server tests and fix any failures caused by removed deploy types/services | File: apps/server/tests/\n```\n\n## 7. Success Metrics\n\n- Deploy tab on Kanban page shows a project selector and lists scripts from `scripts/deploy` folder\n- Clicking a script runs it as a child process with live stdout streaming to the UI\n- Run history shows previous runs with running/complete status\n- Clicking a run shows its current or final output\n- All old deploy configuration (settings UI, environment tabs, HTTP webhooks, auto-deploy) is removed\n- Build passes (`npm run build:packages && npm run build:server`)\n- Server tests pass\n\n## 8. Risks & Mitigations\n\n| Risk | Mitigation |\n|------|------------|\n| Removing deploy types breaks other code that imports them | Search all imports before deleting; fix all references |\n| Old auto-deploy logic in agent-service references removed types | Find and remove all auto-deploy trigger calls |\n| Run history is in-memory only (lost on server restart) | Acceptable for v1; can add file persistence later |\n| Scripts folder doesn't exist for existing projects | Show clear empty state with instruction to create `scripts/deploy` folder |\n| Windows vs Unix script execution differences | Reuse existing platform-aware spawn logic from current deploy service |",
+    "generatedAt": "2026-02-16T17:21:24.791Z",
+    "tasks": [
+      {
+        "id": "T001",
+        "description": "Delete existing deploy service and replace with new simplified DeployScriptRunner service that runs scripts from `scripts/deploy` folder using spawn, captures stdout/stderr in memory, tracks run history, and streams output via callback",
+        "filePath": "apps/server/src/services/deploy-service.ts",
+        "phase": "Phase 1: Server - Clean Up and Rebuild Deploy Service",
+        "status": "pending"
+      },
+      {
+        "id": "T002",
+        "description": "Delete all existing deploy route files (trigger, status, scripts, stream) and replace deploy router with 3 endpoints: GET /folder-scripts (list scripts in scripts/deploy), POST /run (execute a script with SSE streaming), GET /runs (get run history)",
+        "filePath": "apps/server/src/routes/deploy/index.ts",
+        "phase": "Phase 1: Server - Clean Up and Rebuild Deploy Service",
+        "status": "pending"
+      },
+      {
+        "id": "T003",
+        "description": "Update server index.ts to wire up new deploy routes and service, removing old DeployService initialization",
+        "filePath": "apps/server/src/index.ts",
+        "phase": "Phase 1: Server - Clean Up and Rebuild Deploy Service",
+        "status": "pending"
+      },
+      {
+        "id": "T004",
+        "description": "Remove old deploy types (DeployScript, DeployScriptShellAction, DeployScriptHttpAction, DeployEnvironment, DeploySettings, DEPLOY_ENVIRONMENT_LABELS) from types package and add new simplified types (DeployFolderScript, DeployRun, DeployRunStatus)",
+        "filePath": "libs/types/src/settings.ts",
+        "phase": "Phase 2: Types - Update Shared Types",
+        "status": "pending"
+      },
+      {
+        "id": "T005",
+        "description": "Update types index.ts exports to reflect removed/added types",
+        "filePath": "libs/types/src/index.ts",
+        "phase": "Phase 2: Types - Update Shared Types",
+        "status": "pending"
+      },
+      {
+        "id": "T006",
+        "description": "Completely rewrite DeployPanel to: show project selector dropdown (matching agent chat pattern), list scripts from `scripts/deploy` folder, show run history (running/complete), allow viewing live/final output for any run",
+        "filePath": "apps/ui/src/components/views/board-view/components/deploy-panel.tsx",
+        "phase": "Phase 3: UI - Rebuild Deploy Panel",
+        "status": "pending"
+      },
+      {
+        "id": "T007",
+        "description": "Keep DeployLogOutput component as-is (ANSI output + auto-scroll) since it works well for displaying script output",
+        "filePath": "apps/ui/src/components/views/board-view/components/deploy-log-output.tsx",
+        "phase": "Phase 3: UI - Rebuild Deploy Panel",
+        "status": "pending"
+      },
+      {
+        "id": "T008",
+        "description": "Update or simplify DeployButton in top nav to just open/focus the deploy panel (remove inline deploy popover logic, environment tabs, script configuration)",
+        "filePath": "apps/ui/src/components/layout/deploy-button.tsx",
+        "phase": "Phase 3: UI - Rebuild Deploy Panel",
+        "status": "pending"
+      },
+      {
+        "id": "T009",
+        "description": "Remove deploy settings section from settings view (deploy-settings-section.tsx, deploy-script-dialog.tsx, deploy-script-editor.tsx) and update settings navigation to remove Deploy entry",
+        "filePath": "apps/ui/src/components/views/settings-view/deploy/",
+        "phase": "Phase 4: UI - Clean Up Settings and Related Code",
+        "status": "pending"
+      },
+      {
+        "id": "T010",
+        "description": "Remove deploy-related state from app-store (deploySettings, old deploy panel state that references environment) and clean up deploy-related WebSocket event subscriptions in http-api-client if needed",
+        "filePath": "apps/ui/src/store/app-store.ts",
+        "phase": "Phase 4: UI - Clean Up Settings and Related Code",
+        "status": "pending"
+      },
+      {
+        "id": "T011",
+        "description": "Update board-view.tsx to pass correct props to the rebuilt DeployPanel",
+        "filePath": "apps/ui/src/components/views/board-view.tsx",
+        "phase": "Phase 4: UI - Clean Up Settings and Related Code",
+        "status": "pending"
+      },
+      {
+        "id": "T012",
+        "description": "Remove DeployEnvironmentSelect component since environments are no longer used",
+        "filePath": "apps/ui/src/components/views/board-view/shared/deploy-environment-select.tsx",
+        "phase": "Phase 4: UI - Clean Up Settings and Related Code",
+        "status": "pending"
+      },
+      {
+        "id": "T013",
+        "description": "Remove deploySettings, defaultAutoDeploy, defaultDeployEnvironment from GlobalSettings and ProjectSettings types, and remove auto-deploy logic from settings service",
+        "filePath": "apps/server/src/types/settings.ts",
+        "phase": "Phase 5: Server - Clean Up Old Deploy Types from Settings",
+        "status": "pending"
+      },
+      {
+        "id": "T014",
+        "description": "Remove auto-deploy trigger calls from agent-service or auto-mode-service if they reference the old deploy service",
+        "filePath": "apps/server/src/services/agent-service.ts",
+        "phase": "Phase 5: Server - Clean Up Old Deploy Types from Settings",
+        "status": "pending"
+      },
+      {
+        "id": "T015",
+        "description": "Verify the build compiles without errors by running npm run build:packages && npm run build:server",
+        "filePath": "package.json",
+        "phase": "Phase 6: Integration Testing",
+        "status": "pending"
+      },
+      {
+        "id": "T016",
+        "description": "Run existing server tests and fix any failures caused by removed deploy types/services",
+        "filePath": "apps/server/tests/",
+        "phase": "Phase 6: Integration Testing",
+        "status": "pending"
+      }
+    ],
+    "tasksTotal": 16,
+    "tasksCompleted": 15,
+    "approvedAt": "2026-02-16T17:21:24.849Z",
+    "currentTaskId": "T016"
+  }
+}

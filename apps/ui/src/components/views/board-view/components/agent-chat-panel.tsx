@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useEffect, memo, useMemo } from 'react';
 import type { Virtualizer } from '@tanstack/react-virtual';
 import { useAppStore } from '@/store/app-store';
-import type { PhaseModelEntry } from '@automaker/types';
+import type { PhaseModelEntry } from '@dmaker/types';
 import { useElectronAgent } from '@/hooks/use-electron-agent';
 import { cn } from '@/lib/utils';
 import { getElectronAPI, type Project } from '@/lib/electron';
@@ -84,7 +84,7 @@ const WELCOME_MESSAGES = [
     id: 'welcome',
     role: 'assistant' as const,
     content:
-      "Hello! I'm the Automaker Agent. I can help you build software autonomously. I can read and modify files in this project, run commands, and execute tests. What would you like to create today?",
+      "Hello! I'm the DMaker Agent. I can help you build software autonomously. I can read and modify files in this project, run commands, and execute tests. What would you like to create today?",
     timestamp: new Date(0).toISOString(), // Stable timestamp
   },
 ];

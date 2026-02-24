@@ -1,0 +1,42 @@
+{
+  "category": "Uncategorized",
+  "description": "does not start",
+  "title": "Enable Feature Flag for Gradual Rollout",
+  "images": [],
+  "imagePaths": [
+    {
+      "id": "img-1770651141930-8e7ysk8nz",
+      "path": "C:\\Users\\dylan\\Downloads\\automaker-pr\\.automaker\\features\\feature-1770651145838-zogiwzi8j\\images\\pasted-image-2026-02-09T15-32-21-905Z-1770651141925.png",
+      "filename": "pasted-image-2026-02-09T15-32-21-905Z.png",
+      "mimeType": "image/png"
+    },
+    {
+      "path": "C:\\Users\\dylan\\Downloads\\automaker-pr\\.automaker\\features\\feature-1770651145838-zogiwzi8j\\images\\pasted-image-2026-02-09T15-47-39-397Z-1770652059412.png",
+      "filename": "pasted-image-2026-02-09T15-47-39-397Z-1770652059412.png",
+      "mimeType": "image/png"
+    }
+  ],
+  "textFilePaths": [],
+  "skipTests": true,
+  "model": "opus",
+  "thinkingLevel": "low",
+  "reasoningEffort": "none",
+  "priority": 2,
+  "planningMode": "skip",
+  "requirePlanApproval": false,
+  "dependencies": [],
+  "workMode": "current",
+  "titleGenerating": false,
+  "status": "in_progress",
+  "id": "feature-1770651145838-zogiwzi8j",
+  "descriptionHistory": [
+    {
+      "description": "does not start",
+      "timestamp": "2026-02-09T15:32:25.888Z",
+      "source": "initial"
+    }
+  ],
+  "startedAt": "2026-02-09T15:48:46.614Z",
+  "updatedAt": "2026-02-09T15:47:36.322Z",
+  "justFinishedAt": "2026-02-09T15:47:36.322Z"
+}

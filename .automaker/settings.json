@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "deploySettings": {
+    "scripts": [
+      {
+        "id": "781b92f5-1c90-4da2-9adb-a22d92949140",
+        "name": "helloworld.ps1",
+        "description": "Run C:\\Users\\DylanSmart\\OneDrive - Personal\\Desktop\\Projects\\Github2\\CyberChampion-1-1-2026\\scripts\\helloworld.ps1",
+        "environment": "development",
+        "enabled": true,
+        "action": {
+          "type": "shell",
+          "command": "\"C:\\Users\\DylanSmart\\OneDrive - Personal\\Desktop\\Projects\\Github2\\CyberChampion-1-1-2026\\scripts\\helloworld.ps1\"",
+          "timeout": 30000
+        }
+      }
+    ]
+  }
+}

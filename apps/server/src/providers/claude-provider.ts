@@ -7,10 +7,10 @@
 
 import { query, type Options } from '@anthropic-ai/claude-agent-sdk';
 import { BaseProvider } from './base-provider.js';
-import { classifyError, getUserFriendlyErrorMessage, createLogger } from '@automaker/utils';
+import { classifyError, getUserFriendlyErrorMessage, createLogger } from '@dmaker/utils';
 
 const logger = createLogger('ClaudeProvider');
-import { getThinkingTokenBudget, validateBareModelId } from '@automaker/types';
+import { getThinkingTokenBudget, validateBareModelId } from '@dmaker/types';
 import type {
   ExecuteOptions,
   ProviderMessage,

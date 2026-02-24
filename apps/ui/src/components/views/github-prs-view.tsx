@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { createLogger } from '@automaker/utils/logger';
+import { createLogger } from '@dmaker/utils/logger';
 import { GitPullRequest, Loader2, RefreshCw, ExternalLink, GitMerge, X } from 'lucide-react';
 import { getElectronAPI, GitHubPR } from '@/lib/electron';
 import { useAppStore } from '@/store/app-store';

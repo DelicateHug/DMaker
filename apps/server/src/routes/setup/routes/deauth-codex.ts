@@ -11,12 +11,12 @@ export function createDeauthCodexHandler() {
   return async (_req: Request, res: Response): Promise<void> => {
     try {
       // Create a marker file to indicate the CLI is disconnected from the app
-      const automakerDir = path.join(process.cwd(), '.automaker');
-      const markerPath = path.join(automakerDir, '.codex-disconnected');
+      const dmakerDir = path.join(process.cwd(), '.dmaker');
+      const markerPath = path.join(dmakerDir, '.codex-disconnected');
 
-      // Ensure .automaker directory exists
-      if (!fs.existsSync(automakerDir)) {
-        fs.mkdirSync(automakerDir, { recursive: true });
+      // Ensure .dmaker directory exists
+      if (!fs.existsSync(dmakerDir)) {
+        fs.mkdirSync(dmakerDir, { recursive: true });
       }
 
       // Create the marker file with timestamp

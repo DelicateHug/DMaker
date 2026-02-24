@@ -1,0 +1,37 @@
+{
+  "category": "Uncategorized",
+  "description": "Just like how features have A tag that tells you the model being used they should also have a tag that tells you the project",
+  "title": "Add project identifier tag to features",
+  "images": [],
+  "imagePaths": [
+    {
+      "id": "img-1770654353745-51rab2q8o",
+      "path": "C:\\Users\\dylan\\Downloads\\dmaker-pr\\.dmaker\\features\\feature-1770654376466-4jrjfabjg\\images\\pasted-image-2026-02-09T16-25-53-711Z-1770654353741.png",
+      "filename": "pasted-image-2026-02-09T16-25-53-711Z.png",
+      "mimeType": "image/png"
+    }
+  ],
+  "textFilePaths": [],
+  "skipTests": true,
+  "model": "sonnet",
+  "thinkingLevel": "none",
+  "reasoningEffort": "none",
+  "priority": 2,
+  "planningMode": "skip",
+  "requirePlanApproval": false,
+  "dependencies": [],
+  "workMode": "current",
+  "titleGenerating": false,
+  "status": "completed",
+  "id": "feature-1770654376466-4jrjfabjg",
+  "descriptionHistory": [
+    {
+      "description": "Just like how features have A tag that tells you the model being used they should also have a tag that tells you the project",
+      "timestamp": "2026-02-09T16:26:16.543Z",
+      "source": "initial"
+    }
+  ],
+  "startedAt": "2026-02-09T16:26:16.642Z",
+  "updatedAt": "2026-02-09T16:35:14.061Z",
+  "justFinishedAt": "2026-02-09T16:35:14.061Z"
+}

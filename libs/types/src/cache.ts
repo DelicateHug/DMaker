@@ -115,7 +115,7 @@ export const USAGE_CACHE_TTL_MS = 2 * 60_000;
  *
  * @example
  * ```ts
- * import { DEFAULT_CACHE_OPTIONS } from '@automaker/types';
+ * import { DEFAULT_CACHE_OPTIONS } from '@dmaker/types';
  *
  * const modelsCache = new RequestCache({
  *   defaultTtl: DEFAULT_CACHE_OPTIONS.models.ttl,

@@ -1,0 +1,10 @@
+{
+  "id": "evt-1771328341768-71f34d95",
+  "trigger": "feature_success",
+  "timestamp": "2026-02-17T11:39:01.768Z",
+  "projectPath": "C:\\Users\\DylanSmart\\Downloads\\dmaker-pr",
+  "projectName": "dmaker-pr",
+  "featureId": "feature-1771328060375-b1gyess76",
+  "error": "Feature completed in 237s",
+  "passes": true
+}

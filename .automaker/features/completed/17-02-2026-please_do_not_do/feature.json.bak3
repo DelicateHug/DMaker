@@ -1,0 +1,33 @@
+{
+  "category": "Uncategorized",
+  "description": "please do not do anything, this is just a test.",
+  "title": "Do Nothing Test",
+  "images": [],
+  "imagePaths": [],
+  "textFilePaths": [],
+  "skipTests": true,
+  "model": "haiku",
+  "thinkingLevel": "none",
+  "reasoningEffort": "none",
+  "priority": 2,
+  "planningMode": "skip",
+  "requirePlanApproval": false,
+  "autoDeploy": false,
+  "dependencies": [],
+  "workMode": "current",
+  "selectedProjectPath": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr",
+  "titleGenerating": false,
+  "status": "in_progress",
+  "projectPath": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr",
+  "id": "17-02-2026-please_do_not_do",
+  "descriptionHistory": [
+    {
+      "description": "please do not do anything, this is just a test.",
+      "timestamp": "2026-02-17T11:07:43.384Z",
+      "source": "initial"
+    }
+  ],
+  "startedAt": "2026-02-17T11:18:12.499Z",
+  "updatedAt": "2026-02-17T11:08:44.314Z",
+  "justFinishedAt": "2026-02-17T11:08:44.314Z"
+}

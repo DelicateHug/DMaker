@@ -89,7 +89,7 @@ export default defineConfig(({ command }) => {
       },
     },
     optimizeDeps: {
-      exclude: ['@automaker/platform'],
+      exclude: ['@dmaker/platform'],
     },
     define: {
       __APP_VERSION__: JSON.stringify(appVersion),

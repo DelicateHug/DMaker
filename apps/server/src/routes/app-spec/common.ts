@@ -2,7 +2,7 @@
  * Common utilities and state management for spec regeneration
  */
 
-import { createLogger } from '@automaker/utils';
+import { createLogger } from '@dmaker/utils';
 
 const logger = createLogger('SpecRegeneration');
 

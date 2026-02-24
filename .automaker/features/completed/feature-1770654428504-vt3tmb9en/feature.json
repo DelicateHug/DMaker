@@ -1,0 +1,30 @@
+{
+  "category": "Uncategorized",
+  "description": "C:\\Users\\dylan\\Downloads\\dmaker-pr\\dev-restart.ps1 Please stop showing INFO level logging to the terminal",
+  "title": "Stop showing INFO level logging to terminal",
+  "images": [],
+  "imagePaths": [],
+  "textFilePaths": [],
+  "skipTests": true,
+  "model": "sonnet",
+  "thinkingLevel": "none",
+  "reasoningEffort": "none",
+  "priority": 2,
+  "planningMode": "skip",
+  "requirePlanApproval": false,
+  "dependencies": [],
+  "workMode": "current",
+  "titleGenerating": false,
+  "status": "completed",
+  "id": "feature-1770654428504-vt3tmb9en",
+  "descriptionHistory": [
+    {
+      "description": "C:\\Users\\dylan\\Downloads\\dmaker-pr\\dev-restart.ps1 Please stop showing INFO level logging to the terminal",
+      "timestamp": "2026-02-09T16:27:08.568Z",
+      "source": "initial"
+    }
+  ],
+  "startedAt": "2026-02-09T16:27:08.613Z",
+  "updatedAt": "2026-02-09T16:30:55.671Z",
+  "justFinishedAt": "2026-02-09T16:30:55.671Z"
+}

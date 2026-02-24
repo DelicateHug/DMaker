@@ -128,7 +128,7 @@ export function getThinkingTokenBudget(level: ThinkingLevel | undefined): number
 }
 
 /** ModelProvider - AI model provider for credentials and API key management */
-export type ModelProvider = 'claude' | 'cursor' | 'codex' | 'opencode';
+export type ModelProvider = 'claude' | 'cursor' | 'codex' | 'opencode' | 'gcp';
 
 // ============================================================================
 // Deploy Scripts - Folder-based deployment script discovery and execution
@@ -139,7 +139,7 @@ export type DeployScriptType = 'python' | 'powershell' | 'node' | 'shell' | 'bat
 
 /**
  * DeployFolderScript - Metadata about a deploy script discovered in the project's
- * `.automaker/deploy` folder.
+ * `.dmaker/deploy` folder.
  *
  * Scripts are discovered automatically based on supported file extensions:
  * .py, .ps1, .js, .ts, .sh, .bat, .cmd
@@ -737,7 +737,7 @@ export interface WorktreeInfo {
 }
 
 /**
- * ProjectSettings - Project-specific overrides stored in {projectPath}/.automaker/settings.json
+ * ProjectSettings - Project-specific overrides stored in {projectPath}/.dmaker/settings.json
  *
  * Allows per-project customization without affecting global settings.
  * All fields are optional - missing values fall back to global settings.
@@ -777,7 +777,7 @@ export interface ProjectSettings {
   boardBackground?: BoardBackgroundSettings;
 
   // Project Branding
-  /** Custom icon image path for project switcher (relative to .automaker/) */
+  /** Custom icon image path for project switcher (relative to .dmaker/) */
   customIconPath?: string;
 
   // UI Visibility

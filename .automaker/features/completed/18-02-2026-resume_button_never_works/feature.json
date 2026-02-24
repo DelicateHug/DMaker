@@ -1,0 +1,34 @@
+{
+  "category": "Uncategorized",
+  "description": "resume button never works \n\n\nINFO  [Server] OPTIONS /api/auto-mode/resume-feature 204\nINFO  [Server] POST /api/auto-mode/resume-feature 200\nERROR [Server] ERROR [AutoMode] Resume feature 18-02-2026-change_default_keybinds_so error: Error: Feature 18-02-2026-change_default_keybinds_so not found\nERROR [Server] at AutoModeService.resumeFeature (C:\\Users\\DylanSmart\\Downloads\\dmaker-pr\\apps\\server\\src\\services\\auto-mode-service.ts:1007:13)\nINFO  [Server] INFO  [Server] Event received: {\nINFO  [Server] type: 'agent:stream',\nINFO  [Server] hasPayload: true,\nINFO  [Server] payloadKeys: [ 'sessionId', 'type', 'tool' ],\nINFO  [Server] wsReadyState: 1,\nINFO  [Server] wsOpen: true\nINFO  [Server] }\nINFO  [Server] INFO  [Server] Sending event to client: {\nINFO  [Server] type: 'agent:stream',\nINFO  [Server] messageLength: 1259,\nINFO  [Server] sessionId: 'msg_1771207092681_ssbcfv8ak'\nINFO  [Server] }\n\n",
+  "title": "Fix resume button feature lookup error",
+  "images": [],
+  "imagePaths": [],
+  "textFilePaths": [],
+  "skipTests": true,
+  "model": "opus",
+  "thinkingLevel": "none",
+  "reasoningEffort": "none",
+  "priority": 2,
+  "planningMode": "skip",
+  "requirePlanApproval": false,
+  "autoDeploy": false,
+  "dependencies": [],
+  "workMode": "current",
+  "selectedProjectPath": "C:\\Users\\DylanSmart\\Downloads\\dmaker-pr",
+  "titleGenerating": false,
+  "status": "completed",
+  "projectPath": "C:\\Users\\DylanSmart\\Downloads\\dmaker-pr",
+  "id": "18-02-2026-resume_button_never_works",
+  "descriptionHistory": [
+    {
+      "description": "resume button never works \n\n\nINFO  [Server] OPTIONS /api/auto-mode/resume-feature 204\nINFO  [Server] POST /api/auto-mode/resume-feature 200\nERROR [Server] ERROR [AutoMode] Resume feature 18-02-2026-change_default_keybinds_so error: Error: Feature 18-02-2026-change_default_keybinds_so not found\nERROR [Server] at AutoModeService.resumeFeature (C:\\Users\\DylanSmart\\Downloads\\dmaker-pr\\apps\\server\\src\\services\\auto-mode-service.ts:1007:13)\nINFO  [Server] INFO  [Server] Event received: {\nINFO  [Server] type: 'agent:stream',\nINFO  [Server] hasPayload: true,\nINFO  [Server] payloadKeys: [ 'sessionId', 'type', 'tool' ],\nINFO  [Server] wsReadyState: 1,\nINFO  [Server] wsOpen: true\nINFO  [Server] }\nINFO  [Server] INFO  [Server] Sending event to client: {\nINFO  [Server] type: 'agent:stream',\nINFO  [Server] messageLength: 1259,\nINFO  [Server] sessionId: 'msg_1771207092681_ssbcfv8ak'\nINFO  [Server] }\n\n",
+      "timestamp": "2026-02-18T04:31:43.867Z",
+      "source": "initial"
+    }
+  ],
+  "startedAt": "2026-02-18T04:41:06.827Z",
+  "updatedAt": "2026-02-18T13:03:12.370Z",
+  "justFinishedAt": "2026-02-18T13:03:12.370Z",
+  "completedAt": "2026-02-18T15:18:49.783Z"
+}

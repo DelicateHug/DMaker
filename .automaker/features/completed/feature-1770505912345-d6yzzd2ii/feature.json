@@ -1,0 +1,37 @@
+{
+  "category": "Uncategorized",
+  "description": "brnach, git, worktree, + and refresh should be placed under tab at top labeled Git. Remove that row as it will be empty after that",
+  "title": "Organize Git controls into dedicated tab",
+  "images": [],
+  "imagePaths": [
+    {
+      "id": "img-1770505874953-cjyh4ltdz",
+      "path": "C:\\Users\\dylan\\Downloads\\dmaker-pr\\.dmaker\\features\\feature-1770505912345-d6yzzd2ii\\images\\pasted-image-2026-02-07T23-11-14-918Z-1770505874948.png",
+      "filename": "pasted-image-2026-02-07T23-11-14-918Z.png",
+      "mimeType": "image/png"
+    }
+  ],
+  "textFilePaths": [],
+  "skipTests": true,
+  "model": "opus",
+  "thinkingLevel": "none",
+  "reasoningEffort": "none",
+  "priority": 2,
+  "planningMode": "skip",
+  "requirePlanApproval": false,
+  "dependencies": [],
+  "workMode": "current",
+  "titleGenerating": false,
+  "status": "completed",
+  "id": "feature-1770505912345-d6yzzd2ii",
+  "descriptionHistory": [
+    {
+      "description": "brnach, git, worktree, + and refresh should be placed under tab at top labeled Git. Remove that row as it will be empty after that",
+      "timestamp": "2026-02-07T23:11:52.387Z",
+      "source": "initial"
+    }
+  ],
+  "startedAt": "2026-02-07T23:11:52.420Z",
+  "updatedAt": "2026-02-07T23:26:13.439Z",
+  "justFinishedAt": "2026-02-07T23:26:13.439Z"
+}

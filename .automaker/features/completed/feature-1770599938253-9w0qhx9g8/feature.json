@@ -1,0 +1,30 @@
+{
+  "category": "Uncategorized",
+  "description": "ERROR [Server] ERROR [OpencodeProvider] Failed to fetch models from CLI: Error: Command failed: npx.cmd opencode-ai@latest models",
+  "title": "Fix OpenCode provider model fetching error",
+  "images": [],
+  "imagePaths": [],
+  "textFilePaths": [],
+  "skipTests": true,
+  "model": "sonnet",
+  "thinkingLevel": "none",
+  "reasoningEffort": "none",
+  "priority": 2,
+  "planningMode": "skip",
+  "requirePlanApproval": false,
+  "dependencies": [],
+  "workMode": "current",
+  "titleGenerating": false,
+  "status": "completed",
+  "id": "feature-1770599938253-9w0qhx9g8",
+  "descriptionHistory": [
+    {
+      "description": "ERROR [Server] ERROR [OpencodeProvider] Failed to fetch models from CLI: Error: Command failed: npx.cmd opencode-ai@latest models",
+      "timestamp": "2026-02-09T01:18:58.296Z",
+      "source": "initial"
+    }
+  ],
+  "startedAt": "2026-02-09T01:18:58.336Z",
+  "updatedAt": "2026-02-09T01:28:53.975Z",
+  "justFinishedAt": "2026-02-09T01:28:53.975Z"
+}

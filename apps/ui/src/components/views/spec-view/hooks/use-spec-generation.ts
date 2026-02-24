@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { createLogger } from '@automaker/utils/logger';
+import { createLogger } from '@dmaker/utils/logger';
 import { useAppStore } from '@/store/app-store';
 
 const logger = createLogger('SpecGeneration');
@@ -299,7 +299,7 @@ export function useSpecGeneration({ loadSpec }: UseSpecGenerationOptions) {
         }
       } else if (event.type === 'spec_regeneration_tool') {
         const isFeatureTool =
-          event.tool === 'mcp__automaker-tools__UpdateFeatureStatus' ||
+          event.tool === 'mcp__dmaker-tools__UpdateFeatureStatus' ||
           event.tool === 'UpdateFeatureStatus' ||
           event.tool?.includes('Feature');
 

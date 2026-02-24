@@ -7,12 +7,12 @@
 
 import * as secureFs from '../../lib/secure-fs.js';
 import type { EventEmitter } from '../../lib/events.js';
-import { createLogger } from '@automaker/utils';
-import { DEFAULT_PHASE_MODELS } from '@automaker/types';
-import { resolvePhaseModel } from '@automaker/model-resolver';
+import { createLogger } from '@dmaker/utils';
+import { DEFAULT_PHASE_MODELS } from '@dmaker/types';
+import { resolvePhaseModel } from '@dmaker/model-resolver';
 import { streamingQuery } from '../../providers/simple-query-service.js';
 import { parseAndCreateFeatures } from './parse-and-create-features.js';
-import { getAppSpecPath } from '@automaker/platform';
+import { getAppSpecPath } from '@dmaker/platform';
 import type { SettingsService } from '../../services/settings-service.js';
 import { getAutoLoadClaudeMdSetting, getPromptCustomization } from '../../lib/settings-helpers.js';
 import { FeatureLoader } from '../../services/feature-loader.js';
@@ -33,7 +33,7 @@ export async function generateFeaturesFromSpec(
   logger.debug('projectPath:', projectPath);
   logger.debug('maxFeatures:', featureCount);
 
-  // Read existing spec from .automaker directory
+  // Read existing spec from .dmaker directory
   const specPath = getAppSpecPath(projectPath);
   let spec: string;
 

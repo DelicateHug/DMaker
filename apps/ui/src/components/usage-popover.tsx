@@ -23,7 +23,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuLabel,
 } from '@/components/ui/dropdown-menu';
-import type { ClaudeAccountRef } from '@automaker/types';
+import type { ClaudeAccountRef } from '@dmaker/types';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { getElectronAPI } from '@/lib/electron';

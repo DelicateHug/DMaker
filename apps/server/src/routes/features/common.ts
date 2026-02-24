@@ -6,11 +6,11 @@
  * bulkUpdate, bulkDelete) to keep list / summary responses fresh.
  */
 
-import { createLogger } from '@automaker/utils';
-import { FEATURES_CACHE_TTL_MS } from '@automaker/types';
+import { createLogger } from '@dmaker/utils';
+import { FEATURES_CACHE_TTL_MS } from '@dmaker/types';
 import { getErrorMessage as getErrorMessageShared, createLogError } from '../common.js';
 import { RequestCache } from '../../lib/request-cache.js';
-import type { Feature } from '@automaker/types';
+import type { Feature } from '@dmaker/types';
 
 const logger = createLogger('Features');
 

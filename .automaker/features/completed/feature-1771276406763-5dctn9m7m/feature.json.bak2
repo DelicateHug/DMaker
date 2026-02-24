@@ -1,0 +1,40 @@
+{
+  "category": "Uncategorized",
+  "description": "its not correctly showing summary and summary sel;ector drop down",
+  "title": "Fix summary and selector dropdown display",
+  "images": [],
+  "imagePaths": [
+    {
+      "id": "img-1771276393871-h789vg3l9",
+      "path": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr\\.automaker\\features\\feature-1771276406763-5dctn9m7m\\images\\pasted-image-2026-02-16T21-13-13-826Z-1771276393863.png",
+      "filename": "pasted-image-2026-02-16T21-13-13-826Z.png",
+      "mimeType": "image/png"
+    }
+  ],
+  "textFilePaths": [],
+  "skipTests": true,
+  "model": "opus",
+  "thinkingLevel": "none",
+  "reasoningEffort": "none",
+  "priority": 2,
+  "planningMode": "skip",
+  "requirePlanApproval": false,
+  "autoDeploy": false,
+  "deployEnvironment": "development",
+  "dependencies": [],
+  "workMode": "current",
+  "selectedProjectPath": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr",
+  "titleGenerating": false,
+  "status": "in_progress",
+  "projectPath": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr",
+  "id": "feature-1771276406763-5dctn9m7m",
+  "descriptionHistory": [
+    {
+      "description": "its not correctly showing summary and summary sel;ector drop down",
+      "timestamp": "2026-02-16T21:13:27.421Z",
+      "source": "initial"
+    }
+  ],
+  "startedAt": "2026-02-16T21:13:27.440Z",
+  "updatedAt": "2026-02-16T21:23:02.384Z"
+}

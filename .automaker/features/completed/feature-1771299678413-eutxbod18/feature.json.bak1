@@ -1,0 +1,34 @@
+{
+  "category": "Uncategorized",
+  "description": "currently the Files tab is hiding some files. It should show all hidden and all files",
+  "title": "Show all hidden files in Files tab",
+  "images": [],
+  "imagePaths": [],
+  "textFilePaths": [],
+  "skipTests": true,
+  "model": "sonnet",
+  "thinkingLevel": "none",
+  "reasoningEffort": "none",
+  "priority": 2,
+  "planningMode": "skip",
+  "requirePlanApproval": false,
+  "autoDeploy": false,
+  "deployEnvironment": "development",
+  "dependencies": [],
+  "workMode": "current",
+  "selectedProjectPath": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr",
+  "titleGenerating": false,
+  "status": "waiting_approval",
+  "projectPath": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr",
+  "id": "feature-1771299678413-eutxbod18",
+  "descriptionHistory": [
+    {
+      "description": "currently the Files tab is hiding some files. It should show all hidden and all files",
+      "timestamp": "2026-02-17T03:41:18.453Z",
+      "source": "initial"
+    }
+  ],
+  "startedAt": "2026-02-17T04:05:14.785Z",
+  "updatedAt": "2026-02-17T04:10:29.117Z",
+  "justFinishedAt": "2026-02-17T04:10:29.117Z"
+}

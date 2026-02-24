@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { createLogger } from '@automaker/utils/logger';
+import { createLogger } from '@dmaker/utils/logger';
 import { ImageIcon, Upload, Loader2, Trash2 } from 'lucide-react';
 
 const logger = createLogger('BoardBackgroundModal');

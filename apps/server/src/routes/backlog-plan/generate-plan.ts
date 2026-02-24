@@ -6,14 +6,14 @@
  */
 
 import type { EventEmitter } from '../../lib/events.js';
-import type { Feature, BacklogPlanResult, BacklogChange, DependencyUpdate } from '@automaker/types';
+import type { Feature, BacklogPlanResult, BacklogChange, DependencyUpdate } from '@dmaker/types';
 import {
   DEFAULT_PHASE_MODELS,
   isCursorModel,
   stripProviderPrefix,
   type ThinkingLevel,
-} from '@automaker/types';
-import { resolvePhaseModel } from '@automaker/model-resolver';
+} from '@dmaker/types';
+import { resolvePhaseModel } from '@dmaker/model-resolver';
 import { FeatureLoader } from '../../services/feature-loader.js';
 import { ProviderFactory } from '../../providers/provider-factory.js';
 import { extractJsonWithArray } from '../../lib/json-extractor.js';

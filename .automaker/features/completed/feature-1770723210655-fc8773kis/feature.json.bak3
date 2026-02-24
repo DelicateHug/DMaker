@@ -1,0 +1,38 @@
+{
+  "category": "Uncategorized",
+  "description": "deploy scripts should noit be global, there should be a project selector",
+  "title": "",
+  "images": [],
+  "imagePaths": [
+    {
+      "id": "img-1770723188385-rwmznp05x",
+      "path": "C:\\Users\\dylan\\Downloads\\automaker-pr\\.automaker\\features\\feature-1770723210655-fc8773kis\\images\\pasted-image-2026-02-10T11-33-08-298Z-1770723188362.png",
+      "filename": "pasted-image-2026-02-10T11-33-08-298Z.png",
+      "mimeType": "image/png"
+    }
+  ],
+  "textFilePaths": [],
+  "skipTests": true,
+  "model": "opus",
+  "thinkingLevel": "none",
+  "reasoningEffort": "none",
+  "priority": 2,
+  "planningMode": "skip",
+  "requirePlanApproval": false,
+  "autoDeploy": false,
+  "deployEnvironment": "development",
+  "dependencies": [],
+  "workMode": "current",
+  "selectedProjectPath": "C:\\Users\\dylan\\Downloads\\automaker-pr",
+  "titleGenerating": "deploy scripts should noit be global, there should be a project selector",
+  "status": "backlog",
+  "projectPath": "C:\\Users\\dylan\\Downloads\\automaker-pr",
+  "id": "feature-1770723210655-fc8773kis",
+  "descriptionHistory": [
+    {
+      "description": "deploy scripts should noit be global, there should be a project selector",
+      "timestamp": "2026-02-10T11:33:30.733Z",
+      "source": "initial"
+    }
+  ]
+}

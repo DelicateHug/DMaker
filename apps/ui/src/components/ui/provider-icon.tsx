@@ -1,6 +1,6 @@
 import type { ComponentType, SVGProps } from 'react';
 import { cn } from '@/lib/utils';
-import type { AgentModel, ModelProvider } from '@automaker/types';
+import type { AgentModel, ModelProvider } from '@dmaker/types';
 import { getProviderFromModel } from '@/lib/utils';
 
 const PROVIDER_ICON_KEYS = {
@@ -11,6 +11,7 @@ const PROVIDER_ICON_KEYS = {
   gemini: 'gemini',
   grok: 'grok',
   opencode: 'opencode',
+  gcp: 'gcp',
   deepseek: 'deepseek',
   qwen: 'qwen',
   nova: 'nova',
@@ -70,6 +71,12 @@ const PROVIDER_ICON_DEFINITIONS: Record<ProviderIconKey, ProviderIconDefinition>
     path: 'M384 416H128V96H384V416ZM320 160H192V352H320V160Z',
     fillRule: 'evenodd',
     fill: '#6366F1',
+  },
+  gcp: {
+    viewBox: '0 0 24 24',
+    // Google Cloud Platform logo - hexagonal cloud shape
+    path: 'M12.19 2.38a9.344 9.344 0 00-9.234 6.893c.053-.02-.055.013 0 0-3.875 2.551-3.922 8.11-.247 10.941l.006-.007-.007.003A6.969 6.969 0 008.21 22h7.997a7.683 7.683 0 006.392-3.381l.003.005c2.814-4.041.637-9.516-4.162-10.476A9.392 9.392 0 0012.19 2.38zm-.358 2.453a7.125 7.125 0 016.398 3.637l.178.346-1.073.573-.178-.346A5.694 5.694 0 0012.19 5.87a5.731 5.731 0 00-5.593 4.458l-.083.346-1.229-.277.083-.346a6.974 6.974 0 016.464-5.218zm6.617 4.456l.003-.001A7.382 7.382 0 0122 15.714c0 .072-.003.143-.006.214l-.003.07A6.285 6.285 0 0116.207 20.6H8.21a5.544 5.544 0 01-4.2-1.756 5.558 5.558 0 01-1.3-5.036l.023-.09c.55-2.066 2.36-3.532 4.393-3.781a.6.6 0 00.51-.418A7.167 7.167 0 0112.19 5.87c.143 0 .285.005.426.014a7.18 7.18 0 015.833 3.405z',
+    fill: '#4285F4',
   },
   deepseek: {
     viewBox: '0 0 24 24',
@@ -176,6 +183,10 @@ export function GrokIcon(props: Omit<ProviderIconProps, 'provider'>) {
 
 export function OpenCodeIcon(props: Omit<ProviderIconProps, 'provider'>) {
   return <ProviderIcon provider={PROVIDER_ICON_KEYS.opencode} {...props} />;
+}
+
+export function GcpIcon(props: Omit<ProviderIconProps, 'provider'>) {
+  return <ProviderIcon provider={PROVIDER_ICON_KEYS.gcp} {...props} />;
 }
 
 export function DeepSeekIcon({
@@ -395,6 +406,7 @@ export const PROVIDER_ICON_COMPONENTS: Record<
   cursor: CursorIcon,
   codex: OpenAIIcon,
   opencode: OpenCodeIcon,
+  gcp: GcpIcon,
 };
 
 /**
@@ -540,11 +552,21 @@ function getUnderlyingModelIcon(model?: AgentModel | string): ProviderIconKey {
     return 'cursor';
   }
 
+  // Check for GCP/Vertex AI models
+  if (
+    modelStr.startsWith('gcp-') ||
+    modelStr.startsWith('vertex-') ||
+    modelStr.startsWith('vertex/')
+  ) {
+    return 'gcp';
+  }
+
   // Default based on provider
   const provider = getProviderFromModel(model);
   if (provider === 'codex') return 'openai';
   if (provider === 'cursor') return 'cursor';
   if (provider === 'opencode') return 'opencode';
+  if (provider === 'gcp') return 'gcp';
   return 'anthropic';
 }
 
@@ -561,6 +583,7 @@ export function getProviderIconForModel(
     gemini: GeminiIcon,
     grok: GrokIcon,
     opencode: OpenCodeIcon,
+    gcp: GcpIcon,
     deepseek: DeepSeekIcon,
     qwen: QwenIcon,
     nova: NovaIcon,

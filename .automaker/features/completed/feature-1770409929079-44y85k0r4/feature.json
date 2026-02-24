@@ -1,0 +1,37 @@
+{
+  "category": "Uncategorized",
+  "description": "in kanban view there should be a + add new project at end of project list and also there should be a trash icon to quickly delete, but it should do a modal confirmation asking you type project name and give you option to soft delete(remove from projects). It should have the project name up and copy-able by highlighting and hitting control c, but do not make it copy clickable.",
+  "title": "Add kanban quick actions: create and delete projects",
+  "images": [],
+  "imagePaths": [
+    {
+      "id": "img-1770409834386-cl100aoww",
+      "path": "C:\\Users\\dylan\\Downloads\\dmaker-pr\\.dmaker\\features\\feature-1770409929079-44y85k0r4\\images\\pasted-image-2026-02-06T20-30-34-366Z-1770409834382.png",
+      "filename": "pasted-image-2026-02-06T20-30-34-366Z.png",
+      "mimeType": "image/png"
+    }
+  ],
+  "textFilePaths": [],
+  "skipTests": true,
+  "model": "opus",
+  "thinkingLevel": "none",
+  "reasoningEffort": "none",
+  "priority": 2,
+  "planningMode": "skip",
+  "requirePlanApproval": false,
+  "dependencies": [],
+  "workMode": "current",
+  "titleGenerating": false,
+  "status": "completed",
+  "id": "feature-1770409929079-44y85k0r4",
+  "descriptionHistory": [
+    {
+      "description": "in kanban view there should be a + add new project at end of project list and also there should be a trash icon to quickly delete, but it should do a modal confirmation asking you type project name and give you option to soft delete(remove from projects). It should have the project name up and copy-able by highlighting and hitting control c, but do not make it copy clickable.",
+      "timestamp": "2026-02-06T20:32:09.116Z",
+      "source": "initial"
+    }
+  ],
+  "startedAt": "2026-02-06T20:32:09.137Z",
+  "updatedAt": "2026-02-06T20:37:45.178Z",
+  "justFinishedAt": "2026-02-06T20:37:45.178Z"
+}

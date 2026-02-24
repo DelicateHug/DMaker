@@ -1,0 +1,10 @@
+{
+  "id": "evt-1770928250619-035e6d44",
+  "trigger": "feature_error",
+  "timestamp": "2026-02-12T20:30:50.619Z",
+  "projectPath": "C:\\Users\\DylanSmart\\Downloads\\dmaker-pr",
+  "projectName": "dmaker-pr",
+  "featureId": "feature-perf-001-route-lazy-loading",
+  "error": "Plan approval timed out after 30 minutes - feature execution cancelled",
+  "errorType": "cancellation"
+}

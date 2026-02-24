@@ -3,8 +3,8 @@ import { cn } from '@/lib/utils';
 import { useAppStore } from '@/store/app-store';
 import { Button } from '@/components/ui/button';
 import { PhaseModelSelector } from './phase-model-selector';
-import type { PhaseModelKey } from '@automaker/types';
-import { DEFAULT_PHASE_MODELS } from '@automaker/types';
+import type { PhaseModelKey } from '@dmaker/types';
+import { DEFAULT_PHASE_MODELS } from '@dmaker/types';
 
 interface PhaseConfig {
   key: PhaseModelKey;

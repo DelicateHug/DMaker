@@ -1,0 +1,206 @@
+{
+  "id": "feature-perf-005-zustand-selector-optimization",
+  "title": "Zustand Store Selector Optimization (Prevent Unnecessary Re-renders)",
+  "category": "Performance",
+  "description": "## Problem\nThe monolithic `app-store.ts` (~1,800 lines, ~120+ state properties, ~150+ actions) is subscribed to WITHOUT selectors in many major components. This means ANY state change (e.g., voice transcript updating, terminal output appending, theme hover preview) causes re-renders in components that don't use that state. This is the single largest source of unnecessary re-renders in the application.\n\n## Current Behavior - Components Subscribing to ENTIRE Store\n\n### BoardView (~2,981 lines) - `apps/ui/src/components/views/board-view.tsx` (lines 109-152):\n```typescript\nconst {\n  currentProject, projects, maxConcurrency, setMaxConcurrency,\n  defaultSkipTests, specCreatingForProject,\n  // ... 30+ more properties destructured\n} = useAppStore();  // NO SELECTOR - re-renders on ANY store change!\n```\n\n### RootLayoutContent - `apps/ui/src/routes/__root.tsx` (lines 154-173):\n```typescript\nconst {\n  setIpcConnected, projects, currentProject, projectHistory,\n  upsertAndSetCurrentProject, getEffectiveTheme, ...\n} = useAppStore();  // NO SELECTOR\n```\n\n### Similar patterns in:\n- `apps/ui/src/components/views/dashboard-view.tsx`\n- `apps/ui/src/components/views/settings-view.tsx`\n- `apps/ui/src/components/views/terminal-view.tsx`\n- `apps/ui/src/components/layout/top-nav-bar.tsx`\n- `apps/ui/src/components/views/board-view/board-header.tsx`\n- `apps/ui/src/components/views/board-view/kanban-board.tsx`\n- Multiple board-view sub-components\n\n## Good Example Already in Codebase\n`apps/ui/src/hooks/use-auto-mode.ts` (lines 50-85) uses proper selectors:\n```typescript\nconst { autoModeByProject, setAutoModeRunning, ... } = useAppStore(\n  useShallow((state) => ({\n    autoModeByProject: state.autoModeByProject,\n    setAutoModeRunning: state.setAutoModeRunning,\n  }))\n);\n```\n\n## Required Changes\n1. Add `useShallow` selector to every `useAppStore()` call that destructures multiple values\n2. For single-value selections, use direct selectors: `const theme = useAppStore(s => s.theme)`\n3. Actions (functions) are stable and can be selected individually without useShallow\n4. Prioritize the highest-impact components first: BoardView, RootLayoutContent, DashboardView\n5. Consider creating reusable selector hooks for commonly-used store slices:\n   - `useCurrentProject()` - returns currentProject and related project actions\n   - `useThemeSettings()` - returns theme, font settings\n   - `useFeatureActions()` - returns feature CRUD actions\n\n## Files to Modify (Priority Order)\n1. `apps/ui/src/components/views/board-view.tsx` - Highest impact, largest component\n2. `apps/ui/src/routes/__root.tsx` - Renders on every page\n3. `apps/ui/src/components/views/dashboard-view.tsx` - Project list page\n4. `apps/ui/src/components/layout/top-nav-bar.tsx` - Renders on every page\n5. `apps/ui/src/components/views/settings-view.tsx` - Settings page\n6. `apps/ui/src/components/views/board-view/board-header.tsx` - Board sub-component\n7. `apps/ui/src/components/views/board-view/kanban-board.tsx` - Board sub-component\n8. `apps/ui/src/components/views/board-view/components/kanban-column.tsx`\n9. `apps/ui/src/components/views/board-view/dialogs/*.tsx` - All dialog components\n10. All other components using bare `useAppStore()` calls\n\n## Pattern to Follow\n```typescript\nimport { useShallow } from 'zustand/react/shallow';\n\n// BEFORE\nconst { currentProject, features, setTheme } = useAppStore();\n\n// AFTER - for multiple values\nconst { currentProject, features } = useAppStore(\n  useShallow((s) => ({ currentProject: s.currentProject, features: s.features }))\n);\n// For actions (stable references, no useShallow needed)\nconst setTheme = useAppStore((s) => s.setTheme);\n```\n\n## Expected Impact\n- 50-80% reduction in unnecessary re-renders across the application\n- Smoother UI during high-frequency state changes (voice recording, terminal output, agent streaming)\n- Reduced CPU usage during normal operation\n- BoardView won't re-render when unrelated state (voice, terminal, settings) changes\n\n## Acceptance Criteria\n- No bare `useAppStore()` calls without selectors in any component\n- React DevTools Profiler shows reduced render counts when toggling unrelated features\n- Board view does NOT re-render when voice state changes\n- Agent view does NOT re-render when board/settings state changes\n- All existing functionality works correctly\n\n## Verification Steps\n1. Enable React DevTools 'Highlight updates when components render'\n2. Navigate to board view, then trigger voice recording - board should NOT flash\n3. Navigate to agent view, then switch theme - only theme-related components should flash\n4. Use React Profiler to compare render counts before and after",
+  "images": [],
+  "imagePaths": [],
+  "textFilePaths": [],
+  "skipTests": true,
+  "priority": 1,
+  "planningMode": "full",
+  "requirePlanApproval": true,
+  "autoDeploy": false,
+  "dependencies": [],
+  "status": "in_progress",
+  "projectPath": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr",
+  "descriptionHistory": [
+    {
+      "description": "Add Zustand selectors (useShallow) to all components using bare useAppStore() calls to prevent unnecessary re-renders",
+      "timestamp": "2026-02-12T10:00:04.000Z",
+      "source": "initial"
+    }
+  ],
+  "startedAt": "2026-02-12T12:46:54.584Z",
+  "updatedAt": "2026-02-12T15:47:55.547Z",
+  "planSpec": {
+    "status": "approved",
+    "version": 1,
+    "reviewedByUser": true,
+    "generatedAt": "2026-02-12T12:53:16.382Z",
+    "tasks": [
+      {
+        "id": "T001",
+        "description": "Add useShallow selector to BoardView's bare useAppStore() call (43+ properties)",
+        "filePath": "apps/ui/src/components/views/board-view.tsx",
+        "phase": "Phase 1: Highest-Impact Components (renders on every page / largest components)",
+        "status": "pending"
+      },
+      {
+        "id": "T002",
+        "description": "Add useShallow selector to RootLayoutContent's bare useAppStore() call (18 properties)",
+        "filePath": "apps/ui/src/routes/__root.tsx",
+        "phase": "Phase 1: Highest-Impact Components (renders on every page / largest components)",
+        "status": "pending"
+      },
+      {
+        "id": "T003",
+        "description": "Add useShallow selector to TopNavigationBar's bare useAppStore() call (12 properties) and consolidate individual selectors into useShallow groups",
+        "filePath": "apps/ui/src/components/layout/top-nav-bar.tsx",
+        "phase": "Phase 1: Highest-Impact Components (renders on every page / largest components)",
+        "status": "pending"
+      },
+      {
+        "id": "T004",
+        "description": "Add useShallow selector to DashboardView's bare useAppStore() call (8 properties)",
+        "filePath": "apps/ui/src/components/views/dashboard-view.tsx",
+        "phase": "Phase 1: Highest-Impact Components (renders on every page / largest components)",
+        "status": "pending"
+      },
+      {
+        "id": "T005",
+        "description": "Add selectors to KanbanBoard's bare useAppStore() call",
+        "filePath": "apps/ui/src/components/views/board-view/kanban-board.tsx",
+        "phase": "Phase 2: Board-View Sub-Components & Hooks",
+        "status": "pending"
+      },
+      {
+        "id": "T006",
+        "description": "Add selectors to board-view hooks (use-board-actions, use-board-features, use-board-drag-drop, use-board-persistence)",
+        "filePath": "apps/ui/src/components/views/board-view/hooks/",
+        "phase": "Phase 2: Board-View Sub-Components & Hooks",
+        "status": "pending"
+      },
+      {
+        "id": "T007",
+        "description": "Add selectors to board-view card components (kanban-card, card-badges)",
+        "filePath": "apps/ui/src/components/views/board-view/components/kanban-card/",
+        "phase": "Phase 2: Board-View Sub-Components & Hooks",
+        "status": "pending"
+      },
+      {
+        "id": "T008",
+        "description": "Add selectors to board-view list-view, running-agents-panel, mobile-usage-bar",
+        "filePath": "apps/ui/src/components/views/board-view/components/",
+        "phase": "Phase 2: Board-View Sub-Components & Hooks",
+        "status": "pending"
+      },
+      {
+        "id": "T009",
+        "description": "Add selectors to board-view dialogs (add-feature-dialog, backlog-plan-dialog, etc.)",
+        "filePath": "apps/ui/src/components/views/board-view/dialogs/",
+        "phase": "Phase 2: Board-View Sub-Components & Hooks",
+        "status": "pending"
+      },
+      {
+        "id": "T010",
+        "description": "Add selectors to board-view shared (model-selector)",
+        "filePath": "apps/ui/src/components/views/board-view/shared/model-selector.tsx",
+        "phase": "Phase 2: Board-View Sub-Components & Hooks",
+        "status": "pending"
+      },
+      {
+        "id": "T011",
+        "description": "Add selectors to SettingsView and all settings sub-sections",
+        "filePath": "apps/ui/src/components/views/settings-view.tsx + sub-files",
+        "phase": "Phase 3: Settings, Agent & Other Views",
+        "status": "pending"
+      },
+      {
+        "id": "T012",
+        "description": "Add selectors to ProjectSettingsView and sub-sections",
+        "filePath": "apps/ui/src/components/views/project-settings-view/",
+        "phase": "Phase 3: Settings, Agent & Other Views",
+        "status": "pending"
+      },
+      {
+        "id": "T013",
+        "description": "Add selectors to AgentView and agent-view hooks/components",
+        "filePath": "apps/ui/src/components/views/agent-view.tsx + sub-files",
+        "phase": "Phase 3: Settings, Agent & Other Views",
+        "status": "pending"
+      },
+      {
+        "id": "T014",
+        "description": "Add selectors to TerminalView",
+        "filePath": "apps/ui/src/components/views/terminal-view.tsx",
+        "phase": "Phase 3: Settings, Agent & Other Views",
+        "status": "pending"
+      },
+      {
+        "id": "T015",
+        "description": "Add selectors to remaining views (spec-view, welcome-view, chat-history, code-view, github-issues-view, github-prs-view, memory-view, interview-view, ideation-view, notifications-view, analysis-view, agent-tools-view)",
+        "filePath": "apps/ui/src/components/views/*.tsx",
+        "phase": "Phase 3: Settings, Agent & Other Views",
+        "status": "pending"
+      },
+      {
+        "id": "T016",
+        "description": "Add selectors to RunningAgentsIndicator",
+        "filePath": "apps/ui/src/components/layout/running-agents-indicator.tsx",
+        "phase": "Phase 4: Layout, Dialogs, UI Components & Hooks",
+        "status": "pending"
+      },
+      {
+        "id": "T017",
+        "description": "Add selectors to remaining dialog/popover components (file-browser-dialog, board-background-modal, usage popovers)",
+        "filePath": "apps/ui/src/components/dialogs/ + apps/ui/src/components/",
+        "phase": "Phase 4: Layout, Dialogs, UI Components & Hooks",
+        "status": "pending"
+      },
+      {
+        "id": "T018",
+        "description": "Add selectors to UI components (keyboard-map, description-image-dropzone, xterm-log-viewer)",
+        "filePath": "apps/ui/src/components/ui/",
+        "phase": "Phase 4: Layout, Dialogs, UI Components & Hooks",
+        "status": "pending"
+      },
+      {
+        "id": "T019",
+        "description": "Add selectors to remaining hooks (use-keyboard-shortcuts, use-project-settings-loader, use-responsive-kanban, use-settings-sync, use-board-background-settings, use-init-script-events, use-running-agents, use-electron-agent, use-project-switch-for-sessions)",
+        "filePath": "apps/ui/src/hooks/",
+        "phase": "Phase 4: Layout, Dialogs, UI Components & Hooks",
+        "status": "pending"
+      },
+      {
+        "id": "T020",
+        "description": "Add selectors to shared components (model-override-trigger, use-model-override)",
+        "filePath": "apps/ui/src/components/shared/",
+        "phase": "Phase 4: Layout, Dialogs, UI Components & Hooks",
+        "status": "pending"
+      },
+      {
+        "id": "T021",
+        "description": "Add selectors to setup-view steps",
+        "filePath": "apps/ui/src/components/views/setup-view/steps/",
+        "phase": "Phase 4: Layout, Dialogs, UI Components & Hooks",
+        "status": "pending"
+      },
+      {
+        "id": "T022",
+        "description": "Verify no bare useAppStore() calls remain (grep audit)",
+        "filePath": "apps/ui/src/",
+        "phase": "Phase 5: Verification",
+        "status": "pending"
+      },
+      {
+        "id": "T023",
+        "description": "Run TypeScript build to verify no type errors",
+        "filePath": "apps/ui/",
+        "phase": "Phase 5: Verification",
+        "status": "pending"
+      },
+      {
+        "id": "T024",
+        "description": "Run existing tests to verify no regressions",
+        "filePath": "apps/ui/tests/",
+        "phase": "Phase 5: Verification",
+        "status": "pending"
+      }
+    ],
+    "tasksTotal": 24,
+    "tasksCompleted": 23,
+    "approvedAt": "2026-02-12T12:59:49.541Z",
+    "currentTaskId": "T024"
+  }
+}

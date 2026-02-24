@@ -6,7 +6,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import type { IdeationPrompt, PromptCategory, IdeaCategory } from '@automaker/types';
+import type { IdeationPrompt, PromptCategory, IdeaCategory } from '@dmaker/types';
 import { getElectronAPI } from '@/lib/electron';
 
 interface UseGuidedPromptsReturn {

@@ -1,7 +1,7 @@
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import type { ModelAlias, ModelProvider } from '@/store/app-store';
-import { CODEX_MODEL_CONFIG_MAP, codexModelHasThinking } from '@automaker/types';
+import { CODEX_MODEL_CONFIG_MAP, codexModelHasThinking } from '@dmaker/types';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -34,6 +34,11 @@ export function modelSupportsThinking(_model?: ModelAlias | string): boolean {
     return false;
   }
 
+  // GCP/Vertex AI models - don't show thinking controls
+  if (_model.startsWith('gcp-') || _model.startsWith('vertex-') || _model.startsWith('vertex/')) {
+    return false;
+  }
+
   // All Claude models support thinking
   return true;
 }
@@ -44,6 +49,11 @@ export function modelSupportsThinking(_model?: ModelAlias | string): boolean {
  */
 export function getProviderFromModel(model?: string): ModelProvider {
   if (!model) return 'claude';
+
+  // Check for GCP/Vertex AI models (gcp- prefix, vertex- prefix)
+  if (model.startsWith('gcp-') || model.startsWith('vertex-') || model.startsWith('vertex/')) {
+    return 'gcp';
+  }
 
   // Check for Cursor models (cursor- prefix)
   if (model.startsWith('cursor-') || model.startsWith('cursor:')) {

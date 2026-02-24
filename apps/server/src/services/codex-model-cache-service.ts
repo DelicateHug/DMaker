@@ -1,7 +1,7 @@
 import path from 'path';
-import { secureFs } from '@automaker/platform';
-import { createLogger } from '@automaker/utils';
-import type { AppServerModel } from '@automaker/types';
+import { secureFs } from '@dmaker/platform';
+import { createLogger } from '@dmaker/utils';
+import type { AppServerModel } from '@dmaker/types';
 import type { CodexAppServerService } from './codex-app-server-service.js';
 
 const logger = createLogger('CodexModelCache');

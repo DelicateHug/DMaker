@@ -3,7 +3,7 @@
  * Extracts useful information from agent context files for display in kanban cards
  */
 
-import { CLAUDE_MODEL_MAP } from '@automaker/types';
+import { CLAUDE_MODEL_MAP } from '@dmaker/types';
 
 export interface AgentTaskInfo {
   // Task list extracted from TodoWrite tool calls

@@ -12,7 +12,7 @@ import {
   isGhCliAvailable,
 } from '../common.js';
 import { updateWorktreePRInfo } from '../../../lib/worktree-metadata.js';
-import { createLogger } from '@automaker/utils';
+import { createLogger } from '@dmaker/utils';
 
 const logger = createLogger('CreatePR');
 
@@ -39,7 +39,7 @@ export function createCreatePRHandler() {
       }
 
       // Use projectPath if provided, otherwise derive from worktreePath
-      // For worktrees, projectPath is needed to store metadata in the main project's .automaker folder
+      // For worktrees, projectPath is needed to store metadata in the main project's .dmaker folder
       const effectiveProjectPath = projectPath || worktreePath;
 
       // Get current branch name

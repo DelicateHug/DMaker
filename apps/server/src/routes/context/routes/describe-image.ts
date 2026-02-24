@@ -12,9 +12,9 @@
  */
 
 import type { Request, Response } from 'express';
-import { createLogger, readImageAsBase64 } from '@automaker/utils';
-import { DEFAULT_PHASE_MODELS, isCursorModel } from '@automaker/types';
-import { resolvePhaseModel } from '@automaker/model-resolver';
+import { createLogger, readImageAsBase64 } from '@dmaker/utils';
+import { DEFAULT_PHASE_MODELS, isCursorModel } from '@dmaker/types';
+import { resolvePhaseModel } from '@dmaker/model-resolver';
 import { simpleQuery } from '../../../providers/simple-query-service.js';
 import * as secureFs from '../../../lib/secure-fs.js';
 import * as path from 'path';

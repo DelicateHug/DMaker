@@ -1,6 +1,6 @@
 /**
- * @automaker/types
- * Shared type definitions for AutoMaker
+ * @dmaker/types
+ * Shared type definitions for DMaker
  */
 
 // Provider types
@@ -198,6 +198,7 @@ export type { ModelOption, ThinkingLevelOption, ReasoningEffortOption } from './
 export {
   CLAUDE_MODELS,
   CODEX_MODELS,
+  GCP_MODELS,
   THINKING_LEVELS,
   THINKING_LEVEL_LABELS,
   REASONING_EFFORT_LEVELS,
@@ -249,6 +250,7 @@ export {
   isClaudeModel,
   isCodexModel,
   isOpencodeModel,
+  isGcpModel,
   getModelProvider,
   stripProviderPrefix,
   addProviderPrefix,

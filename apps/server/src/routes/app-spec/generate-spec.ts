@@ -8,13 +8,13 @@
 import * as secureFs from '../../lib/secure-fs.js';
 import type { EventEmitter } from '../../lib/events.js';
 import { specOutputSchema, specToXml, type SpecOutput } from '../../lib/app-spec-format.js';
-import { createLogger } from '@automaker/utils';
-import { DEFAULT_PHASE_MODELS, isCursorModel } from '@automaker/types';
-import { resolvePhaseModel } from '@automaker/model-resolver';
+import { createLogger } from '@dmaker/utils';
+import { DEFAULT_PHASE_MODELS, isCursorModel } from '@dmaker/types';
+import { resolvePhaseModel } from '@dmaker/model-resolver';
 import { extractJson } from '../../lib/json-extractor.js';
 import { streamingQuery } from '../../providers/simple-query-service.js';
 import { generateFeaturesFromSpec } from './generate-features-from-spec.js';
-import { ensureAutomakerDir, getAppSpecPath } from '@automaker/platform';
+import { ensureDmakerDir, getAppSpecPath } from '@dmaker/platform';
 import type { SettingsService } from '../../services/settings-service.js';
 import { getAutoLoadClaudeMdSetting, getPromptCustomization } from '../../lib/settings-helpers.js';
 
@@ -183,7 +183,7 @@ Your entire response should be valid JSON starting with { and ending with }. No 
   } else {
     // Fallback: Extract XML content from response text
     // Claude might include conversational text before/after
-    // See: https://github.com/AutoMaker-Org/automaker/issues/149
+    // See: https://github.com/DelicateHug/DMaker/issues/149
     logger.warn('⚠️ No structured output, falling back to text parsing');
     logger.info('========== FINAL RESPONSE TEXT ==========');
     logger.info(responseText || '(empty)');
@@ -231,8 +231,8 @@ Your entire response should be valid JSON starting with { and ending with }. No 
     }
   }
 
-  // Save spec to .automaker directory
-  await ensureAutomakerDir(projectPath);
+  // Save spec to .dmaker directory
+  await ensureDmakerDir(projectPath);
   const specPath = getAppSpecPath(projectPath);
 
   logger.info('Saving spec to:', specPath);

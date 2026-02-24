@@ -2,7 +2,7 @@
  * GET /folder-scripts endpoint - List scripts in the deploy folder
  *
  * Returns supported scripts (.py, .ps1, .js, .ts, .sh, .bat, .cmd)
- * from the project's .automaker/deploy folder.
+ * from the project's .dmaker/deploy folder.
  *
  * Query params:
  * - projectPath (required) - Absolute path to the project directory

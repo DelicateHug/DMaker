@@ -1,0 +1,41 @@
+{
+  "category": "Uncategorized",
+  "description": "there should be a favorite icon on tasks, ",
+  "title": "",
+  "images": [],
+  "imagePaths": [
+    {
+      "id": "img-1770723010495-0bmp1597a",
+      "path": "C:\\Users\\dylan\\Downloads\\dmaker-pr\\.dmaker\\features\\feature-1770723039481-6ua7d80fq\\images\\pasted-image-2026-02-10T11-30-10-426Z-1770723010485.png",
+      "filename": "pasted-image-2026-02-10T11-30-10-426Z.png",
+      "mimeType": "image/png"
+    }
+  ],
+  "textFilePaths": [],
+  "skipTests": true,
+  "model": "sonnet",
+  "thinkingLevel": "none",
+  "reasoningEffort": "none",
+  "priority": 2,
+  "planningMode": "skip",
+  "requirePlanApproval": false,
+  "autoDeploy": false,
+  "deployEnvironment": "development",
+  "dependencies": [],
+  "workMode": "current",
+  "selectedProjectPath": "C:\\Users\\dylan\\Downloads\\dmaker-pr",
+  "titleGenerating": "there should be a favorite icon on tasks,",
+  "status": "completed",
+  "projectPath": "C:\\Users\\dylan\\Downloads\\dmaker-pr",
+  "id": "feature-1770723039481-6ua7d80fq",
+  "descriptionHistory": [
+    {
+      "description": "there should be a favorite icon on tasks, ",
+      "timestamp": "2026-02-10T11:30:39.577Z",
+      "source": "initial"
+    }
+  ],
+  "updatedAt": "2026-02-10T11:42:40.108Z",
+  "justFinishedAt": "2026-02-10T11:42:40.108Z",
+  "completedAt": "2026-02-11T01:06:59.921Z"
+}

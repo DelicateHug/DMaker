@@ -1,0 +1,34 @@
+{
+  "category": "Uncategorized",
+  "description": "fix C:\\Users\\DylanSmart\\Downloads\\automaker-pr\\dev-restart.ps1 so that it will run",
+  "title": "Fix PowerShell restart script execution permissions",
+  "images": [],
+  "imagePaths": [],
+  "textFilePaths": [],
+  "skipTests": true,
+  "model": "opus",
+  "thinkingLevel": "none",
+  "reasoningEffort": "none",
+  "priority": 2,
+  "planningMode": "skip",
+  "requirePlanApproval": false,
+  "autoDeploy": false,
+  "deployEnvironment": "development",
+  "dependencies": [],
+  "workMode": "current",
+  "selectedProjectPath": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr",
+  "titleGenerating": false,
+  "status": "waiting_approval",
+  "projectPath": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr",
+  "id": "feature-1770836428327-6qwhpcd7n",
+  "descriptionHistory": [
+    {
+      "description": "fix C:\\Users\\DylanSmart\\Downloads\\automaker-pr\\dev-restart.ps1 so that it will run",
+      "timestamp": "2026-02-11T19:00:28.376Z",
+      "source": "initial"
+    }
+  ],
+  "startedAt": "2026-02-11T19:18:53.972Z",
+  "updatedAt": "2026-02-11T19:22:22.299Z",
+  "justFinishedAt": "2026-02-11T19:22:22.299Z"
+}

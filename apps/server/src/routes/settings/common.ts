@@ -5,7 +5,7 @@
  * Re-exports error handling helpers from the parent routes module.
  */
 
-import { createLogger } from '@automaker/utils';
+import { createLogger } from '@dmaker/utils';
 import { getErrorMessage as getErrorMessageShared, createLogError } from '../common.js';
 import { RequestCache } from '../../lib/request-cache.js';
 import type { GlobalSettings } from '../../types/settings.js';

@@ -11,7 +11,7 @@ import type {
   IdeationPrompt,
   AnalysisSuggestion,
   ProjectAnalysisResult,
-} from '@automaker/types';
+} from '@dmaker/types';
 
 // ============================================================================
 // Generation Job Types
@@ -312,7 +312,7 @@ export const useIdeationStore = create<IdeationState & IdeationActions>()(
         }),
     }),
     {
-      name: 'automaker-ideation-store',
+      name: 'dmaker-ideation-store',
       version: 4,
       partialize: (state) => ({
         // Only persist these fields

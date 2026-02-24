@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { createLogger } from '@automaker/utils/logger';
+import { createLogger } from '@dmaker/utils/logger';
 import { getElectronAPI, GitHubIssue } from '@/lib/electron';
-import type { Feature } from '@automaker/types';
+import type { Feature } from '@dmaker/types';
 import type { StatusTab } from './use-board-status-tabs';
 
 const logger = createLogger('GitHubBoardIssues');

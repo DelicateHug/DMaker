@@ -1,0 +1,40 @@
+{
+  "category": "Uncategorized",
+  "description": "this should show a countdown and it should be updating every 1 minute ",
+  "title": "Update countdown timer with minute-based refresh",
+  "images": [],
+  "imagePaths": [
+    {
+      "id": "img-1771095711580-01mwzllct",
+      "path": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr\\.automaker\\features\\feature-1771095716887-4915zv1ad\\images\\pasted-image-2026-02-14T19-01-51-552Z-1771095711577.png",
+      "filename": "pasted-image-2026-02-14T19-01-51-552Z.png",
+      "mimeType": "image/png"
+    }
+  ],
+  "textFilePaths": [],
+  "skipTests": true,
+  "model": "sonnet",
+  "thinkingLevel": "none",
+  "reasoningEffort": "none",
+  "priority": 2,
+  "planningMode": "skip",
+  "requirePlanApproval": false,
+  "autoDeploy": false,
+  "deployEnvironment": "development",
+  "dependencies": [],
+  "workMode": "current",
+  "selectedProjectPath": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr",
+  "titleGenerating": false,
+  "status": "in_progress",
+  "projectPath": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr",
+  "id": "feature-1771095716887-4915zv1ad",
+  "descriptionHistory": [
+    {
+      "description": "this should show a countdown and it should be updating every 1 minute ",
+      "timestamp": "2026-02-14T19:01:56.934Z",
+      "source": "initial"
+    }
+  ],
+  "startedAt": "2026-02-14T19:01:56.982Z",
+  "updatedAt": "2026-02-14T19:01:57.470Z"
+}

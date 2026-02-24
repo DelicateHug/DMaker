@@ -8,9 +8,9 @@
 
 import type { Request, Response } from 'express';
 import type { AutoModeService } from '../../../services/auto-mode-service.js';
-import { createLogger } from '@automaker/utils';
+import { createLogger } from '@dmaker/utils';
 import { getErrorMessage, logError } from '../common.js';
-import { getBlockingDependencies } from '@automaker/dependency-resolver';
+import { getBlockingDependencies } from '@dmaker/dependency-resolver';
 import { getGitHubSyncService } from '../../../services/github-sync-service.js';
 
 const logger = createLogger('AutoMode');

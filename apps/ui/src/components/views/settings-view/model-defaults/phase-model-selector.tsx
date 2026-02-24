@@ -9,7 +9,7 @@ import type {
   OpencodeModelId,
   GroupedModel,
   PhaseModelEntry,
-} from '@automaker/types';
+} from '@dmaker/types';
 import {
   stripProviderPrefix,
   STANDALONE_CURSOR_MODELS,
@@ -17,11 +17,12 @@ import {
   isGroupSelected,
   getSelectedVariant,
   codexModelHasThinking,
-} from '@automaker/types';
+} from '@dmaker/types';
 import {
   CLAUDE_MODELS,
   CURSOR_MODELS,
   OPENCODE_MODELS,
+  GCP_MODELS,
   THINKING_LEVELS,
   THINKING_LEVEL_LABELS,
   REASONING_EFFORT_LEVELS,
@@ -35,12 +36,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import type { ThinkingLevel, ReasoningEffort } from '@automaker/types';
+import type { ThinkingLevel, ReasoningEffort } from '@dmaker/types';
 import { Check, ChevronsUpDown, Star, ChevronRight } from 'lucide-react';
 import {
   AnthropicIcon,
   CursorIcon,
   OpenAIIcon,
+  GcpIcon,
   getProviderIconForModel,
 } from '@/components/ui/provider-icon';
 import { Button } from '@/components/ui/button';
@@ -306,6 +308,10 @@ export function PhaseModelSelector({
     const codexModel = transformedCodexModels.find((m) => m.id === selectedModel);
     if (codexModel) return { ...codexModel, icon: OpenAIIcon };
 
+    // Check GCP models
+    const gcpModel = GCP_MODELS.find((m) => m.id === selectedModel);
+    if (gcpModel) return { ...gcpModel, icon: GcpIcon };
+
     // Check OpenCode models (static) - use dynamic icon resolution for provider-specific icons
     const opencodeModel = OPENCODE_MODELS.find((m) => m.id === selectedModel);
     if (opencodeModel) return { ...opencodeModel, icon: getProviderIconForModel(opencodeModel.id) };
@@ -390,17 +396,19 @@ export function PhaseModelSelector({
   }, [dynamicOpencodeModels, enabledDynamicModelIds]);
 
   // Group models (filtering out disabled providers)
-  const { favorites, claude, cursor, codex, opencode } = useMemo(() => {
+  const { favorites, claude, cursor, codex, opencode, gcp } = useMemo(() => {
     const favs: typeof CLAUDE_MODELS = [];
     const cModels: typeof CLAUDE_MODELS = [];
     const curModels: typeof CURSOR_MODELS = [];
     const codModels: typeof transformedCodexModels = [];
     const ocModels: ModelOption[] = [];
+    const gcpModels: ModelOption[] = [];
 
     const isClaudeDisabled = disabledProviders.includes('claude');
     const isCursorDisabled = disabledProviders.includes('cursor');
     const isCodexDisabled = disabledProviders.includes('codex');
     const isOpencodeDisabled = disabledProviders.includes('opencode');
+    const isGcpDisabled = disabledProviders.includes('gcp');
 
     // Process Claude Models (skip if provider is disabled)
     if (!isClaudeDisabled) {
@@ -446,12 +454,24 @@ export function PhaseModelSelector({
       });
     }
 
+    // Process GCP Models (skip if provider is disabled)
+    if (!isGcpDisabled) {
+      GCP_MODELS.forEach((model) => {
+        if (favoriteModels.includes(model.id)) {
+          favs.push(model);
+        } else {
+          gcpModels.push(model);
+        }
+      });
+    }
+
     return {
       favorites: favs,
       claude: cModels,
       cursor: curModels,
       codex: codModels,
       opencode: ocModels,
+      gcp: gcpModels,
     };
   }, [
     favoriteModels,
@@ -633,6 +653,64 @@ export function PhaseModelSelector({
       >
         <div className="flex items-center gap-3 overflow-hidden">
           <ProviderIcon
+            className={cn(
+              'h-4 w-4 shrink-0',
+              isSelected ? 'text-primary' : 'text-muted-foreground'
+            )}
+          />
+          <div className="flex flex-col truncate">
+            <span className={cn('truncate font-medium', isSelected && 'text-primary')}>
+              {model.label}
+            </span>
+            <span className="truncate text-xs text-muted-foreground">{model.description}</span>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-1 ml-2">
+          {model.badge && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground mr-1">
+              {model.badge}
+            </span>
+          )}
+          <Button
+            variant="ghost"
+            size="icon"
+            className={cn(
+              'h-6 w-6 hover:bg-transparent hover:text-yellow-500 focus:ring-0',
+              isFavorite
+                ? 'text-yellow-500 opacity-100'
+                : 'opacity-0 group-hover:opacity-100 text-muted-foreground'
+            )}
+            onClick={(e) => {
+              e.stopPropagation();
+              toggleFavoriteModel(model.id);
+            }}
+          >
+            <Star className={cn('h-3.5 w-3.5', isFavorite && 'fill-current')} />
+          </Button>
+          {isSelected && <Check className="h-4 w-4 text-primary shrink-0" />}
+        </div>
+      </CommandItem>
+    );
+  };
+
+  // Render GCP model item (simple selector, no thinking/reasoning options)
+  const renderGcpModelItem = (model: ModelOption) => {
+    const isSelected = selectedModel === model.id;
+    const isFavorite = favoriteModels.includes(model.id);
+
+    return (
+      <CommandItem
+        key={model.id}
+        value={model.label}
+        onSelect={() => {
+          onChange({ model: model.id });
+          setOpen(false);
+        }}
+        className="group flex items-center justify-between py-2"
+      >
+        <div className="flex items-center gap-3 overflow-hidden">
+          <GcpIcon
             className={cn(
               'h-4 w-4 shrink-0',
               isSelected ? 'text-primary' : 'text-muted-foreground'
@@ -1086,6 +1164,10 @@ export function PhaseModelSelector({
                     if (model.provider === 'opencode') {
                       return renderOpencodeModelItem(model);
                     }
+                    // GCP model
+                    if (model.provider === 'gcp') {
+                      return renderGcpModelItem(model);
+                    }
                     // Claude model
                     return renderClaudeModelItem(model);
                   });
@@ -1142,6 +1224,12 @@ export function PhaseModelSelector({
                   </div>
                 </Fragment>
               ))}
+            </CommandGroup>
+          )}
+
+          {gcp.length > 0 && (
+            <CommandGroup heading="GCP Gemini Models">
+              {gcp.map((model) => renderGcpModelItem(model))}
             </CommandGroup>
           )}
         </CommandList>

@@ -1,12 +1,18 @@
 import type { ModelAlias } from '@/store/app-store';
-import type { ModelProvider, ThinkingLevel, ReasoningEffort } from '@automaker/types';
+import type { ModelProvider, ThinkingLevel, ReasoningEffort } from '@dmaker/types';
 import {
   CURSOR_MODEL_MAP,
   CODEX_MODEL_MAP,
   OPENCODE_MODELS as OPENCODE_MODEL_CONFIGS,
-} from '@automaker/types';
+} from '@dmaker/types';
 import { Brain, Zap, Scale, Cpu, Rocket, Sparkles } from 'lucide-react';
-import { AnthropicIcon, CursorIcon, OpenAIIcon, OpenCodeIcon } from '@/components/ui/provider-icon';
+import {
+  AnthropicIcon,
+  CursorIcon,
+  OpenAIIcon,
+  OpenCodeIcon,
+  GcpIcon,
+} from '@/components/ui/provider-icon';
 
 export type ModelOption = {
   id: string; // Claude models use ModelAlias, Cursor models use "cursor-{id}"
@@ -114,13 +120,55 @@ export const OPENCODE_MODELS: ModelOption[] = OPENCODE_MODEL_CONFIGS.map((config
 }));
 
 /**
- * All available models (Claude + Cursor + Codex + OpenCode)
+ * GCP/Vertex AI Gemini models
+ */
+export const GCP_MODELS: ModelOption[] = [
+  {
+    id: 'gcp-gemini-2.5-pro',
+    label: 'Gemini 2.5 Pro',
+    description: 'Most capable Gemini model for complex tasks.',
+    badge: 'Premium',
+    provider: 'gcp',
+  },
+  {
+    id: 'gcp-gemini-2.5-flash',
+    label: 'Gemini 2.5 Flash',
+    description: 'Fast and efficient with strong reasoning.',
+    badge: 'Balanced',
+    provider: 'gcp',
+  },
+  {
+    id: 'gcp-gemini-2.0-flash',
+    label: 'Gemini 2.0 Flash',
+    description: 'Quick responses for simpler tasks.',
+    badge: 'Speed',
+    provider: 'gcp',
+  },
+  {
+    id: 'gcp-gemini-1.5-pro',
+    label: 'Gemini 1.5 Pro',
+    description: 'Large context window for complex analysis.',
+    badge: 'Balanced',
+    provider: 'gcp',
+  },
+  {
+    id: 'gcp-gemini-1.5-flash',
+    label: 'Gemini 1.5 Flash',
+    description: 'Lightweight and fast for simple queries.',
+    badge: 'Speed',
+    provider: 'gcp',
+  },
+];
+
+/**
+ * All available models (Claude + Cursor + Codex + OpenCode + GCP)
  */
 export const ALL_MODELS: ModelOption[] = [
   ...CLAUDE_MODELS,
   ...CURSOR_MODELS,
   ...CODEX_MODELS,
   ...OPENCODE_MODELS,
+  ...GCP_MODELS,
 ];
 
 export const THINKING_LEVELS: ThinkingLevel[] = ['none', 'low', 'medium', 'high', 'ultrathink'];

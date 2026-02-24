@@ -1,8 +1,8 @@
 /**
- * Automaker Paths - Utilities for managing automaker data storage
+ * DMaker Paths - Utilities for managing dmaker data storage
  *
  * Provides functions to construct paths for:
- * - Project-level data stored in {projectPath}/.automaker/
+ * - Project-level data stored in {projectPath}/.dmaker/
  * - Global user data stored in app userData directory
  *
  * All returned paths are absolute and ready to use with fs module.
@@ -109,16 +109,16 @@ export function isMonthDir(dirName: string): boolean {
 }
 
 /**
- * Get the automaker data directory root for a project
+ * Get the dmaker data directory root for a project
  *
- * All project-specific automaker data is stored under {projectPath}/.automaker/
- * This directory is created when needed via ensureAutomakerDir().
+ * All project-specific dmaker data is stored under {projectPath}/.dmaker/
+ * This directory is created when needed via ensureDmakerDir().
  *
  * @param projectPath - Absolute path to project directory
- * @returns Absolute path to {projectPath}/.automaker
+ * @returns Absolute path to {projectPath}/.dmaker
  */
-export function getAutomakerDir(projectPath: string): string {
-  return path.join(projectPath, '.automaker');
+export function getDmakerDir(projectPath: string): string {
+  return path.join(projectPath, '.dmaker');
 }
 
 /**
@@ -128,17 +128,17 @@ export function getAutomakerDir(projectPath: string): string {
  * feature IDs, as well as flat feature directories for legacy IDs.
  *
  * @param projectPath - Absolute path to project directory
- * @returns Absolute path to {projectPath}/.automaker/features
+ * @returns Absolute path to {projectPath}/.dmaker/features
  */
 export function getFeaturesDir(projectPath: string): string {
-  return path.join(getAutomakerDir(projectPath), 'features');
+  return path.join(getDmakerDir(projectPath), 'features');
 }
 
 /**
  * Get the month-based subdirectory for a feature inside the features directory.
  *
  * For new-format IDs (dd-MM-YYYY-slug), returns the month subdirectory:
- *   {projectPath}/.automaker/features/{YYYY}-{monthname}
+ *   {projectPath}/.dmaker/features/{YYYY}-{monthname}
  *
  * For old-format IDs or IDs that don't match the new pattern, returns null
  * (meaning the feature lives directly inside the features directory).
@@ -150,7 +150,7 @@ export function getFeaturesDir(projectPath: string): string {
  * @example
  * // New-format ID -> month directory
  * getFeatureMonthDir('/proj', '17-02-2026-add_dark_mode')
- * // => "/proj/.automaker/features/2026-february"
+ * // => "/proj/.dmaker/features/2026-february"
  *
  * // Old-format ID -> null (flat layout)
  * getFeatureMonthDir('/proj', 'auth-feature')
@@ -175,11 +175,11 @@ export function getFeatureMonthDir(projectPath: string, featureId: string): stri
  *
  * For new-format IDs (dd-MM-YYYY-slug), features are organized into
  * month-based subdirectories:
- *   {projectPath}/.automaker/features/{YYYY}-{monthname}/{featureId}
+ *   {projectPath}/.dmaker/features/{YYYY}-{monthname}/{featureId}
  *
  * For old-format IDs or IDs that don't match the new pattern, falls back
  * to the flat structure for backward compatibility:
- *   {projectPath}/.automaker/features/{featureId}
+ *   {projectPath}/.dmaker/features/{featureId}
  *
  * @param projectPath - Absolute path to project directory
  * @param featureId - Feature identifier
@@ -188,11 +188,11 @@ export function getFeatureMonthDir(projectPath: string, featureId: string): stri
  * @example
  * // New-format ID -> month-based directory
  * getFeatureDir('/proj', '17-02-2026-add_dark_mode')
- * // => "/proj/.automaker/features/2026-february/17-02-2026-add_dark_mode"
+ * // => "/proj/.dmaker/features/2026-february/17-02-2026-add_dark_mode"
  *
  * // Old-format ID -> flat fallback
  * getFeatureDir('/proj', 'auth-feature')
- * // => "/proj/.automaker/features/auth-feature"
+ * // => "/proj/.dmaker/features/auth-feature"
  */
 export function getFeatureDir(projectPath: string, featureId: string): string {
   const monthDir = getFeatureMonthDir(projectPath, featureId);
@@ -206,7 +206,7 @@ export function getFeatureDir(projectPath: string, featureId: string): string {
 /**
  * Get the status-based subdirectory for a feature.
  *
- * Returns the path: {projectPath}/.automaker/features/{status}/{featureId}
+ * Returns the path: {projectPath}/.dmaker/features/{status}/{featureId}
  *
  * @param projectPath - Absolute path to project directory
  * @param status - Feature status (e.g. "backlog", "in_progress", "completed")
@@ -228,7 +228,7 @@ export function getFeatureStatusDir(
  *
  * @param projectPath - Absolute path to project directory
  * @param featureId - Feature identifier
- * @returns Absolute path to {projectPath}/.automaker/features/{featureId}/images
+ * @returns Absolute path to {projectPath}/.dmaker/features/{featureId}/images
  */
 export function getFeatureImagesDir(projectPath: string, featureId: string): string {
   return path.join(getFeatureDir(projectPath, featureId), 'images');
@@ -242,7 +242,7 @@ export function getFeatureImagesDir(projectPath: string, featureId: string): str
  *
  * @param projectPath - Absolute path to project directory
  * @param featureId - Feature identifier
- * @returns Absolute path to {projectPath}/.automaker/features/{featureId}/summaries
+ * @returns Absolute path to {projectPath}/.dmaker/features/{featureId}/summaries
  */
 export function getFeatureSummariesDir(projectPath: string, featureId: string): string {
   return path.join(getFeatureDir(projectPath, featureId), 'summaries');
@@ -280,10 +280,10 @@ export function getFeatureBackupsDir(projectPath: string, featureId: string): st
  * Contains board-related data like background images and customization files.
  *
  * @param projectPath - Absolute path to project directory
- * @returns Absolute path to {projectPath}/.automaker/board
+ * @returns Absolute path to {projectPath}/.dmaker/board
  */
 export function getBoardDir(projectPath: string): string {
-  return path.join(getAutomakerDir(projectPath), 'board');
+  return path.join(getDmakerDir(projectPath), 'board');
 }
 
 /**
@@ -292,10 +292,10 @@ export function getBoardDir(projectPath: string): string {
  * Stores project-level images like background images or shared assets.
  *
  * @param projectPath - Absolute path to project directory
- * @returns Absolute path to {projectPath}/.automaker/images
+ * @returns Absolute path to {projectPath}/.dmaker/images
  */
 export function getImagesDir(projectPath: string): string {
-  return path.join(getAutomakerDir(projectPath), 'images');
+  return path.join(getDmakerDir(projectPath), 'images');
 }
 
 /**
@@ -304,10 +304,10 @@ export function getImagesDir(projectPath: string): string {
  * Stores user-uploaded context files for reference during generation.
  *
  * @param projectPath - Absolute path to project directory
- * @returns Absolute path to {projectPath}/.automaker/context
+ * @returns Absolute path to {projectPath}/.dmaker/context
  */
 export function getContextDir(projectPath: string): string {
-  return path.join(getAutomakerDir(projectPath), 'context');
+  return path.join(getDmakerDir(projectPath), 'context');
 }
 
 /**
@@ -316,10 +316,10 @@ export function getContextDir(projectPath: string): string {
  * Stores information about git worktrees associated with the project.
  *
  * @param projectPath - Absolute path to project directory
- * @returns Absolute path to {projectPath}/.automaker/worktrees
+ * @returns Absolute path to {projectPath}/.dmaker/worktrees
  */
 export function getWorktreesDir(projectPath: string): string {
-  return path.join(getAutomakerDir(projectPath), 'worktrees');
+  return path.join(getDmakerDir(projectPath), 'worktrees');
 }
 
 /**
@@ -328,10 +328,10 @@ export function getWorktreesDir(projectPath: string): string {
  * Stores GitHub issue validation results, organized by issue number.
  *
  * @param projectPath - Absolute path to project directory
- * @returns Absolute path to {projectPath}/.automaker/validations
+ * @returns Absolute path to {projectPath}/.dmaker/validations
  */
 export function getValidationsDir(projectPath: string): string {
-  return path.join(getAutomakerDir(projectPath), 'validations');
+  return path.join(getDmakerDir(projectPath), 'validations');
 }
 
 /**
@@ -341,7 +341,7 @@ export function getValidationsDir(projectPath: string): string {
  *
  * @param projectPath - Absolute path to project directory
  * @param issueNumber - GitHub issue number
- * @returns Absolute path to {projectPath}/.automaker/validations/{issueNumber}
+ * @returns Absolute path to {projectPath}/.dmaker/validations/{issueNumber}
  */
 export function getValidationDir(projectPath: string, issueNumber: number): string {
   return path.join(getValidationsDir(projectPath), String(issueNumber));
@@ -354,7 +354,7 @@ export function getValidationDir(projectPath: string, issueNumber: number): stri
  *
  * @param projectPath - Absolute path to project directory
  * @param issueNumber - GitHub issue number
- * @returns Absolute path to {projectPath}/.automaker/validations/{issueNumber}/validation.json
+ * @returns Absolute path to {projectPath}/.dmaker/validations/{issueNumber}/validation.json
  */
 export function getValidationPath(projectPath: string, issueNumber: number): string {
   return path.join(getValidationDir(projectPath, issueNumber), 'validation.json');
@@ -366,10 +366,10 @@ export function getValidationPath(projectPath: string, issueNumber: number): str
  * Stores the application specification document used for generation.
  *
  * @param projectPath - Absolute path to project directory
- * @returns Absolute path to {projectPath}/.automaker/app_spec.txt
+ * @returns Absolute path to {projectPath}/.dmaker/app_spec.txt
  */
 export function getAppSpecPath(projectPath: string): string {
-  return path.join(getAutomakerDir(projectPath), 'app_spec.txt');
+  return path.join(getDmakerDir(projectPath), 'app_spec.txt');
 }
 
 /**
@@ -378,10 +378,10 @@ export function getAppSpecPath(projectPath: string): string {
  * Stores project-level notifications for feature status changes and operation completions.
  *
  * @param projectPath - Absolute path to project directory
- * @returns Absolute path to {projectPath}/.automaker/notifications.json
+ * @returns Absolute path to {projectPath}/.dmaker/notifications.json
  */
 export function getNotificationsPath(projectPath: string): string {
-  return path.join(getAutomakerDir(projectPath), 'notifications.json');
+  return path.join(getDmakerDir(projectPath), 'notifications.json');
 }
 
 /**
@@ -390,10 +390,10 @@ export function getNotificationsPath(projectPath: string): string {
  * Stores JSON metadata about active git branches and worktrees.
  *
  * @param projectPath - Absolute path to project directory
- * @returns Absolute path to {projectPath}/.automaker/active-branches.json
+ * @returns Absolute path to {projectPath}/.dmaker/active-branches.json
  */
 export function getBranchTrackingPath(projectPath: string): string {
-  return path.join(getAutomakerDir(projectPath), 'active-branches.json');
+  return path.join(getDmakerDir(projectPath), 'active-branches.json');
 }
 
 /**
@@ -403,25 +403,25 @@ export function getBranchTrackingPath(projectPath: string): string {
  * Tracks which features were running and auto-loop configuration.
  *
  * @param projectPath - Absolute path to project directory
- * @returns Absolute path to {projectPath}/.automaker/execution-state.json
+ * @returns Absolute path to {projectPath}/.dmaker/execution-state.json
  */
 export function getExecutionStatePath(projectPath: string): string {
-  return path.join(getAutomakerDir(projectPath), 'execution-state.json');
+  return path.join(getDmakerDir(projectPath), 'execution-state.json');
 }
 
 /**
- * Create the automaker directory structure for a project if it doesn't exist
+ * Create the dmaker directory structure for a project if it doesn't exist
  *
- * Creates {projectPath}/.automaker with all subdirectories recursively.
+ * Creates {projectPath}/.dmaker with all subdirectories recursively.
  * Safe to call multiple times - uses recursive: true.
  *
  * @param projectPath - Absolute path to project directory
- * @returns Promise resolving to the created automaker directory path
+ * @returns Promise resolving to the created dmaker directory path
  */
-export async function ensureAutomakerDir(projectPath: string): Promise<string> {
-  const automakerDir = getAutomakerDir(projectPath);
-  await secureFs.mkdir(automakerDir, { recursive: true });
-  return automakerDir;
+export async function ensureDmakerDir(projectPath: string): Promise<string> {
+  const dmakerDir = getDmakerDir(projectPath);
+  await secureFs.mkdir(dmakerDir, { recursive: true });
+  return dmakerDir;
 }
 
 // ============================================================================
@@ -434,10 +434,10 @@ export async function ensureAutomakerDir(projectPath: string): Promise<string> {
  * Contains ideas, sessions, and drafts for brainstorming.
  *
  * @param projectPath - Absolute path to project directory
- * @returns Absolute path to {projectPath}/.automaker/ideation
+ * @returns Absolute path to {projectPath}/.dmaker/ideation
  */
 export function getIdeationDir(projectPath: string): string {
-  return path.join(getAutomakerDir(projectPath), 'ideation');
+  return path.join(getDmakerDir(projectPath), 'ideation');
 }
 
 /**
@@ -446,7 +446,7 @@ export function getIdeationDir(projectPath: string): string {
  * Contains subdirectories for each idea, keyed by ideaId.
  *
  * @param projectPath - Absolute path to project directory
- * @returns Absolute path to {projectPath}/.automaker/ideation/ideas
+ * @returns Absolute path to {projectPath}/.dmaker/ideation/ideas
  */
 export function getIdeasDir(projectPath: string): string {
   return path.join(getIdeationDir(projectPath), 'ideas');
@@ -459,7 +459,7 @@ export function getIdeasDir(projectPath: string): string {
  *
  * @param projectPath - Absolute path to project directory
  * @param ideaId - Idea identifier
- * @returns Absolute path to {projectPath}/.automaker/ideation/ideas/{ideaId}
+ * @returns Absolute path to {projectPath}/.dmaker/ideation/ideas/{ideaId}
  */
 export function getIdeaDir(projectPath: string, ideaId: string): string {
   return path.join(getIdeasDir(projectPath), ideaId);
@@ -472,7 +472,7 @@ export function getIdeaDir(projectPath: string, ideaId: string): string {
  *
  * @param projectPath - Absolute path to project directory
  * @param ideaId - Idea identifier
- * @returns Absolute path to {projectPath}/.automaker/ideation/ideas/{ideaId}/idea.json
+ * @returns Absolute path to {projectPath}/.dmaker/ideation/ideas/{ideaId}/idea.json
  */
 export function getIdeaPath(projectPath: string, ideaId: string): string {
   return path.join(getIdeaDir(projectPath, ideaId), 'idea.json');
@@ -485,7 +485,7 @@ export function getIdeaPath(projectPath: string, ideaId: string): string {
  *
  * @param projectPath - Absolute path to project directory
  * @param ideaId - Idea identifier
- * @returns Absolute path to {projectPath}/.automaker/ideation/ideas/{ideaId}/attachments
+ * @returns Absolute path to {projectPath}/.dmaker/ideation/ideas/{ideaId}/attachments
  */
 export function getIdeaAttachmentsDir(projectPath: string, ideaId: string): string {
   return path.join(getIdeaDir(projectPath, ideaId), 'attachments');
@@ -497,7 +497,7 @@ export function getIdeaAttachmentsDir(projectPath: string, ideaId: string): stri
  * Contains conversation history for ideation sessions.
  *
  * @param projectPath - Absolute path to project directory
- * @returns Absolute path to {projectPath}/.automaker/ideation/sessions
+ * @returns Absolute path to {projectPath}/.dmaker/ideation/sessions
  */
 export function getIdeationSessionsDir(projectPath: string): string {
   return path.join(getIdeationDir(projectPath), 'sessions');
@@ -510,7 +510,7 @@ export function getIdeationSessionsDir(projectPath: string): string {
  *
  * @param projectPath - Absolute path to project directory
  * @param sessionId - Session identifier
- * @returns Absolute path to {projectPath}/.automaker/ideation/sessions/{sessionId}.json
+ * @returns Absolute path to {projectPath}/.dmaker/ideation/sessions/{sessionId}.json
  */
 export function getIdeationSessionPath(projectPath: string, sessionId: string): string {
   return path.join(getIdeationSessionsDir(projectPath), `${sessionId}.json`);
@@ -522,7 +522,7 @@ export function getIdeationSessionPath(projectPath: string, sessionId: string): 
  * Stores unsaved conversation drafts.
  *
  * @param projectPath - Absolute path to project directory
- * @returns Absolute path to {projectPath}/.automaker/ideation/drafts
+ * @returns Absolute path to {projectPath}/.dmaker/ideation/drafts
  */
 export function getIdeationDraftsDir(projectPath: string): string {
   return path.join(getIdeationDir(projectPath), 'drafts');
@@ -534,7 +534,7 @@ export function getIdeationDraftsDir(projectPath: string): string {
  * Stores the cached project analysis result.
  *
  * @param projectPath - Absolute path to project directory
- * @returns Absolute path to {projectPath}/.automaker/ideation/analysis.json
+ * @returns Absolute path to {projectPath}/.dmaker/ideation/analysis.json
  */
 export function getIdeationAnalysisPath(projectPath: string): string {
   return path.join(getIdeationDir(projectPath), 'analysis.json');
@@ -543,7 +543,7 @@ export function getIdeationAnalysisPath(projectPath: string): string {
 /**
  * Create the ideation directory structure for a project if it doesn't exist
  *
- * Creates {projectPath}/.automaker/ideation with all subdirectories.
+ * Creates {projectPath}/.dmaker/ideation with all subdirectories.
  * Safe to call multiple times - uses recursive: true.
  *
  * @param projectPath - Absolute path to project directory
@@ -569,9 +569,9 @@ export async function ensureIdeationDir(projectPath: string): Promise<string> {
  * Located in the platform-specific userData directory.
  *
  * Default locations:
- * - macOS: ~/Library/Application Support/automaker
- * - Windows: %APPDATA%\automaker
- * - Linux: ~/.config/automaker
+ * - macOS: ~/Library/Application Support/dmaker
+ * - Windows: %APPDATA%\dmaker
+ * - Linux: ~/.config/dmaker
  *
  * @param dataDir - User data directory (from app.getPath('userData'))
  * @returns Absolute path to {dataDir}/settings.json
@@ -597,13 +597,13 @@ export function getCredentialsPath(dataDir: string): string {
  * Get the project settings file path
  *
  * Stores project-specific settings that override global settings.
- * Located within the project's .automaker directory.
+ * Located within the project's .dmaker directory.
  *
  * @param projectPath - Absolute path to project directory
- * @returns Absolute path to {projectPath}/.automaker/settings.json
+ * @returns Absolute path to {projectPath}/.dmaker/settings.json
  */
 export function getProjectSettingsPath(projectPath: string): string {
-  return path.join(getAutomakerDir(projectPath), 'settings.json');
+  return path.join(getDmakerDir(projectPath), 'settings.json');
 }
 
 /**

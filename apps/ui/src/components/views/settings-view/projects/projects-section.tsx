@@ -230,7 +230,7 @@ export function ProjectsSection() {
       }
 
       await api.writeFile(
-        `${projectPath}/.automaker/app_spec.txt`,
+        `${projectPath}/.dmaker/app_spec.txt`,
         `<project_specification>
   <project_name>${projectName}</project_name>
 
@@ -300,7 +300,7 @@ export function ProjectsSection() {
       }
 
       await api.writeFile(
-        `${projectPath}/.automaker/app_spec.txt`,
+        `${projectPath}/.dmaker/app_spec.txt`,
         `<project_specification>
   <project_name>${projectName}</project_name>
 
@@ -366,7 +366,7 @@ export function ProjectsSection() {
       }
 
       await api.writeFile(
-        `${projectPath}/.automaker/app_spec.txt`,
+        `${projectPath}/.dmaker/app_spec.txt`,
         `<project_specification>
   <project_name>${projectName}</project_name>
 
@@ -617,7 +617,7 @@ export function ProjectsSection() {
                             className="text-destructive focus:text-destructive"
                           >
                             <Trash2 className="w-4 h-4 mr-2" />
-                            Remove from Automaker
+                            Remove from DMaker
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>

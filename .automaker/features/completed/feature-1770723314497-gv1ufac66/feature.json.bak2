@@ -1,0 +1,39 @@
+{
+  "category": "Uncategorized",
+  "description": "changing theme does nothing to ui",
+  "title": "",
+  "images": [],
+  "imagePaths": [
+    {
+      "id": "img-1770723300279-glujq4s4m",
+      "path": "C:\\Users\\dylan\\Downloads\\automaker-pr\\.automaker\\features\\feature-1770723314497-gv1ufac66\\images\\pasted-image-2026-02-10T11-35-00-217Z-1770723300270.png",
+      "filename": "pasted-image-2026-02-10T11-35-00-217Z.png",
+      "mimeType": "image/png"
+    }
+  ],
+  "textFilePaths": [],
+  "skipTests": true,
+  "model": "opus",
+  "thinkingLevel": "medium",
+  "reasoningEffort": "none",
+  "priority": 2,
+  "planningMode": "full",
+  "requirePlanApproval": false,
+  "autoDeploy": false,
+  "deployEnvironment": "development",
+  "dependencies": [],
+  "workMode": "current",
+  "selectedProjectPath": "C:\\Users\\dylan\\Downloads\\automaker-pr",
+  "titleGenerating": "changing theme does nothing to ui",
+  "status": "in_progress",
+  "projectPath": "C:\\Users\\dylan\\Downloads\\automaker-pr",
+  "id": "feature-1770723314497-gv1ufac66",
+  "descriptionHistory": [
+    {
+      "description": "changing theme does nothing to ui",
+      "timestamp": "2026-02-10T11:35:14.634Z",
+      "source": "initial"
+    }
+  ],
+  "updatedAt": "2026-02-10T11:35:15.974Z"
+}

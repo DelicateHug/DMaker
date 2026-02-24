@@ -1,0 +1,71 @@
+{
+  "category": "Uncategorized",
+  "description": "Recently completed should not tell me when it was completed or anything like that it should just tell me the feature title right now it done in 100 S which makes no sense I don't actually know a task completed and also when I right click it nothing happens so it doesn't actually pop up uh you know the task that I can look at what it is and you know complete it from the opened task menu. Also there should be a button there called Complete All so that I can just automatically move all of them into the archive state for the recently completed this does not include all awaiting approval it only includes the ones that are listed under Recently Completed",
+  "title": "Add right-click context menu to recently completed tasks",
+  "images": [],
+  "imagePaths": [
+    {
+      "id": "img-1770606981833-33kqwfpyy",
+      "path": "C:\\Users\\dylan\\Downloads\\dmaker-pr\\.dmaker\\features\\feature-1770607053060-te9xld17q\\images\\pasted-image-2026-02-09T03-16-21-806Z-1770606981829.png",
+      "filename": "pasted-image-2026-02-09T03-16-21-806Z.png",
+      "mimeType": "image/png"
+    }
+  ],
+  "textFilePaths": [],
+  "skipTests": true,
+  "model": "opus",
+  "thinkingLevel": "none",
+  "reasoningEffort": "none",
+  "priority": 2,
+  "planningMode": "full",
+  "requirePlanApproval": false,
+  "dependencies": [],
+  "workMode": "current",
+  "titleGenerating": false,
+  "status": "completed",
+  "id": "feature-1770607053060-te9xld17q",
+  "descriptionHistory": [
+    {
+      "description": "Recently completed should not tell me when it was completed or anything like that it should just tell me the feature title right now it done in 100 S which makes no sense I don't actually know a task completed and also when I right click it nothing happens so it doesn't actually pop up uh you know the task that I can look at what it is and you know complete it from the opened task menu. Also there should be a button there called Complete All so that I can just automatically move all of them into the archive state for the recently completed this does not include all awaiting approval it only includes the ones that are listed under Recently Completed",
+      "timestamp": "2026-02-09T03:17:33.121Z",
+      "source": "initial"
+    }
+  ],
+  "startedAt": "2026-02-09T03:17:33.155Z",
+  "updatedAt": "2026-02-09T03:31:56.377Z",
+  "planSpec": {
+    "status": "approved",
+    "version": 1,
+    "reviewedByUser": false,
+    "content": "# Specification: Recently Completed Features UX Improvements\n\n## 1. Problem Statement\n\nThe \"Recently Completed\" dropdown in the running agents indicator shows confusing information like \"Feature completed in 100s\" instead of just the feature title. Additionally, right-clicking on completed features doesn't show a context menu, and there's no way to quickly archive all recently completed features at once.\n\n## 2. User Story\n\nAs a user, I want the Recently Completed section to display clear feature titles with working context menus and a \"Complete All\" button, so that I can quickly understand what finished and efficiently move completed items to the archive.\n\n## 3. Acceptance Criteria\n\n**Happy Path - Display:**\n- GIVEN a feature has completed\n- WHEN it appears in the Recently Completed dropdown\n- THEN it should display only the feature title (not completion time or \"completed in Xs\")\n\n**Happy Path - Context Menu:**\n- GIVEN a recently completed feature is displayed\n- WHEN the user right-clicks on it\n- THEN a context menu should appear with options to view/manage the feature\n\n**Happy Path - Complete All:**\n- GIVEN there are multiple items in Recently Completed\n- WHEN the user clicks \"Complete All\" button\n- THEN all features listed under Recently Completed should be moved to archived/completed state\n- AND the Recently Completed list should be cleared\n\n**Edge Case - Empty List:**\n- GIVEN there are no recently completed features\n- WHEN viewing the Recently Completed section\n- THEN the \"Complete All\" button should be disabled or hidden\n\n**Edge Case - Only Awaiting Approval:**\n- GIVEN there are features awaiting approval but none in Recently Completed\n- WHEN the user views the dropdown\n- THEN \"Complete All\" should not affect awaiting approval items\n\n## 4. Technical Context\n\n| Aspect | Value |\n|--------|-------|\n| Affected Files | `apps/ui/src/components/layout/running-agents-indicator.tsx` |\n| Dependencies | None (uses existing UI components) |\n| Constraints | Must use existing feature archive/complete API |\n| Patterns to Follow | Existing context menu patterns in board view, existing button styles |\n\n## 5. Non-Goals\n\n- Modifying the \"Awaiting Approval\" section behavior\n- Changing the Running Agents section\n- Adding new backend API endpoints (will use existing feature update mechanisms)\n\n## 6. Implementation Tasks\n\n```tasks\n## Phase 1: Fix Display Text\n- [ ] T001: Remove completion time display, show only feature title | File: apps/ui/src/components/layout/running-agents-indicator.tsx\n\n## Phase 2: Add Context Menu\n- [ ] T002: Add right-click context menu to recently completed items | File: apps/ui/src/components/layout/running-agents-indicator.tsx\n\n## Phase 3: Add Complete All Button\n- [ ] T003: Add \"Complete All\" button that archives all recently completed features | File: apps/ui/src/components/layout/running-agents-indicator.tsx\n```\n\n## 7. Success Metrics\n\n- Recently completed features show only titles (no timing information)\n- Right-click on recently completed items shows a functional context menu\n- \"Complete All\" button visible and functional when items exist in Recently Completed\n- All recently completed features can be archived with one click\n\n## 8. Risks & Mitigations\n\n| Risk | Mitigation |\n|------|------------|\n| Context menu may conflict with existing click handlers | Use existing context menu patterns from board view |\n| Complete All needs proper API integration | Use existing feature update mutation patterns |",
+    "generatedAt": "2026-02-09T03:17:58.187Z",
+    "tasks": [
+      {
+        "id": "T001",
+        "description": "Remove completion time display, show only feature title",
+        "filePath": "apps/ui/src/components/layout/running-agents-indicator.tsx",
+        "phase": "Phase 1: Fix Display Text",
+        "status": "pending"
+      },
+      {
+        "id": "T002",
+        "description": "Add right-click context menu to recently completed items",
+        "filePath": "apps/ui/src/components/layout/running-agents-indicator.tsx",
+        "phase": "Phase 2: Add Context Menu",
+        "status": "pending"
+      },
+      {
+        "id": "T003",
+        "description": "Add \"Complete All\" button that archives all recently completed features",
+        "filePath": "apps/ui/src/components/layout/running-agents-indicator.tsx",
+        "phase": "Phase 3: Add Complete All Button",
+        "status": "pending"
+      }
+    ],
+    "tasksTotal": 3,
+    "tasksCompleted": 3,
+    "approvedAt": "2026-02-09T03:17:58.192Z",
+    "currentTaskId": "T003"
+  },
+  "justFinishedAt": "2026-02-09T03:31:56.377Z"
+}

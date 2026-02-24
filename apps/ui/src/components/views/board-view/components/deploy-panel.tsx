@@ -30,7 +30,7 @@ import {
 import { toast } from 'sonner';
 import { apiDelete, apiFetch, apiGet, getAuthenticatedImageUrl } from '@/lib/api-fetch';
 import { getHttpApiClient } from '@/lib/http-api-client';
-import { createLogger } from '@automaker/utils/logger';
+import { createLogger } from '@dmaker/utils/logger';
 import type { Project } from '@/lib/electron';
 import { useAppStore } from '@/store/app-store';
 import { getProjectIcon } from '@/lib/icon-registry';
@@ -63,7 +63,7 @@ export interface DeployPanelProps {
   showProjectSelector?: boolean;
 }
 
-/** A deploy script from the .automaker/deploy folder (matches server type) */
+/** A deploy script from the .dmaker/deploy folder (matches server type) */
 interface FolderScript {
   name: string;
   path: string;
@@ -207,7 +207,7 @@ function formatTime(date: Date | string): string {
  *
  * Features:
  * - Project selector dropdown (matching AgentChatPanel pattern)
- * - Lists scripts from the project's .automaker/deploy folder
+ * - Lists scripts from the project's .dmaker/deploy folder
  * - Shows run history (running/complete) with status indicators
  * - Allows viewing live output for running deploys and final output for past runs
  * - WebSocket streaming for real-time output
@@ -344,7 +344,7 @@ export const DeployPanel = memo(function DeployPanel({
   }, [viewingHistoryIdx, history]);
 
   // ---------------------------------------------------------------------------
-  // Fetch scripts from .automaker/deploy folder
+  // Fetch scripts from .dmaker/deploy folder
   // ---------------------------------------------------------------------------
 
   const fetchScripts = useCallback(async () => {
@@ -978,7 +978,7 @@ export const DeployPanel = memo(function DeployPanel({
                   : 'Create a deploy folder to get started.'}
               </p>
               <p className="text-[10px] text-muted-foreground/50 mt-2 font-mono">
-                {folderPath || '.automaker/deploy/'}
+                {folderPath || '.dmaker/deploy/'}
               </p>
             </div>
           )}

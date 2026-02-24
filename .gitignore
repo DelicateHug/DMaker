@@ -11,11 +11,11 @@ out/
 .next/
 .turbo/
 
-# Automaker
-.automaker/images/
-.automaker/
-/.automaker/*
-/.automaker/
+# DMaker
+.dmaker/images/
+.dmaker/
+/.dmaker/*
+/.dmaker/
 
 .worktrees/
 
@@ -105,4 +105,4 @@ test-output.txt
 nul
 
 # Per-project feature data (user-specific, may contain sensitive output)
-.automaker/features/
+.dmaker/features/

@@ -1,0 +1,30 @@
+{
+  "category": "Uncategorized",
+  "description": "Please make add feature also have a hot key and then in the bottom left where it actually says add feature button that you can click make sure that it when you hover it it tells you what that hotkey would be",
+  "title": "Add feature hotkey with tooltip hint",
+  "images": [],
+  "imagePaths": [],
+  "textFilePaths": [],
+  "skipTests": true,
+  "model": "opus",
+  "thinkingLevel": "none",
+  "reasoningEffort": "none",
+  "priority": 2,
+  "planningMode": "skip",
+  "requirePlanApproval": false,
+  "dependencies": [],
+  "workMode": "current",
+  "titleGenerating": false,
+  "status": "completed",
+  "id": "feature-1770699441672-0dtesruea",
+  "descriptionHistory": [
+    {
+      "description": "Please make add feature also have a hot key and then in the bottom left where it actually says add feature button that you can click make sure that it when you hover it it tells you what that hotkey would be",
+      "timestamp": "2026-02-10T04:57:21.714Z",
+      "source": "initial"
+    }
+  ],
+  "startedAt": "2026-02-10T04:57:21.745Z",
+  "updatedAt": "2026-02-10T05:03:18.725Z",
+  "justFinishedAt": "2026-02-10T05:03:18.725Z"
+}

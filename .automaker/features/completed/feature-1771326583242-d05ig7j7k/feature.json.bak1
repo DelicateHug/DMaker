@@ -1,0 +1,46 @@
+{
+  "category": "Uncategorized",
+  "description": "feature id should be somewhere on agent output",
+  "title": "Display Agent Output Feature ID on Results",
+  "images": [],
+  "imagePaths": [
+    {
+      "id": "img-1771326572231-ws9y3d7al",
+      "path": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr\\.automaker\\features\\feature-1771326583242-d05ig7j7k\\images\\pasted-image-2026-02-17T11-09-32-204Z-1771326572225.png",
+      "filename": "pasted-image-2026-02-17T11-09-32-204Z.png",
+      "mimeType": "image/png"
+    },
+    {
+      "path": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr\\.automaker\\features\\feature-1771326583242-d05ig7j7k\\images\\pasted-image-2026-02-17T11-18-56-047Z-1771327136765.png",
+      "filename": "pasted-image-2026-02-17T11-18-56-047Z-1771327136765.png",
+      "mimeType": "image/png"
+    }
+  ],
+  "textFilePaths": [],
+  "skipTests": true,
+  "model": "sonnet",
+  "thinkingLevel": "none",
+  "reasoningEffort": "none",
+  "priority": 2,
+  "planningMode": "skip",
+  "requirePlanApproval": false,
+  "autoDeploy": false,
+  "deployEnvironment": "development",
+  "dependencies": [],
+  "workMode": "current",
+  "selectedProjectPath": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr",
+  "titleGenerating": false,
+  "status": "waiting_approval",
+  "projectPath": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr",
+  "id": "feature-1771326583242-d05ig7j7k",
+  "descriptionHistory": [
+    {
+      "description": "feature id should be somewhere on agent output",
+      "timestamp": "2026-02-17T11:09:43.290Z",
+      "source": "initial"
+    }
+  ],
+  "startedAt": "2026-02-17T11:19:24.861Z",
+  "updatedAt": "2026-02-17T11:24:25.330Z",
+  "justFinishedAt": "2026-02-17T11:24:25.330Z"
+}

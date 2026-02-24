@@ -1,0 +1,41 @@
+{
+  "category": "Uncategorized",
+  "description": "If the tag has a within the past 5 minutes then it should not show the resume button because that means that it's already running",
+  "title": "",
+  "images": [],
+  "imagePaths": [
+    {
+      "id": "img-1770724959912-ewgak6sj2",
+      "path": "C:\\Users\\dylan\\Downloads\\dmaker-pr\\.dmaker\\features\\feature-1770724980365-7vqsnabcl\\images\\pasted-image-2026-02-10T12-02-39-688Z-1770724959813.png",
+      "filename": "pasted-image-2026-02-10T12-02-39-688Z.png",
+      "mimeType": "image/png"
+    }
+  ],
+  "textFilePaths": [],
+  "skipTests": true,
+  "model": "opus",
+  "thinkingLevel": "none",
+  "reasoningEffort": "none",
+  "priority": 2,
+  "planningMode": "skip",
+  "requirePlanApproval": false,
+  "autoDeploy": false,
+  "deployEnvironment": "development",
+  "dependencies": [],
+  "workMode": "current",
+  "selectedProjectPath": "C:\\Users\\dylan\\Downloads\\dmaker-pr",
+  "titleGenerating": "If the tag has a within the past 5 minutes then it should not show the resume button because that means that it's already running",
+  "status": "completed",
+  "projectPath": "C:\\Users\\dylan\\Downloads\\dmaker-pr",
+  "id": "feature-1770724980365-7vqsnabcl",
+  "descriptionHistory": [
+    {
+      "description": "If the tag has a within the past 5 minutes then it should not show the resume button because that means that it's already running",
+      "timestamp": "2026-02-10T12:03:03.448Z",
+      "source": "initial"
+    }
+  ],
+  "updatedAt": "2026-02-10T12:20:48.445Z",
+  "justFinishedAt": "2026-02-10T12:20:48.445Z",
+  "completedAt": "2026-02-11T01:11:55.551Z"
+}

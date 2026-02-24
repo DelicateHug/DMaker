@@ -1,0 +1,105 @@
+{
+  "category": "Uncategorized",
+  "description": "In the top left drop down menu where you select the project we should not be refreshing the entire page. Please only refresh the board view and also change the agent sessions so that we can choose Project in the agent sessions and not via the top left menu so that we don't keep having whole page refreshes all the time",
+  "title": "Optimize project switching to prevent full page refresh",
+  "images": [],
+  "imagePaths": [],
+  "textFilePaths": [],
+  "skipTests": true,
+  "model": "opus",
+  "thinkingLevel": "medium",
+  "reasoningEffort": "none",
+  "priority": 2,
+  "planningMode": "full",
+  "requirePlanApproval": false,
+  "dependencies": [],
+  "workMode": "current",
+  "titleGenerating": false,
+  "status": "in_progress",
+  "id": "feature-1770634307637-l8t6rl1vy",
+  "descriptionHistory": [
+    {
+      "description": "In the top left drop down menu where you select the project we should not be refreshing the entire page. Please only refresh the board view and also change the agent sessions so that we can choose Project in the agent sessions and not via the top left menu so that we don't keep having whole page refreshes all the time",
+      "timestamp": "2026-02-09T10:51:47.690Z",
+      "source": "initial"
+    }
+  ],
+  "startedAt": "2026-02-09T11:52:13.560Z",
+  "updatedAt": "2026-02-09T11:52:24.049Z",
+  "planSpec": {
+    "status": "approved",
+    "version": 1,
+    "reviewedByUser": false,
+    "content": "🔧 Tool: Task\nInput: {\n  \"subagent_type\": \"Explore\",\n  \"prompt\": \"Find the implementation of:\\n1. The top-left project dropdown/switcher menu\\n2. How project switching currently works and causes page refresh\\n3. The agent sessions view/component\\n4. The board view component\\n\\nFocus on understanding the navigation flow and how project context is managed. Look at the app store, router configuration, and any project switching logic.\",\n  \"description\": \"Explore project switching flow\"\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"cd \\\"C:\\\\Users\\\\dylan\\\\Downloads\\\\automaker-pr\\\" && git status --short | head -20\",\n  \"description\": \"Check git status to understand current changes\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"**/src/components/layout/**\",\n  \"path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"**/src/routes/**\",\n  \"path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"**/src/store/**\",\n  \"path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"**/src/components/views/**\",\n  \"path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\layout\\\\top-nav-bar.tsx\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\store\\\\app-store.ts\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\routes\\\\__root.tsx\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\routes\\\\board.tsx\"\n}\n\n🔧 Tool: Grep\nInput: {\n  \"pattern\": \"project.*switch|Project.*Switcher|setCurrentProject|currentProject\",\n  \"type\": \"tsx\",\n  \"path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\",\n  \"output_mode\": \"files_with_matches\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\store\\\\app-store.ts\",\n  \"limit\": 200\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"**/board-view.tsx\",\n  \"path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\"\n}\n\n🔧 Tool: Grep\nInput: {\n  \"pattern\": \"BoardView|export.*BoardView\",\n  \"type\": \"tsx\",\n  \"path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\",\n  \"output_mode\": \"files_with_matches\",\n  \"head_limit\": 5\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\store\\\\app-store.ts\",\n  \"offset\": 200,\n  \"limit\": 300\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\board-view.tsx\",\n  \"limit\": 300\n}\n\n🔧 Tool: Grep\nInput: {\n  \"pattern\": \"setCurrentProject|currentProject|showAllProjects\",\n  \"type\": \"ts\",\n  \"path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\store\\\\app-store.ts\",\n  \"output_mode\": \"content\",\n  \"head_limit\": 30\n}\n\n🔧 Tool: Grep\nInput: {\n  \"pattern\": \"setCurrentProject|handleProjectSelect|showAllProjects|location.pathname\",\n  \"type\": \"tsx\",\n  \"path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\layout\\\\top-nav-bar.tsx\",\n  \"output_mode\": \"content\",\n  \"head_limit\": 50\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"cd \\\"C:\\\\Users\\\\dylan\\\\Downloads\\\\automaker-pr\\\" && find apps/ui/src -name \\\"*.tsx\\\" -exec grep -l \\\"ProjectSwitcher\\\\|project.*switch\\\" {} \\\\; | head -20\",\n  \"description\": \"Find project switcher components\"\n}\n\n🔧 Tool: Grep\nInput: {\n  \"pattern\": \"useAppStore.*currentProject|showAllProjects\",\n  \"type\": \"tsx\",\n  \"path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\board-view.tsx\",\n  \"output_mode\": \"content\",\n  \"head_limit\": 20\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\board-view.tsx\",\n  \"offset\": 90,\n  \"limit\": 150\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"**/*agent*view*.tsx\",\n  \"path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"**/agent-view/*.tsx\",\n  \"path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\agent-view.tsx\",\n  \"limit\": 250\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"cd \\\"C:\\\\Users\\\\dylan\\\\Downloads\\\\automaker-pr\\\" && grep -r \\\"agent.*session\\\\|ChatSession\\\\|sessionManager\\\" apps/ui/src/components --include=\\\"*.tsx\\\" | head -20\",\n  \"description\": \"Find agent session references\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"**/session*.tsx\",\n  \"path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\session-manager.tsx\",\n  \"limit\": 200\n}\n\n🔧 Tool: Grep\nInput: {\n  \"pattern\": \"useBoardFeatures|currentProject.*filter|showAllProjects\",\n  \"type\": \"tsx\",\n  \"path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\board-view\\\\hooks\",\n  \"output_mode\": \"files_with_matches\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"**/*use-board*.ts\",\n  \"path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\board-view\\\\hooks\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\board-view\\\\hooks\\\\use-board-features.ts\",\n  \"limit\": 250\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"cd \\\"C:\\\\Users\\\\dylan\\\\Downloads\\\\automaker-pr\\\" && grep -n \\\"currentProject\\\\|showAllProjects\\\" apps/ui/src/components/views/board-view/hooks/use-board-features.ts | head -30\",\n  \"description\": \"Check board features hook for project filtering\"\n}\n\n🔧 Tool: Bash\nInput: {\n  \"command\": \"cd \\\"C:\\\\Users\\\\dylan\\\\Downloads\\\\automaker-pr\\\" && grep -n \\\"interface AppState\\\\|const useAppStore\\\" apps/ui/src/store/app-store.ts | head -20\",\n  \"description\": \"Find AppStore interface and main store definition\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\store\\\\app-store.ts\",\n  \"offset\": 500,\n  \"limit\": 200\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\layout\\\\top-nav-bar.tsx\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\agent-view.tsx\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\store\\\\app-store.ts\",\n  \"offset\": 1,\n  \"limit\": 200\n}\n\n🔧 Tool: Grep\nInput: {\n  \"pattern\": \"window\\\\.location|location\\\\.reload|location\\\\.href\",\n  \"path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\agent-view\\\\components\\\\agent-header.tsx\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\agent-view\\\\components\\\\session-selector.tsx\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\board-view\\\\components\\\\agent-chat-panel.tsx\"\n}\n\n🔧 Tool: Grep\nInput: {\n  \"pattern\": \"setCurrentProject|currentProject\",\n  \"path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\board-view.tsx\",\n  \"output_mode\": \"content\",\n  \"-n\": true\n}\n# Feature Specification: Optimized Project Switching Without Page Refreshes\n\n## 1. Problem Statement\n\nWhen users select a different project from the top-left dropdown menu, they experience a full page refresh which is jarring and unnecessary. The user wants project switching to be more seamless by only refreshing the board view data, and they also want the ability to select projects from within the agent sessions interface to avoid triggering whole page refreshes through the top navigation.\n\n## 2. User Story\n\nAs a developer using Automaker, I want to switch between projects without experiencing full page refreshes, so that my workflow remains uninterrupted and the application feels more responsive.\n\n## 3. Acceptance Criteria\n\n**Happy Path: Switch project via session selector**\n- GIVEN I am on the board view with an active agent chat panel\n- WHEN I click on the session selector dropdown in the agent chat header\n- THEN I should see a project selector above the session list\n- AND selecting a different project should only refresh the board view and agent sessions without a full page reload\n\n**Happy Path: Switch project via top nav dropdown (optimized)**\n- GIVEN I am viewing any page in the application\n- WHEN I select a different project from the top-left dropdown\n- THEN only the relevant views should refresh (board, features, sessions)\n- AND the page should NOT perform a full reload\n\n**Edge Case: No projects available**\n- GIVEN I have no projects in my workspace\n- WHEN I open the session selector\n- THEN I should see a prompt to add a project\n- AND the project section should gracefully handle empty state\n\n**Edge Case: Switching while agent is processing**\n- GIVEN I have an agent actively processing a request\n- WHEN I switch to a different project\n- THEN the current agent session should continue in the background\n- AND the new project's sessions should load without interrupting background work\n\n**Error Handling: Failed to load project sessions**\n- GIVEN I switch to a project with corrupted session data\n- WHEN the sessions fail to load\n- THEN I should see an error message with option to create a new session\n- AND the application should remain stable\n\n## 4. Technical Context\n\n| Aspect | Value |\n|--------|-------|\n| Affected Files | `session-selector.tsx`, `agent-chat-panel.tsx`, `agent-header.tsx`, `use-agent-session.ts`, `top-nav-bar.tsx`, `app-store.ts` |\n| Dependencies | None (uses existing Zustand store and React patterns) |\n| Constraints | Must maintain backward compatibility with existing session management |\n| Patterns to Follow | Use Zustand for state management, React memo for performance, existing dropdown patterns |\n\n## 5. Non-Goals\n\n- This feature does NOT include:\n  - Modifying how features are loaded/refreshed (already working correctly)\n  - Changing the overall navigation structure\n  - Adding new API endpoints (using existing session/project APIs)\n  - Modifying the server-side session management\n  - Supporting multiple simultaneous project sessions in the same panel\n\n## 6. Implementation Tasks\n\n```tasks\n## Phase 1: Foundation - Add Project Selector to Session Selector\n\n- [ ] T001: Add project selection dropdown section to SessionSelector component | File: apps/ui/src/components/views/agent-view/components/session-selector.tsx\n- [ ] T002: Create useProjectSwitchForSessions hook to handle project context switching | File: apps/ui/src/hooks/use-project-switch-for-sessions.ts\n- [ ] T003: Update SessionSelector to filter sessions by selected project | File: apps/ui/src/components/views/agent-view/components/session-selector.tsx\n\n## Phase 2: Core Implementation - Optimize Project Switching\n\n- [ ] T004: Update AgentChatPanel to accept project as prop and respond to project changes | File: apps/ui/src/components/views/board-view/components/agent-chat-panel.tsx\n- [ ] T005: Modify useAgentSession hook to reset session when project changes | File: apps/ui/src/hooks/use-agent-session.ts (via agent-view/hooks)\n- [ ] T006: Ensure top-nav-bar project selection doesn't cause unnecessary re-renders | File: apps/ui/src/components/layout/top-nav-bar.tsx\n\n## Phase 3: Integration & Polish\n\n- [ ] T007: Add project indicator to AgentHeader compact mode showing current project | File: apps/ui/src/components/views/agent-view/components/agent-header.tsx\n- [ ] T008: Update SessionSelector to reload sessions when project changes | File: apps/ui/src/components/views/agent-view/components/session-selector.tsx\n- [ ] T009: Add empty state handling for projects with no sessions | File: apps/ui/src/components/views/agent-view/components/session-selector.tsx\n```\n\n## 7. Success Metrics\n\n- No full page refresh when switching projects from any location\n- SessionSelector shows project dropdown with current project highlighted\n- Switching projects in SessionSelector updates agent sessions within 200ms\n- Board view correctly loads features for newly selected project\n- Agent chat history is preserved per-project and restored when switching back\n- Performance: project switch should complete in under 500ms\n\n## 8. Risks & Mitigations\n\n| Risk | Mitigation |\n|------|------------|\n| Session data corruption on rapid project switching | Add debounce to project switch handler and validate session data before display |\n| Memory leaks from orphaned session connections | Ensure WebSocket connections are properly cleaned up on project change |\n| Race conditions between board and agent session loading | Use React Suspense boundaries and loading states to prevent stale data display |\n| Breaking existing session management | Keep existing APIs and add new project-aware layer on top |",
+    "generatedAt": "2026-02-09T11:01:01.979Z",
+    "tasks": [
+      {
+        "id": "T001",
+        "description": "Add project selection dropdown section to SessionSelector component",
+        "filePath": "apps/ui/src/components/views/agent-view/components/session-selector.tsx",
+        "phase": "Phase 1: Foundation - Add Project Selector to Session Selector",
+        "status": "pending"
+      },
+      {
+        "id": "T002",
+        "description": "Create useProjectSwitchForSessions hook to handle project context switching",
+        "filePath": "apps/ui/src/hooks/use-project-switch-for-sessions.ts",
+        "phase": "Phase 1: Foundation - Add Project Selector to Session Selector",
+        "status": "pending"
+      },
+      {
+        "id": "T003",
+        "description": "Update SessionSelector to filter sessions by selected project",
+        "filePath": "apps/ui/src/components/views/agent-view/components/session-selector.tsx",
+        "phase": "Phase 1: Foundation - Add Project Selector to Session Selector",
+        "status": "pending"
+      },
+      {
+        "id": "T004",
+        "description": "Update AgentChatPanel to accept project as prop and respond to project changes",
+        "filePath": "apps/ui/src/components/views/board-view/components/agent-chat-panel.tsx",
+        "phase": "Phase 2: Core Implementation - Optimize Project Switching",
+        "status": "pending"
+      },
+      {
+        "id": "T005",
+        "description": "Modify useAgentSession hook to reset session when project changes",
+        "filePath": "apps/ui/src/hooks/use-agent-session.ts (via agent-view/hooks)",
+        "phase": "Phase 2: Core Implementation - Optimize Project Switching",
+        "status": "pending"
+      },
+      {
+        "id": "T006",
+        "description": "Ensure top-nav-bar project selection doesn't cause unnecessary re-renders",
+        "filePath": "apps/ui/src/components/layout/top-nav-bar.tsx",
+        "phase": "Phase 2: Core Implementation - Optimize Project Switching",
+        "status": "pending"
+      },
+      {
+        "id": "T007",
+        "description": "Add project indicator to AgentHeader compact mode showing current project",
+        "filePath": "apps/ui/src/components/views/agent-view/components/agent-header.tsx",
+        "phase": "Phase 3: Integration & Polish",
+        "status": "pending"
+      },
+      {
+        "id": "T008",
+        "description": "Update SessionSelector to reload sessions when project changes",
+        "filePath": "apps/ui/src/components/views/agent-view/components/session-selector.tsx",
+        "phase": "Phase 3: Integration & Polish",
+        "status": "pending"
+      },
+      {
+        "id": "T009",
+        "description": "Add empty state handling for projects with no sessions",
+        "filePath": "apps/ui/src/components/views/agent-view/components/session-selector.tsx",
+        "phase": "Phase 3: Integration & Polish",
+        "status": "pending"
+      }
+    ],
+    "tasksTotal": 9,
+    "tasksCompleted": 5,
+    "approvedAt": "2026-02-09T11:01:01.982Z",
+    "currentTaskId": "T006"
+  }
+}

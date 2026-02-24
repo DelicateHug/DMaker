@@ -14,7 +14,7 @@ import {
   secureFs,
   getDataDirectory,
   getCodexConfigDir,
-} from '@automaker/platform';
+} from '@dmaker/platform';
 import { checkCodexAuthentication } from '../lib/codex-auth.js';
 import {
   formatHistoryAsText,
@@ -22,7 +22,7 @@ import {
   classifyError,
   getUserFriendlyErrorMessage,
   createLogger,
-} from '@automaker/utils';
+} from '@dmaker/utils';
 import type {
   ExecuteOptions,
   ProviderMessage,
@@ -38,7 +38,7 @@ import {
   type CodexApprovalPolicy,
   type CodexSandboxMode,
   type CodexAuthStatus,
-} from '@automaker/types';
+} from '@dmaker/types';
 import { CodexConfigManager } from './codex-config-manager.js';
 import { executeCodexSdkQuery } from './codex-sdk-client.js';
 import {
@@ -98,7 +98,7 @@ const TEXT_ENCODING = 'utf-8';
  * This is the "no output" timeout - if the CLI doesn't produce any JSONL output
  * for this duration, the process is killed. For reasoning models with high
  * reasoning effort, this timeout is dynamically extended via calculateReasoningTimeout().
- * @see calculateReasoningTimeout from @automaker/types
+ * @see calculateReasoningTimeout from @dmaker/types
  */
 const CODEX_CLI_TIMEOUT_MS = DEFAULT_TIMEOUT_MS;
 const CONTEXT_WINDOW_256K = 256000;

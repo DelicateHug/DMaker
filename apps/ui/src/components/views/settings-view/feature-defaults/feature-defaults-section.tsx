@@ -19,7 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import type { PhaseModelEntry, DeployEnvironment } from '@automaker/types';
+import type { PhaseModelEntry, DeployEnvironment } from '@dmaker/types';
 import { PhaseModelSelector } from '../model-defaults/phase-model-selector';
 
 interface FeatureDefaultsSectionProps {

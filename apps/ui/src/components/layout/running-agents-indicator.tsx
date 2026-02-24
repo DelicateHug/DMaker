@@ -30,8 +30,8 @@ import { getElectronAPI } from '@/lib/electron';
 import { getHttpApiClient } from '@/lib/http-api-client';
 import { useAppStore } from '@/store/app-store';
 import { useNotificationsStore } from '@/store/notifications-store';
-import { createLogger } from '@automaker/utils/logger';
-import type { Notification } from '@automaker/types';
+import { createLogger } from '@dmaker/utils/logger';
+import type { Notification } from '@dmaker/types';
 
 const logger = createLogger('RunningAgentsIndicator');
 

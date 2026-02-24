@@ -1,6 +1,6 @@
 /**
- * @automaker/platform
- * Platform-specific utilities for AutoMaker
+ * @dmaker/platform
+ * Platform-specific utilities for DMaker
  */
 
 // Path utilities
@@ -8,7 +8,7 @@ export {
   getMonthName,
   isMonthDir,
   isStatusDir,
-  getAutomakerDir,
+  getDmakerDir,
   getFeaturesDir,
   getFeatureMonthDir,
   getFeatureDir,
@@ -28,7 +28,7 @@ export {
   getBranchTrackingPath,
   getExecutionStatePath,
   getNotificationsPath,
-  ensureAutomakerDir,
+  ensureDmakerDir,
   getGlobalSettingsPath,
   getCredentialsPath,
   getProjectSettingsPath,

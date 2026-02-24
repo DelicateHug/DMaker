@@ -1,0 +1,41 @@
+{
+  "category": "Uncategorized",
+  "description": "I should be able to configure on a per project level the Max agents but the agent configuration that's directly underneath the board of actions should be for all projects So what I would do is I would increment it by one it would increment all projects by one so if I have 5 projects and I increment it then my total agents would go up by 5 for everyone",
+  "title": "Add per-project max agents configuration with global increment",
+  "images": [],
+  "imagePaths": [
+    {
+      "id": "img-1770784989650-kj3h5au16",
+      "path": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr\\.automaker\\features\\feature-1770785032872-xp44kog07\\images\\pasted-image-2026-02-11T04-43-09-611Z-1770784989642.png",
+      "filename": "pasted-image-2026-02-11T04-43-09-611Z.png",
+      "mimeType": "image/png"
+    }
+  ],
+  "textFilePaths": [],
+  "skipTests": true,
+  "model": "sonnet",
+  "thinkingLevel": "none",
+  "reasoningEffort": "none",
+  "priority": 2,
+  "planningMode": "skip",
+  "requirePlanApproval": false,
+  "autoDeploy": false,
+  "deployEnvironment": "development",
+  "dependencies": [],
+  "workMode": "current",
+  "selectedProjectPath": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr",
+  "titleGenerating": false,
+  "status": "waiting_approval",
+  "projectPath": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr",
+  "id": "feature-1770785032872-xp44kog07",
+  "descriptionHistory": [
+    {
+      "description": "I should be able to configure on a per project level the Max agents but the agent configuration that's directly underneath the board of actions should be for all projects So what I would do is I would increment it by one it would increment all projects by one so if I have 5 projects and I increment it then my total agents would go up by 5 for everyone",
+      "timestamp": "2026-02-11T04:43:53.003Z",
+      "source": "initial"
+    }
+  ],
+  "startedAt": "2026-02-11T04:43:53.127Z",
+  "updatedAt": "2026-02-11T05:47:47.769Z",
+  "justFinishedAt": "2026-02-11T05:47:47.769Z"
+}

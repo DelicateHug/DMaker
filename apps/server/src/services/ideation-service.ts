@@ -6,7 +6,7 @@
 import path from 'path';
 import * as secureFs from '../lib/secure-fs.js';
 import type { EventEmitter } from '../lib/events.js';
-import type { Feature, ExecuteOptions } from '@automaker/types';
+import type { Feature, ExecuteOptions } from '@dmaker/types';
 import type {
   Idea,
   IdeaCategory,
@@ -23,7 +23,7 @@ import type {
   SendMessageOptions,
   PromptCategory,
   IdeationPrompt,
-} from '@automaker/types';
+} from '@dmaker/types';
 import {
   getIdeationDir,
   getIdeasDir,
@@ -33,14 +33,14 @@ import {
   getIdeationSessionPath,
   getIdeationAnalysisPath,
   ensureIdeationDir,
-} from '@automaker/platform';
-import { createLogger, loadContextFiles, isAbortError } from '@automaker/utils';
+} from '@dmaker/platform';
+import { createLogger, loadContextFiles, isAbortError } from '@dmaker/utils';
 import { ProviderFactory } from '../providers/provider-factory.js';
 import type { SettingsService } from './settings-service.js';
 import type { FeatureLoader } from './feature-loader.js';
 import { createChatOptions, validateWorkingDirectory } from '../lib/sdk-options.js';
-import { resolveModelString } from '@automaker/model-resolver';
-import { stripProviderPrefix } from '@automaker/types';
+import { resolveModelString } from '@dmaker/model-resolver';
+import { stripProviderPrefix } from '@dmaker/types';
 import { getPromptCustomization } from '../lib/settings-helpers.js';
 
 const logger = createLogger('IdeationService');

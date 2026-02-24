@@ -1,0 +1,41 @@
+{
+  "category": "Uncategorized",
+  "description": "If I have files expanded and I change the project then what it's currently doing is it collapses the file I don't want that to happen if I have files expanded the only time it should collapse is if I choose to collapse it it would however still refresh with board but not collapse while it's refreshing",
+  "title": "",
+  "images": [],
+  "imagePaths": [
+    {
+      "id": "img-1770726133137-hnqf1r7ls",
+      "path": "C:\\Users\\dylan\\Downloads\\dmaker-pr\\.dmaker\\features\\feature-1770726172413-lqizkoh4b\\images\\pasted-image-2026-02-10T12-22-12-761Z-1770726132942.png",
+      "filename": "pasted-image-2026-02-10T12-22-12-761Z.png",
+      "mimeType": "image/png"
+    }
+  ],
+  "textFilePaths": [],
+  "skipTests": true,
+  "model": "opus",
+  "thinkingLevel": "none",
+  "reasoningEffort": "none",
+  "priority": 2,
+  "planningMode": "skip",
+  "requirePlanApproval": false,
+  "autoDeploy": false,
+  "deployEnvironment": "development",
+  "dependencies": [],
+  "workMode": "current",
+  "selectedProjectPath": "C:\\Users\\dylan\\Downloads\\dmaker-pr",
+  "titleGenerating": "If I have files expanded and I change the project then what it's currently doing is it collapses the file I don't want that to happen if I have files expanded the only time it should collapse is if I choose to collapse it it would however still refresh with board but not collapse while it's refreshing",
+  "status": "completed",
+  "projectPath": "C:\\Users\\dylan\\Downloads\\dmaker-pr",
+  "id": "feature-1770726172413-lqizkoh4b",
+  "descriptionHistory": [
+    {
+      "description": "If I have files expanded and I change the project then what it's currently doing is it collapses the file I don't want that to happen if I have files expanded the only time it should collapse is if I choose to collapse it it would however still refresh with board but not collapse while it's refreshing",
+      "timestamp": "2026-02-10T12:22:52.537Z",
+      "source": "initial"
+    }
+  ],
+  "updatedAt": "2026-02-10T12:46:07.343Z",
+  "justFinishedAt": "2026-02-10T12:46:07.343Z",
+  "completedAt": "2026-02-11T01:11:56.471Z"
+}

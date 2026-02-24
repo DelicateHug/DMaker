@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { createLogger } from '@automaker/utils/logger';
+import { createLogger } from '@dmaker/utils/logger';
 import { getElectronAPI, GitHubIssue } from '@/lib/electron';
 
 const logger = createLogger('GitHubIssues');

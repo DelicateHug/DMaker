@@ -1,0 +1,38 @@
+{
+  "category": "Uncategorized",
+  "description": "These should show the project that they are assigned also I should be able to filter by project",
+  "title": "",
+  "images": [],
+  "imagePaths": [
+    {
+      "id": "img-1770724090995-vx7jhk97s",
+      "path": "C:\\Users\\dylan\\Downloads\\automaker-pr\\.automaker\\features\\feature-1770724149093-r8wr8n0az\\images\\pasted-image-2026-02-10T11-48-10-851Z-1770724090891.png",
+      "filename": "pasted-image-2026-02-10T11-48-10-851Z.png",
+      "mimeType": "image/png"
+    }
+  ],
+  "textFilePaths": [],
+  "skipTests": true,
+  "model": "opus",
+  "thinkingLevel": "none",
+  "reasoningEffort": "none",
+  "priority": 2,
+  "planningMode": "skip",
+  "requirePlanApproval": false,
+  "autoDeploy": false,
+  "deployEnvironment": "development",
+  "dependencies": [],
+  "workMode": "current",
+  "selectedProjectPath": "C:\\Users\\dylan\\Downloads\\automaker-pr",
+  "titleGenerating": "These should show the project that they are assigned also I should be able to filter by project",
+  "status": "backlog",
+  "projectPath": "C:\\Users\\dylan\\Downloads\\automaker-pr",
+  "id": "feature-1770724149093-r8wr8n0az",
+  "descriptionHistory": [
+    {
+      "description": "These should show the project that they are assigned also I should be able to filter by project",
+      "timestamp": "2026-02-10T11:49:09.196Z",
+      "source": "initial"
+    }
+  ]
+}

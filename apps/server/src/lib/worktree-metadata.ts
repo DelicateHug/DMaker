@@ -1,6 +1,6 @@
 /**
  * Worktree metadata storage utilities
- * Stores worktree-specific data in .automaker/worktrees/:branch/worktree.json
+ * Stores worktree-specific data in .dmaker/worktrees/:branch/worktree.json
  */
 
 import * as secureFs from './secure-fs.js';
@@ -61,7 +61,7 @@ function sanitizeBranchName(branch: string): string {
  */
 function getWorktreeMetadataDir(projectPath: string, branch: string): string {
   const safeBranch = sanitizeBranchName(branch);
-  return path.join(projectPath, '.automaker', 'worktrees', safeBranch);
+  return path.join(projectPath, '.dmaker', 'worktrees', safeBranch);
 }
 
 /**
@@ -149,7 +149,7 @@ export async function readAllWorktreeMetadata(
   projectPath: string
 ): Promise<Map<string, WorktreeMetadata>> {
   const result = new Map<string, WorktreeMetadata>();
-  const worktreesDir = path.join(projectPath, '.automaker', 'worktrees');
+  const worktreesDir = path.join(projectPath, '.dmaker', 'worktrees');
 
   try {
     const dirs = await secureFs.readdir(worktreesDir, { withFileTypes: true });

@@ -9,7 +9,7 @@ import type {
   CursorAssistantEvent,
   CursorToolCallEvent,
   CursorResultEvent,
-} from '@automaker/types';
+} from '@dmaker/types';
 
 /**
  * Cleans up fragmented streaming text by removing spurious newlines
@@ -881,7 +881,7 @@ export function getProviderStyle(entry: LogEntry): { badge?: string; icon?: stri
     };
   }
 
-  // Default (Claude/AutoMaker)
+  // Default (Claude/DMaker)
   return {
     badge: 'Claude',
     icon: 'bot',

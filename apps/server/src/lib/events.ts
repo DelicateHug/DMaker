@@ -2,8 +2,8 @@
  * Event emitter for streaming events to WebSocket clients
  */
 
-import type { EventType, EventCallback } from '@automaker/types';
-import { createLogger } from '@automaker/utils';
+import type { EventType, EventCallback } from '@dmaker/types';
+import { createLogger } from '@dmaker/utils';
 
 const logger = createLogger('Events');
 

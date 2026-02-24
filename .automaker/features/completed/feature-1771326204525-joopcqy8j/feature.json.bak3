@@ -1,0 +1,41 @@
+{
+  "category": "Uncategorized",
+  "description": "there should be a new prject button as well and it should be on bottom. thje bottom 2 on both should be all then new",
+  "title": "Add new project button at bottom",
+  "images": [],
+  "imagePaths": [
+    {
+      "id": "img-1771326161216-670ixvi9s",
+      "path": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr\\.automaker\\features\\feature-1771326204525-joopcqy8j\\images\\pasted-image-2026-02-17T11-02-41-180Z-1771326161211.png",
+      "filename": "pasted-image-2026-02-17T11-02-41-180Z.png",
+      "mimeType": "image/png"
+    }
+  ],
+  "textFilePaths": [],
+  "skipTests": true,
+  "model": "opus",
+  "thinkingLevel": "none",
+  "reasoningEffort": "none",
+  "priority": 2,
+  "planningMode": "skip",
+  "requirePlanApproval": false,
+  "autoDeploy": false,
+  "deployEnvironment": "development",
+  "dependencies": [],
+  "workMode": "current",
+  "selectedProjectPath": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr",
+  "titleGenerating": false,
+  "status": "in_progress",
+  "projectPath": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr",
+  "id": "feature-1771326204525-joopcqy8j",
+  "descriptionHistory": [
+    {
+      "description": "there should be a new prject button as well and it should be on bottom. thje bottom 2 on both should be all then new",
+      "timestamp": "2026-02-17T11:03:24.571Z",
+      "source": "initial"
+    }
+  ],
+  "startedAt": "2026-02-17T11:16:49.509Z",
+  "updatedAt": "2026-02-17T11:15:54.434Z",
+  "justFinishedAt": "2026-02-17T11:15:54.434Z"
+}

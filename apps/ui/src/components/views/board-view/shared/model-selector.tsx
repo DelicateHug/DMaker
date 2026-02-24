@@ -2,13 +2,13 @@
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Brain, AlertTriangle } from 'lucide-react';
-import { AnthropicIcon, CursorIcon, OpenAIIcon } from '@/components/ui/provider-icon';
+import { AnthropicIcon, CursorIcon, OpenAIIcon, GcpIcon } from '@/components/ui/provider-icon';
 import { cn } from '@/lib/utils';
 import type { ModelAlias } from '@/store/app-store';
 import { useAppStore } from '@/store/app-store';
 import { useSetupStore } from '@/store/setup-store';
-import { getModelProvider, PROVIDER_PREFIXES, stripProviderPrefix } from '@automaker/types';
-import type { ModelProvider } from '@automaker/types';
+import { getModelProvider, PROVIDER_PREFIXES, stripProviderPrefix } from '@dmaker/types';
+import type { ModelProvider } from '@dmaker/types';
 import { CLAUDE_MODELS, CURSOR_MODELS, ModelOption } from './model-constants';
 import { useEffect } from 'react';
 import { RefreshCw } from 'lucide-react';
@@ -93,12 +93,14 @@ export function ModelSelector({
   const isClaudeDisabled = disabledProviders.includes('claude');
   const isCursorDisabled = disabledProviders.includes('cursor');
   const isCodexDisabled = disabledProviders.includes('codex');
+  const isGcpDisabled = disabledProviders.includes('gcp');
 
   // Count available providers
   const availableProviders = [
     !isClaudeDisabled && 'claude',
     !isCursorDisabled && 'cursor',
     !isCodexDisabled && 'codex',
+    !isGcpDisabled && 'gcp',
   ].filter(Boolean) as ModelProvider[];
 
   return (
@@ -154,6 +156,22 @@ export function ModelSelector({
               >
                 <OpenAIIcon className="w-4 h-4" />
                 Codex CLI
+              </button>
+            )}
+            {!isGcpDisabled && (
+              <button
+                type="button"
+                onClick={() => handleProviderChange('gcp')}
+                className={cn(
+                  'flex-1 px-3 py-2 rounded-md border text-sm font-medium transition-colors flex items-center justify-center gap-2',
+                  selectedProvider === 'gcp'
+                    ? 'bg-primary text-primary-foreground border-primary'
+                    : 'bg-background hover:bg-accent border-border'
+                )}
+                data-testid={`${testIdPrefix}-provider-gcp`}
+              >
+                <GcpIcon className="w-4 h-4" />
+                GCP
               </button>
             )}
           </div>
@@ -375,6 +393,74 @@ export function ModelSelector({
               })}
             </div>
           )}
+        </div>
+      )}
+
+      {/* GCP/Vertex AI Models */}
+      {selectedProvider === 'gcp' && !isGcpDisabled && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <Label className="flex items-center gap-2">
+              <GcpIcon className="w-4 h-4 text-primary" />
+              GCP Vertex AI Model
+            </Label>
+            <span className="text-[11px] px-2 py-0.5 rounded-full border border-blue-500/40 text-blue-600 dark:text-blue-400">
+              Vertex AI
+            </span>
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            {[
+              {
+                id: 'gcp-gemini-2.5-pro',
+                label: 'Gemini 2.5 Pro',
+                description: 'Most capable Gemini model',
+                badge: 'Premium',
+              },
+              {
+                id: 'gcp-gemini-2.5-flash',
+                label: 'Gemini 2.5 Flash',
+                description: 'Fast with strong reasoning',
+                badge: 'Balanced',
+              },
+              {
+                id: 'gcp-gemini-2.0-flash',
+                label: 'Gemini 2.0 Flash',
+                description: 'Quick responses',
+                badge: 'Speed',
+              },
+              {
+                id: 'gcp-gemini-1.5-pro',
+                label: 'Gemini 1.5 Pro',
+                description: 'Large context window',
+                badge: 'Balanced',
+              },
+              {
+                id: 'gcp-gemini-1.5-flash',
+                label: 'Gemini 1.5 Flash',
+                description: 'Lightweight and fast',
+                badge: 'Speed',
+              },
+            ].map((option) => {
+              const isSelected = selectedModel === option.id;
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  onClick={() => onModelSelect(option.id)}
+                  title={option.description}
+                  className={cn(
+                    'flex-1 min-w-[120px] px-3 py-2 rounded-md border text-sm font-medium transition-colors',
+                    isSelected
+                      ? 'bg-primary text-primary-foreground border-primary'
+                      : 'bg-background hover:bg-accent border-input'
+                  )}
+                  data-testid={`${testIdPrefix}-${option.id}`}
+                >
+                  {option.label}
+                </button>
+              );
+            })}
+          </div>
         </div>
       )}
     </div>

@@ -15,7 +15,7 @@ import { modelSupportsThinking } from '@/lib/utils';
 import { Feature, ModelAlias, ThinkingLevel } from '@/store/app-store';
 import { TestingTabContent, PrioritySelect, WorkModeSelector, PhaseModelSelector } from '../shared';
 import type { WorkMode } from '../shared';
-import { isCursorModel, type PhaseModelEntry } from '@automaker/types';
+import { isCursorModel, type PhaseModelEntry } from '@dmaker/types';
 import { cn } from '@/lib/utils';
 
 interface MassEditDialogProps {

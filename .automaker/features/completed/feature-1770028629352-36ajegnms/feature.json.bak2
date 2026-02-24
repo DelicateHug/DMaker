@@ -1,0 +1,34 @@
+{
+  "category": "Uncategorized",
+  "description": "change the title to DMaker",
+  "title": "",
+  "images": [],
+  "imagePaths": [
+    {
+      "id": "img-1770028627790-ey8r7cn5x",
+      "path": "C:\\Users\\dylan\\Downloads\\automaker-pr\\.automaker\\features\\feature-1770028629352-36ajegnms\\images\\pasted-image-2026-02-02T10-37-05-734Z-1770028627773.png",
+      "filename": "pasted-image-2026-02-02T10-37-05-734Z.png",
+      "mimeType": "image/png"
+    }
+  ],
+  "textFilePaths": [],
+  "skipTests": true,
+  "model": "sonnet",
+  "thinkingLevel": "none",
+  "reasoningEffort": "none",
+  "priority": 2,
+  "planningMode": "skip",
+  "requirePlanApproval": false,
+  "dependencies": [],
+  "workMode": "current",
+  "titleGenerating": "change the title to DMaker",
+  "status": "backlog",
+  "id": "feature-1770028629352-36ajegnms",
+  "descriptionHistory": [
+    {
+      "description": "change the title to DMaker",
+      "timestamp": "2026-02-02T10:37:09.666Z",
+      "source": "initial"
+    }
+  ]
+}

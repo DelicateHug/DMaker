@@ -1,6 +1,6 @@
 /**
- * @automaker/git-utils
- * Git operations utilities for AutoMaker
+ * @dmaker/git-utils
+ * Git operations utilities for DMaker
  */
 
 // Export types and constants

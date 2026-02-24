@@ -18,7 +18,7 @@ import {
   globalSettingsCache,
   GLOBAL_SETTINGS_CACHE_KEY,
 } from '../common.js';
-import { setLogLevel, LogLevel } from '@automaker/utils';
+import { setLogLevel, LogLevel } from '@dmaker/utils';
 import { setRequestLoggingEnabled } from '../../../index.js';
 
 /**

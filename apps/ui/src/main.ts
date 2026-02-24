@@ -4,7 +4,7 @@
  * This version spawns the backend server and uses HTTP API for most operations.
  * Only native features (dialogs, shell) use IPC.
  *
- * SECURITY: All file system access uses centralized methods from @automaker/platform.
+ * SECURITY: All file system access uses centralized methods from @dmaker/platform.
  */
 
 import path from 'path';
@@ -13,7 +13,7 @@ import crypto from 'crypto';
 import http, { Server } from 'http';
 import net from 'net';
 import { app, BrowserWindow, ipcMain, dialog, shell, screen, Tray, nativeImage } from 'electron';
-import { createLogger } from '@automaker/utils/logger';
+import { createLogger } from '@dmaker/utils/logger';
 import {
   findNodeExecutable,
   buildEnhancedPath,
@@ -34,7 +34,7 @@ import {
   electronAppReadFile,
   // System path operations
   systemPathExists,
-} from '@automaker/platform';
+} from '@dmaker/platform';
 
 const logger = createLogger('Electron');
 const serverLogger = createLogger('Server');
@@ -142,7 +142,7 @@ const MIN_HEIGHT = 500; // Reduced to allow more flexibility
 const DEFAULT_WIDTH = 1600;
 const DEFAULT_HEIGHT = 950;
 
-// Window bounds interface (matches @automaker/types WindowBounds)
+// Window bounds interface (matches @dmaker/types WindowBounds)
 interface WindowBounds {
   x: number;
   y: number;
@@ -512,7 +512,7 @@ async function startServer(): Promise<void> {
     DATA_DIR: app.getPath('userData'),
     NODE_PATH: serverNodeModules,
     // Pass API key to server for CSRF protection
-    AUTOMAKER_API_KEY: apiKey!,
+    DMAKER_API_KEY: apiKey!,
     // Only set ALLOWED_ROOT_DIRECTORY if explicitly provided in environment
     // If not set, server will allow access to all paths
     ...(process.env.ALLOWED_ROOT_DIRECTORY && {
@@ -936,7 +936,7 @@ function createWindow(): void {
 
 // App lifecycle
 app.whenReady().then(async () => {
-  // Ensure userData path is consistent across dev/prod so files land in Automaker dir
+  // Ensure userData path is consistent across dev/prod so files land in DMaker dir
   try {
     const desiredUserDataPath = path.join(app.getPath('appData'), 'DMaker');
     if (app.getPath('userData') !== desiredUserDataPath) {

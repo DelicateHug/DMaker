@@ -1,6 +1,6 @@
 /**
- * @automaker/utils
- * Shared utility functions for AutoMaker
+ * @dmaker/utils
+ * Shared utility functions for DMaker
  */
 
 // Error handling

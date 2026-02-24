@@ -1,0 +1,111 @@
+{
+  "category": "Uncategorized",
+  "description": "Automakers should be grouping by project but actually it should not be affected by other things in terms of the project selected as you can see here it's not actually showing correctly all agents running it should show every agent that's running on every project on every branch at all times but grouped with collapsible and expandable menus but their collapse by default and it just has a number next to the project name saying how many are running if there's zero running in the project then that project is not put in the running agents",
+  "title": "Fix agent grouping to show all running agents across projects",
+  "images": [],
+  "imagePaths": [
+    {
+      "id": "img-1770642509204-c2a76elmm",
+      "path": "C:\\Users\\dylan\\Downloads\\automaker-pr\\.automaker\\features\\feature-1770642590086-fe5fjcw9d\\images\\pasted-image-2026-02-09T13-08-29-160Z-1770642509198.png",
+      "filename": "pasted-image-2026-02-09T13-08-29-160Z.png",
+      "mimeType": "image/png"
+    },
+    {
+      "id": "img-1770642528831-zlojm715p",
+      "path": "C:\\Users\\dylan\\Downloads\\automaker-pr\\.automaker\\features\\feature-1770642590086-fe5fjcw9d\\images\\pasted-image-2026-02-09T13-08-48-764Z-1770642528825.png",
+      "filename": "pasted-image-2026-02-09T13-08-48-764Z.png",
+      "mimeType": "image/png"
+    }
+  ],
+  "textFilePaths": [],
+  "skipTests": true,
+  "model": "opus",
+  "thinkingLevel": "medium",
+  "reasoningEffort": "none",
+  "priority": 2,
+  "planningMode": "full",
+  "requirePlanApproval": false,
+  "dependencies": [],
+  "workMode": "current",
+  "titleGenerating": false,
+  "status": "in_progress",
+  "id": "feature-1770642590086-fe5fjcw9d",
+  "descriptionHistory": [
+    {
+      "description": "Automakers should be grouping by project but actually it should not be affected by other things in terms of the project selected as you can see here it's not actually showing correctly all agents running it should show every agent that's running on every project on every branch at all times but grouped with collapsible and expandable menus but their collapse by default and it just has a number next to the project name saying how many are running if there's zero running in the project then that project is not put in the running agents",
+      "timestamp": "2026-02-09T13:09:50.162Z",
+      "source": "initial"
+    }
+  ],
+  "startedAt": "2026-02-09T14:22:25.736Z",
+  "updatedAt": "2026-02-09T14:22:26.049Z",
+  "planSpec": {
+    "status": "approved",
+    "version": 1,
+    "reviewedByUser": false,
+    "content": "# Comprehensive Specification: Cross-Project Running Agents Panel\n\n## 1. Problem Statement\n\nCurrently, the Running Agents panel only displays agents for the currently selected project, making it impossible to monitor agent activity across multiple projects simultaneously. Users need visibility into all running agents across their entire workspace, organized by project with expandable groups, so they can efficiently track and manage distributed AI agent workloads.\n\n## 2. User Story\n\nAs a **developer managing multiple Automaker projects**, I want **to see all running agents across all projects in a single unified panel**, so that **I can monitor overall system activity and quickly identify which projects have active agent work without switching contexts**.\n\n## 3. Acceptance Criteria\n\n### Happy Path\n- **GIVEN** agents are running on multiple projects, **WHEN** the user opens the Running Agents panel, **THEN** all running agents from all projects are displayed grouped by project name\n- **GIVEN** agents are grouped by project, **WHEN** the panel first loads, **THEN** all project groups are collapsed by default showing only project name and running agent count\n- **GIVEN** a collapsed project group with 3 running agents, **WHEN** the user views it, **THEN** they see \"[Project Name] (3)\" with an expand arrow\n\n### Edge Cases\n- **GIVEN** a project has zero running agents, **WHEN** the Running Agents panel renders, **THEN** that project does not appear in the list\n- **GIVEN** all agents across all projects complete, **WHEN** the panel updates, **THEN** it shows \"No agents currently running\"\n- **GIVEN** a new agent starts on a previously hidden project (0 agents), **WHEN** the panel updates, **THEN** that project appears with count (1)\n\n### Error Handling\n- **GIVEN** agent status cannot be fetched for a project, **WHEN** the panel renders, **THEN** that project is skipped without breaking the entire panel\n\n## 4. Technical Context\n\n| Aspect | Value |\n|--------|-------|\n| Affected Files | `apps/ui/src/components/layout/running-agents-indicator.tsx`, `apps/ui/src/hooks/use-running-agents.ts`, `apps/ui/src/store/app-store.ts` |\n| Dependencies | None (uses existing WebSocket events) |\n| Constraints | Must work with existing agent event system; must not affect performance with many projects |\n| Patterns to Follow | Existing collapsible patterns in board-view, Zustand store patterns |\n\n## 5. Non-Goals\n\n- Modifying how agents are started/stopped\n- Changing the agent execution logic on the server\n- Adding new API endpoints (use existing WebSocket events)\n- Persisting collapse/expand state across sessions\n- Adding project switching from this panel\n\n## 6. Implementation Tasks\n\n```tasks\n## Phase 1: Data Layer Updates\n- [ ] T001: Update useRunningAgents hook to fetch agents across all projects | File: apps/ui/src/hooks/use-running-agents.ts\n- [ ] T002: Add project grouping logic with agent counts | File: apps/ui/src/hooks/use-running-agents.ts\n\n## Phase 2: UI Component Updates\n- [ ] T003: Create collapsible project group component with expand/collapse state | File: apps/ui/src/components/layout/running-agents-indicator.tsx\n- [ ] T004: Update panel to render grouped agents with project headers showing counts | File: apps/ui/src/components/layout/running-agents-indicator.tsx\n- [ ] T005: Filter out projects with zero running agents | File: apps/ui/src/components/layout/running-agents-indicator.tsx\n- [ ] T006: Set default collapsed state for all project groups | File: apps/ui/src/components/layout/running-agents-indicator.tsx\n\n## Phase 3: Polish & Edge Cases\n- [ ] T007: Handle empty state when no agents running across any project | File: apps/ui/src/components/layout/running-agents-indicator.tsx\n- [ ] T008: Ensure real-time updates when agents start/stop on any project | File: apps/ui/src/hooks/use-running-agents.ts\n```\n\n## 7. Success Metrics\n\n- Running Agents panel displays agents from ALL projects, not just the selected one\n- Projects with running agents appear as collapsed groups with \"(N)\" count badge\n- Clicking a project group expands to show individual agent entries\n- Projects with 0 running agents are not displayed\n- Panel updates in real-time as agents start/stop across any project\n\n## 8. Risks & Mitigations\n\n| Risk | Mitigation |\n|------|------------|\n| Performance with many projects/agents | Use efficient grouping with useMemo; only render expanded content |\n| WebSocket events might be project-scoped | Verify server broadcasts agent events globally; adjust if needed |\n| UI clutter with many projects | Collapsed-by-default design keeps panel compact |\n\n---",
+    "generatedAt": "2026-02-09T13:11:06.353Z",
+    "tasks": [
+      {
+        "id": "T001",
+        "description": "Update useRunningAgents hook to fetch agents across all projects",
+        "filePath": "apps/ui/src/hooks/use-running-agents.ts",
+        "phase": "Phase 1: Data Layer Updates",
+        "status": "pending"
+      },
+      {
+        "id": "T002",
+        "description": "Add project grouping logic with agent counts",
+        "filePath": "apps/ui/src/hooks/use-running-agents.ts",
+        "phase": "Phase 1: Data Layer Updates",
+        "status": "pending"
+      },
+      {
+        "id": "T003",
+        "description": "Create collapsible project group component with expand/collapse state",
+        "filePath": "apps/ui/src/components/layout/running-agents-indicator.tsx",
+        "phase": "Phase 2: UI Component Updates",
+        "status": "pending"
+      },
+      {
+        "id": "T004",
+        "description": "Update panel to render grouped agents with project headers showing counts",
+        "filePath": "apps/ui/src/components/layout/running-agents-indicator.tsx",
+        "phase": "Phase 2: UI Component Updates",
+        "status": "pending"
+      },
+      {
+        "id": "T005",
+        "description": "Filter out projects with zero running agents",
+        "filePath": "apps/ui/src/components/layout/running-agents-indicator.tsx",
+        "phase": "Phase 2: UI Component Updates",
+        "status": "pending"
+      },
+      {
+        "id": "T006",
+        "description": "Set default collapsed state for all project groups",
+        "filePath": "apps/ui/src/components/layout/running-agents-indicator.tsx",
+        "phase": "Phase 2: UI Component Updates",
+        "status": "pending"
+      },
+      {
+        "id": "T007",
+        "description": "Handle empty state when no agents running across any project",
+        "filePath": "apps/ui/src/components/layout/running-agents-indicator.tsx",
+        "phase": "Phase 3: Polish & Edge Cases",
+        "status": "pending"
+      },
+      {
+        "id": "T008",
+        "description": "Ensure real-time updates when agents start/stop on any project",
+        "filePath": "apps/ui/src/hooks/use-running-agents.ts",
+        "phase": "Phase 3: Polish & Edge Cases",
+        "status": "pending"
+      }
+    ],
+    "tasksTotal": 8,
+    "tasksCompleted": 4,
+    "approvedAt": "2026-02-09T13:11:06.367Z",
+    "currentTaskId": "T005"
+  }
+}

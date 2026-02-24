@@ -1,0 +1,10 @@
+{
+  "id": "evt-1771572353445-cc6a81e3",
+  "trigger": "feature_success",
+  "timestamp": "2026-02-20T07:25:53.445Z",
+  "projectPath": "C:\\Users\\DylanSmart\\Downloads\\dmaker-pr",
+  "projectName": "dmaker-pr",
+  "featureId": "20-02-2026-remove_all_event_hook",
+  "error": "Feature completed in 1292s",
+  "passes": true
+}

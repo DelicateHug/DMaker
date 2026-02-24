@@ -1,0 +1,10 @@
+{
+  "id": "evt-1771224561445-aaf87018",
+  "trigger": "feature_error",
+  "timestamp": "2026-02-16T06:49:21.445Z",
+  "projectPath": "C:\\Users\\DylanSmart\\Downloads\\dmaker-pr",
+  "projectName": "dmaker-pr",
+  "featureId": "feature-1771207069173-releopctr",
+  "error": "Claude Code process exited with code 1",
+  "errorType": "execution"
+}

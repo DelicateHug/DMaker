@@ -25,7 +25,7 @@ export interface StatusTab {
 }
 
 /** Storage key for persisting active tab preference */
-const STORAGE_KEY = 'automaker:board-status-tab';
+const STORAGE_KEY = 'dmaker:board-status-tab';
 
 /** Default status tab IDs (base columns without pipeline, plus all) */
 const DEFAULT_TAB_IDS: StatusTabId[] = [

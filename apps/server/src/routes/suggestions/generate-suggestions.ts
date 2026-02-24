@@ -6,13 +6,13 @@
  */
 
 import type { EventEmitter } from '../../lib/events.js';
-import { createLogger } from '@automaker/utils';
-import { DEFAULT_PHASE_MODELS, isCursorModel, type ThinkingLevel } from '@automaker/types';
-import { resolvePhaseModel } from '@automaker/model-resolver';
+import { createLogger } from '@dmaker/utils';
+import { DEFAULT_PHASE_MODELS, isCursorModel, type ThinkingLevel } from '@dmaker/types';
+import { resolvePhaseModel } from '@dmaker/model-resolver';
 import { extractJsonWithArray } from '../../lib/json-extractor.js';
 import { streamingQuery } from '../../providers/simple-query-service.js';
 import { FeatureLoader } from '../../services/feature-loader.js';
-import { getAppSpecPath } from '@automaker/platform';
+import { getAppSpecPath } from '@dmaker/platform';
 import * as secureFs from '../../lib/secure-fs.js';
 import type { SettingsService } from '../../services/settings-service.js';
 import { getAutoLoadClaudeMdSetting, getPromptCustomization } from '../../lib/settings-helpers.js';

@@ -1,0 +1,30 @@
+{
+  "category": "Uncategorized",
+  "description": "Please add a taskbar icon. For now make it just show a number, that number is total running tasks. The tasbar icon is the one in windows at bottom right of screen.",
+  "title": "Add taskbar icon showing running task count",
+  "images": [],
+  "imagePaths": [],
+  "textFilePaths": [],
+  "skipTests": true,
+  "model": "sonnet",
+  "thinkingLevel": "none",
+  "reasoningEffort": "none",
+  "priority": 2,
+  "planningMode": "skip",
+  "requirePlanApproval": false,
+  "dependencies": [],
+  "workMode": "current",
+  "titleGenerating": false,
+  "status": "completed",
+  "id": "feature-1770647712428-tfhqlqgj5",
+  "descriptionHistory": [
+    {
+      "description": "Please add a taskbar icon. For now make it just show a number, that number is total running tasks. The tasbar icon is the one in windows at bottom right of screen.",
+      "timestamp": "2026-02-09T14:35:12.488Z",
+      "source": "initial"
+    }
+  ],
+  "startedAt": "2026-02-09T14:35:12.529Z",
+  "updatedAt": "2026-02-09T14:52:43.854Z",
+  "justFinishedAt": "2026-02-09T14:52:43.854Z"
+}

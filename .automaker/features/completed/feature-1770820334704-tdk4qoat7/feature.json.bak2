@@ -1,0 +1,40 @@
+{
+  "category": "Uncategorized",
+  "description": "Logs need an output only works when it's running I don't wanna see like the most recent logs or anything like that I want to see all logs at all times",
+  "title": "Display all logs continuously during execution",
+  "images": [],
+  "imagePaths": [
+    {
+      "id": "img-1770820319167-snskq52pf",
+      "path": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr\\.automaker\\features\\feature-1770820334704-tdk4qoat7\\images\\pasted-image-2026-02-11T14-31-59-119Z-1770820319156.png",
+      "filename": "pasted-image-2026-02-11T14-31-59-119Z.png",
+      "mimeType": "image/png"
+    }
+  ],
+  "textFilePaths": [],
+  "skipTests": true,
+  "model": "sonnet",
+  "thinkingLevel": "none",
+  "reasoningEffort": "none",
+  "priority": 2,
+  "planningMode": "skip",
+  "requirePlanApproval": false,
+  "autoDeploy": false,
+  "deployEnvironment": "development",
+  "dependencies": [],
+  "workMode": "current",
+  "selectedProjectPath": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr",
+  "titleGenerating": false,
+  "status": "in_progress",
+  "projectPath": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr",
+  "id": "feature-1770820334704-tdk4qoat7",
+  "descriptionHistory": [
+    {
+      "description": "Logs need an output only works when it's running I don't wanna see like the most recent logs or anything like that I want to see all logs at all times",
+      "timestamp": "2026-02-11T14:32:15.093Z",
+      "source": "initial"
+    }
+  ],
+  "startedAt": "2026-02-11T14:43:24.421Z",
+  "updatedAt": "2026-02-11T14:43:24.577Z"
+}

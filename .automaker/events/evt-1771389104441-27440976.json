@@ -1,0 +1,10 @@
+{
+  "id": "evt-1771389104441-27440976",
+  "trigger": "feature_error",
+  "timestamp": "2026-02-18T04:31:44.441Z",
+  "projectPath": "C:\\Users\\DylanSmart\\Downloads\\dmaker-pr",
+  "projectName": "dmaker-pr",
+  "featureId": "18-02-2026-resume_button_never_works",
+  "error": "Feature 18-02-2026-resume_button_never_works not found",
+  "errorType": "execution"
+}

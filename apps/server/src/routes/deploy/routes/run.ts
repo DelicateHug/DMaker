@@ -1,7 +1,7 @@
 /**
  * POST /run endpoint - Execute a deploy script with SSE streaming output
  *
- * Runs a script from the project's .automaker/deploy folder and streams
+ * Runs a script from the project's .dmaker/deploy folder and streams
  * real-time stdout/stderr via Server-Sent Events (SSE).
  *
  * Additionally emits deploy events via the WebSocket event emitter so that

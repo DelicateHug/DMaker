@@ -5,9 +5,9 @@
  * Never assumes authenticated - only returns true if CLI confirms.
  */
 
-import { spawnProcess } from '@automaker/platform';
-import { findCodexCliPath } from '@automaker/platform';
-import { createLogger } from '@automaker/utils';
+import { spawnProcess } from '@dmaker/platform';
+import { findCodexCliPath } from '@dmaker/platform';
+import { createLogger } from '@dmaker/utils';
 
 const logger = createLogger('CodexAuth');
 

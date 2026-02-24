@@ -1,5 +1,5 @@
 /**
- * Automaker Backend Server
+ * DMaker Backend Server
  *
  * Provides HTTP/WebSocket API for both web and Electron modes.
  * In Electron mode, this server runs locally.
@@ -17,8 +17,8 @@ import { createServer } from 'http';
 import dotenv from 'dotenv';
 
 import { createEventEmitter, createThrottledCallback, type EventEmitter } from './lib/events.js';
-import { initAllowedPaths } from '@automaker/platform';
-import { createLogger, setLogLevel, LogLevel } from '@automaker/utils';
+import { initAllowedPaths } from '@dmaker/platform';
+import { createLogger, setLogLevel, LogLevel } from '@dmaker/utils';
 
 const logger = createLogger('Server');
 
@@ -649,7 +649,7 @@ const startServer = (port: number, host: string) => {
     const portStr = port.toString().padEnd(4);
     logger.info(`
 ╔═══════════════════════════════════════════════════════╗
-║           Automaker Backend Server                    ║
+║           DMaker Backend Server                    ║
 ╠═══════════════════════════════════════════════════════╣
 ║  Listening:   ${host}:${port}${' '.repeat(Math.max(0, 34 - host.length - port.toString().length))}║
 ║  HTTP API:    http://${HOSTNAME}:${portStr}                 ║

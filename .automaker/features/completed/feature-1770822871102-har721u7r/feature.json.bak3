@@ -1,0 +1,130 @@
+{
+  "category": "Uncategorized",
+  "description": "deploy is not working as intended, There should be a deploy tab in the Kanban view to the right of the agent chat view and the way that it works is whenever you run a deploy script that's assigned to like a kind of like log ENT into new tab And it's supposed to be used to run individual scripts So like right now whenever you you know add a new script just select the script it's asking for folders and not files should be used to run like PowerShell scripts MPM scripts and Python scripts",
+  "title": "Fix deploy tab to accept folders and run scripts in Kanban view",
+  "images": [],
+  "imagePaths": [],
+  "textFilePaths": [],
+  "skipTests": true,
+  "model": "opus",
+  "thinkingLevel": "medium",
+  "reasoningEffort": "none",
+  "priority": 2,
+  "planningMode": "full",
+  "requirePlanApproval": false,
+  "autoDeploy": false,
+  "deployEnvironment": "development",
+  "dependencies": [],
+  "workMode": "current",
+  "selectedProjectPath": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr",
+  "titleGenerating": false,
+  "status": "in_progress",
+  "projectPath": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr",
+  "id": "feature-1770822871102-har721u7r",
+  "descriptionHistory": [
+    {
+      "description": "deploy is not working as intended, There should be a deploy tab in the Kanban view to the right of the agent chat view and the way that it works is whenever you run a deploy script that's assigned to like a kind of like log ENT into new tab And it's supposed to be used to run individual scripts So like right now whenever you you know add a new script just select the script it's asking for folders and not files should be used to run like PowerShell scripts MPM scripts and Python scripts",
+      "timestamp": "2026-02-11T15:14:31.504Z",
+      "source": "initial"
+    }
+  ],
+  "startedAt": "2026-02-11T15:14:31.614Z",
+  "updatedAt": "2026-02-11T18:07:02.322Z",
+  "planSpec": {
+    "status": "approved",
+    "version": 1,
+    "reviewedByUser": false,
+    "content": "[timestamp:2026-02-11T15:15:12.973Z] 🔧 Tool: Task\nInput: {\n  \"description\": \"Explore deploy and board structure\",\n  \"prompt\": \"I need to thoroughly understand the deploy functionality and board view structure in this codebase. Please explore:\\n\\n1. The existing deploy-related files:\\n   - apps/server/src/routes/deploy/ (new, untracked)\\n   - apps/server/src/services/deploy-service.ts (new, untracked)\\n   - apps/ui/src/components/views/board-view/shared/deploy-environment-select.tsx\\n   - apps/ui/src/components/views/settings-view/deploy/ (new, untracked)\\n   - apps/ui/src/components/layout/deploy-button.tsx (new, untracked)\\n\\n2. The board view structure:\\n   - apps/ui/src/components/views/board-view.tsx (main board view)\\n   - apps/ui/src/components/views/board-view/kanban-board.tsx\\n   - apps/ui/src/components/views/board-view/components/agent-chat-panel.tsx (new, untracked)\\n   - apps/ui/src/components/views/board-view/board-header.tsx\\n\\n3. The settings types for deploy:\\n   - libs/types/src/settings.ts\\n   - apps/server/src/types/settings.ts\\n\\n4. Any existing deploy-related routes, types, or services\\n\\nRead all these files completely and provide their full contents. I need to understand the current state of deploy implementation.\",\n  \"subagent_type\": \"Explore\",\n  \"run_in_background\": true\n}\n\n[timestamp:2026-02-11T15:15:20.430Z] 🔧 Tool: Task\nInput: {\n  \"description\": \"Explore board view panels and tabs\",\n  \"prompt\": \"I need to understand how the board view handles panels/tabs (like the agent chat panel) and how the UI is structured for showing side panels. Please explore:\\n\\n1. apps/ui/src/components/views/board-view.tsx - the main board view component\\n2. apps/ui/src/components/views/board-view/components/agent-chat-panel.tsx - how the agent chat panel works\\n3. apps/ui/src/store/app-store.ts - any state related to panels/views\\n4. apps/ui/src/store/board-controls-store.ts - board control state (new file)\\n5. apps/ui/src/components/views/board-view/hooks/ - board hooks\\n\\nRead all these files completely and provide their full contents. I need to understand how panels are rendered in the board view.\",\n  \"subagent_type\": \"Explore\",\n  \"run_in_background\": true\n}\n\n[timestamp:2026-02-11T15:15:26.900Z] 🔧 Tool: Task\nInput: {\n  \"description\": \"Explore server deploy and settings\",\n  \"prompt\": \"I need to understand the server-side deploy implementation and settings structure. Please read these files completely and provide their full contents:\\n\\n1. apps/server/src/routes/deploy/ - all files in this directory\\n2. apps/server/src/services/deploy-service.ts\\n3. libs/types/src/settings.ts - look for deploy-related types\\n4. apps/server/src/types/settings.ts - look for deploy-related types\\n5. libs/types/src/index.ts - check what's exported\\n6. apps/ui/src/components/views/settings-view/deploy/ - all files in this directory\\n7. apps/ui/src/components/layout/deploy-button.tsx\\n\\nRead ALL of these files and provide their complete contents.\",\n  \"subagent_type\": \"Explore\",\n  \"run_in_background\": true\n}\n\n[timestamp:2026-02-11T15:15:30.674Z] 🔧 Tool: TaskOutput\nInput: {\n  \"task_id\": \"a8abe13\",\n  \"block\": true,\n  \"timeout\": 60000\n}\n\n[timestamp:2026-02-11T15:17:16.590Z] 🔧 Tool: TaskOutput\nInput: {\n  \"task_id\": \"ac21d7d\",\n  \"block\": true,\n  \"timeout\": 60000\n}\n\n[timestamp:2026-02-11T15:18:24.654Z] 🔧 Tool: TaskOutput\nInput: {\n  \"task_id\": \"a8abe13\",\n  \"block\": true,\n  \"timeout\": 120000\n}\n\n[timestamp:2026-02-11T15:18:33.300Z] 🔧 Tool: TaskOutput\nInput: {\n  \"task_id\": \"ac21d7d\",\n  \"block\": true,\n  \"timeout\": 120000\n}\n\n[timestamp:2026-02-11T15:18:33.787Z] 🔧 Tool: TaskOutput\nInput: {\n  \"task_id\": \"aed9cfc\",\n  \"block\": true,\n  \"timeout\": 120000\n}\nLet me read the key files directly to understand the current state:\n\n[timestamp:2026-02-11T15:21:45.154Z] 🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\board-view.tsx\"\n}\n\n[timestamp:2026-02-11T15:21:45.574Z] 🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\board-view\\\\components\\\\agent-chat-panel.tsx\"\n}\n\n[timestamp:2026-02-11T15:21:46.493Z] 🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\store\\\\board-controls-store.ts\"\n}\n\n[timestamp:2026-02-11T15:22:23.016Z] 🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\board-view.tsx\",\n  \"offset\": 1,\n  \"limit\": 200\n}\n\n[timestamp:2026-02-11T15:22:59.906Z] 🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\server\\\\src\\\\services\\\\deploy-service.ts\"\n}\n\n[timestamp:2026-02-11T15:23:00.870Z] 🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\layout\\\\deploy-button.tsx\"\n}\nNow let me read more of the board-view to understand the panel layout:\n\n[timestamp:2026-02-11T15:23:39.875Z] 🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\board-view.tsx\",\n  \"offset\": 200,\n  \"limit\": 300\n}\n\n[timestamp:2026-02-11T15:23:40.641Z] 🔧 Tool: Glob\nInput: {\n  \"pattern\": \"apps/server/src/routes/deploy/**/*\"\n}\n\n[timestamp:2026-02-11T15:23:40.882Z] 🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\settings-view\\\\deploy\"\n}\n\n[timestamp:2026-02-11T15:24:03.619Z] 🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\board-view.tsx\",\n  \"offset\": 500,\n  \"limit\": 400\n}\n\n[timestamp:2026-02-11T15:24:04.435Z] 🔧 Tool: Glob\nInput: {\n  \"pattern\": \"apps/ui/src/components/views/settings-view/deploy/**/*\"\n}\n\n[timestamp:2026-02-11T15:24:04.909Z] 🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\server\\\\src\\\\routes\\\\deploy\\\\routes\\\\folder-scripts.ts\"\n}\n\n[timestamp:2026-02-11T15:24:05.535Z] 🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\server\\\\src\\\\routes\\\\deploy\\\\routes\\\\run-folder-script.ts\"\n}\nNow let me read the remaining portion of board-view.tsx to see the panel rendering layout:\n\n[timestamp:2026-02-11T15:24:37.643Z] 🔧 Tool: Grep\nInput: {\n  \"pattern\": \"PanelGroup|Panel |PanelResizeHandle|AgentChatPanel\",\n  \"path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\board-view.tsx\",\n  \"output_mode\": \"content\",\n  \"-n\": true\n}\n\n[timestamp:2026-02-11T15:24:38.608Z] 🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\board-view.tsx\",\n  \"offset\": 1050,\n  \"limit\": 400\n}\n\n[timestamp:2026-02-11T15:25:07.945Z] 🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\board-view.tsx\",\n  \"offset\": 1800,\n  \"limit\": 250\n}\n\n[timestamp:2026-02-11T15:25:36.227Z] 🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\board-view.tsx\",\n  \"offset\": 2050,\n  \"limit\": 250\n}\n\n[timestamp:2026-02-11T15:25:55.038Z] 🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\board-view.tsx\",\n  \"offset\": 2300,\n  \"limit\": 250\n}\nNow I have a thorough understanding of the codebase. Let me also check the `openFile` API to understand the current file picker issue:\n\n[timestamp:2026-02-11T15:26:14.454Z] 🔧 Tool: Grep\nInput: {\n  \"pattern\": \"openFile|openDirectory\",\n  \"path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\lib\\\\electron.ts\",\n  \"output_mode\": \"content\",\n  \"-n\": true\n}\n\n[timestamp:2026-02-11T15:26:15.840Z] 🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\server\\\\src\\\\routes\\\\deploy\\\\index.ts\"\n}\nNow let me check the deploy types:\n\n[timestamp:2026-02-11T15:26:44.613Z] 🔧 Tool: Grep\nInput: {\n  \"pattern\": \"DeployScript|DeployEnvironment|DeploySettings|deploySettings\",\n  \"path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\libs\\\\types\\\\src\\\\settings.ts\",\n  \"output_mode\": \"content\",\n  \"-n\": true,\n  \"-C\": 3\n}\nNow I have a comprehensive understanding. Let me generate the specification.\n\n---\n\n## 1. Problem Statement\n\nThe deploy feature in the Kanban board view is not working as intended. Currently, deploy scripts are triggered via a popover button in the top nav bar that uses `openFile` for adding scripts. The user expects: (a) a dedicated **Deploy panel/tab** in the board view positioned to the right of the Agent Chat panel, (b) script execution output to be logged/streamed into this panel tab, (c) the file picker to select individual script **files** (not folders) for PowerShell (.ps1), npm/Node (.js/.ts), and Python (.py) scripts, and (d) the ability to run individual scripts with real-time log output visible in the panel.\n\n## 2. User Story\n\nAs a developer using Automaker, I want a dedicated Deploy tab in the Kanban board view (to the right of the Agent Chat panel) that lets me select and run individual deploy scripts (PowerShell, npm, Python) with real-time output logging, so that I can easily trigger and monitor deployments without leaving the board.\n\n## 3. Acceptance Criteria\n\n- **Happy Path - Panel Visibility**: GIVEN the board view is open on desktop, WHEN the user clicks on the Deploy collapsed sidebar (or it's expanded by default), THEN a Deploy panel appears to the right of the Agent Chat panel with a list of available scripts and a log output area.\n\n- **Happy Path - Script Selection**: GIVEN the Deploy panel is open, WHEN the user clicks \"Add Script from File\", THEN a file picker dialog opens filtered to script files (.ps1, .py, .js, .ts, .sh, .bat, .cmd) — NOT a folder picker.\n\n- **Happy Path - Script Execution**: GIVEN the Deploy panel has scripts listed, WHEN the user clicks \"Run\" on a script, THEN the script executes and its stdout/stderr output streams in real-time into the Deploy panel's log area.\n\n- **Happy Path - Multiple Script Types**: GIVEN the user has PowerShell, Python, and npm scripts configured, WHEN they run any of them, THEN each script type is executed with its appropriate interpreter (powershell, python, node/npm).\n\n- **Edge Case - No Scripts**: GIVEN no deploy scripts are configured, WHEN the Deploy panel opens, THEN it shows an empty state with an \"Add Script from File\" button.\n\n- **Edge Case - Script Failure**: GIVEN a script fails during execution, WHEN the error occurs, THEN the error output is shown in the log area with a red error indicator.\n\n- **Error Handling - Missing Interpreter**: GIVEN a Python script is selected but Python is not installed, WHEN the user runs it, THEN a meaningful error message is shown in the log area.\n\n## 4. Technical Context\n\n| Aspect | Value |\n|--------|-------|\n| Affected Files | `apps/ui/src/components/views/board-view.tsx`, new `DeployPanel` component, `apps/ui/src/store/app-store.ts`, `apps/server/src/routes/deploy/routes/run-folder-script.ts`, `apps/ui/src/components/layout/deploy-button.tsx`, `apps/server/src/routes/deploy/routes/folder-scripts.ts` |\n| Dependencies | `react-resizable-panels` (already used), existing deploy routes, `node-pty` or `child_process` on server |\n| Constraints | Must work in both Electron and web mode; script execution happens on the server side |\n| Patterns to Follow | AgentChatPanel pattern (collapsible panel with header, content area), PanelGroup/Panel/PanelResizeHandle for resizable layout, existing deploy routes for script execution |\n\n## 5. Non-Goals\n\n- Auto-deploy on feature completion (already exists)\n- Deploy pipeline/CI integrations\n- Remote/cloud deployment orchestration\n- Rewriting the entire deploy settings system\n- Supporting script types beyond .ps1, .py, .js, .ts, .sh, .bat, .cmd\n\n## 6. Implementation Tasks\n\n```tasks\n## Phase 1: Foundation - Deploy Panel Component\n\n- [ ] T001: Create DeployPanel component with collapsible layout matching AgentChatPanel pattern (header, script list, log output area) | File: apps/ui/src/components/views/board-view/components/deploy-panel.tsx\n- [ ] T002: Add deploy panel state to app-store (isDeployPanelCollapsed, deployPanelSize) | File: apps/ui/src/store/app-store.ts\n- [ ] T003: Export DeployPanel from board-view components index | File: apps/ui/src/components/views/board-view/components/index.ts\n\n## Phase 2: Board View Integration - Add Deploy Panel to Layout\n\n- [ ] T004: Add deploy panel to the desktop PanelGroup layout (third panel after Agent Chat) with resize handle and collapse toggle | File: apps/ui/src/components/views/board-view.tsx\n- [ ] T005: Add deploy panel toggle to mobile/tablet layout as a third panel option | File: apps/ui/src/components/views/board-view.tsx\n\n## Phase 3: Script Management - File Picker Fix & Script List\n\n- [ ] T006: Fix the \"Add Script from File\" file picker in DeployPanel to use openFile with proper file filters (not folder picker) and support .ps1, .py, .js, .ts, .sh, .bat, .cmd | File: apps/ui/src/components/views/board-view/components/deploy-panel.tsx\n- [ ] T007: Add support for npm scripts (.js/.ts) and batch scripts (.bat/.cmd) in the server's folder-scripts endpoint and run-folder-script endpoint | File: apps/server/src/routes/deploy/routes/folder-scripts.ts\n- [ ] T008: Update run-folder-script to support .js, .ts, .sh, .bat, .cmd script executors | File: apps/server/src/routes/deploy/routes/run-folder-script.ts\n\n## Phase 4: Real-Time Script Output Logging\n\n- [ ] T009: Implement script execution with real-time stdout/stderr streaming in the DeployPanel log area (using polling or WebSocket for output) | File: apps/ui/src/components/views/board-view/components/deploy-panel.tsx\n- [ ] T010: Add log output display component with ANSI color support and auto-scroll to the DeployPanel | File: apps/ui/src/components/views/board-view/components/deploy-panel.tsx\n\n## Phase 5: Polish & Integration\n\n- [ ] T011: Update the existing DeployButton popover to optionally open/focus the deploy panel instead of running inline | File: apps/ui/src/components/layout/deploy-button.tsx\n- [ ] T012: Add deploy panel to board-controls-store for top-nav integration | File: apps/ui/src/store/board-controls-store.ts\n```\n\n## 7. Success Metrics\n\n- Deploy panel renders as a collapsible third panel to the right of Agent Chat in the board view\n- Users can add deploy scripts by selecting individual files (not folders) via file picker\n- Script execution output (stdout/stderr) is visible in the deploy panel log area\n- PowerShell, Python, Node.js, and shell scripts all execute correctly\n- Panel state (collapsed/expanded, size) persists across page refreshes\n- No regression to existing Kanban board or Agent Chat panel functionality\n\n## 8. Risks & Mitigations\n\n| Risk | Mitigation |\n|------|------------|\n| Third panel may make board feel cramped on smaller screens | Panel is collapsible with persisted state; on tablet/mobile it's a separate tab |\n| Real-time log streaming may be complex with current HTTP-only deploy routes | Use polling the run-folder-script endpoint which already returns full output; for longer scripts, consider chunked response |\n| Adding a third panel to PanelGroup may break existing resize behavior | Maintain existing two-panel layout when deploy panel is collapsed; test resize handles thoroughly |\n| npm script execution may need different handling (npm run vs node) | Support both `node` for .js/.ts files and document that npm scripts should be wrapped in shell scripts |\n\n---",
+    "generatedAt": "2026-02-11T15:27:33.541Z",
+    "tasks": [
+      {
+        "id": "T001",
+        "description": "Create DeployPanel component with collapsible layout matching AgentChatPanel pattern (header, script list, log output area)",
+        "filePath": "apps/ui/src/components/views/board-view/components/deploy-panel.tsx",
+        "phase": "Phase 1: Foundation - Deploy Panel Component",
+        "status": "pending"
+      },
+      {
+        "id": "T002",
+        "description": "Add deploy panel state to app-store (isDeployPanelCollapsed, deployPanelSize)",
+        "filePath": "apps/ui/src/store/app-store.ts",
+        "phase": "Phase 1: Foundation - Deploy Panel Component",
+        "status": "pending"
+      },
+      {
+        "id": "T003",
+        "description": "Export DeployPanel from board-view components index",
+        "filePath": "apps/ui/src/components/views/board-view/components/index.ts",
+        "phase": "Phase 1: Foundation - Deploy Panel Component",
+        "status": "pending"
+      },
+      {
+        "id": "T004",
+        "description": "Add deploy panel to the desktop PanelGroup layout (third panel after Agent Chat) with resize handle and collapse toggle",
+        "filePath": "apps/ui/src/components/views/board-view.tsx",
+        "phase": "Phase 2: Board View Integration - Add Deploy Panel to Layout",
+        "status": "pending"
+      },
+      {
+        "id": "T005",
+        "description": "Add deploy panel toggle to mobile/tablet layout as a third panel option",
+        "filePath": "apps/ui/src/components/views/board-view.tsx",
+        "phase": "Phase 2: Board View Integration - Add Deploy Panel to Layout",
+        "status": "pending"
+      },
+      {
+        "id": "T006",
+        "description": "Fix the \"Add Script from File\" file picker in DeployPanel to use openFile with proper file filters (not folder picker) and support .ps1, .py, .js, .ts, .sh, .bat, .cmd",
+        "filePath": "apps/ui/src/components/views/board-view/components/deploy-panel.tsx",
+        "phase": "Phase 3: Script Management - File Picker Fix & Script List",
+        "status": "pending"
+      },
+      {
+        "id": "T007",
+        "description": "Add support for npm scripts (.js/.ts) and batch scripts (.bat/.cmd) in the server's folder-scripts endpoint and run-folder-script endpoint",
+        "filePath": "apps/server/src/routes/deploy/routes/folder-scripts.ts",
+        "phase": "Phase 3: Script Management - File Picker Fix & Script List",
+        "status": "pending"
+      },
+      {
+        "id": "T008",
+        "description": "Update run-folder-script to support .js, .ts, .sh, .bat, .cmd script executors",
+        "filePath": "apps/server/src/routes/deploy/routes/run-folder-script.ts",
+        "phase": "Phase 3: Script Management - File Picker Fix & Script List",
+        "status": "pending"
+      },
+      {
+        "id": "T009",
+        "description": "Implement script execution with real-time stdout/stderr streaming in the DeployPanel log area (using polling or WebSocket for output)",
+        "filePath": "apps/ui/src/components/views/board-view/components/deploy-panel.tsx",
+        "phase": "Phase 4: Real-Time Script Output Logging",
+        "status": "pending"
+      },
+      {
+        "id": "T010",
+        "description": "Add log output display component with ANSI color support and auto-scroll to the DeployPanel",
+        "filePath": "apps/ui/src/components/views/board-view/components/deploy-panel.tsx",
+        "phase": "Phase 4: Real-Time Script Output Logging",
+        "status": "pending"
+      },
+      {
+        "id": "T011",
+        "description": "Update the existing DeployButton popover to optionally open/focus the deploy panel instead of running inline",
+        "filePath": "apps/ui/src/components/layout/deploy-button.tsx",
+        "phase": "Phase 5: Polish & Integration",
+        "status": "pending"
+      },
+      {
+        "id": "T012",
+        "description": "Add deploy panel to board-controls-store for top-nav integration",
+        "filePath": "apps/ui/src/store/board-controls-store.ts",
+        "phase": "Phase 5: Polish & Integration",
+        "status": "pending"
+      }
+    ],
+    "tasksTotal": 12,
+    "tasksCompleted": 11,
+    "approvedAt": "2026-02-11T15:27:33.564Z",
+    "currentTaskId": "T012"
+  }
+}

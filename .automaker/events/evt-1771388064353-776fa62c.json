@@ -1,0 +1,10 @@
+{
+  "id": "evt-1771388064353-776fa62c",
+  "trigger": "feature_error",
+  "timestamp": "2026-02-18T04:14:24.353Z",
+  "projectPath": "C:\\Users\\DylanSmart\\Downloads\\dmaker-pr",
+  "projectName": "dmaker-pr",
+  "featureId": "18-02-2026-change_default_keybinds_so",
+  "error": "Feature 18-02-2026-change_default_keybinds_so not found",
+  "errorType": "execution"
+}

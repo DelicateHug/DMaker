@@ -1,7 +1,7 @@
 /**
- * Settings Types - Re-exported from @automaker/types
+ * Settings Types - Re-exported from @dmaker/types
  *
- * This file now re-exports settings types from the shared @automaker/types package
+ * This file now re-exports settings types from the shared @dmaker/types package
  * to maintain backward compatibility with existing imports in the server codebase.
  */
 
@@ -27,7 +27,7 @@ export type {
   DeployFolderScript,
   DeployRunStatus,
   DeployRun,
-} from '@automaker/types';
+} from '@dmaker/types';
 
 export {
   DEFAULT_KEYBOARD_SHORTCUTS,
@@ -38,4 +38,4 @@ export {
   SETTINGS_VERSION,
   CREDENTIALS_VERSION,
   PROJECT_SETTINGS_VERSION,
-} from '@automaker/types';
+} from '@dmaker/types';

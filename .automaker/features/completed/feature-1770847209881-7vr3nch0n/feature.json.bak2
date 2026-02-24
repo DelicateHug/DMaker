@@ -1,0 +1,33 @@
+{
+  "category": "Uncategorized",
+  "description": "all deploy scripts are failing\n\n\nINFO  [Server] INFO  [Server] Sending event to client: { type: 'deploy:output', messageLength: 336, sessionId: undefined }\nERROR [Server] ERROR [DeployService] Deploy script \"helloworld.ps1\" failed: Error: '\\\"C:\\Users\\DylanSmart\\OneDrive - Personal\\Desktop\\Projects\\Github2\\CyberChampion-1-1-2026\\scripts\\helloworld.ps1\\\"' is\n\n\n\n\n\n\n\n\n                                                                                                                                                                                                         s not recognized as an internal or external command,\nERROR [Server] operable program or batch file.\nERROR [Server] at ChildProcess.<anonymous> (C:\\Users\\DylanSmart\\Downloads\\automaker-pr\\apps\\server\\src\\services\\deploy-service.ts:501:25)\nERROR [Server] at ChildProcess.emit (node:events:508:28)\nERROR [Server] at maybeClose (node:internal/child_process:1085:16)\nERROR [Server] at ChildProcess._handle.onexit (node:internal/child_process:304:5) {\nERROR [Server] code: 1\nERROR [Server] }\nINFO  [Server] INFO  [Server] Event received: {\nINFO  [Server] type: 'deploy:error',\n\n\nthat filke is just Write-Output \"Hello, World!\"\n",
+  "title": "Fix deploy script path escaping issue",
+  "images": [],
+  "imagePaths": [],
+  "textFilePaths": [],
+  "skipTests": true,
+  "model": "opus",
+  "thinkingLevel": "medium",
+  "reasoningEffort": "none",
+  "priority": 2,
+  "planningMode": "skip",
+  "requirePlanApproval": false,
+  "autoDeploy": false,
+  "deployEnvironment": "development",
+  "dependencies": [],
+  "workMode": "current",
+  "selectedProjectPath": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr",
+  "titleGenerating": false,
+  "status": "in_progress",
+  "projectPath": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr",
+  "id": "feature-1770847209881-7vr3nch0n",
+  "descriptionHistory": [
+    {
+      "description": "all deploy scripts are failing\n\n\nINFO  [Server] INFO  [Server] Sending event to client: { type: 'deploy:output', messageLength: 336, sessionId: undefined }\nERROR [Server] ERROR [DeployService] Deploy script \"helloworld.ps1\" failed: Error: '\\\"C:\\Users\\DylanSmart\\OneDrive - Personal\\Desktop\\Projects\\Github2\\CyberChampion-1-1-2026\\scripts\\helloworld.ps1\\\"' is\n\n\n\n\n\n\n\n\n                                                                                                                                                                                                         s not recognized as an internal or external command,\nERROR [Server] operable program or batch file.\nERROR [Server] at ChildProcess.<anonymous> (C:\\Users\\DylanSmart\\Downloads\\automaker-pr\\apps\\server\\src\\services\\deploy-service.ts:501:25)\nERROR [Server] at ChildProcess.emit (node:events:508:28)\nERROR [Server] at maybeClose (node:internal/child_process:1085:16)\nERROR [Server] at ChildProcess._handle.onexit (node:internal/child_process:304:5) {\nERROR [Server] code: 1\nERROR [Server] }\nINFO  [Server] INFO  [Server] Event received: {\nINFO  [Server] type: 'deploy:error',\n\n\nthat filke is just Write-Output \"Hello, World!\"\n",
+      "timestamp": "2026-02-11T22:00:09.984Z",
+      "source": "initial"
+    }
+  ],
+  "startedAt": "2026-02-11T22:00:10.097Z",
+  "updatedAt": "2026-02-11T22:00:13.228Z"
+}

@@ -1,0 +1,40 @@
+{
+  "category": "Uncategorized",
+  "description": "Recently completed features are just telling me completed in X amount of seconds I don't care about this what they should be telling me is just the title of the task that finish",
+  "title": "",
+  "images": [],
+  "imagePaths": [
+    {
+      "id": "img-1770724413953-sokmhi453",
+      "path": "C:\\Users\\dylan\\Downloads\\automaker-pr\\.automaker\\features\\feature-1770724429376-e5q72191u\\images\\pasted-image-2026-02-10T11-53-33-563Z-1770724413772.png",
+      "filename": "pasted-image-2026-02-10T11-53-33-563Z.png",
+      "mimeType": "image/png"
+    }
+  ],
+  "textFilePaths": [],
+  "skipTests": true,
+  "model": "opus",
+  "thinkingLevel": "none",
+  "reasoningEffort": "none",
+  "priority": 2,
+  "planningMode": "skip",
+  "requirePlanApproval": false,
+  "autoDeploy": false,
+  "deployEnvironment": "development",
+  "dependencies": [],
+  "workMode": "current",
+  "selectedProjectPath": "C:\\Users\\dylan\\Downloads\\automaker-pr",
+  "titleGenerating": "Recently completed features are just telling me completed in X amount of seconds I don't care about this what they should be telling me is just the title of the task that finish",
+  "status": "waiting_approval",
+  "projectPath": "C:\\Users\\dylan\\Downloads\\automaker-pr",
+  "id": "feature-1770724429376-e5q72191u",
+  "descriptionHistory": [
+    {
+      "description": "Recently completed features are just telling me completed in X amount of seconds I don't care about this what they should be telling me is just the title of the task that finish",
+      "timestamp": "2026-02-10T11:53:49.484Z",
+      "source": "initial"
+    }
+  ],
+  "updatedAt": "2026-02-10T12:27:14.990Z",
+  "justFinishedAt": "2026-02-10T12:27:14.992Z"
+}

@@ -48,9 +48,9 @@ import {
   useKeyboardShortcutsConfig,
   type KeyboardShortcut,
 } from '@/hooks/use-keyboard-shortcuts';
-import { initializeProject, hasAppSpec, hasAutomakerDir } from '@/lib/project-init';
+import { initializeProject, hasAppSpec, hasDMakerDir } from '@/lib/project-init';
 import { toast } from 'sonner';
-import { createLogger } from '@automaker/utils/logger';
+import { createLogger } from '@dmaker/utils/logger';
 import { RunningAgentsIndicator } from './running-agents-indicator';
 import { DeleteProjectDialog } from '@/components/dialogs';
 import { UsagePopover } from '@/components/usage-popover';
@@ -280,10 +280,10 @@ export function TopNavigationBar({
       const name = path.split(/[/\\]/).filter(Boolean).pop() || 'Untitled Project';
 
       try {
-        // Check if this is a brand new project (no .automaker directory)
-        const hadAutomakerDir = await hasAutomakerDir(path);
+        // Check if this is a brand new project (no .dmaker directory)
+        const hadDMakerDir = await hasDMakerDir(path);
 
-        // Initialize the .automaker directory structure
+        // Initialize the .dmaker directory structure
         const initResult = await initializeProject(path);
 
         if (!initResult.success) {
@@ -305,14 +305,14 @@ export function TopNavigationBar({
         // Check if app_spec.txt exists
         const specExists = await hasAppSpec(path);
 
-        if (!hadAutomakerDir && !specExists) {
+        if (!hadDMakerDir && !specExists) {
           // This is a brand new project - notify user
           toast.success('Project opened', {
             description: `Opened ${name}. Let's set up your app specification!`,
           });
         } else if (initResult.createdFiles && initResult.createdFiles.length > 0) {
           toast.success(initResult.isNewProject ? 'Project initialized' : 'Project updated', {
-            description: `Set up ${initResult.createdFiles.length} file(s) in .automaker`,
+            description: `Set up ${initResult.createdFiles.length} file(s) in .dmaker`,
           });
         } else {
           toast.success('Project opened', {
@@ -1062,7 +1062,7 @@ function GitButton({
       onCreateWorktree();
     } else {
       // Dispatch a custom event that BoardView will listen for
-      window.dispatchEvent(new CustomEvent('automaker:create-worktree'));
+      window.dispatchEvent(new CustomEvent('dmaker:create-worktree'));
     }
     setOpen(false);
   }, [onCreateWorktree]);

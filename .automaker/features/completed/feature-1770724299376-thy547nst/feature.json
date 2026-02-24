@@ -1,0 +1,41 @@
+{
+  "category": "Uncategorized",
+  "description": "When I hit left All in all it does is immediately send a... message as well as whenever I hit the icon it sends a... message",
+  "title": "",
+  "images": [],
+  "imagePaths": [
+    {
+      "id": "img-1770724284464-op16jm55p",
+      "path": "C:\\Users\\dylan\\Downloads\\dmaker-pr\\.dmaker\\features\\feature-1770724299376-thy547nst\\images\\pasted-image-2026-02-10T11-51-24-403Z-1770724284437.png",
+      "filename": "pasted-image-2026-02-10T11-51-24-403Z.png",
+      "mimeType": "image/png"
+    }
+  ],
+  "textFilePaths": [],
+  "skipTests": true,
+  "model": "opus",
+  "thinkingLevel": "none",
+  "reasoningEffort": "none",
+  "priority": 2,
+  "planningMode": "full",
+  "requirePlanApproval": false,
+  "autoDeploy": false,
+  "deployEnvironment": "development",
+  "dependencies": [],
+  "workMode": "current",
+  "selectedProjectPath": "C:\\Users\\dylan\\Downloads\\dmaker-pr",
+  "titleGenerating": "When I hit left All in all it does is immediately send a... message as well as whenever I hit the icon it sends a... message",
+  "status": "completed",
+  "projectPath": "C:\\Users\\dylan\\Downloads\\dmaker-pr",
+  "id": "feature-1770724299376-thy547nst",
+  "descriptionHistory": [
+    {
+      "description": "When I hit left All in all it does is immediately send a... message as well as whenever I hit the icon it sends a... message",
+      "timestamp": "2026-02-10T11:51:39.451Z",
+      "source": "initial"
+    }
+  ],
+  "updatedAt": "2026-02-10T12:05:46.345Z",
+  "justFinishedAt": "2026-02-10T12:05:46.345Z",
+  "completedAt": "2026-02-11T01:11:52.372Z"
+}

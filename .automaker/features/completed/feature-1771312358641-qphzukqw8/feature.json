@@ -1,0 +1,42 @@
+{
+  "category": "Uncategorized",
+  "description": "deploy scripts should support nesting",
+  "title": "Implement nested directory support in deploy scripts",
+  "images": [],
+  "imagePaths": [
+    {
+      "id": "img-1771312350378-m739m7mza",
+      "path": "C:\\Users\\DylanSmart\\Downloads\\dmaker-pr\\.dmaker\\features\\feature-1771312358641-qphzukqw8\\images\\pasted-image-2026-02-17T07-12-30-341Z-1771312350374.png",
+      "filename": "pasted-image-2026-02-17T07-12-30-341Z.png",
+      "mimeType": "image/png"
+    }
+  ],
+  "textFilePaths": [],
+  "skipTests": true,
+  "model": "opus",
+  "thinkingLevel": "none",
+  "reasoningEffort": "none",
+  "priority": 2,
+  "planningMode": "skip",
+  "requirePlanApproval": false,
+  "autoDeploy": false,
+  "deployEnvironment": "development",
+  "dependencies": [],
+  "workMode": "current",
+  "selectedProjectPath": "C:\\Users\\DylanSmart\\Downloads\\dmaker-pr",
+  "titleGenerating": false,
+  "status": "completed",
+  "projectPath": "C:\\Users\\DylanSmart\\Downloads\\dmaker-pr",
+  "id": "feature-1771312358641-qphzukqw8",
+  "descriptionHistory": [
+    {
+      "description": "deploy scripts should support nesting",
+      "timestamp": "2026-02-17T07:12:38.694Z",
+      "source": "initial"
+    }
+  ],
+  "startedAt": "2026-02-17T07:12:38.777Z",
+  "updatedAt": "2026-02-17T07:26:08.040Z",
+  "justFinishedAt": "2026-02-17T07:26:08.040Z",
+  "completedAt": "2026-02-17T07:32:03.752Z"
+}

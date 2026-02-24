@@ -1,0 +1,39 @@
+{
+  "category": "Uncategorized",
+  "description": "remove all \"event hook\" related code",
+  "title": "Remove event hook related code",
+  "images": [],
+  "imagePaths": [
+    {
+      "id": "img-1771571058639-4btcagu3v",
+      "path": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr\\.automaker\\features\\backlog\\20-02-2026-remove_all_event_hook\\images\\pasted-image-2026-02-20T07-04-18-238Z-1771571058607.png",
+      "filename": "pasted-image-2026-02-20T07-04-18-238Z.png",
+      "mimeType": "image/png"
+    }
+  ],
+  "textFilePaths": [],
+  "skipTests": true,
+  "model": "opus",
+  "thinkingLevel": "none",
+  "reasoningEffort": "none",
+  "priority": 2,
+  "planningMode": "skip",
+  "requirePlanApproval": false,
+  "autoDeploy": false,
+  "dependencies": [],
+  "workMode": "current",
+  "selectedProjectPath": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr",
+  "titleGenerating": false,
+  "status": "in_progress",
+  "projectPath": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr",
+  "id": "20-02-2026-remove_all_event_hook",
+  "descriptionHistory": [
+    {
+      "description": "remove all \"event hook\" related code",
+      "timestamp": "2026-02-20T07:04:20.558Z",
+      "source": "initial"
+    }
+  ],
+  "startedAt": "2026-02-20T07:04:20.641Z",
+  "updatedAt": "2026-02-20T07:04:21.176Z"
+}

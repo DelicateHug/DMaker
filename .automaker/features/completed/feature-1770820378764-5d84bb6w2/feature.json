@@ -1,0 +1,42 @@
+{
+  "category": "Uncategorized",
+  "description": "I'm still seeing all statuses and no drop down status selector next to the project selector I don't want to see all of them at the same time I only want to see all of them if I choose the dropdown of See all statuses otherwise it should show me In Progress or waiting approval but it should default to waiting approval",
+  "title": "Add status filter dropdown with \"Waiting Approval\" default",
+  "images": [],
+  "imagePaths": [
+    {
+      "id": "img-1770820345325-pjco9ddit",
+      "path": "C:\\Users\\DylanSmart\\Downloads\\dmaker-pr\\.dmaker\\features\\feature-1770820378764-5d84bb6w2\\images\\pasted-image-2026-02-11T14-32-24-978Z-1770820345320.png",
+      "filename": "pasted-image-2026-02-11T14-32-24-978Z.png",
+      "mimeType": "image/png"
+    }
+  ],
+  "textFilePaths": [],
+  "skipTests": true,
+  "model": "opus",
+  "thinkingLevel": "none",
+  "reasoningEffort": "none",
+  "priority": 2,
+  "planningMode": "skip",
+  "requirePlanApproval": false,
+  "autoDeploy": false,
+  "deployEnvironment": "development",
+  "dependencies": [],
+  "workMode": "current",
+  "selectedProjectPath": "C:\\Users\\DylanSmart\\Downloads\\dmaker-pr",
+  "titleGenerating": false,
+  "status": "completed",
+  "projectPath": "C:\\Users\\DylanSmart\\Downloads\\dmaker-pr",
+  "id": "feature-1770820378764-5d84bb6w2",
+  "descriptionHistory": [
+    {
+      "description": "I'm still seeing all statuses and no drop down status selector next to the project selector I don't want to see all of them at the same time I only want to see all of them if I choose the dropdown of See all statuses otherwise it should show me In Progress or waiting approval but it should default to waiting approval",
+      "timestamp": "2026-02-11T14:33:00.049Z",
+      "source": "initial"
+    }
+  ],
+  "startedAt": "2026-02-11T14:53:38.480Z",
+  "updatedAt": "2026-02-11T15:10:12.442Z",
+  "justFinishedAt": "2026-02-11T15:10:12.442Z",
+  "completedAt": "2026-02-11T19:19:39.798Z"
+}

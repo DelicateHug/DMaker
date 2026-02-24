@@ -1,0 +1,30 @@
+{
+  "category": "Uncategorized",
+  "description": "remove started visually and functions",
+  "title": "Remove started visually and functions",
+  "images": [],
+  "imagePaths": [],
+  "textFilePaths": [],
+  "skipTests": true,
+  "model": "sonnet",
+  "thinkingLevel": "none",
+  "reasoningEffort": "none",
+  "priority": 2,
+  "planningMode": "skip",
+  "requirePlanApproval": false,
+  "dependencies": [],
+  "workMode": "current",
+  "titleGenerating": false,
+  "status": "completed",
+  "id": "feature-1770482714560-d14fgjxk",
+  "descriptionHistory": [
+    {
+      "description": "remove started visually and functions",
+      "timestamp": "2026-02-07T16:45:14.603Z",
+      "source": "initial"
+    }
+  ],
+  "startedAt": "2026-02-07T16:45:14.630Z",
+  "updatedAt": "2026-02-07T17:04:56.343Z",
+  "justFinishedAt": "2026-02-07T17:04:56.343Z"
+}

@@ -1,0 +1,99 @@
+{
+  "category": "Uncategorized",
+  "description": "Completed Features should be searcheable, filterable by project and favorites and also it should automatically sort based on timestamp showing most recent first, do pagination of 1-10 with a dropdown to select how many you see at once. There should be a restore and define button not just restore.",
+  "title": "Enhance completed features with search, filter, sort, and pagination",
+  "images": [],
+  "imagePaths": [],
+  "textFilePaths": [],
+  "skipTests": true,
+  "model": "opus",
+  "thinkingLevel": "none",
+  "reasoningEffort": "none",
+  "priority": 2,
+  "planningMode": "full",
+  "requirePlanApproval": false,
+  "dependencies": [],
+  "workMode": "current",
+  "titleGenerating": false,
+  "status": "completed",
+  "id": "feature-1770482526856-b8pw00s3j",
+  "descriptionHistory": [
+    {
+      "description": "Completed Features should be searcheable, filterable by project and favorites and also it should automatically sort based on timestamp showing most recent first, do pagination of 1-10 with a dropdown to select how many you see at once. There should be a restore and define button not just restore.",
+      "timestamp": "2026-02-07T16:42:06.883Z",
+      "source": "initial"
+    }
+  ],
+  "startedAt": "2026-02-07T16:42:06.908Z",
+  "updatedAt": "2026-02-07T17:06:23.166Z",
+  "planSpec": {
+    "status": "approved",
+    "version": 1,
+    "reviewedByUser": false,
+    "content": "🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\board-view\\\\completed-features-list-view.tsx\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"**/board-view/**/*.tsx\"\n}\n\n🔧 Tool: Grep\nInput: {\n  \"pattern\": \"completed.*feature|CompletedFeature\",\n  \"glob\": \"*.tsx\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\board-view\\\\dialogs\\\\completed-features-modal.tsx\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\ui\\\\src\\\\store\\\\app-store.ts\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\libs\\\\types\\\\src\\\\feature.ts\"\n}\n\n🔧 Tool: Grep\nInput: {\n  \"pattern\": \"completedFeatures|CompletedFeatures\",\n  \"path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\ui\\\\src\\\\store\\\\app-store.ts\",\n  \"output_mode\": \"content\",\n  \"-n\": true,\n  \"-C\": 3\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\board-view.tsx\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\board-view\\\\hooks\\\\use-board-column-features.ts\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\board-view\\\\kanban-board.tsx\"\n}\n\n🔧 Tool: Grep\nInput: {\n  \"pattern\": \"projectPath\",\n  \"path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\ui\\\\src\\\\store\\\\app-store.ts\",\n  \"output_mode\": \"content\",\n  \"-n\": true,\n  \"-C\": 2,\n  \"head_limit\": 50\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\ui\\\\src\\\\store\\\\app-store.ts\",\n  \"offset\": 1,\n  \"limit\": 150\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\ui\\\\src\\\\store\\\\app-store.ts\",\n  \"offset\": 151,\n  \"limit\": 250\n}\nNow I have a good understanding of the codebase. Let me generate the specification.\n\n---\n\n## Specification: Enhanced Completed Features View\n\n### 1. Problem Statement\nThe completed features view currently displays all completed features in a simple modal grid without advanced filtering, searching, or sorting capabilities. Users need to quickly find specific completed features across multiple projects, filter by various criteria (project, favorites), and have better pagination control. Additionally, users want a \"Delete\" button alongside \"Restore\" for completed feature cards.\n\n### 2. User Story\nAs a user managing completed features, I want to search, filter, paginate, and sort my completed features, so that I can quickly find and manage archived work across all my projects efficiently.\n\n### 3. Acceptance Criteria\n\n**Happy Path - Search:**\n- GIVEN a list of completed features\n- WHEN I type a search query in the search box\n- THEN only features with matching title, description, category, or branch name are displayed\n\n**Happy Path - Filter by Project:**\n- GIVEN completed features from multiple projects\n- WHEN I select a specific project from the filter dropdown\n- THEN only completed features from that project are displayed\n\n**Happy Path - Filter by Favorites:**\n- GIVEN completed features with some marked as favorites\n- WHEN I toggle the favorites filter on\n- THEN only favorited completed features are displayed\n\n**Happy Path - Sort by Timestamp:**\n- GIVEN a list of completed features\n- WHEN I view the list\n- THEN features are automatically sorted by completion date with most recent first\n\n**Happy Path - Pagination:**\n- GIVEN more than 10 completed features\n- WHEN I view the list with default settings\n- THEN I see 10 features per page with pagination controls\n\n**Happy Path - Page Size Selection:**\n- GIVEN completed features with pagination\n- WHEN I select a different page size from the dropdown (10, 25, 50, 100)\n- THEN the list updates to show that many features per page\n\n**Happy Path - Delete Button:**\n- GIVEN a completed feature card\n- WHEN I click the \"Delete\" button\n- THEN the delete confirmation dialog is shown (alongside existing Restore functionality)\n\n**Edge Case - Empty Results:**\n- GIVEN filters or search that match no features\n- WHEN the list is empty\n- THEN an appropriate empty state message is shown\n\n**Edge Case - Single Project Mode:**\n- GIVEN I'm viewing completed features for a single project\n- WHEN the view loads\n- THEN the project filter is not shown (or shows only current project)\n\n### 4. Technical Context\n\n| Aspect | Value |\n|--------|-------|\n| Affected Files | `apps/ui/src/components/views/board-view/completed-features-list-view.tsx`, `apps/ui/src/components/views/board-view/dialogs/completed-features-modal.tsx`, `apps/ui/src/components/views/board-view.tsx` |\n| Dependencies | Existing shadcn/ui components (Select, Button, Input, Badge, Checkbox) |\n| Constraints | Must work within existing modal or list view patterns, maintain responsive design |\n| Patterns to Follow | Use existing filter patterns from `FilterBar` component, existing pagination UI patterns from shadcn/ui |\n\n### 5. Non-Goals\n- Adding new backend APIs for pagination (client-side only)\n- Changing how features are stored or archived\n- Modifying the feature data model\n- Adding new global project list APIs (use existing `availableProjects` prop)\n\n### 6. Implementation Tasks\n\n```tasks\n## Phase 1: Core Enhancement\n\n- [ ] T001: Add favorites filter state and toggle button to CompletedFeaturesListView | File: apps/ui/src/components/views/board-view/completed-features-list-view.tsx\n- [ ] T002: Ensure features are sorted by completion timestamp (most recent first) before grouping | File: apps/ui/src/components/views/board-view/completed-features-list-view.tsx\n- [ ] T003: Add pagination state (currentPage, pageSize) with page size dropdown (10, 25, 50, 100) | File: apps/ui/src/components/views/board-view/completed-features-list-view.tsx\n- [ ] T004: Implement pagination controls (prev/next buttons, page info display) | File: apps/ui/src/components/views/board-view/completed-features-list-view.tsx\n- [ ] T005: Add \"Delete\" button to CompletedFeatureCard alongside existing \"Restore\" button | File: apps/ui/src/components/views/board-view/completed-features-list-view.tsx\n\n## Phase 2: Integration\n\n- [ ] T006: Update CompletedFeaturesModal to use enhanced CompletedFeaturesListView or add same features | File: apps/ui/src/components/views/board-view/dialogs/completed-features-modal.tsx\n- [ ] T007: Pass project info and favorites capability to CompletedFeaturesListView from board-view | File: apps/ui/src/components/views/board-view.tsx\n\n## Phase 3: Polish & Testing\n\n- [ ] T008: Verify all filters, search, pagination, and sorting work together correctly | File: apps/ui/src/components/views/board-view/completed-features-list-view.tsx\n```\n\n### 7. Success Metrics\n- Completed features can be searched by title, description, category, and branch name\n- Features can be filtered by project when viewing across projects\n- Features can be filtered to show only favorites\n- Features are sorted by completion timestamp (most recent first)\n- Pagination works with selectable page sizes (10, 25, 50, 100)\n- Delete button is visible and functional on each completed feature card\n\n### 8. Risks & Mitigations\n\n| Risk | Mitigation |\n|------|------------|\n| Performance with many completed features | Use client-side pagination to limit rendered DOM elements |\n| Filter state complexity | Reuse existing filter patterns from the component |\n| UI clutter with too many controls | Group related controls and use progressive disclosure |",
+    "generatedAt": "2026-02-07T16:43:58.230Z",
+    "tasks": [
+      {
+        "id": "T001",
+        "description": "Add favorites filter state and toggle button to CompletedFeaturesListView",
+        "filePath": "apps/ui/src/components/views/board-view/completed-features-list-view.tsx",
+        "phase": "Phase 1: Core Enhancement",
+        "status": "pending"
+      },
+      {
+        "id": "T002",
+        "description": "Ensure features are sorted by completion timestamp (most recent first) before grouping",
+        "filePath": "apps/ui/src/components/views/board-view/completed-features-list-view.tsx",
+        "phase": "Phase 1: Core Enhancement",
+        "status": "pending"
+      },
+      {
+        "id": "T003",
+        "description": "Add pagination state (currentPage, pageSize) with page size dropdown (10, 25, 50, 100)",
+        "filePath": "apps/ui/src/components/views/board-view/completed-features-list-view.tsx",
+        "phase": "Phase 1: Core Enhancement",
+        "status": "pending"
+      },
+      {
+        "id": "T004",
+        "description": "Implement pagination controls (prev/next buttons, page info display)",
+        "filePath": "apps/ui/src/components/views/board-view/completed-features-list-view.tsx",
+        "phase": "Phase 1: Core Enhancement",
+        "status": "pending"
+      },
+      {
+        "id": "T005",
+        "description": "Add \"Delete\" button to CompletedFeatureCard alongside existing \"Restore\" button",
+        "filePath": "apps/ui/src/components/views/board-view/completed-features-list-view.tsx",
+        "phase": "Phase 1: Core Enhancement",
+        "status": "pending"
+      },
+      {
+        "id": "T006",
+        "description": "Update CompletedFeaturesModal to use enhanced CompletedFeaturesListView or add same features",
+        "filePath": "apps/ui/src/components/views/board-view/dialogs/completed-features-modal.tsx",
+        "phase": "Phase 2: Integration",
+        "status": "pending"
+      },
+      {
+        "id": "T007",
+        "description": "Pass project info and favorites capability to CompletedFeaturesListView from board-view",
+        "filePath": "apps/ui/src/components/views/board-view.tsx",
+        "phase": "Phase 2: Integration",
+        "status": "pending"
+      },
+      {
+        "id": "T008",
+        "description": "Verify all filters, search, pagination, and sorting work together correctly",
+        "filePath": "apps/ui/src/components/views/board-view/completed-features-list-view.tsx",
+        "phase": "Phase 3: Polish & Testing",
+        "status": "pending"
+      }
+    ],
+    "tasksTotal": 8,
+    "tasksCompleted": 8,
+    "approvedAt": "2026-02-07T16:43:58.234Z",
+    "currentTaskId": "T008"
+  },
+  "justFinishedAt": "2026-02-07T17:06:23.166Z"
+}

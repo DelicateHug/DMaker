@@ -49,11 +49,11 @@ jobs:
           PORT: 3008
           NODE_ENV: test
           # Use a deterministic API key so Playwright can log in reliably
-          AUTOMAKER_API_KEY: test-api-key-for-e2e-tests
+          DMAKER_API_KEY: test-api-key-for-e2e-tests
           # Reduce log noise in CI
-          AUTOMAKER_HIDE_API_KEY: 'true'
+          DMAKER_HIDE_API_KEY: 'true'
           # Avoid real API calls during CI
-          AUTOMAKER_MOCK_AGENT: 'true'
+          DMAKER_MOCK_AGENT: 'true'
           # Simulate containerized environment to skip sandbox confirmation dialogs
           IS_CONTAINERIZED: 'true'
 
@@ -135,7 +135,7 @@ jobs:
           VITE_SERVER_URL: http://localhost:3008
           VITE_SKIP_SETUP: 'true'
           # Keep UI-side login/defaults consistent
-          AUTOMAKER_API_KEY: test-api-key-for-e2e-tests
+          DMAKER_API_KEY: test-api-key-for-e2e-tests
 
       - name: Print backend logs on failure
         if: failure()

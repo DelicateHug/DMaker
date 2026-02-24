@@ -1,8 +1,8 @@
 {
-  "name": "@automaker/prompts",
+  "name": "@dmaker/prompts",
   "version": "1.0.0",
   "type": "module",
-  "description": "AI prompt templates for AutoMaker",
+  "description": "AI prompt templates for DMaker",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
@@ -12,17 +12,17 @@
     "test:watch": "vitest"
   },
   "keywords": [
-    "automaker",
+    "dmaker",
     "prompts",
     "ai"
   ],
-  "author": "AutoMaker Team",
+  "author": "DMaker Team",
   "license": "SEE LICENSE IN LICENSE",
   "engines": {
     "node": ">=22.0.0 <23.0.0"
   },
   "dependencies": {
-    "@automaker/types": "1.0.0"
+    "@dmaker/types": "1.0.0"
   },
   "devDependencies": {
     "@types/node": "22.19.3",

@@ -1,0 +1,37 @@
+{
+  "category": "Uncategorized",
+  "description": "I should eb able to see tiemstamp on logs",
+  "title": "Fix log timestamp visibility",
+  "images": [],
+  "imagePaths": [
+    {
+      "id": "img-1770613889325-cz69mhnrg",
+      "path": "C:\\Users\\dylan\\Downloads\\dmaker-pr\\.dmaker\\features\\feature-1770613896211-l7fk6ryps\\images\\pasted-image-2026-02-09T05-11-29-116Z-1770613889294.png",
+      "filename": "pasted-image-2026-02-09T05-11-29-116Z.png",
+      "mimeType": "image/png"
+    }
+  ],
+  "textFilePaths": [],
+  "skipTests": true,
+  "model": "sonnet",
+  "thinkingLevel": "none",
+  "reasoningEffort": "none",
+  "priority": 2,
+  "planningMode": "skip",
+  "requirePlanApproval": false,
+  "dependencies": [],
+  "workMode": "current",
+  "titleGenerating": false,
+  "status": "completed",
+  "id": "feature-1770613896211-l7fk6ryps",
+  "descriptionHistory": [
+    {
+      "description": "I should eb able to see tiemstamp on logs",
+      "timestamp": "2026-02-09T05:11:36.264Z",
+      "source": "initial"
+    }
+  ],
+  "startedAt": "2026-02-09T05:11:36.305Z",
+  "updatedAt": "2026-02-09T05:20:46.646Z",
+  "justFinishedAt": "2026-02-09T05:20:46.646Z"
+}

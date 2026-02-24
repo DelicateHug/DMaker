@@ -1,0 +1,33 @@
+{
+  "category": "Uncategorized",
+  "description": "deploy scripts is not Working even though it's super simple it's just supposed to run a PowerShell script or a Python script and then tell me you know the output of that but currently it doesn't do anything it just gets stuck on loading and gives me the details and the logs here\n\nhanged to: info\nINFO  [Server] INFO  [Settings] HTTP request logging enabled\nINFO  [Server] PUT /api/settings/global 200\nINFO  [Server] OPTIONS /api/deploy/stream 204\nINFO  [Server] INFO  [Deploy] Starting streaming deploy for project: C:\\Users\\DylanSmart\\Downloads\\automaker-pr, environment: development\nINFO  [Server] INFO  [Deploy] Client disconnected from deploy stream\nINFO  [Server] INFO  [DeployService] Streaming 1 deploy script(s) for environment: development\nINFO  [Server] INFO  [DeployService] Executing deploy command (streaming): \"C:\\Users\\DylanSmart\\OneDrive - Personal\\Desktop\\Projects\\Github2\\CyberChampion-1-1-2026\\scripts\\helloworld.ps1\"\nINFO  [Server] INFO  [Server] Event received: {\nINFO  [Server] type: 'deploy:output',\nINFO  [Server] hasPayload: true,\nINFO  [Server] payloadKeys: [ 'scriptId', 'stream', 'data' ],\nINFO  [Server] wsReadyState: 1,\nINFO  [Server] wsOpen: true\nINFO  [Server] }\nINFO  [Server] INFO  [Server] Sending event to client: { type: 'deploy:output', messageLength: 131, sessionId: undefined }\nINFO  [Server] INFO  [Server] Event received: {\nINFO  [Server] type: 'deploy:success',\nINFO  [Server] hasPayload: true,\nINFO  [Server] payloadKeys: [\nINFO  [Server] 'type',       'scriptId',\nINFO  [Server] 'scriptName', 'environment',\nINFO  [Server] 'message',    'error',\nINFO  [Server] 'duration',   'projectPath',\nINFO  [Server] 'featureId',  'featureName'\nINFO  [Server] ],\nINFO  [Server] wsReadyState: 1,\nINFO  [Server] wsOpen: true\nINFO  [Server] }\nINFO  [Server] INFO  [Server] Sending event to client: { type: 'deploy:success', messageLength: 316, sessionId: undefined }\n",
+  "title": "",
+  "images": [],
+  "imagePaths": [],
+  "textFilePaths": [],
+  "skipTests": true,
+  "model": "opus",
+  "thinkingLevel": "none",
+  "reasoningEffort": "none",
+  "priority": 2,
+  "planningMode": "skip",
+  "requirePlanApproval": false,
+  "autoDeploy": false,
+  "deployEnvironment": "development",
+  "dependencies": [],
+  "workMode": "current",
+  "selectedProjectPath": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr",
+  "titleGenerating": "deploy scripts is not Working even though it's super simple it's just supposed to run a PowerShell script or a Python script and then tell me you know the output of that but currently it doesn't do anything it just gets stuck on loading and gives me the details and the logs here\n\nhanged to: info\nINFO  [Server] INFO  [Settings] HTTP request logging enabled\nINFO  [Server] PUT /api/settings/global 200\nINFO  [Server] OPTIONS /api/deploy/stream 204\nINFO  [Server] INFO  [Deploy] Starting streaming deploy for project: C:\\Users\\DylanSmart\\Downloads\\automaker-pr, environment: development\nINFO  [Server] INFO  [Deploy] Client disconnected from deploy stream\nINFO  [Server] INFO  [DeployService] Streaming 1 deploy script(s) for environment: development\nINFO  [Server] INFO  [DeployService] Executing deploy command (streaming): \"C:\\Users\\DylanSmart\\OneDrive - Personal\\Desktop\\Projects\\Github2\\CyberChampion-1-1-2026\\scripts\\helloworld.ps1\"\nINFO  [Server] INFO  [Server] Event received: {\nINFO  [Server] type: 'deploy:output',\nINFO  [Server] hasPayload: true,\nINFO  [Server] payloadKeys: [ 'scriptId', 'stream', 'data' ],\nINFO  [Server] wsReadyState: 1,\nINFO  [Server] wsOpen: true\nINFO  [Server] }\nINFO  [Server] INFO  [Server] Sending event to client: { type: 'deploy:output', messageLength: 131, sessionId: undefined }\nINFO  [Server] INFO  [Server] Event received: {\nINFO  [Server] type: 'deploy:success',\nINFO  [Server] hasPayload: true,\nINFO  [Server] payloadKeys: [\nINFO  [Server] 'type',       'scriptId',\nINFO  [Server] 'scriptName', 'environment',\nINFO  [Server] 'message',    'error',\nINFO  [Server] 'duration',   'projectPath',\nINFO  [Server] 'featureId',  'featureName'\nINFO  [Server] ],\nINFO  [Server] wsReadyState: 1,\nINFO  [Server] wsOpen: true\nINFO  [Server] }\nINFO  [Server] INFO  [Server] Sending event to client: { type: 'deploy:success', messageLength: 316, sessionId: undefined }",
+  "status": "in_progress",
+  "projectPath": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr",
+  "id": "feature-1771207511822-qidlujcg8",
+  "descriptionHistory": [
+    {
+      "description": "deploy scripts is not Working even though it's super simple it's just supposed to run a PowerShell script or a Python script and then tell me you know the output of that but currently it doesn't do anything it just gets stuck on loading and gives me the details and the logs here\n\nhanged to: info\nINFO  [Server] INFO  [Settings] HTTP request logging enabled\nINFO  [Server] PUT /api/settings/global 200\nINFO  [Server] OPTIONS /api/deploy/stream 204\nINFO  [Server] INFO  [Deploy] Starting streaming deploy for project: C:\\Users\\DylanSmart\\Downloads\\automaker-pr, environment: development\nINFO  [Server] INFO  [Deploy] Client disconnected from deploy stream\nINFO  [Server] INFO  [DeployService] Streaming 1 deploy script(s) for environment: development\nINFO  [Server] INFO  [DeployService] Executing deploy command (streaming): \"C:\\Users\\DylanSmart\\OneDrive - Personal\\Desktop\\Projects\\Github2\\CyberChampion-1-1-2026\\scripts\\helloworld.ps1\"\nINFO  [Server] INFO  [Server] Event received: {\nINFO  [Server] type: 'deploy:output',\nINFO  [Server] hasPayload: true,\nINFO  [Server] payloadKeys: [ 'scriptId', 'stream', 'data' ],\nINFO  [Server] wsReadyState: 1,\nINFO  [Server] wsOpen: true\nINFO  [Server] }\nINFO  [Server] INFO  [Server] Sending event to client: { type: 'deploy:output', messageLength: 131, sessionId: undefined }\nINFO  [Server] INFO  [Server] Event received: {\nINFO  [Server] type: 'deploy:success',\nINFO  [Server] hasPayload: true,\nINFO  [Server] payloadKeys: [\nINFO  [Server] 'type',       'scriptId',\nINFO  [Server] 'scriptName', 'environment',\nINFO  [Server] 'message',    'error',\nINFO  [Server] 'duration',   'projectPath',\nINFO  [Server] 'featureId',  'featureName'\nINFO  [Server] ],\nINFO  [Server] wsReadyState: 1,\nINFO  [Server] wsOpen: true\nINFO  [Server] }\nINFO  [Server] INFO  [Server] Sending event to client: { type: 'deploy:success', messageLength: 316, sessionId: undefined }\n",
+      "timestamp": "2026-02-16T02:05:12.181Z",
+      "source": "initial"
+    }
+  ],
+  "startedAt": "2026-02-16T02:05:12.213Z",
+  "updatedAt": "2026-02-16T02:05:12.378Z"
+}

@@ -5,7 +5,7 @@
 import type { Request, Response } from 'express';
 import * as secureFs from '../../../lib/secure-fs.js';
 import path from 'path';
-import { PathNotAllowedError } from '@automaker/platform';
+import { PathNotAllowedError } from '@dmaker/platform';
 import { getErrorMessage, logError } from '../common.js';
 
 export function createImageHandler() {

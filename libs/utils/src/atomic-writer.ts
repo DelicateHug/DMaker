@@ -5,7 +5,7 @@
  * ensuring data integrity even during crashes or power failures.
  */
 
-import { secureFs } from '@automaker/platform';
+import { secureFs } from '@dmaker/platform';
 import path from 'path';
 import { createLogger } from './logger.js';
 import { mkdirSafe } from './fs-utils.js';

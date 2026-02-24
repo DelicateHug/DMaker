@@ -1,0 +1,30 @@
+{
+  "category": "Uncategorized",
+  "description": "for running agents view i should be able to see the pogress also in percent and also task completed/task remaining",
+  "title": "Display running agents progress with percentage and task count",
+  "images": [],
+  "imagePaths": [],
+  "textFilePaths": [],
+  "skipTests": true,
+  "model": "sonnet",
+  "thinkingLevel": "none",
+  "reasoningEffort": "none",
+  "priority": 2,
+  "planningMode": "skip",
+  "requirePlanApproval": false,
+  "dependencies": [],
+  "workMode": "current",
+  "titleGenerating": false,
+  "status": "completed",
+  "id": "feature-1770485454552-1yx698j2d",
+  "descriptionHistory": [
+    {
+      "description": "for running agents view i should be able to see the pogress also in percent and also task completed/task remaining",
+      "timestamp": "2026-02-07T17:30:54.584Z",
+      "source": "initial"
+    }
+  ],
+  "startedAt": "2026-02-07T17:30:54.607Z",
+  "updatedAt": "2026-02-07T17:41:29.655Z",
+  "justFinishedAt": "2026-02-07T17:41:29.655Z"
+}

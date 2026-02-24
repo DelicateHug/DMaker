@@ -20,7 +20,7 @@ import {
 const TEST_TEMP_DIR = createTempDirPath('agent-chat-persistence-test');
 
 /**
- * Create a test project directory with minimal Automaker structure
+ * Create a test project directory with minimal DMaker structure
  */
 function createTestProject(basePath: string, projectName: string): string {
   const projectPath = path.join(basePath, projectName);
@@ -32,20 +32,20 @@ function createTestProject(basePath: string, projectName: string): string {
     JSON.stringify({ name: projectName, version: '1.0.0' }, null, 2)
   );
 
-  // Create .automaker directory structure
-  const automakerDir = path.join(projectPath, '.automaker');
-  fs.mkdirSync(automakerDir, { recursive: true });
-  fs.mkdirSync(path.join(automakerDir, 'features'), { recursive: true });
-  fs.mkdirSync(path.join(automakerDir, 'context'), { recursive: true });
-  fs.mkdirSync(path.join(automakerDir, 'sessions'), { recursive: true });
+  // Create .dmaker directory structure
+  const dmakerDir = path.join(projectPath, '.dmaker');
+  fs.mkdirSync(dmakerDir, { recursive: true });
+  fs.mkdirSync(path.join(dmakerDir, 'features'), { recursive: true });
+  fs.mkdirSync(path.join(dmakerDir, 'context'), { recursive: true });
+  fs.mkdirSync(path.join(dmakerDir, 'sessions'), { recursive: true });
 
   fs.writeFileSync(
-    path.join(automakerDir, 'categories.json'),
+    path.join(dmakerDir, 'categories.json'),
     JSON.stringify({ categories: [] }, null, 2)
   );
 
   fs.writeFileSync(
-    path.join(automakerDir, 'app_spec.txt'),
+    path.join(dmakerDir, 'app_spec.txt'),
     `# ${projectName}\n\nA test project for e2e testing.`
   );
 
@@ -125,7 +125,7 @@ test.describe('Agent Chat Persistence Through Project Switches', () => {
           },
           version: versions.APP_STORE,
         };
-        localStorage.setItem('automaker-storage', JSON.stringify(appState));
+        localStorage.setItem('dmaker-storage', JSON.stringify(appState));
 
         const setupState = {
           state: {
@@ -135,9 +135,9 @@ test.describe('Agent Chat Persistence Through Project Switches', () => {
           },
           version: versions.SETUP_STORE,
         };
-        localStorage.setItem('automaker-setup', JSON.stringify(setupState));
+        localStorage.setItem('dmaker-setup', JSON.stringify(setupState));
 
-        sessionStorage.setItem('automaker-splash-shown', 'true');
+        sessionStorage.setItem('dmaker-splash-shown', 'true');
       },
       {
         pathA: projectAPath,
@@ -238,7 +238,7 @@ test.describe('Agent Chat Persistence Through Project Switches', () => {
           },
           version: versions.APP_STORE,
         };
-        localStorage.setItem('automaker-storage', JSON.stringify(appState));
+        localStorage.setItem('dmaker-storage', JSON.stringify(appState));
 
         const setupState = {
           state: {
@@ -248,9 +248,9 @@ test.describe('Agent Chat Persistence Through Project Switches', () => {
           },
           version: versions.SETUP_STORE,
         };
-        localStorage.setItem('automaker-setup', JSON.stringify(setupState));
+        localStorage.setItem('dmaker-setup', JSON.stringify(setupState));
 
-        sessionStorage.setItem('automaker-splash-shown', 'true');
+        sessionStorage.setItem('dmaker-splash-shown', 'true');
       },
       {
         pathA: projectAPath,
@@ -361,7 +361,7 @@ test.describe('Agent Chat Persistence Through Project Switches', () => {
           },
           version: versions.APP_STORE,
         };
-        localStorage.setItem('automaker-storage', JSON.stringify(appState));
+        localStorage.setItem('dmaker-storage', JSON.stringify(appState));
 
         const setupState = {
           state: {
@@ -371,9 +371,9 @@ test.describe('Agent Chat Persistence Through Project Switches', () => {
           },
           version: versions.SETUP_STORE,
         };
-        localStorage.setItem('automaker-setup', JSON.stringify(setupState));
+        localStorage.setItem('dmaker-setup', JSON.stringify(setupState));
 
-        sessionStorage.setItem('automaker-splash-shown', 'true');
+        sessionStorage.setItem('dmaker-splash-shown', 'true');
       },
       {
         pathA: projectAPath,
@@ -483,7 +483,7 @@ test.describe('Agent Chat Persistence Through Project Switches', () => {
           },
           version: versions.APP_STORE,
         };
-        localStorage.setItem('automaker-storage', JSON.stringify(appState));
+        localStorage.setItem('dmaker-storage', JSON.stringify(appState));
 
         const setupState = {
           state: {
@@ -493,9 +493,9 @@ test.describe('Agent Chat Persistence Through Project Switches', () => {
           },
           version: versions.SETUP_STORE,
         };
-        localStorage.setItem('automaker-setup', JSON.stringify(setupState));
+        localStorage.setItem('dmaker-setup', JSON.stringify(setupState));
 
-        sessionStorage.setItem('automaker-splash-shown', 'true');
+        sessionStorage.setItem('dmaker-splash-shown', 'true');
       },
       {
         pathA: projectAPath,

@@ -2,7 +2,7 @@ import { memo, useMemo } from 'react';
 import { cn } from '@/lib/utils';
 import { FeatureCardSkeleton } from './feature-card-skeleton';
 import { COLUMNS, getColumnsWithPipeline, type Column } from '../constants';
-import type { PipelineConfig } from '@automaker/types';
+import type { PipelineConfig } from '@dmaker/types';
 
 /**
  * Shimmer placeholder block for column header elements.

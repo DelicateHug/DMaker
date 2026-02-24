@@ -6,7 +6,7 @@
  */
 
 import { contextBridge, ipcRenderer, OpenDialogOptions, SaveDialogOptions } from 'electron';
-import { createLogger } from '@automaker/utils/logger';
+import { createLogger } from '@dmaker/utils/logger';
 
 const logger = createLogger('Preload');
 

@@ -1,15 +1,15 @@
 // @ts-nocheck
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
-import { createLogger } from '@automaker/utils/logger';
+import { createLogger } from '@dmaker/utils/logger';
 import { useShallow } from 'zustand/react/shallow';
 import { useAppStore, Feature } from '@/store/app-store';
 import { getElectronAPI } from '@/lib/electron';
 import { getHttpApiClient } from '@/lib/http-api-client';
 import type { AutoModeEvent } from '@/types/electron';
-import type { ModelAlias, CursorModelId, BacklogPlanResult } from '@automaker/types';
+import type { ModelAlias, CursorModelId, BacklogPlanResult } from '@dmaker/types';
 import { pathsEqual, cn } from '@/lib/utils';
 import { toast } from 'sonner';
-import { getBlockingDependencies } from '@automaker/dependency-resolver';
+import { getBlockingDependencies } from '@dmaker/dependency-resolver';
 import { BoardBackgroundModal } from '@/components/dialogs';
 import { Button } from '@/components/ui/button';
 import {
@@ -38,7 +38,7 @@ import { getAuthenticatedImageUrl } from '@/lib/api-fetch';
 import { LazyImage } from '@/components/ui/lazy-image';
 import type { Project } from '@/lib/electron';
 import { DeleteProjectDialog } from '@/components/dialogs';
-import { initializeProject, hasAutomakerDir, hasAppSpec } from '@/lib/project-init';
+import { initializeProject, hasDMakerDir, hasAppSpec } from '@/lib/project-init';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import { useAutoMode } from '@/hooks/use-auto-mode';
 import { useKeyboardShortcutsConfig } from '@/hooks/use-keyboard-shortcuts';
@@ -321,7 +321,7 @@ export function BoardView() {
       const name = path.split(/[/\\]/).filter(Boolean).pop() || 'Untitled Project';
 
       try {
-        const hadAutomakerDir = await hasAutomakerDir(path);
+        const hadDMakerDir = await hasDMakerDir(path);
         const initResult = await initializeProject(path);
 
         if (!initResult.success) {
@@ -337,13 +337,13 @@ export function BoardView() {
 
         const specExists = await hasAppSpec(path);
 
-        if (!hadAutomakerDir && !specExists) {
+        if (!hadDMakerDir && !specExists) {
           toast.success('Project opened', {
             description: `Opened ${name}. Let's set up your app specification!`,
           });
         } else if (initResult.createdFiles && initResult.createdFiles.length > 0) {
           toast.success(initResult.isNewProject ? 'Project initialized' : 'Project updated', {
-            description: `Set up ${initResult.createdFiles.length} file(s) in .automaker`,
+            description: `Set up ${initResult.createdFiles.length} file(s) in .dmaker`,
           });
         } else {
           toast.success('Project opened', {
@@ -398,7 +398,7 @@ export function BoardView() {
   // Board mode state (local, github, or both for hybrid) - persisted in localStorage
   const [activeModes, setActiveModes] = useState<('local' | 'github')[]>(() => {
     try {
-      const stored = localStorage.getItem('automaker-board-modes');
+      const stored = localStorage.getItem('dmaker-board-modes');
       if (stored) {
         const parsed = JSON.parse(stored);
         if (Array.isArray(parsed) && parsed.length > 0) return parsed;
@@ -408,7 +408,7 @@ export function BoardView() {
   });
   // Persist mode changes to localStorage
   useEffect(() => {
-    localStorage.setItem('automaker-board-modes', JSON.stringify(activeModes));
+    localStorage.setItem('dmaker-board-modes', JSON.stringify(activeModes));
   }, [activeModes]);
 
   const handleModeChange = useCallback((modes: ('local' | 'github')[]) => {
@@ -1505,9 +1505,9 @@ export function BoardView() {
       setShowCreateWorktreeDialog(true);
     };
 
-    window.addEventListener('automaker:create-worktree', handleCreateWorktreeEvent);
+    window.addEventListener('dmaker:create-worktree', handleCreateWorktreeEvent);
     return () => {
-      window.removeEventListener('automaker:create-worktree', handleCreateWorktreeEvent);
+      window.removeEventListener('dmaker:create-worktree', handleCreateWorktreeEvent);
     };
   }, []);
 

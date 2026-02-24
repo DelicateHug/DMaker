@@ -1,0 +1,211 @@
+{
+  "category": "Uncategorized",
+  "description": "make tools 2 rows and add usage, worktree bar, auto mode and plan to it\n\nmove branch master and worktrees and + and refresh to right and up where usage and others use to be, get rid of one ui row\n\ntasks should be favoritable so i can quickly find them later even after archive\n\nbacklog should be filterable by projects individually but on project change above it in ui it should match that, but the projkect changer above should not be changed on backlog change, this is a view change only. Please get rid of verified state and make mark as verified complete\n\nwhen you do refine this it create multiple summaries, Agent Output should have a drop down with timestamps of summaries but default to most recent summary view.",
+  "title": "Reorganize toolbar layout and add task favorites with filtered backlog views",
+  "images": [],
+  "imagePaths": [
+    {
+      "id": "img-1770409956719-kkfexhv1p",
+      "path": "C:\\Users\\dylan\\Downloads\\dmaker-pr\\.dmaker\\features\\feature-1770410181656-gs8jgwm1t\\images\\pasted-image-2026-02-06T20-32-36-688Z-1770409956716.png",
+      "filename": "pasted-image-2026-02-06T20-32-36-688Z.png",
+      "mimeType": "image/png"
+    }
+  ],
+  "textFilePaths": [],
+  "skipTests": true,
+  "model": "opus",
+  "thinkingLevel": "none",
+  "reasoningEffort": "none",
+  "priority": 2,
+  "planningMode": "full",
+  "requirePlanApproval": false,
+  "dependencies": [],
+  "workMode": "current",
+  "titleGenerating": false,
+  "status": "completed",
+  "id": "feature-1770410181656-gs8jgwm1t",
+  "descriptionHistory": [
+    {
+      "description": "make tools 2 rows and add usage, worktree bar, auto mode and plan to it\n\nmove branch master and worktrees and + and refresh to right and up where usage and others use to be, get rid of one ui row\n\ntasks should be favoritable so i can quickly find them later even after archive\n\nbacklog should be filterable by projects individually but on project change above it in ui it should match that, but the projkect changer above should not be changed on backlog change, this is a view change only. Please get rid of verified state and make mark as verified complete\n\nwhen you do refine this it create multiple summaries, Agent Output should have a drop down with timestamps of summaries but default to most recent summary view.",
+      "timestamp": "2026-02-06T20:36:21.691Z",
+      "source": "initial"
+    }
+  ],
+  "startedAt": "2026-02-07T16:40:25.599Z",
+  "updatedAt": "2026-02-07T17:02:17.897Z",
+  "planSpec": {
+    "status": "approved",
+    "version": 1,
+    "reviewedByUser": false,
+    "content": "🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\.dmaker\\\\features\\\\feature-1770410181656-gs8jgwm1t\\\\images\\\\pasted-image-2026-02-06T20-32-36-688Z-1770409956716.png\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"apps/ui/src/components/views/board-view/**/*.tsx\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\board-view\\\\board-header.tsx\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\layout\\\\top-nav-bar.tsx\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\board-view\\\\kanban-board.tsx\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\board-view\\\\dialogs\\\\agent-output-modal.tsx\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\libs\\\\types\\\\src\\\\feature.ts\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"apps/ui/src/components/usage*.tsx\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\board-view\\\\constants.ts\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\usage-popover.tsx\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\board-view\\\\components\\\\kanban-card\\\\card-actions.tsx\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\ui\\\\src\\\\store\\\\app-store.ts\",\n  \"limit\": 200\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\ui\\\\src\\\\store\\\\app-store.ts\",\n  \"offset\": 200,\n  \"limit\": 300\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\board-view.tsx\"\n}\nBased on my exploration of the codebase, I now have a comprehensive understanding of the feature requirements. Let me generate the specification:\n\n---\n\n## Comprehensive Specification\n\n### 1. Problem Statement\n\nThe user wants to reorganize the UI toolbar to be more compact (2 rows instead of 3), add Usage, Worktree Bar, Auto Mode, and Plan controls to the Tools dropdown area, move git-related controls to the top-right, add task favoriting capability for quick access, improve backlog filtering UX, remove the \"Verified\" state (merge into \"Mark as Verified Complete\"), and add summary history with timestamp dropdown in the Agent Output modal.\n\n### 2. User Story\n\nAs a developer using DMaker, I want a more compact and organized toolbar with features like task favoriting, project-filtered backlog view, and summary history in agent output, so that I can work more efficiently with less UI clutter and better access to frequently used tasks and agent output history.\n\n### 3. Acceptance Criteria\n\n**Toolbar Reorganization:**\n- **Happy Path**: GIVEN I open the board view, WHEN the toolbar loads, THEN I see a 2-row toolbar with Tools menu showing Usage, Worktree Bar toggle, Auto Mode, and Plan controls, and branch/worktree controls in the top-right where Usage used to be.\n- **Edge Case**: GIVEN I am on mobile/tablet view, WHEN I open the toolbar, THEN all controls remain accessible through the mobile menu.\n\n**Task Favoriting:**\n- **Happy Path**: GIVEN I view a task card, WHEN I click the favorite star, THEN the task is marked as favorite and persisted.\n- **Happy Path**: GIVEN I have favorite tasks, WHEN I filter by favorites, THEN only favorited tasks are shown.\n- **Edge Case**: GIVEN a task is archived, WHEN I have it favorited, THEN I can still find it quickly via favorites filter.\n\n**Backlog Project Filtering:**\n- **Happy Path**: GIVEN I have the backlog view open, WHEN I select a project filter in the backlog, THEN only tasks for that project are shown, but the top project selector is unchanged.\n- **Edge Case**: GIVEN the top project selector changes, WHEN I view the backlog, THEN the backlog filter matches the selected project automatically.\n\n**Verified State Removal:**\n- **Happy Path**: GIVEN a task is in \"Waiting Approval\", WHEN I click \"Mark as Verified\", THEN the task moves directly to \"Completed\" status (no \"Verified\" column).\n- **Error Handling**: GIVEN existing features with \"verified\" status, WHEN the app loads, THEN they are migrated to \"completed\" status.\n\n**Agent Output Summary History:**\n- **Happy Path**: GIVEN I open Agent Output for a refined task with multiple summaries, WHEN I view the modal, THEN I see a dropdown with timestamped summaries defaulting to the most recent.\n- **Edge Case**: GIVEN only one summary exists, WHEN I view the modal, THEN no dropdown is shown (just the single summary).\n\n### 4. Technical Context\n\n| Aspect | Value |\n|--------|-------|\n| Affected Files | `apps/ui/src/components/views/board-view/board-header.tsx`, `apps/ui/src/components/layout/top-nav-bar.tsx`, `apps/ui/src/components/views/board-view/constants.ts`, `apps/ui/src/components/views/board-view/dialogs/agent-output-modal.tsx`, `apps/ui/src/components/views/board-view/components/kanban-card/*.tsx`, `apps/ui/src/store/app-store.ts`, `libs/types/src/feature.ts` |\n| Dependencies | None new, uses existing UI components |\n| Constraints | Must maintain backward compatibility with existing features; must migrate \"verified\" status features |\n| Patterns to Follow | Existing Zustand store patterns, existing component structure, Feature type extensions |\n\n### 5. Non-Goals\n\n- This feature does NOT include a full sidebar redesign\n- Does NOT include changes to the mobile navigation patterns beyond accommodating the new toolbar\n- Does NOT include changes to how summaries are generated (only how they're displayed)\n- Does NOT include changes to the auto mode logic itself\n\n### 6. Implementation Tasks\n\n```tasks\n## Phase 1: Data Model Updates\n- [ ] T001: Add `isFavorite` boolean field to Feature type | File: libs/types/src/feature.ts\n- [ ] T002: Add `summaryHistory` array field to Feature type for storing multiple summaries with timestamps | File: libs/types/src/feature.ts\n- [ ] T003: Remove \"verified\" from FeatureStatus type and update to have \"Mark as Verified\" go to \"completed\" | File: libs/types/src/feature.ts\n- [ ] T004: Update app-store Feature interface to include new fields | File: apps/ui/src/store/app-store.ts\n\n## Phase 2: Toolbar Reorganization\n- [ ] T005: Modify BoardHeader to move Usage, Worktree Bar toggle, Auto Mode, Plan to a consolidated toolbar row | File: apps/ui/src/components/views/board-view/board-header.tsx\n- [ ] T006: Add branch/worktree controls (master, worktrees, +, refresh) to the top-right area where usage controls were | File: apps/ui/src/components/views/board-view/board-header.tsx\n- [ ] T007: Update TopNavigationBar to integrate with new toolbar layout | File: apps/ui/src/components/layout/top-nav-bar.tsx\n\n## Phase 3: Task Favoriting\n- [ ] T008: Add favorite toggle button to KanbanCard component | File: apps/ui/src/components/views/board-view/components/kanban-card/kanban-card.tsx\n- [ ] T009: Add favorite filter option to board search/filter controls | File: apps/ui/src/components/views/board-view/board-search-bar.tsx\n- [ ] T010: Update feature persistence to save favorite status | File: apps/ui/src/components/views/board-view/hooks/use-board-persistence.ts\n\n## Phase 4: Backlog Project Filtering\n- [ ] T011: Add project filter dropdown to backlog column header | File: apps/ui/src/components/views/board-view/components/kanban-column.tsx\n- [ ] T012: Update backlog filtering logic to respect project filter but not change top selector | File: apps/ui/src/components/views/board-view/hooks/use-board-column-features.ts\n- [ ] T013: Auto-sync backlog filter when top project selector changes | File: apps/ui/src/components/views/board-view/board-view.tsx\n\n## Phase 5: Remove Verified State\n- [ ] T014: Remove \"verified\" column from COLUMNS constant | File: apps/ui/src/components/views/board-view/constants.ts\n- [ ] T015: Update CardActions to change \"Mark as Verified\" to move to \"completed\" directly | File: apps/ui/src/components/views/board-view/components/kanban-card/card-actions.tsx\n- [ ] T016: Update board action handlers to skip verified state | File: apps/ui/src/components/views/board-view/hooks/use-board-actions.ts\n- [ ] T017: Add migration logic for existing \"verified\" features on load | File: apps/ui/src/components/views/board-view/hooks/use-board-features.ts\n\n## Phase 6: Agent Output Summary History\n- [ ] T018: Update AgentOutputModal to parse and store multiple summaries with timestamps | File: apps/ui/src/components/views/board-view/dialogs/agent-output-modal.tsx\n- [ ] T019: Add dropdown selector for summary history in AgentOutputModal header | File: apps/ui/src/components/views/board-view/dialogs/agent-output-modal.tsx\n- [ ] T020: Update summary extraction logic to support multiple summaries | File: apps/ui/src/lib/log-parser.ts\n\n## Phase 7: Integration & Testing\n- [ ] T021: Update E2E tests for new toolbar layout | File: apps/ui/tests/features/feature-manual-review-flow.spec.ts\n- [ ] T022: Add E2E tests for task favoriting functionality | File: apps/ui/tests/features/task-favorites.spec.ts\n- [ ] T023: Update test utilities for removed verified state | File: apps/ui/tests/utils/core/constants.ts\n```\n\n### 7. Success Metrics\n\n- Toolbar takes up only 2 rows instead of 3\n- Users can favorite tasks and filter by favorites\n- Backlog can be filtered by project without changing the main project selector\n- No \"Verified\" column exists; tasks go directly from \"Waiting Approval\" to \"Completed\"\n- Agent Output modal shows dropdown with timestamped summaries when multiple exist\n- All existing tests pass after migration\n- No regressions in board functionality\n\n### 8. Risks & Mitigations\n\n| Risk | Mitigation |\n|------|------------|\n| Migration of existing \"verified\" features could cause data loss | Add migration logic that converts \"verified\" → \"completed\" on load, preserving all feature data |\n| Summary history storage could increase feature.json file size | Limit to last 10 summaries per feature with oldest dropped |\n| Toolbar reorganization could break mobile responsive design | Test thoroughly on mobile breakpoints; maintain existing mobile menu patterns |\n| Backlog filter state could get out of sync | Use controlled state with explicit sync on project change |\n\n---",
+    "generatedAt": "2026-02-06T20:38:51.201Z",
+    "tasks": [
+      {
+        "id": "T001",
+        "description": "Add `isFavorite` boolean field to Feature type",
+        "filePath": "libs/types/src/feature.ts",
+        "phase": "Phase 1: Data Model Updates",
+        "status": "pending"
+      },
+      {
+        "id": "T002",
+        "description": "Add `summaryHistory` array field to Feature type for storing multiple summaries with timestamps",
+        "filePath": "libs/types/src/feature.ts",
+        "phase": "Phase 1: Data Model Updates",
+        "status": "pending"
+      },
+      {
+        "id": "T003",
+        "description": "Remove \"verified\" from FeatureStatus type and update to have \"Mark as Verified\" go to \"completed\"",
+        "filePath": "libs/types/src/feature.ts",
+        "phase": "Phase 1: Data Model Updates",
+        "status": "pending"
+      },
+      {
+        "id": "T004",
+        "description": "Update app-store Feature interface to include new fields",
+        "filePath": "apps/ui/src/store/app-store.ts",
+        "phase": "Phase 1: Data Model Updates",
+        "status": "pending"
+      },
+      {
+        "id": "T005",
+        "description": "Modify BoardHeader to move Usage, Worktree Bar toggle, Auto Mode, Plan to a consolidated toolbar row",
+        "filePath": "apps/ui/src/components/views/board-view/board-header.tsx",
+        "phase": "Phase 2: Toolbar Reorganization",
+        "status": "pending"
+      },
+      {
+        "id": "T006",
+        "description": "Add branch/worktree controls (master, worktrees, +, refresh) to the top-right area where usage controls were",
+        "filePath": "apps/ui/src/components/views/board-view/board-header.tsx",
+        "phase": "Phase 2: Toolbar Reorganization",
+        "status": "pending"
+      },
+      {
+        "id": "T007",
+        "description": "Update TopNavigationBar to integrate with new toolbar layout",
+        "filePath": "apps/ui/src/components/layout/top-nav-bar.tsx",
+        "phase": "Phase 2: Toolbar Reorganization",
+        "status": "pending"
+      },
+      {
+        "id": "T008",
+        "description": "Add favorite toggle button to KanbanCard component",
+        "filePath": "apps/ui/src/components/views/board-view/components/kanban-card/kanban-card.tsx",
+        "phase": "Phase 3: Task Favoriting",
+        "status": "pending"
+      },
+      {
+        "id": "T009",
+        "description": "Add favorite filter option to board search/filter controls",
+        "filePath": "apps/ui/src/components/views/board-view/board-search-bar.tsx",
+        "phase": "Phase 3: Task Favoriting",
+        "status": "pending"
+      },
+      {
+        "id": "T010",
+        "description": "Update feature persistence to save favorite status",
+        "filePath": "apps/ui/src/components/views/board-view/hooks/use-board-persistence.ts",
+        "phase": "Phase 3: Task Favoriting",
+        "status": "pending"
+      },
+      {
+        "id": "T011",
+        "description": "Add project filter dropdown to backlog column header",
+        "filePath": "apps/ui/src/components/views/board-view/components/kanban-column.tsx",
+        "phase": "Phase 4: Backlog Project Filtering",
+        "status": "pending"
+      },
+      {
+        "id": "T012",
+        "description": "Update backlog filtering logic to respect project filter but not change top selector",
+        "filePath": "apps/ui/src/components/views/board-view/hooks/use-board-column-features.ts",
+        "phase": "Phase 4: Backlog Project Filtering",
+        "status": "pending"
+      },
+      {
+        "id": "T013",
+        "description": "Auto-sync backlog filter when top project selector changes",
+        "filePath": "apps/ui/src/components/views/board-view/board-view.tsx",
+        "phase": "Phase 4: Backlog Project Filtering",
+        "status": "pending"
+      },
+      {
+        "id": "T014",
+        "description": "Remove \"verified\" column from COLUMNS constant",
+        "filePath": "apps/ui/src/components/views/board-view/constants.ts",
+        "phase": "Phase 5: Remove Verified State",
+        "status": "pending"
+      },
+      {
+        "id": "T015",
+        "description": "Update CardActions to change \"Mark as Verified\" to move to \"completed\" directly",
+        "filePath": "apps/ui/src/components/views/board-view/components/kanban-card/card-actions.tsx",
+        "phase": "Phase 5: Remove Verified State",
+        "status": "pending"
+      },
+      {
+        "id": "T016",
+        "description": "Update board action handlers to skip verified state",
+        "filePath": "apps/ui/src/components/views/board-view/hooks/use-board-actions.ts",
+        "phase": "Phase 5: Remove Verified State",
+        "status": "pending"
+      },
+      {
+        "id": "T017",
+        "description": "Add migration logic for existing \"verified\" features on load",
+        "filePath": "apps/ui/src/components/views/board-view/hooks/use-board-features.ts",
+        "phase": "Phase 5: Remove Verified State",
+        "status": "pending"
+      },
+      {
+        "id": "T018",
+        "description": "Update AgentOutputModal to parse and store multiple summaries with timestamps",
+        "filePath": "apps/ui/src/components/views/board-view/dialogs/agent-output-modal.tsx",
+        "phase": "Phase 6: Agent Output Summary History",
+        "status": "pending"
+      },
+      {
+        "id": "T019",
+        "description": "Add dropdown selector for summary history in AgentOutputModal header",
+        "filePath": "apps/ui/src/components/views/board-view/dialogs/agent-output-modal.tsx",
+        "phase": "Phase 6: Agent Output Summary History",
+        "status": "pending"
+      },
+      {
+        "id": "T020",
+        "description": "Update summary extraction logic to support multiple summaries",
+        "filePath": "apps/ui/src/lib/log-parser.ts",
+        "phase": "Phase 6: Agent Output Summary History",
+        "status": "pending"
+      },
+      {
+        "id": "T021",
+        "description": "Update E2E tests for new toolbar layout",
+        "filePath": "apps/ui/tests/features/feature-manual-review-flow.spec.ts",
+        "phase": "Phase 7: Integration & Testing",
+        "status": "pending"
+      },
+      {
+        "id": "T022",
+        "description": "Add E2E tests for task favoriting functionality",
+        "filePath": "apps/ui/tests/features/task-favorites.spec.ts",
+        "phase": "Phase 7: Integration & Testing",
+        "status": "pending"
+      },
+      {
+        "id": "T023",
+        "description": "Update test utilities for removed verified state",
+        "filePath": "apps/ui/tests/utils/core/constants.ts",
+        "phase": "Phase 7: Integration & Testing",
+        "status": "pending"
+      }
+    ],
+    "tasksTotal": 23,
+    "tasksCompleted": 8,
+    "approvedAt": "2026-02-06T20:38:51.205Z",
+    "currentTaskId": "T009"
+  },
+  "justFinishedAt": "2026-02-07T17:02:17.897Z"
+}

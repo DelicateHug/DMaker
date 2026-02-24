@@ -6,7 +6,7 @@
  */
 
 import type { Request, Response } from 'express';
-import { createLogger } from '@automaker/utils';
+import { createLogger } from '@dmaker/utils';
 import type { AutoModeService } from '../../../services/auto-mode-service.js';
 
 const logger = createLogger('ResumeInterrupted');

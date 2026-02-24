@@ -1,0 +1,92 @@
+{
+  "category": "Uncategorized",
+  "description": "Changing the board project is still force refreshing the entire Kanban view It should only refresh the board view and the files view so the agent chat should not be affected by anything that the board does",
+  "title": "Fix Kanban refresh to avoid affecting agent chat",
+  "images": [],
+  "imagePaths": [],
+  "textFilePaths": [],
+  "skipTests": true,
+  "model": "opus",
+  "thinkingLevel": "high",
+  "reasoningEffort": "none",
+  "priority": 2,
+  "planningMode": "full",
+  "requirePlanApproval": false,
+  "dependencies": [],
+  "workMode": "current",
+  "titleGenerating": false,
+  "status": "completed",
+  "id": "feature-1770653957652-dvfqvsmey",
+  "descriptionHistory": [
+    {
+      "description": "Changing the board project is still force refreshing the entire Kanban view It should only refresh the board view and the files view so the agent chat should not be affected by anything that the board does",
+      "timestamp": "2026-02-09T16:19:17.710Z",
+      "source": "initial"
+    }
+  ],
+  "startedAt": "2026-02-09T17:54:21.390Z",
+  "updatedAt": "2026-02-09T18:18:44.896Z",
+  "planSpec": {
+    "status": "approved",
+    "version": 1,
+    "reviewedByUser": false,
+    "content": "# Specification: Isolate Agent Chat from Board Project Changes\n\n## 1. Problem Statement\n\nWhen a user changes the project in the board view, the entire Kanban view including the agent chat panel is being force-refreshed. This causes disruption to any ongoing agent conversations and creates a jarring user experience. The agent chat should remain independent and unaffected by board-level project changes.\n\n## 2. User Story\n\nAs a **developer using DMaker**, I want **the agent chat to remain stable when I switch projects in the board view**, so that **I can continue my agent conversations without interruption while exploring different projects on the board**.\n\n## 3. Acceptance Criteria\n\n**Happy Path:**\n- GIVEN I have an active agent chat session open\n- WHEN I change the project in the board view\n- THEN the agent chat remains visible with the same conversation and is not refreshed\n\n**Edge Case - New Session:**\n- GIVEN I have no active agent chat session\n- WHEN I change the project in the board view\n- THEN the agent chat panel remains in its empty state without unnecessary re-renders\n\n**Edge Case - Different Project Agent:**\n- GIVEN I have an agent chat for Project A open\n- WHEN I switch the board to Project B\n- THEN the agent chat for Project A continues uninterrupted (user can choose to switch agent sessions separately)\n\n**Error Handling:**\n- GIVEN the board view encounters an error during project switch\n- WHEN the board refreshes due to error recovery\n- THEN the agent chat state is preserved independently\n\n## 4. Technical Context\n\n| Aspect | Value |\n|--------|-------|\n| Affected Files | `apps/ui/src/components/views/board-view.tsx`, `apps/ui/src/components/views/board-view/components/agent-chat-panel.tsx`, `apps/ui/src/hooks/use-board-project.ts` (if exists), `apps/ui/src/store/app-store.ts` |\n| Dependencies | React, Zustand |\n| Constraints | Must maintain state isolation between board and agent components |\n| Patterns to Follow | Zustand store patterns, React key management, component memoization |\n\n## 5. Non-Goals\n\n- This feature does NOT change how the agent chat itself works\n- This feature does NOT modify the agent session management logic\n- This feature does NOT change the project switching API\n- This feature does NOT affect the files view refresh behavior (files view SHOULD still refresh)\n\n## 6. Implementation Tasks\n\n```tasks\n## Phase 1: Investigation & Analysis\n- [ ] T001: Analyze board-view.tsx to understand current project switching mechanism | File: apps/ui/src/components/views/board-view.tsx\n- [ ] T002: Analyze agent-chat-panel.tsx to understand its dependencies on board state | File: apps/ui/src/components/views/board-view/components/agent-chat-panel.tsx\n- [ ] T003: Review app-store.ts for project state management | File: apps/ui/src/store/app-store.ts\n\n## Phase 2: Core Implementation\n- [ ] T004: Isolate agent chat state from board project changes | File: apps/ui/src/components/views/board-view.tsx\n- [ ] T005: Memoize agent-chat-panel to prevent unnecessary re-renders | File: apps/ui/src/components/views/board-view/components/agent-chat-panel.tsx\n- [ ] T006: Ensure board and files view still refresh correctly on project change | File: apps/ui/src/components/views/board-view.tsx\n\n## Phase 3: Verification\n- [ ] T007: Test that agent chat persists through project switches | File: apps/ui/src/components/views/board-view.tsx\n```\n\n## 7. Success Metrics\n\n- Agent chat component does not unmount/remount when board project changes\n- Agent chat conversation history is preserved during project switch\n- Board view and files view still update correctly when project changes\n- No React key warnings or unnecessary re-renders in console\n\n## 8. Risks & Mitigations\n\n| Risk | Mitigation |\n|------|------------|\n| Agent chat may have hidden dependencies on board project state | Thorough analysis of component props and hooks before changes |\n| Over-memoization could cause stale state issues | Use appropriate dependency arrays and test state updates |\n| Files view might accidentally be isolated too | Explicitly verify files view still refreshes |\n\n---",
+    "generatedAt": "2026-02-09T16:19:51.284Z",
+    "tasks": [
+      {
+        "id": "T001",
+        "description": "Analyze board-view.tsx to understand current project switching mechanism",
+        "filePath": "apps/ui/src/components/views/board-view.tsx",
+        "phase": "Phase 1: Investigation & Analysis",
+        "status": "pending"
+      },
+      {
+        "id": "T002",
+        "description": "Analyze agent-chat-panel.tsx to understand its dependencies on board state",
+        "filePath": "apps/ui/src/components/views/board-view/components/agent-chat-panel.tsx",
+        "phase": "Phase 1: Investigation & Analysis",
+        "status": "pending"
+      },
+      {
+        "id": "T003",
+        "description": "Review app-store.ts for project state management",
+        "filePath": "apps/ui/src/store/app-store.ts",
+        "phase": "Phase 1: Investigation & Analysis",
+        "status": "pending"
+      },
+      {
+        "id": "T004",
+        "description": "Isolate agent chat state from board project changes",
+        "filePath": "apps/ui/src/components/views/board-view.tsx",
+        "phase": "Phase 2: Core Implementation",
+        "status": "pending"
+      },
+      {
+        "id": "T005",
+        "description": "Memoize agent-chat-panel to prevent unnecessary re-renders",
+        "filePath": "apps/ui/src/components/views/board-view/components/agent-chat-panel.tsx",
+        "phase": "Phase 2: Core Implementation",
+        "status": "pending"
+      },
+      {
+        "id": "T006",
+        "description": "Ensure board and files view still refresh correctly on project change",
+        "filePath": "apps/ui/src/components/views/board-view.tsx",
+        "phase": "Phase 2: Core Implementation",
+        "status": "pending"
+      },
+      {
+        "id": "T007",
+        "description": "Test that agent chat persists through project switches",
+        "filePath": "apps/ui/src/components/views/board-view.tsx",
+        "phase": "Phase 3: Verification",
+        "status": "pending"
+      }
+    ],
+    "tasksTotal": 7,
+    "tasksCompleted": 7,
+    "approvedAt": "2026-02-09T16:19:51.290Z",
+    "currentTaskId": "T007"
+  },
+  "justFinishedAt": "2026-02-09T18:18:44.896Z"
+}

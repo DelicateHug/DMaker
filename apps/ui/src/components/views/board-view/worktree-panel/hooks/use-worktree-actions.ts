@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { createLogger } from '@automaker/utils/logger';
+import { createLogger } from '@dmaker/utils/logger';
 import { getElectronAPI } from '@/lib/electron';
 import { toast } from 'sonner';
 import type { WorktreeInfo } from '../types';

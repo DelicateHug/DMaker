@@ -7,7 +7,13 @@
 
 import { BaseProvider } from './base-provider.js';
 import type { InstallationStatus, ModelDefinition } from './types.js';
-import { isCursorModel, isCodexModel, isOpencodeModel, type ModelProvider } from '@automaker/types';
+import {
+  isCursorModel,
+  isCodexModel,
+  isOpencodeModel,
+  isGcpModel,
+  type ModelProvider,
+} from '@dmaker/types';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -16,6 +22,7 @@ const DISCONNECTED_MARKERS: Record<string, string> = {
   codex: '.codex-disconnected',
   cursor: '.cursor-disconnected',
   opencode: '.opencode-disconnected',
+  gcp: '.gcp-disconnected',
 };
 
 /**
@@ -25,7 +32,7 @@ export function isProviderDisconnected(providerName: string): boolean {
   const markerFile = DISCONNECTED_MARKERS[providerName.toLowerCase()];
   if (!markerFile) return false;
 
-  const markerPath = path.join(process.cwd(), '.automaker', markerFile);
+  const markerPath = path.join(process.cwd(), '.dmaker', markerFile);
   return fs.existsSync(markerPath);
 }
 
@@ -267,6 +274,7 @@ import { ClaudeProvider } from './claude-provider.js';
 import { CursorProvider } from './cursor-provider.js';
 import { CodexProvider } from './codex-provider.js';
 import { OpencodeProvider } from './opencode-provider.js';
+import { GcpProvider } from './gcp-provider.js';
 
 // Register Claude provider
 registerProvider('claude', {
@@ -300,4 +308,12 @@ registerProvider('opencode', {
   factory: () => new OpencodeProvider(),
   canHandleModel: (model: string) => isOpencodeModel(model),
   priority: 3, // Between codex (5) and claude (0)
+});
+
+// Register GCP/Vertex AI provider
+registerProvider('gcp', {
+  factory: () => new GcpProvider(),
+  aliases: ['vertex', 'vertexai', 'google-cloud'],
+  canHandleModel: (model: string) => isGcpModel(model),
+  priority: 2, // Between opencode (3) and claude (0)
 });

@@ -1,0 +1,35 @@
+{
+  "category": "Uncategorized",
+  "description": "running agents should be scrollable with mouse wheel",
+  "title": "",
+  "images": [],
+  "imagePaths": [],
+  "textFilePaths": [],
+  "skipTests": true,
+  "model": "sonnet",
+  "thinkingLevel": "none",
+  "reasoningEffort": "none",
+  "priority": 2,
+  "planningMode": "skip",
+  "requirePlanApproval": false,
+  "autoDeploy": false,
+  "deployEnvironment": "development",
+  "dependencies": [],
+  "workMode": "current",
+  "selectedProjectPath": "C:\\Users\\DylanSmart\\Downloads\\dmaker-pr",
+  "titleGenerating": "running agents should be scrollable with mouse wheel",
+  "status": "completed",
+  "projectPath": "C:\\Users\\DylanSmart\\Downloads\\dmaker-pr",
+  "id": "feature-1770766089589-xd90eui0w",
+  "descriptionHistory": [
+    {
+      "description": "running agents should be scrollable with mouse wheel",
+      "timestamp": "2026-02-10T23:28:10.653Z",
+      "source": "initial"
+    }
+  ],
+  "startedAt": "2026-02-11T04:42:25.805Z",
+  "updatedAt": "2026-02-11T05:15:31.296Z",
+  "justFinishedAt": "2026-02-11T05:15:31.296Z",
+  "completedAt": "2026-02-11T19:19:37.526Z"
+}

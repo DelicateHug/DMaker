@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { createLogger } from '@automaker/utils/logger';
+import { createLogger } from '@dmaker/utils/logger';
 import {
   Dialog,
   DialogContent,
@@ -28,8 +28,8 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { modelSupportsThinking } from '@/lib/utils';
 import { useAppStore, ModelAlias, ThinkingLevel, FeatureImage, Feature } from '@/store/app-store';
-import type { ReasoningEffort, PhaseModelEntry, AgentModel } from '@automaker/types';
-import { supportsReasoningEffort } from '@automaker/types';
+import type { ReasoningEffort, PhaseModelEntry, AgentModel } from '@dmaker/types';
+import { supportsReasoningEffort } from '@dmaker/types';
 import {
   TestingTabContent,
   PrioritySelector,
@@ -54,7 +54,7 @@ import {
   getAncestors,
   formatAncestorContextForPrompt,
   type AncestorContext,
-} from '@automaker/dependency-resolver';
+} from '@dmaker/dependency-resolver';
 
 const logger = createLogger('AddFeatureDialog');
 

@@ -1,0 +1,42 @@
+{
+  "category": "Uncategorized",
+  "description": "when you do trash icon it deltes it in chat but in drop down it stays until refresh.",
+  "title": "Fix trash icon deletion sync across chat and dropdown",
+  "images": [],
+  "imagePaths": [
+    {
+      "id": "img-1771309411807-ekwibf7j2",
+      "path": "C:\\Users\\DylanSmart\\Downloads\\dmaker-pr\\.dmaker\\features\\feature-1771309436533-vajyjtid0\\images\\pasted-image-2026-02-17T06-23-31-724Z-1771309411789.png",
+      "filename": "pasted-image-2026-02-17T06-23-31-724Z.png",
+      "mimeType": "image/png"
+    }
+  ],
+  "textFilePaths": [],
+  "skipTests": true,
+  "model": "opus",
+  "thinkingLevel": "none",
+  "reasoningEffort": "none",
+  "priority": 2,
+  "planningMode": "skip",
+  "requirePlanApproval": false,
+  "autoDeploy": false,
+  "deployEnvironment": "development",
+  "dependencies": [],
+  "workMode": "current",
+  "selectedProjectPath": "C:\\Users\\DylanSmart\\Downloads\\dmaker-pr",
+  "titleGenerating": false,
+  "status": "completed",
+  "projectPath": "C:\\Users\\DylanSmart\\Downloads\\dmaker-pr",
+  "id": "feature-1771309436533-vajyjtid0",
+  "descriptionHistory": [
+    {
+      "description": "when you do trash icon it deltes it in chat but in drop down it stays until refresh.",
+      "timestamp": "2026-02-17T06:23:56.580Z",
+      "source": "initial"
+    }
+  ],
+  "startedAt": "2026-02-17T06:28:59.083Z",
+  "updatedAt": "2026-02-17T06:43:12.485Z",
+  "justFinishedAt": "2026-02-17T06:43:12.485Z",
+  "completedAt": "2026-02-17T07:13:54.383Z"
+}

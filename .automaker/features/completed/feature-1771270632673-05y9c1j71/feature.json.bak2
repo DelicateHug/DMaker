@@ -1,0 +1,40 @@
+{
+  "category": "Uncategorized",
+  "description": "INFO  [Server] WARN  [AtomicWriter] Main file C:\\Users\\DylanSmart\\Downloads\\automaker-pr\\.automaker\\features\\feature-1770701166716-ejn0yajqi\\feature.json unavailable: File does not exist\nINFO  [Server] WARN  [AtomicWriter] All recovery attempts failed for C:\\Users\\DylanSmart\\Downloads\\automaker-pr\\.automaker\\features\\feature-1770701166716-ejn0yajqi\\feature.json, using default value",
+  "title": "Fix atomic writer file recovery fallback handling",
+  "images": [],
+  "imagePaths": [
+    {
+      "id": "img-1771270632542-ctitgw5ff",
+      "path": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr\\.automaker\\features\\feature-1771270632673-05y9c1j71\\images\\pasted-image-2026-02-16T19-37-11-685Z-1771270632534.png",
+      "filename": "pasted-image-2026-02-16T19-37-11-685Z.png",
+      "mimeType": "image/png"
+    }
+  ],
+  "textFilePaths": [],
+  "skipTests": true,
+  "model": "opus",
+  "thinkingLevel": "none",
+  "reasoningEffort": "none",
+  "priority": 2,
+  "planningMode": "skip",
+  "requirePlanApproval": false,
+  "autoDeploy": false,
+  "deployEnvironment": "development",
+  "dependencies": [],
+  "workMode": "current",
+  "selectedProjectPath": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr",
+  "titleGenerating": false,
+  "status": "in_progress",
+  "projectPath": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr",
+  "id": "feature-1771270632673-05y9c1j71",
+  "descriptionHistory": [
+    {
+      "description": "INFO  [Server] WARN  [AtomicWriter] Main file C:\\Users\\DylanSmart\\Downloads\\automaker-pr\\.automaker\\features\\feature-1770701166716-ejn0yajqi\\feature.json unavailable: File does not exist\nINFO  [Server] WARN  [AtomicWriter] All recovery attempts failed for C:\\Users\\DylanSmart\\Downloads\\automaker-pr\\.automaker\\features\\feature-1770701166716-ejn0yajqi\\feature.json, using default value",
+      "timestamp": "2026-02-16T19:37:12.770Z",
+      "source": "initial"
+    }
+  ],
+  "startedAt": "2026-02-16T19:37:12.963Z",
+  "updatedAt": "2026-02-16T20:02:22.203Z"
+}

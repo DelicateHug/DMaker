@@ -10,8 +10,8 @@ import {
 } from '@/components/ui/select';
 import { Terminal } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { CursorModelId, CursorModelConfig } from '@automaker/types';
-import { CURSOR_MODEL_MAP } from '@automaker/types';
+import type { CursorModelId, CursorModelConfig } from '@dmaker/types';
+import { CURSOR_MODEL_MAP } from '@dmaker/types';
 
 interface CursorModelConfigurationProps {
   enabledCursorModels: CursorModelId[];

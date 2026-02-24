@@ -7,9 +7,9 @@
  */
 
 import type { Request, Response } from 'express';
-import { createLogger } from '@automaker/utils';
-import { resolveModelString } from '@automaker/model-resolver';
-import { CLAUDE_MODEL_MAP, type ThinkingLevel } from '@automaker/types';
+import { createLogger } from '@dmaker/utils';
+import { resolveModelString } from '@dmaker/model-resolver';
+import { CLAUDE_MODEL_MAP, type ThinkingLevel } from '@dmaker/types';
 import { simpleQuery } from '../../../providers/simple-query-service.js';
 import type { SettingsService } from '../../../services/settings-service.js';
 import { getPromptCustomization } from '../../../lib/settings-helpers.js';

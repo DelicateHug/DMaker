@@ -3,8 +3,8 @@ import { useShallow } from 'zustand/react/shallow';
 import { useAppStore, ClaudeUsage, CodexUsage } from '@/store/app-store';
 import { useSetupStore } from '@/store/setup-store';
 import { getElectronAPI } from '@/lib/electron';
-import { createLogger } from '@automaker/utils/logger';
-import { USAGE_CACHE_TTL_MS } from '@automaker/types';
+import { createLogger } from '@dmaker/utils/logger';
+import { USAGE_CACHE_TTL_MS } from '@dmaker/types';
 
 const logger = createLogger('UsageTracking');
 

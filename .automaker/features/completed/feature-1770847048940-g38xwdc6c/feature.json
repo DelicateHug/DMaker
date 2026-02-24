@@ -1,0 +1,42 @@
+{
+  "category": "Uncategorized",
+  "description": "Code editor is not correctly syntax highlighting the files",
+  "title": "Fix syntax highlighting in code editor",
+  "images": [],
+  "imagePaths": [
+    {
+      "id": "img-1770847043971-foo6m133f",
+      "path": "C:\\Users\\DylanSmart\\Downloads\\dmaker-pr\\.dmaker\\features\\feature-1770847048940-g38xwdc6c\\images\\pasted-image-2026-02-11T21-57-23-915Z-1770847043966.png",
+      "filename": "pasted-image-2026-02-11T21-57-23-915Z.png",
+      "mimeType": "image/png"
+    }
+  ],
+  "textFilePaths": [],
+  "skipTests": true,
+  "model": "opus",
+  "thinkingLevel": "high",
+  "reasoningEffort": "none",
+  "priority": 2,
+  "planningMode": "skip",
+  "requirePlanApproval": false,
+  "autoDeploy": false,
+  "deployEnvironment": "development",
+  "dependencies": [],
+  "workMode": "current",
+  "selectedProjectPath": "C:\\Users\\DylanSmart\\Downloads\\dmaker-pr",
+  "titleGenerating": false,
+  "status": "completed",
+  "projectPath": "C:\\Users\\DylanSmart\\Downloads\\dmaker-pr",
+  "id": "feature-1770847048940-g38xwdc6c",
+  "descriptionHistory": [
+    {
+      "description": "Code editor is not correctly syntax highlighting the files",
+      "timestamp": "2026-02-11T21:57:28.997Z",
+      "source": "initial"
+    }
+  ],
+  "startedAt": "2026-02-11T21:57:29.074Z",
+  "updatedAt": "2026-02-11T22:09:46.862Z",
+  "justFinishedAt": "2026-02-11T22:09:46.862Z",
+  "completedAt": "2026-02-11T22:30:49.837Z"
+}

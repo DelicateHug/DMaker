@@ -168,7 +168,7 @@ export function FileBrowserDialog({
     if (open && !currentPath) {
       // Priority order:
       // 1. initialPath prop (from parent component) - always takes priority when provided
-      // 2. Default workspace directory (last used > Documents/Automaker > DATA_DIR)
+      // 2. Default workspace directory (last used > Documents/DMaker > DATA_DIR)
       // 3. Home directory
       const loadInitialPath = async () => {
         // If initialPath is explicitly provided, use it directly (e.g. file selection starting at project dir)

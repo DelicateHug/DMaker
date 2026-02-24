@@ -1,0 +1,35 @@
+{
+  "category": "dad",
+  "description": "In Kanban view the task and features should also be grouped under collapsible and expandable groupings of category",
+  "title": "Group tasks by category with collapsible sections",
+  "images": [],
+  "imagePaths": [],
+  "textFilePaths": [],
+  "skipTests": true,
+  "model": "opus",
+  "thinkingLevel": "none",
+  "reasoningEffort": "none",
+  "priority": 2,
+  "planningMode": "skip",
+  "requirePlanApproval": false,
+  "autoDeploy": false,
+  "deployEnvironment": "development",
+  "dependencies": [],
+  "workMode": "current",
+  "selectedProjectPath": "C:\\Users\\DylanSmart\\Downloads\\dmaker-pr",
+  "titleGenerating": false,
+  "status": "completed",
+  "projectPath": "C:\\Users\\DylanSmart\\Downloads\\dmaker-pr",
+  "id": "feature-1770836390630-om2v3lzsj",
+  "descriptionHistory": [
+    {
+      "description": "In Kanban view the task and features should also be grouped under collapsible and expandable groupings of category",
+      "timestamp": "2026-02-11T18:59:50.685Z",
+      "source": "initial"
+    }
+  ],
+  "startedAt": "2026-02-11T18:59:50.782Z",
+  "updatedAt": "2026-02-11T19:11:30.884Z",
+  "justFinishedAt": "2026-02-11T19:11:30.884Z",
+  "completedAt": "2026-02-11T19:19:38.723Z"
+}

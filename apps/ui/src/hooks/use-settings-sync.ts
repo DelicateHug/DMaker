@@ -13,7 +13,7 @@
 
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
-import { createLogger } from '@automaker/utils/logger';
+import { createLogger } from '@dmaker/utils/logger';
 import { getHttpApiClient, waitForApiKeyInit } from '@/lib/http-api-client';
 import { setItem } from '@/lib/storage';
 import {
@@ -26,11 +26,7 @@ import {
 import { useSetupStore } from '@/store/setup-store';
 import { useAuthStore } from '@/store/auth-store';
 import { waitForMigrationComplete, resetMigrationState } from './use-settings-migration';
-import {
-  DEFAULT_OPENCODE_MODEL,
-  getAllOpencodeModelIds,
-  type GlobalSettings,
-} from '@automaker/types';
+import { DEFAULT_OPENCODE_MODEL, getAllOpencodeModelIds, type GlobalSettings } from '@dmaker/types';
 
 /**
  * Selector for auth state needed by settings sync

@@ -11,10 +11,10 @@
  */
 
 import type { Request, Response } from 'express';
-import { createLogger } from '@automaker/utils';
-import { DEFAULT_PHASE_MODELS } from '@automaker/types';
-import { PathNotAllowedError } from '@automaker/platform';
-import { resolvePhaseModel } from '@automaker/model-resolver';
+import { createLogger } from '@dmaker/utils';
+import { DEFAULT_PHASE_MODELS } from '@dmaker/types';
+import { PathNotAllowedError } from '@dmaker/platform';
+import { resolvePhaseModel } from '@dmaker/model-resolver';
 import { simpleQuery } from '../../../providers/simple-query-service.js';
 import * as secureFs from '../../../lib/secure-fs.js';
 import * as path from 'path';

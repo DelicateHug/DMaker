@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { useGuidedPrompts } from '@/hooks/use-guided-prompts';
-import type { IdeaCategory } from '@automaker/types';
+import type { IdeaCategory } from '@dmaker/types';
 
 interface PromptCategoryGridProps {
   onSelect: (category: IdeaCategory) => void;

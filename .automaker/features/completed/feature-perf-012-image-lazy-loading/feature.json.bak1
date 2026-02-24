@@ -1,0 +1,179 @@
+{
+  "id": "feature-perf-012-image-lazy-loading",
+  "title": "Add Lazy Loading and Error Handling to All Image Elements",
+  "category": "Performance",
+  "description": "## Problem\nAll `<img>` tags in the application use basic rendering without `loading=\"lazy\"`, placeholder states, or error handling. This means all images (feature screenshots, project icons, description images) load immediately when their container renders, even if they're off-screen. Failed image loads show broken image icons.\n\n## Current Behavior\nImage elements across the codebase follow this pattern:\n```tsx\n// dashboard-view.tsx lines 766-773\n<img\n  src={getAuthenticatedImageUrl(project.customIconPath, project.path)}\n  alt={project.name}\n  className=\"w-full h-full object-cover\"\n/>\n```\n\nNo `loading=\"lazy\"`, no placeholder, no error handling.\n\n## Locations with <img> Tags (20+ locations):\n- `apps/ui/src/components/views/board-view.tsx` (lines 2180, 2267) - Feature images\n- `apps/ui/src/components/views/dashboard-view.tsx` (lines 766, 857) - Project icons\n- `apps/ui/src/components/ui/description-image-dropzone.tsx` (lines 493, 499) - Description images\n- `apps/ui/src/components/views/agent-view/components/message-bubble.tsx` (line 157) - Chat images\n- `apps/ui/src/components/views/board-view/components/kanban-card/card-content-sections.tsx` - Feature card images\n- `apps/ui/src/components/ui/feature-image-upload.tsx` - Image upload previews\n- Plus 15+ other locations\n\n## Required Changes\n\n### 1. Add `loading=\"lazy\"` to All Off-Screen Images\nSimplest change with biggest impact. Native browser lazy loading defers loading of off-screen images.\n\n### 2. Create a Reusable `<LazyImage>` Component\n```typescript\n// apps/ui/src/components/ui/lazy-image.tsx\nfunction LazyImage({ src, alt, className, fallback, ...props }) {\n  const [status, setStatus] = useState<'loading' | 'loaded' | 'error'>('loading');\n  \n  return (\n    <div className={cn('relative', className)}>\n      {status === 'loading' && (\n        <div className=\"absolute inset-0 bg-muted animate-pulse rounded\" />\n      )}\n      {status === 'error' && (\n        <div className=\"absolute inset-0 flex items-center justify-center bg-muted rounded\">\n          <ImageOff className=\"w-6 h-6 text-muted-foreground\" />\n        </div>\n      )}\n      <img\n        src={src}\n        alt={alt}\n        loading=\"lazy\"\n        onLoad={() => setStatus('loaded')}\n        onError={() => setStatus('error')}\n        className={cn('transition-opacity', status === 'loaded' ? 'opacity-100' : 'opacity-0')}\n        {...props}\n      />\n    </div>\n  );\n}\n```\n\n### 3. Add Placeholder Skeletons During Image Load\nUse CSS `aspect-ratio` to prevent layout shift while images load.\n\n### 4. Add Error State for Failed Images\nShow a sensible fallback instead of broken image icon.\n\n## Files to Modify\n- Create: `apps/ui/src/components/ui/lazy-image.tsx` - Reusable lazy image component\n- `apps/ui/src/components/views/board-view.tsx` - Replace `<img>` with `<LazyImage>`\n- `apps/ui/src/components/views/dashboard-view.tsx` - Replace `<img>` with `<LazyImage>`\n- `apps/ui/src/components/ui/description-image-dropzone.tsx` - Replace `<img>` with `<LazyImage>`\n- `apps/ui/src/components/views/agent-view/components/message-bubble.tsx` - Replace `<img>` with `<LazyImage>`\n- `apps/ui/src/components/views/board-view/components/kanban-card/card-content-sections.tsx`\n- `apps/ui/src/components/ui/feature-image-upload.tsx`\n- All other files with `<img>` tags\n\n## Expected Impact\n- Off-screen images no longer fetched until user scrolls to them\n- Smoother page load with skeleton placeholders instead of blank spaces\n- Better UX when images fail to load (clear error state vs broken icon)\n- Reduced initial bandwidth usage\n\n## Acceptance Criteria\n- All images use `loading=\"lazy\"` or the `<LazyImage>` component\n- Skeleton placeholder visible while images load\n- Error state shows fallback icon when images fail to load\n- No Cumulative Layout Shift (CLS) - images have defined dimensions/aspect-ratio\n- Board view with many feature images scrolls without loading all images upfront\n- Existing image functionality (click to preview, zoom, etc.) still works",
+  "images": [],
+  "imagePaths": [],
+  "textFilePaths": [],
+  "skipTests": true,
+  "priority": 3,
+  "planningMode": "full",
+  "requirePlanApproval": false,
+  "autoDeploy": false,
+  "dependencies": [],
+  "status": "waiting_approval",
+  "projectPath": "C:\\Users\\DylanSmart\\Downloads\\automaker-pr",
+  "descriptionHistory": [
+    {
+      "description": "Add native lazy loading, placeholder skeletons, and error states to all image elements across the application",
+      "timestamp": "2026-02-12T10:00:11.000Z",
+      "source": "initial"
+    }
+  ],
+  "startedAt": "2026-02-13T02:07:03.360Z",
+  "updatedAt": "2026-02-13T02:21:19.666Z",
+  "planSpec": {
+    "status": "approved",
+    "version": 1,
+    "reviewedByUser": true,
+    "content": "I'll start by exploring the codebase to understand the existing patterns, then generate the specification.\n\n[timestamp:2026-02-12T22:06:04.323Z] 🔧 Tool: Task\nInput: {\n  \"description\": \"Find all img tags in UI\",\n  \"prompt\": \"Search the apps/ui/src directory for all `<img` tags in .tsx files. I need to find every location where images are rendered. Return the file paths, line numbers, and the surrounding code context (a few lines around each match). Be thorough - check all subdirectories.\",\n  \"subagent_type\": \"Explore\"\n}\n\n[timestamp:2026-02-12T22:06:08.663Z] 🔧 Tool: Task\nInput: {\n  \"description\": \"Explore UI component patterns\",\n  \"prompt\": \"Explore the apps/ui/src/components/ui/ directory to understand existing component patterns. I need to understand:\\n1. What existing UI components look like (structure, exports, naming conventions)\\n2. How they use className/cn utility\\n3. How they handle props spreading\\n4. Whether there's an existing pattern for loading states or skeletons\\n5. Check if there's already any lazy-image or similar component\\n6. Look at the imports pattern used (lucide-react icons, cn utility, etc.)\\n\\nAlso check apps/ui/src/components/ui/feature-image-upload.tsx and apps/ui/src/components/ui/description-image-dropzone.tsx to understand how images are currently handled in these components.\",\n  \"subagent_type\": \"Explore\"\n}\n\n[timestamp:2026-02-12T22:06:11.526Z] 🔧 Tool: Bash\nInput: {\n  \"command\": \"ls -la \\\"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\ui\\\\\\\"\"\n}\n\n[timestamp:2026-02-12T22:06:11.575Z] 🔧 Tool: Grep\nInput: {\n  \"pattern\": \"&lt;img\",\n  \"type\": \"tsx\",\n  \"path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\",\n  \"output_mode\": \"content\",\n  \"-C\": 3\n}\n\n[timestamp:2026-02-12T22:06:18.875Z] 🔧 Tool: Grep\nInput: {\n  \"pattern\": \"<img\",\n  \"type\": \"tsx\",\n  \"path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\",\n  \"output_mode\": \"content\",\n  \"-C\": 3\n}\n\n[timestamp:2026-02-12T22:06:23.189Z] 🔧 Tool: Bash\nInput: {\n  \"command\": \"ls -la '/c/Users/DylanSmart/Downloads/automaker-pr/apps/ui/src/components/ui/'\"\n}\n\n[timestamp:2026-02-12T22:06:25.967Z] 🔧 Tool: Bash\nInput: {\n  \"command\": \"cd \\\"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\" && find . -name \\\"*.tsx\\\" -type f | head -20\",\n  \"description\": \"Find tsx files in apps/ui/src\"\n}\n\n[timestamp:2026-02-12T22:06:32.167Z] 🔧 Tool: Read\nInput: {\n  \"file_path\": \"/c/Users/DylanSmart/Downloads/automaker-pr/apps/ui/src/components/ui/button.tsx\"\n}\n\n[timestamp:2026-02-12T22:06:32.355Z] 🔧 Tool: Read\nInput: {\n  \"file_path\": \"/c/Users/DylanSmart/Downloads/automaker-pr/apps/ui/src/components/ui/badge.tsx\"\n}\n\n[timestamp:2026-02-12T22:06:32.682Z] 🔧 Tool: Read\nInput: {\n  \"file_path\": \"/c/Users/DylanSmart/Downloads/automaker-pr/apps/ui/src/components/ui/card.tsx\"\n}\n\n[timestamp:2026-02-12T22:06:32.963Z] 🔧 Tool: Read\nInput: {\n  \"file_path\": \"/c/Users/DylanSmart/Downloads/automaker-pr/apps/ui/src/components/ui/loading-state.tsx\"\n}\n\n[timestamp:2026-02-12T22:06:35.547Z] 🔧 Tool: Bash\nInput: {\n  \"command\": \"cd \\\"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\" && grep -rn \\\"<img\\\" --include=\\\"*.tsx\\\" .\",\n  \"description\": \"Search for img tags in tsx files\"\n}\n\n[timestamp:2026-02-12T22:06:42.610Z] 🔧 Tool: Read\nInput: {\n  \"file_path\": \"/c/Users/DylanSmart/Downloads/automaker-pr/apps/ui/src/components/ui/button.tsx\"\n}\n\n[timestamp:2026-02-12T22:06:42.843Z] 🔧 Tool: Read\nInput: {\n  \"file_path\": \"/c/Users/DylanSmart/Downloads/automaker-pr/apps/ui/src/components/ui/loading-state.tsx\"\n}\n\n[timestamp:2026-02-12T22:06:43.133Z] 🔧 Tool: Read\nInput: {\n  \"file_path\": \"/c/Users/DylanSmart/Downloads/automaker-pr/apps/ui/src/components/ui/feature-image-upload.tsx\"\n}\n\n[timestamp:2026-02-12T22:06:43.426Z] 🔧 Tool: Read\nInput: {\n  \"file_path\": \"/c/Users/DylanSmart/Downloads/automaker-pr/apps/ui/src/components/ui/description-image-dropzone.tsx\"\n}\n\n[timestamp:2026-02-12T22:06:48.379Z] 🔧 Tool: Bash\nInput: {\n  \"command\": \"cat '/c/Users/DylanSmart/Downloads/automaker-pr/apps/ui/src/components/ui/button.tsx'\"\n}\n\n[timestamp:2026-02-12T22:06:48.700Z] 🔧 Tool: Bash\nInput: {\n  \"command\": \"cat '/c/Users/DylanSmart/Downloads/automaker-pr/apps/ui/src/components/ui/loading-state.tsx'\"\n}\n\n[timestamp:2026-02-12T22:06:48.896Z] 🔧 Tool: Bash\nInput: {\n  \"command\": \"cat '/c/Users/DylanSmart/Downloads/automaker-pr/apps/ui/src/components/ui/badge.tsx'\"\n}\n\n[timestamp:2026-02-12T22:06:49.117Z] 🔧 Tool: Bash\nInput: {\n  \"command\": \"cat '/c/Users/DylanSmart/Downloads/automaker-pr/apps/ui/src/components/ui/card.tsx'\"\n}\n\n[timestamp:2026-02-12T22:07:00.579Z] 🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\dialogs\\\\board-background-modal.tsx\",\n  \"offset\": 305,\n  \"limit\": 10\n}\n\n[timestamp:2026-02-12T22:07:00.786Z] 🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\ui\\\\description-image-dropzone.tsx\",\n  \"offset\": 490,\n  \"limit\": 15\n}\n\n[timestamp:2026-02-12T22:07:00.942Z] 🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\ui\\\\feature-image-upload.tsx\",\n  \"offset\": 246,\n  \"limit\": 10\n}\n\n[timestamp:2026-02-12T22:07:01.124Z] 🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\ui\\\\image-drop-zone.tsx\",\n  \"offset\": 252,\n  \"limit\": 10\n}\n\n[timestamp:2026-02-12T22:07:04.504Z] 🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\ui\\\\image-preview-dialog.tsx\",\n  \"offset\": 27,\n  \"limit\": 10\n}\n\n[timestamp:2026-02-12T22:07:04.743Z] 🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\agent-view\\\\components\\\\message-bubble.tsx\",\n  \"offset\": 152,\n  \"limit\": 10\n}\n\n[timestamp:2026-02-12T22:07:40.058Z] 🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\agent-view\\\\components\\\\session-selector.tsx\",\n  \"offset\": 286,\n  \"limit\": 10\n}\n\n[timestamp:2026-02-12T22:07:40.321Z] 🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\agent-view\\\\input-area\\\\file-preview.tsx\",\n  \"offset\": 61,\n  \"limit\": 10\n}\n\n[timestamp:2026-02-12T22:07:40.520Z] 🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\board-view\\\\components\\\\agent-chat-panel.tsx\",\n  \"offset\": 405,\n  \"limit\": 10\n}\n\n[timestamp:2026-02-12T22:07:40.706Z] 🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\board-view\\\\components\\\\agent-chat-panel.tsx\",\n  \"offset\": 436,\n  \"limit\": 10\n}\n\n[timestamp:2026-02-12T22:07:42.651Z] 🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\board-view.tsx\",\n  \"offset\": 2221,\n  \"limit\": 10\n}\n\n[timestamp:2026-02-12T22:07:43.225Z] 🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\board-view.tsx\",\n  \"offset\": 2308,\n  \"limit\": 10\n}\n\n[timestamp:2026-02-12T22:08:13.390Z] 🔧 Tool: Bash\nInput: {\n  \"command\": \"cat '/c/Users/DylanSmart/Downloads/automaker-pr/apps/ui/src/components/ui/feature-image-upload.tsx'\"\n}\n\n[timestamp:2026-02-12T22:08:13.537Z] 🔧 Tool: Bash\nInput: {\n  \"command\": \"cat '/c/Users/DylanSmart/Downloads/automaker-pr/apps/ui/src/components/ui/description-image-dropzone.tsx'\"\n}\n\n[timestamp:2026-02-12T22:08:13.701Z] 🔧 Tool: Bash\nInput: {\n  \"command\": \"cat '/c/Users/DylanSmart/Downloads/automaker-pr/apps/ui/src/components/ui/image-drop-zone.tsx'\"\n}\n\n[timestamp:2026-02-12T22:08:15.735Z] 🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\dashboard-view.tsx\",\n  \"offset\": 774,\n  \"limit\": 10\n}\n\n[timestamp:2026-02-12T22:08:16.038Z] 🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\dashboard-view.tsx\",\n  \"offset\": 865,\n  \"limit\": 10\n}\n\n[timestamp:2026-02-12T22:08:17.414Z] 🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\github-issues-view\\\\components\\\\comment-item.tsx\",\n  \"offset\": 11,\n  \"limit\": 10\n}\n\n[timestamp:2026-02-12T22:08:17.609Z] 🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\github-issues-view\\\\components\\\\issue-detail-panel.tsx\",\n  \"offset\": 224,\n  \"limit\": 10\n}\n\n[timestamp:2026-02-12T22:08:17.862Z] 🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\project-settings-view\\\\project-identity-section.tsx\",\n  \"offset\": 198,\n  \"limit\": 10\n}\n\n[timestamp:2026-02-12T22:08:18.103Z] 🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\settings-view\\\\components\\\\edit-project-dialog.tsx\",\n  \"offset\": 205,\n  \"limit\": 10\n}\n\n[timestamp:2026-02-12T22:08:55.709Z] 🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\settings-view\\\\projects\\\\projects-section.tsx\",\n  \"offset\": 512,\n  \"limit\": 10\n}\n\n[timestamp:2026-02-12T22:08:56.033Z] 🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\setup-view\\\\steps\\\\welcome-step.tsx\",\n  \"offset\": 7,\n  \"limit\": 10\n}\n\n[timestamp:2026-02-12T22:08:56.415Z] 🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\setup-view.tsx\",\n  \"offset\": 94,\n  \"limit\": 10\n}\n\n[timestamp:2026-02-12T22:08:58.983Z] 🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\welcome-view.tsx\",\n  \"offset\": 549,\n  \"limit\": 10\n}\n\n[timestamp:2026-02-12T22:09:28.345Z] 🔧 Tool: Bash\nInput: {\n  \"command\": \"cat '/c/Users/DylanSmart/Downloads/automaker-pr/apps/ui/src/lib/utils.ts' | head -30\"\n}\n\n[timestamp:2026-02-12T22:09:28.574Z] 🔧 Tool: Bash\nInput: {\n  \"command\": \"cat '/c/Users/DylanSmart/Downloads/automaker-pr/apps/ui/src/components/ui/image-preview-dialog.tsx'\"\n}\n\n[timestamp:2026-02-12T22:09:28.970Z] 🔧 Tool: Bash\nInput: {\n  \"command\": \"cat '/c/Users/DylanSmart/Downloads/automaker-pr/apps/ui/src/components/ui/dialog.tsx'\"\n}\n\n[timestamp:2026-02-12T22:09:57.596Z] 🔧 Tool: Bash\nInput: {\n  \"command\": \"find '/c/Users/DylanSmart/Downloads/automaker-pr/apps/ui/src' -name '*skeleton*' -o -name '*loader*' | head -20\"\n}\n\n[timestamp:2026-02-12T22:09:57.869Z] 🔧 Tool: Bash\nInput: {\n  \"command\": \"cat '/c/Users/DylanSmart/Downloads/automaker-pr/apps/ui/src/lib/image-utils.ts' | head -100\"\n}\n\n[timestamp:2026-02-12T22:10:13.192Z] 🔧 Tool: Bash\nInput: {\n  \"command\": \"cat '/c/Users/DylanSmart/Downloads/automaker-pr/apps/ui/src/components/views/board-view/components/board-skeleton.tsx'\"\n}\n\n[timestamp:2026-02-12T22:10:13.972Z] 🔧 Tool: Bash\nInput: {\n  \"command\": \"cat '/c/Users/DylanSmart/Downloads/automaker-pr/apps/ui/src/components/views/board-view/components/kanban-card/feature-card-skeleton.tsx'\"\n}\n\n[timestamp:2026-02-12T22:10:40.328Z] 🔧 Tool: Bash\nInput: {\n  \"command\": \"cat '/c/Users/DylanSmart/Downloads/automaker-pr/apps/ui/src/components/ui/input.tsx'\"\n}\n\n[timestamp:2026-02-12T22:10:40.679Z] 🔧 Tool: Bash\nInput: {\n  \"command\": \"cat '/c/Users/DylanSmart/Downloads/automaker-pr/apps/ui/src/components/ui/textarea.tsx'\"\n}\n\n[timestamp:2026-02-12T22:11:12.285Z] 🔧 Tool: Bash\nInput: {\n  \"command\": \"cat '/c/Users/DylanSmart/Downloads/automaker-pr/apps/ui/src/components/ui/dropdown-menu.tsx' | head -150\"\n}\n\n[timestamp:2026-02-12T22:11:36.078Z] 🔧 Tool: Bash\nInput: {\n  \"command\": \"ls -la '/c/Users/DylanSmart/Downloads/automaker-pr/apps/ui/src/components/' | grep -E \\\"index|layout\\\"\"\n}\nNow let me look at a few specific files to understand the exact code patterns:\n\n[timestamp:2026-02-12T22:12:23.435Z] 🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\board-view\\\\components\\\\kanban-card\\\\card-content-sections.tsx\"\n}\n\n[timestamp:2026-02-12T22:12:24.141Z] 🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\ui\\\\image-preview-dialog.tsx\"\n}\n\n[timestamp:2026-02-12T22:12:24.576Z] 🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\DylanSmart\\\\Downloads\\\\automaker-pr\\\\apps\\\\ui\\\\src\\\\lib\\\\utils.ts\"\n}\nNow I have a thorough understanding of the codebase. Note that `card-content-sections.tsx` doesn't actually contain any `<img>` tags - it only has branch and PR link info. Let me now produce the specification.\n\n---\n\n## 1. Problem Statement\n\nAll `<img>` tags across the Automaker UI render without `loading=\"lazy\"`, skeleton placeholders, or error handling. Off-screen images (e.g., in scrolled-away kanban cards, project lists) load immediately on render, increasing initial bandwidth and degrading page load performance. When images fail to load, users see broken image icons with no graceful fallback.\n\n## 2. User Story\n\nAs a **developer using Automaker**, I want **images to load lazily with skeleton placeholders and error fallbacks**, so that **the UI loads faster, uses less bandwidth, and handles image failures gracefully**.\n\n## 3. Acceptance Criteria\n\n- **Happy Path - Lazy Loading**: GIVEN a board with 20+ feature cards containing images, WHEN the page loads, THEN only images visible in the viewport are fetched; off-screen images load as the user scrolls to them.\n- **Happy Path - Skeleton**: GIVEN an image is still loading, WHEN the component renders, THEN a pulsing skeleton placeholder with matching dimensions is displayed.\n- **Happy Path - Loaded**: GIVEN an image has loaded successfully, WHEN the load completes, THEN the skeleton fades away and the image fades in smoothly.\n- **Error Handling**: GIVEN an image URL returns a 404 or fails to load, WHEN the error event fires, THEN a muted fallback with an `ImageOff` icon is displayed instead of a broken image icon.\n- **Edge Case - Preview Dialog**: GIVEN a user clicks an image to open the preview dialog, WHEN the dialog opens, THEN the full-size image still loads and displays correctly (preview dialog images should NOT be lazy since they're always in-view).\n- **Edge Case - Inline Data URLs**: GIVEN an image uses a base64 data URL (file upload previews), WHEN the component renders, THEN the image loads instantly without a visible skeleton flash (data URLs are already local).\n- **Edge Case - Logo Images**: GIVEN static logo images like `/logo.png`, WHEN the page loads, THEN these are NOT made lazy (they're critical above-the-fold content).\n- **Edge Case - No CLS**: GIVEN images have `LazyImage` applied, WHEN loading completes, THEN there is no Cumulative Layout Shift because containers have defined dimensions or aspect ratios.\n\n## 4. Technical Context\n\n| Aspect | Value |\n|--------|-------|\n| Affected Files | 16 files (14 with `<img>` tags + 1 new component + 1 barrel export) |\n| Dependencies | None (uses native `loading=\"lazy\"`, React state, existing lucide-react icons) |\n| Constraints | Must not break existing click-to-preview functionality; must work with `getAuthenticatedImageUrl()` |\n| Patterns to Follow | `cn()` from `@/lib/utils`, `data-slot` attribute, lucide-react icons, `animate-pulse` skeletons, `bg-muted` for placeholder colors |\n\n## 5. Non-Goals\n\n- **Intersection Observer polyfill**: Native `loading=\"lazy\"` has sufficient browser support; no need for a JS-based lazy loading library.\n- **Blur-up / LQIP placeholders**: No low-quality image placeholder technique; a simple skeleton is sufficient.\n- **Image optimization / resizing**: No server-side image processing or srcset generation.\n- **Virtualized image lists**: No virtual scrolling for image-heavy lists (separate concern).\n- **Retry logic**: No automatic retry on failed image loads.\n\n## 6. Implementation Tasks\n\n```tasks\n## Phase 1: Foundation\n- [ ] T001: Create reusable LazyImage component with loading/error states | File: apps/ui/src/components/ui/lazy-image.tsx\n- [ ] T002: Export LazyImage from UI component barrel (if one exists) or verify import path works | File: apps/ui/src/components/ui/lazy-image.tsx\n\n## Phase 2: Core Replacements - Board & Dashboard Views\n- [ ] T003: Replace <img> tags in board-view.tsx (2 project icon instances) with LazyImage | File: apps/ui/src/components/views/board-view.tsx\n- [ ] T004: Replace <img> tags in dashboard-view.tsx (2 project icon instances) with LazyImage | File: apps/ui/src/components/views/dashboard-view.tsx\n- [ ] T005: Replace <img> tag in agent-chat-panel.tsx (2 project icon instances) with LazyImage | File: apps/ui/src/components/views/board-view/components/agent-chat-panel.tsx\n\n## Phase 3: Core Replacements - Agent & Settings Views\n- [ ] T006: Replace <img> tag in session-selector.tsx (1 project icon) with LazyImage | File: apps/ui/src/components/views/agent-view/components/session-selector.tsx\n- [ ] T007: Replace <img> tag in message-bubble.tsx (1 chat image) with LazyImage | File: apps/ui/src/components/views/agent-view/components/message-bubble.tsx\n- [ ] T008: Replace <img> tag in project-identity-section.tsx (1 project icon preview) with LazyImage | File: apps/ui/src/components/views/project-settings-view/project-identity-section.tsx\n- [ ] T009: Replace <img> tag in edit-project-dialog.tsx (1 project icon) with LazyImage | File: apps/ui/src/components/views/settings-view/components/edit-project-dialog.tsx\n- [ ] T010: Replace <img> tag in projects-section.tsx (1 project icon) with LazyImage | File: apps/ui/src/components/views/settings-view/projects/projects-section.tsx\n\n## Phase 4: Core Replacements - Image Upload & Dropzone Components\n- [ ] T011: Replace <img> tags in description-image-dropzone.tsx (2 thumbnail instances) with LazyImage | File: apps/ui/src/components/ui/description-image-dropzone.tsx\n- [ ] T012: Replace <img> tag in feature-image-upload.tsx (1 thumbnail) with LazyImage | File: apps/ui/src/components/ui/feature-image-upload.tsx\n- [ ] T013: Replace <img> tag in image-drop-zone.tsx (1 thumbnail) with LazyImage | File: apps/ui/src/components/ui/image-drop-zone.tsx\n- [ ] T014: Replace <img> tag in file-preview.tsx (1 file preview thumbnail) with LazyImage | File: apps/ui/src/components/views/agent-view/input-area/file-preview.tsx\n\n## Phase 5: Remaining Views & Edge Cases\n- [ ] T015: Replace <img> tags in GitHub components (comment-item.tsx, issue-detail-panel.tsx) with LazyImage | File: apps/ui/src/components/views/github-issues-view/components/comment-item.tsx\n- [ ] T016: Add error handling to image-preview-dialog.tsx (keep eager loading, add onError fallback) | File: apps/ui/src/components/ui/image-preview-dialog.tsx\n- [ ] T017: Add error handling to board-background-modal.tsx background preview image | File: apps/ui/src/components/dialogs/board-background-modal.tsx\n- [ ] T018: Skip LazyImage for static logos (welcome-step.tsx, setup-view.tsx, welcome-view.tsx) - just add loading=\"eager\" to be explicit | File: apps/ui/src/components/views/setup-view/steps/welcome-step.tsx\n\n## Phase 6: Validation\n- [ ] T019: Build the project to verify no TypeScript errors | File: (build output)\n```\n\n## 7. Success Metrics\n\n- All 24 `<img>` tags are either replaced with `LazyImage` or explicitly marked with `loading=\"eager\"` for above-the-fold content.\n- The project builds without TypeScript errors.\n- Off-screen images in the kanban board defer loading until scrolled into view (verifiable via browser DevTools Network tab).\n- Failed image loads display a muted `ImageOff` icon instead of a broken image icon.\n- Images show a pulsing skeleton placeholder while loading.\n- No layout shift when images load (containers maintain their dimensions).\n\n## 8. Risks & Mitigations\n\n| Risk | Mitigation |\n|------|------------|\n| LazyImage wrapper breaks click-to-preview interactions | Pass through all event handlers via `...props` spread; test preview dialog still opens |\n| Skeleton flash on instant-loading data URLs | Data URLs trigger `onLoad` synchronously or near-instantly; the opacity transition is short enough (200ms) that any flash is imperceptible |\n| Layout shift from missing dimensions | LazyImage wrapper inherits parent container dimensions via `className`; existing containers already define dimensions (e.g., `w-5 h-5`, `w-full h-full`) |\n| Image-preview-dialog shows skeleton unnecessarily | Preview dialog keeps `<img>` directly with just error handling added, no lazy loading |\n| Authenticated image URLs don't work with lazy loading | `loading=\"lazy\"` is a browser-native attribute that works with any URL including authenticated ones; no impact |\n\n---",
+    "generatedAt": "2026-02-12T22:13:44.624Z",
+    "tasks": [
+      {
+        "id": "T001",
+        "description": "Create reusable LazyImage component with loading/error states",
+        "filePath": "apps/ui/src/components/ui/lazy-image.tsx",
+        "phase": "Phase 1: Foundation",
+        "status": "pending"
+      },
+      {
+        "id": "T002",
+        "description": "Export LazyImage from UI component barrel (if one exists) or verify import path works",
+        "filePath": "apps/ui/src/components/ui/lazy-image.tsx",
+        "phase": "Phase 1: Foundation",
+        "status": "pending"
+      },
+      {
+        "id": "T003",
+        "description": "Replace <img> tags in board-view.tsx (2 project icon instances) with LazyImage",
+        "filePath": "apps/ui/src/components/views/board-view.tsx",
+        "phase": "Phase 2: Core Replacements - Board & Dashboard Views",
+        "status": "pending"
+      },
+      {
+        "id": "T004",
+        "description": "Replace <img> tags in dashboard-view.tsx (2 project icon instances) with LazyImage",
+        "filePath": "apps/ui/src/components/views/dashboard-view.tsx",
+        "phase": "Phase 2: Core Replacements - Board & Dashboard Views",
+        "status": "pending"
+      },
+      {
+        "id": "T005",
+        "description": "Replace <img> tag in agent-chat-panel.tsx (2 project icon instances) with LazyImage",
+        "filePath": "apps/ui/src/components/views/board-view/components/agent-chat-panel.tsx",
+        "phase": "Phase 2: Core Replacements - Board & Dashboard Views",
+        "status": "pending"
+      },
+      {
+        "id": "T006",
+        "description": "Replace <img> tag in session-selector.tsx (1 project icon) with LazyImage",
+        "filePath": "apps/ui/src/components/views/agent-view/components/session-selector.tsx",
+        "phase": "Phase 3: Core Replacements - Agent & Settings Views",
+        "status": "pending"
+      },
+      {
+        "id": "T007",
+        "description": "Replace <img> tag in message-bubble.tsx (1 chat image) with LazyImage",
+        "filePath": "apps/ui/src/components/views/agent-view/components/message-bubble.tsx",
+        "phase": "Phase 3: Core Replacements - Agent & Settings Views",
+        "status": "pending"
+      },
+      {
+        "id": "T008",
+        "description": "Replace <img> tag in project-identity-section.tsx (1 project icon preview) with LazyImage",
+        "filePath": "apps/ui/src/components/views/project-settings-view/project-identity-section.tsx",
+        "phase": "Phase 3: Core Replacements - Agent & Settings Views",
+        "status": "pending"
+      },
+      {
+        "id": "T009",
+        "description": "Replace <img> tag in edit-project-dialog.tsx (1 project icon) with LazyImage",
+        "filePath": "apps/ui/src/components/views/settings-view/components/edit-project-dialog.tsx",
+        "phase": "Phase 3: Core Replacements - Agent & Settings Views",
+        "status": "pending"
+      },
+      {
+        "id": "T010",
+        "description": "Replace <img> tag in projects-section.tsx (1 project icon) with LazyImage",
+        "filePath": "apps/ui/src/components/views/settings-view/projects/projects-section.tsx",
+        "phase": "Phase 3: Core Replacements - Agent & Settings Views",
+        "status": "pending"
+      },
+      {
+        "id": "T011",
+        "description": "Replace <img> tags in description-image-dropzone.tsx (2 thumbnail instances) with LazyImage",
+        "filePath": "apps/ui/src/components/ui/description-image-dropzone.tsx",
+        "phase": "Phase 4: Core Replacements - Image Upload & Dropzone Components",
+        "status": "pending"
+      },
+      {
+        "id": "T012",
+        "description": "Replace <img> tag in feature-image-upload.tsx (1 thumbnail) with LazyImage",
+        "filePath": "apps/ui/src/components/ui/feature-image-upload.tsx",
+        "phase": "Phase 4: Core Replacements - Image Upload & Dropzone Components",
+        "status": "pending"
+      },
+      {
+        "id": "T013",
+        "description": "Replace <img> tag in image-drop-zone.tsx (1 thumbnail) with LazyImage",
+        "filePath": "apps/ui/src/components/ui/image-drop-zone.tsx",
+        "phase": "Phase 4: Core Replacements - Image Upload & Dropzone Components",
+        "status": "pending"
+      },
+      {
+        "id": "T014",
+        "description": "Replace <img> tag in file-preview.tsx (1 file preview thumbnail) with LazyImage",
+        "filePath": "apps/ui/src/components/views/agent-view/input-area/file-preview.tsx",
+        "phase": "Phase 4: Core Replacements - Image Upload & Dropzone Components",
+        "status": "pending"
+      },
+      {
+        "id": "T015",
+        "description": "Replace <img> tags in GitHub components (comment-item.tsx, issue-detail-panel.tsx) with LazyImage",
+        "filePath": "apps/ui/src/components/views/github-issues-view/components/comment-item.tsx",
+        "phase": "Phase 5: Remaining Views & Edge Cases",
+        "status": "pending"
+      },
+      {
+        "id": "T016",
+        "description": "Add error handling to image-preview-dialog.tsx (keep eager loading, add onError fallback)",
+        "filePath": "apps/ui/src/components/ui/image-preview-dialog.tsx",
+        "phase": "Phase 5: Remaining Views & Edge Cases",
+        "status": "pending"
+      },
+      {
+        "id": "T017",
+        "description": "Add error handling to board-background-modal.tsx background preview image",
+        "filePath": "apps/ui/src/components/dialogs/board-background-modal.tsx",
+        "phase": "Phase 5: Remaining Views & Edge Cases",
+        "status": "pending"
+      },
+      {
+        "id": "T018",
+        "description": "Skip LazyImage for static logos (welcome-step.tsx, setup-view.tsx, welcome-view.tsx) - just add loading=\"eager\" to be explicit",
+        "filePath": "apps/ui/src/components/views/setup-view/steps/welcome-step.tsx",
+        "phase": "Phase 5: Remaining Views & Edge Cases",
+        "status": "pending"
+      },
+      {
+        "id": "T019",
+        "description": "Build the project to verify no TypeScript errors",
+        "filePath": "(build output)",
+        "phase": "Phase 6: Validation",
+        "status": "pending"
+      }
+    ],
+    "tasksTotal": 19,
+    "tasksCompleted": 0,
+    "approvedAt": "2026-02-12T23:29:38.699Z"
+  },
+  "model": "opus",
+  "thinkingLevel": "none",
+  "reasoningEffort": "none",
+  "deployEnvironment": "development",
+  "workMode": "current",
+  "waitForDependencies": false,
+  "remoteModified": false,
+  "justFinishedAt": "2026-02-13T02:21:19.666Z"
+}

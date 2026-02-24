@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Automaker is an autonomous AI development studio built as an npm workspace monorepo. It provides a Kanban-based workflow where AI agents (powered by Claude Agent SDK) implement features in isolated git worktrees.
+DMaker is an autonomous AI development studio built as an npm workspace monorepo. It provides a Kanban-based workflow where AI agents (powered by Claude Agent SDK) implement features in isolated git worktrees.
 
 ## Common Commands
 
@@ -42,11 +42,11 @@ npm run format:check        # Prettier check
 ### Monorepo Structure
 
 ```
-automaker/
+dmaker/
 ├── apps/
 │   ├── ui/           # React + Vite + Electron frontend (port 3007)
 │   └── server/       # Express + WebSocket backend (port 3008)
-└── libs/             # Shared packages (@automaker/*)
+└── libs/             # Shared packages (@dmaker/*)
     ├── types/        # Core TypeScript definitions (no dependencies)
     ├── utils/        # Logging, errors, image processing, context loading
     ├── prompts/      # AI prompt templates
@@ -61,13 +61,13 @@ automaker/
 Packages can only depend on packages above them:
 
 ```
-@automaker/types (no dependencies)
+@dmaker/types (no dependencies)
     ↓
-@automaker/utils, @automaker/prompts, @automaker/platform, @automaker/model-resolver, @automaker/dependency-resolver
+@dmaker/utils, @dmaker/prompts, @dmaker/platform, @dmaker/model-resolver, @dmaker/dependency-resolver
     ↓
-@automaker/git-utils
+@dmaker/git-utils
     ↓
-@automaker/server, @automaker/ui
+@dmaker/server, @dmaker/ui
 ```
 
 ### Key Technologies
@@ -97,10 +97,10 @@ The UI (`apps/ui/src/`) uses:
 
 ## Data Storage
 
-### Per-Project Data (`.automaker/`)
+### Per-Project Data (`.dmaker/`)
 
 ```
-.automaker/
+.dmaker/
 ├── features/              # Feature JSON files and images
 │   └── {featureId}/
 │       ├── feature.json
@@ -128,13 +128,13 @@ Always import from shared packages, never from old paths:
 
 ```typescript
 // ✅ Correct
-import type { Feature, ExecuteOptions } from '@automaker/types';
-import { createLogger, classifyError } from '@automaker/utils';
-import { getEnhancementPrompt } from '@automaker/prompts';
-import { getFeatureDir, ensureAutomakerDir } from '@automaker/platform';
-import { resolveModelString } from '@automaker/model-resolver';
-import { resolveDependencies } from '@automaker/dependency-resolver';
-import { getGitRepositoryDiffs } from '@automaker/git-utils';
+import type { Feature, ExecuteOptions } from '@dmaker/types';
+import { createLogger, classifyError } from '@dmaker/utils';
+import { getEnhancementPrompt } from '@dmaker/prompts';
+import { getFeatureDir, ensureDmakerDir } from '@dmaker/platform';
+import { resolveModelString } from '@dmaker/model-resolver';
+import { resolveDependencies } from '@dmaker/dependency-resolver';
+import { getGitRepositoryDiffs } from '@dmaker/git-utils';
 
 // ❌ Never import from old paths
 import { Feature } from '../services/feature-loader'; // Wrong
@@ -149,15 +149,15 @@ All server operations emit events that stream to the frontend via WebSocket. Eve
 
 ### Git Worktree Isolation
 
-Each feature executes in an isolated git worktree, created via `@automaker/git-utils`. This protects the main branch during AI agent execution.
+Each feature executes in an isolated git worktree, created via `@dmaker/git-utils`. This protects the main branch during AI agent execution.
 
 ### Context Files
 
-Project-specific rules are stored in `.automaker/context/` and automatically loaded into agent prompts via `loadContextFiles()` from `@automaker/utils`.
+Project-specific rules are stored in `.dmaker/context/` and automatically loaded into agent prompts via `loadContextFiles()` from `@dmaker/utils`.
 
 ### Model Resolution
 
-Use `resolveModelString()` from `@automaker/model-resolver` to convert model aliases:
+Use `resolveModelString()` from `@dmaker/model-resolver` to convert model aliases:
 
 - `haiku` → `claude-haiku-4-5`
 - `sonnet` → `claude-sonnet-4-20250514`
@@ -171,5 +171,5 @@ Use `resolveModelString()` from `@automaker/model-resolver` to convert model ali
 - `PORT` - Server port (default: 3008)
 - `DATA_DIR` - Data storage directory (default: ./data)
 - `ALLOWED_ROOT_DIRECTORY` - Restrict file operations to specific directory
-- `AUTOMAKER_MOCK_AGENT=true` - Enable mock agent mode for CI testing
+- `DMAKER_MOCK_AGENT=true` - Enable mock agent mode for CI testing
 - `VITE_HOSTNAME` - Hostname for frontend API URLs (default: localhost)

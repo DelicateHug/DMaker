@@ -1,0 +1,42 @@
+{
+  "category": "Uncategorized",
+  "description": "stuck on checking",
+  "title": "Fix checking validation issue",
+  "images": [],
+  "imagePaths": [
+    {
+      "id": "img-1771103066897-4410hjb7v",
+      "path": "C:\\Users\\DylanSmart\\Downloads\\dmaker-pr\\.dmaker\\features\\feature-1771103073610-lpn8h6cww\\images\\pasted-image-2026-02-14T21-04-26-866Z-1771103066892.png",
+      "filename": "pasted-image-2026-02-14T21-04-26-866Z.png",
+      "mimeType": "image/png"
+    }
+  ],
+  "textFilePaths": [],
+  "skipTests": true,
+  "model": "opus",
+  "thinkingLevel": "medium",
+  "reasoningEffort": "none",
+  "priority": 2,
+  "planningMode": "skip",
+  "requirePlanApproval": false,
+  "autoDeploy": false,
+  "deployEnvironment": "development",
+  "dependencies": [],
+  "workMode": "current",
+  "selectedProjectPath": "C:\\Users\\DylanSmart\\Downloads\\dmaker-pr",
+  "titleGenerating": false,
+  "status": "completed",
+  "projectPath": "C:\\Users\\DylanSmart\\Downloads\\dmaker-pr",
+  "id": "feature-1771103073610-lpn8h6cww",
+  "descriptionHistory": [
+    {
+      "description": "stuck on checking",
+      "timestamp": "2026-02-14T21:04:34.276Z",
+      "source": "initial"
+    }
+  ],
+  "startedAt": "2026-02-14T21:04:34.297Z",
+  "updatedAt": "2026-02-14T21:14:28.700Z",
+  "justFinishedAt": "2026-02-14T21:14:28.700Z",
+  "completedAt": "2026-02-15T04:53:47.961Z"
+}

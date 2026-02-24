@@ -16,15 +16,15 @@ import type {
   LinkedPRInfo,
   ThinkingLevel,
   ReasoningEffort,
-} from '@automaker/types';
+} from '@dmaker/types';
 import {
   DEFAULT_PHASE_MODELS,
   isClaudeModel,
   isCodexModel,
   isCursorModel,
   isOpencodeModel,
-} from '@automaker/types';
-import { resolvePhaseModel } from '@automaker/model-resolver';
+} from '@dmaker/types';
+import { resolvePhaseModel } from '@dmaker/model-resolver';
 import { extractJson } from '../../../lib/json-extractor.js';
 import { writeValidation } from '../../../lib/validation-storage.js';
 import { streamingQuery } from '../../../providers/simple-query-service.js';

@@ -1,6 +1,6 @@
 // Test 2: Pipeline verification marker (20-02-2026-test_2)
 import type { Feature } from '@/store/app-store';
-import type { PipelineConfig, FeatureStatusWithPipeline } from '@automaker/types';
+import type { PipelineConfig, FeatureStatusWithPipeline } from '@dmaker/types';
 
 export type ColumnId = Feature['status'];
 

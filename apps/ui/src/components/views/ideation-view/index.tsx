@@ -12,7 +12,7 @@ import { IdeationDashboard } from './components/ideation-dashboard';
 import { useGuidedPrompts } from '@/hooks/use-guided-prompts';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, ChevronRight, Lightbulb, CheckCheck, Loader2, Trash2 } from 'lucide-react';
-import type { IdeaCategory } from '@automaker/types';
+import type { IdeaCategory } from '@dmaker/types';
 import type { IdeationMode } from '@/store/ideation-store';
 
 // Breadcrumb component - compact inline breadcrumbs

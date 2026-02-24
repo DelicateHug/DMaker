@@ -1,0 +1,39 @@
+{
+  "category": "Uncategorized",
+  "description": "Execution plan should be its own tab and logs its own tab",
+  "title": "",
+  "images": [],
+  "imagePaths": [
+    {
+      "id": "img-1770724913661-gk0svvx3b",
+      "path": "C:\\Users\\dylan\\Downloads\\automaker-pr\\.automaker\\features\\feature-1770724923741-6mm3cjff4\\images\\pasted-image-2026-02-10T12-01-53-525Z-1770724913615.png",
+      "filename": "pasted-image-2026-02-10T12-01-53-525Z.png",
+      "mimeType": "image/png"
+    }
+  ],
+  "textFilePaths": [],
+  "skipTests": true,
+  "model": "opus",
+  "thinkingLevel": "none",
+  "reasoningEffort": "none",
+  "priority": 2,
+  "planningMode": "skip",
+  "requirePlanApproval": false,
+  "autoDeploy": false,
+  "deployEnvironment": "development",
+  "dependencies": [],
+  "workMode": "current",
+  "selectedProjectPath": "C:\\Users\\dylan\\Downloads\\automaker-pr",
+  "titleGenerating": "Execution plan should be its own tab and logs its own tab",
+  "status": "in_progress",
+  "projectPath": "C:\\Users\\dylan\\Downloads\\automaker-pr",
+  "id": "feature-1770724923741-6mm3cjff4",
+  "descriptionHistory": [
+    {
+      "description": "Execution plan should be its own tab and logs its own tab",
+      "timestamp": "2026-02-10T12:02:03.877Z",
+      "source": "initial"
+    }
+  ],
+  "updatedAt": "2026-02-10T12:02:05.130Z"
+}

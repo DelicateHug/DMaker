@@ -1,0 +1,37 @@
+{
+  "category": "Uncategorized",
+  "description": "If any put in the waiting approval in the past 30 minutes That should you know listed under running agents under like kind of like a bottom area box and then you should be able to like click it to make the kind of like notification or status disappear so don't you know send a pop up or anything to the user whenever this is done just make sure that you know if they click the the agents and then they see the running agents that anything completed or in the waiting approval status has been placed in the waiting approval status in the last 30 minutes that it's shown there until they click it off or it's past 30 minutes",
+  "title": "Add recent waiting approval status indicator",
+  "images": [],
+  "imagePaths": [
+    {
+      "id": "img-1770600455381-0trqquh11",
+      "path": "C:\\Users\\dylan\\Downloads\\dmaker-pr\\.dmaker\\features\\feature-1770600508213-rn80hbp7y\\images\\pasted-image-2026-02-09T01-27-35-335Z-1770600455369.png",
+      "filename": "pasted-image-2026-02-09T01-27-35-335Z.png",
+      "mimeType": "image/png"
+    }
+  ],
+  "textFilePaths": [],
+  "skipTests": true,
+  "model": "opus",
+  "thinkingLevel": "none",
+  "reasoningEffort": "none",
+  "priority": 2,
+  "planningMode": "skip",
+  "requirePlanApproval": false,
+  "dependencies": [],
+  "workMode": "current",
+  "titleGenerating": false,
+  "status": "completed",
+  "id": "feature-1770600508213-rn80hbp7y",
+  "descriptionHistory": [
+    {
+      "description": "If any put in the waiting approval in the past 30 minutes That should you know listed under running agents under like kind of like a bottom area box and then you should be able to like click it to make the kind of like notification or status disappear so don't you know send a pop up or anything to the user whenever this is done just make sure that you know if they click the the agents and then they see the running agents that anything completed or in the waiting approval status has been placed in the waiting approval status in the last 30 minutes that it's shown there until they click it off or it's past 30 minutes",
+      "timestamp": "2026-02-09T01:28:28.278Z",
+      "source": "initial"
+    }
+  ],
+  "startedAt": "2026-02-09T01:28:28.315Z",
+  "updatedAt": "2026-02-09T01:41:08.474Z",
+  "justFinishedAt": "2026-02-09T01:41:08.474Z"
+}

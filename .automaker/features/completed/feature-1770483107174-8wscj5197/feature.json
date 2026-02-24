@@ -1,0 +1,120 @@
+{
+  "category": "Uncategorized",
+  "description": "Each project should be assignable a default brancj, also when in all project view you should see a greyed out default tree icon. Also when looking at features they should have icon for branch so you know what branch you are on when in all project view.",
+  "title": "Add default branch assignment and branch indicators",
+  "images": [],
+  "imagePaths": [],
+  "textFilePaths": [],
+  "skipTests": true,
+  "model": "opus",
+  "thinkingLevel": "none",
+  "reasoningEffort": "none",
+  "priority": 2,
+  "planningMode": "full",
+  "requirePlanApproval": false,
+  "dependencies": [],
+  "workMode": "current",
+  "titleGenerating": false,
+  "status": "completed",
+  "id": "feature-1770483107174-8wscj5197",
+  "descriptionHistory": [
+    {
+      "description": "Each project should be assignable a default brancj, also when in all project view you should see a greyed out default tree icon. Also when looking at features they should have icon for branch so you know what branch you are on when in all project view.",
+      "timestamp": "2026-02-07T16:51:47.237Z",
+      "source": "initial"
+    }
+  ],
+  "startedAt": "2026-02-07T16:51:47.282Z",
+  "updatedAt": "2026-02-07T17:26:43.399Z",
+  "planSpec": {
+    "status": "approved",
+    "version": 1,
+    "reviewedByUser": false,
+    "content": "🔧 Tool: Glob\nInput: {\n  \"pattern\": \"**/*.ts\",\n  \"path\": \"libs/types/src\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"**/settings*.ts\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"**/project*.tsx\",\n  \"path\": \"apps/ui/src\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"**/board-view*.tsx\",\n  \"path\": \"apps/ui/src\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"**/kanban*.tsx\",\n  \"path\": \"apps/ui/src\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\libs\\\\types\\\\src\\\\settings.ts\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\libs\\\\types\\\\src\\\\feature.ts\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\board-view\\\\components\\\\kanban-card\\\\kanban-card.tsx\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\project-settings-view\\\\project-identity-section.tsx\"\n}\n\n🔧 Tool: Grep\nInput: {\n  \"pattern\": \"defaultBranch\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\board-view\\\\components\\\\kanban-card\\\\card-badges.tsx\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\ui\\\\src\\\\store\\\\app-store.ts\"\n}\n\n🔧 Tool: Glob\nInput: {\n  \"pattern\": \"**/list-view*.tsx\",\n  \"path\": \"apps/ui/src\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\board-view\\\\dialogs\\\\add-feature-dialog.tsx\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\board-view\\\\components\\\\list-view\\\\list-view.tsx\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\ui\\\\src\\\\store\\\\app-store.ts\",\n  \"offset\": 1,\n  \"limit\": 200\n}\n\n🔧 Tool: Grep\nInput: {\n  \"pattern\": \"interface Project\",\n  \"path\": \"apps/ui/src\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\ui\\\\src\\\\store\\\\app-store.ts\",\n  \"offset\": 200,\n  \"limit\": 200\n}\n\n🔧 Tool: Grep\nInput: {\n  \"pattern\": \"viewAllProjects|allProjects\",\n  \"path\": \"apps/ui/src\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\ui\\\\src\\\\lib\\\\electron.ts\"\n}\n\n🔧 Tool: Grep\nInput: {\n  \"pattern\": \"showAllProjects|all.*project|allProject\",\n  \"path\": \"apps/ui/src\",\n  \"-i\": true\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\ui\\\\src\\\\lib\\\\electron.ts\",\n  \"offset\": 1,\n  \"limit\": 100\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\views\\\\board-view\\\\board-header.tsx\"\n}\n\n🔧 Tool: Read\nInput: {\n  \"file_path\": \"C:\\\\Users\\\\dylan\\\\Downloads\\\\dmaker-pr\\\\apps\\\\ui\\\\src\\\\components\\\\layout\\\\top-nav-bar.tsx\"\n}\nNow I have a good understanding of the codebase. Let me generate the specification:\n\n---\n\n# Feature Specification: Default Branch per Project + Branch Icons in All Projects View\n\n## 1. Problem Statement\n\nUsers cannot assign a default branch to each project, making it unclear which branch is the primary working branch. Additionally, when viewing features in \"All Projects\" mode, there's no visual indicator showing which branch each feature belongs to, making it difficult to understand the context of features across multiple projects.\n\n## 2. User Story\n\nAs a developer managing multiple projects with different branches, I want to assign a default branch to each project and see branch indicators on feature cards when in \"All Projects\" view, so that I can quickly understand the branch context of my work without switching between projects.\n\n## 3. Acceptance Criteria\n\n### Happy Path\n- **GIVEN** I am in project settings, **WHEN** I view the Project Identity section, **THEN** I can see a field to set the default branch for this project\n- **GIVEN** I have set a default branch for a project, **WHEN** I view the project in \"All Projects\" mode, **THEN** I see a greyed-out tree/branch icon indicating this project has a default branch\n- **GIVEN** I am viewing feature cards in \"All Projects\" mode, **WHEN** I look at a feature card, **THEN** I see a branch icon with the branch name indicating which branch this feature is associated with\n\n### Edge Cases\n- **GIVEN** a project has no default branch set, **WHEN** I view it in \"All Projects\" mode, **THEN** no default branch icon is shown\n- **GIVEN** a feature has no `branchName` property, **WHEN** I view the feature card, **THEN** the branch badge shows \"main\" or the project's default branch\n- **GIVEN** I am viewing a single project (not \"All Projects\"), **WHEN** I look at feature cards, **THEN** the branch icon only shows when `useWorktrees` is enabled and feature has a branch\n\n### Error Handling\n- **GIVEN** the default branch field, **WHEN** I clear the value, **THEN** the project reverts to having no explicit default branch (uses \"main\" implicitly)\n\n## 4. Technical Context\n\n| Aspect | Value |\n|--------|-------|\n| Affected Files | `libs/types/src/settings.ts`, `apps/ui/src/store/app-store.ts`, `apps/ui/src/components/views/project-settings-view/project-identity-section.tsx`, `apps/ui/src/components/views/board-view/components/kanban-card/card-badges.tsx`, `apps/ui/src/components/layout/top-nav-bar.tsx`, `apps/ui/src/lib/electron.ts` |\n| Dependencies | Lucide React icons (GitBranch) |\n| Constraints | Must work with existing worktree system |\n| Patterns to Follow | Use existing badge styling from `card-badges.tsx`, follow `ProjectSettings` interface pattern |\n\n## 5. Non-Goals\n\n- This feature does NOT change the git worktree creation logic\n- This feature does NOT automatically create branches based on the default branch setting\n- This feature does NOT affect how features are executed (only visual indicators)\n- This feature does NOT modify the branch selection in the \"Add Feature\" dialog\n\n## 6. Implementation Tasks\n\n```tasks\n## Phase 1: Foundation - Type Definitions\n\n- [ ] T001: Add `defaultBranch` field to `ProjectSettings` interface | File: libs/types/src/settings.ts\n- [ ] T002: Add `defaultBranch` field to `ProjectRef` interface (for quick access) | File: libs/types/src/settings.ts\n- [ ] T003: Add `defaultBranch` field to `Project` interface in electron.ts | File: apps/ui/src/lib/electron.ts\n\n## Phase 2: State Management & Persistence\n\n- [ ] T004: Add `setProjectDefaultBranch` action to app-store | File: apps/ui/src/store/app-store.ts\n- [ ] T005: Update API client to support defaultBranch in project settings | File: apps/ui/src/lib/http-api-client.ts\n\n## Phase 3: Project Settings UI\n\n- [ ] T006: Add Default Branch input field to ProjectIdentitySection | File: apps/ui/src/components/views/project-settings-view/project-identity-section.tsx\n\n## Phase 4: All Projects View Icons\n\n- [ ] T007: Add greyed-out branch icon to project items in TopNavigationBar dropdown when project has defaultBranch | File: apps/ui/src/components/layout/top-nav-bar.tsx\n\n## Phase 5: Feature Card Branch Badges\n\n- [ ] T008: Add branch badge component to show feature branch in all-projects mode | File: apps/ui/src/components/views/board-view/components/kanban-card/card-badges.tsx\n- [ ] T009: Add showAllProjects prop to KanbanCard and pass it through | File: apps/ui/src/components/views/board-view/components/kanban-card/kanban-card.tsx\n- [ ] T010: Update kanban-board.tsx to pass showAllProjects context | File: apps/ui/src/components/views/board-view/kanban-board.tsx\n- [ ] T011: Update list-view row to show branch indicator in all-projects mode | File: apps/ui/src/components/views/board-view/components/list-view/list-row.tsx\n```\n\n## 7. Success Metrics\n\n1. Users can set a default branch per project in Project Settings\n2. Projects with a default branch show a greyed-out tree icon in the project dropdown when in \"All Projects\" mode\n3. Feature cards display a branch icon with branch name when viewing \"All Projects\"\n4. Existing functionality (worktrees, branch selection in dialogs) remains unchanged\n\n## 8. Risks & Mitigations\n\n| Risk | Mitigation |\n|------|------------|\n| Confusion between defaultBranch and worktree branch selection | defaultBranch is purely informational; worktree selection remains unchanged |\n| Performance impact from loading branch info for all features | Only compute in \"All Projects\" mode; use memoization |\n| UI clutter from showing branch on every card | Use subtle, small badge styling consistent with other badges |\n\n---",
+    "generatedAt": "2026-02-07T16:56:51.995Z",
+    "tasks": [
+      {
+        "id": "T001",
+        "description": "Add `defaultBranch` field to `ProjectSettings` interface",
+        "filePath": "libs/types/src/settings.ts",
+        "phase": "Phase 1: Foundation - Type Definitions",
+        "status": "pending"
+      },
+      {
+        "id": "T002",
+        "description": "Add `defaultBranch` field to `ProjectRef` interface (for quick access)",
+        "filePath": "libs/types/src/settings.ts",
+        "phase": "Phase 1: Foundation - Type Definitions",
+        "status": "pending"
+      },
+      {
+        "id": "T003",
+        "description": "Add `defaultBranch` field to `Project` interface in electron.ts",
+        "filePath": "apps/ui/src/lib/electron.ts",
+        "phase": "Phase 1: Foundation - Type Definitions",
+        "status": "pending"
+      },
+      {
+        "id": "T004",
+        "description": "Add `setProjectDefaultBranch` action to app-store",
+        "filePath": "apps/ui/src/store/app-store.ts",
+        "phase": "Phase 2: State Management & Persistence",
+        "status": "pending"
+      },
+      {
+        "id": "T005",
+        "description": "Update API client to support defaultBranch in project settings",
+        "filePath": "apps/ui/src/lib/http-api-client.ts",
+        "phase": "Phase 2: State Management & Persistence",
+        "status": "pending"
+      },
+      {
+        "id": "T006",
+        "description": "Add Default Branch input field to ProjectIdentitySection",
+        "filePath": "apps/ui/src/components/views/project-settings-view/project-identity-section.tsx",
+        "phase": "Phase 3: Project Settings UI",
+        "status": "pending"
+      },
+      {
+        "id": "T007",
+        "description": "Add greyed-out branch icon to project items in TopNavigationBar dropdown when project has defaultBranch",
+        "filePath": "apps/ui/src/components/layout/top-nav-bar.tsx",
+        "phase": "Phase 4: All Projects View Icons",
+        "status": "pending"
+      },
+      {
+        "id": "T008",
+        "description": "Add branch badge component to show feature branch in all-projects mode",
+        "filePath": "apps/ui/src/components/views/board-view/components/kanban-card/card-badges.tsx",
+        "phase": "Phase 5: Feature Card Branch Badges",
+        "status": "pending"
+      },
+      {
+        "id": "T009",
+        "description": "Add showAllProjects prop to KanbanCard and pass it through",
+        "filePath": "apps/ui/src/components/views/board-view/components/kanban-card/kanban-card.tsx",
+        "phase": "Phase 5: Feature Card Branch Badges",
+        "status": "pending"
+      },
+      {
+        "id": "T010",
+        "description": "Update kanban-board.tsx to pass showAllProjects context",
+        "filePath": "apps/ui/src/components/views/board-view/kanban-board.tsx",
+        "phase": "Phase 5: Feature Card Branch Badges",
+        "status": "pending"
+      },
+      {
+        "id": "T011",
+        "description": "Update list-view row to show branch indicator in all-projects mode",
+        "filePath": "apps/ui/src/components/views/board-view/components/list-view/list-row.tsx",
+        "phase": "Phase 5: Feature Card Branch Badges",
+        "status": "pending"
+      }
+    ],
+    "tasksTotal": 11,
+    "tasksCompleted": 11,
+    "approvedAt": "2026-02-07T16:56:52.000Z",
+    "currentTaskId": "T011"
+  },
+  "justFinishedAt": "2026-02-07T17:26:43.399Z"
+}
