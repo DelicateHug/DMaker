@@ -21,7 +21,7 @@ The agent starts light and only escalates when it discovers the work requires it
 
 DMaker doesn't just run one agent at a time. Auto-mode manages a **pipeline of features** executing in parallel:
 
-- Configurable concurrency (up to 5 features building simultaneously)
+- Configurable concurrency — run as many features simultaneously as your API limits allow
 - Dependency-aware scheduling — features wait for their dependencies to complete before starting
 - Failure resilience with rate-limit detection and automatic pausing
 - Execution state recovery across restarts
