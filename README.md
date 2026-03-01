@@ -8,9 +8,9 @@ DMaker is an autonomous AI development studio. Describe features, and AI agents 
 
 **Adaptive Planning** — Fully automatic by default. DMaker assesses complexity in real-time and selects the right planning depth on its own — from skipping straight to implementation for trivial fixes, to generating full phased design documents for complex systems. You can override and manually select a planning mode if you want, but you don't have to. It just works.
 
-**Adaptive Memory** — DMaker auto-generates memory at different tiers and sizes, selected based on the current task context. Like planning, memory is fully automatic and adaptive. Agents learn from previous executions and carry relevant knowledge forward without manual configuration.
+**Adaptive Memory** — DMaker auto-generates memory at different tiers and sizes, selected based on the current task context. Like planning, memory is fully automatic and adaptive. Agents learn from previous executions and carry relevant knowledge forward. Individual memory files can be enabled or disabled.
 
-**Context** — Human-authored context files (markdown, images, docs) that you control. Agents reference these automatically during execution. You decide what your agents should know.
+**Context** — Human-authored context files (markdown, images, docs) that you control. Agents reference these automatically during execution. Each file can be individually enabled or disabled so you decide exactly what your agents know.
 
 **Agent Chat** — Talk 1-on-1 with AI agents about features, architecture, or anything. Supports multiple concurrent chat sessions with full history.
 
