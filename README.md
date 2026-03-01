@@ -4,8 +4,6 @@
 
 DMaker is an autonomous AI development studio. Describe features on a Kanban board and watch AI agents implement them in isolated git worktrees. Built with React, Vite, Electron, and Express, powered by Claude Agent SDK.
 
-![DMaker UI](https://i.imgur.com/jdwKydM.png)
-
 ## Quick Start
 
 ### Prerequisites
