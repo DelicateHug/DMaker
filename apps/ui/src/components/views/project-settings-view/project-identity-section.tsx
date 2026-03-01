@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
-import { Label } from '@/components/ui/label';
-import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/forms';
+import { Input } from '@/components/ui/forms';
 import { Button } from '@/components/ui/button';
 import { Palette, Upload, X, ImageIcon, GitBranch } from 'lucide-react';
 import { cn } from '@/lib/utils';

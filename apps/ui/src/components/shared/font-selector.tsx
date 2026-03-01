@@ -5,7 +5,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
+} from '@/components/ui/forms';
 import { DEFAULT_FONT_VALUE } from '@/config/ui-font-options';
 import { loadFontByFamily } from '@/lib/font-loader';
 

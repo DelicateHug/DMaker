@@ -190,6 +190,85 @@ After completing all tasks in a phase, output:
 This allows real-time progress tracking during implementation.
 `;
 
+export const DEFAULT_AUTO_MODE_PLANNING_ADAPTIVE = `## Adaptive Planning Phase
+
+You are planning a feature implementation. Start with MINIMAL planning and escalate ONLY if needed.
+
+### Step 1: Quick Assessment (ALWAYS do this first)
+Briefly scan the feature request. Determine scope:
+- **Trivial** (1 file, simple change, rename, hello world, config tweak): Skip to implementation. Output \`[PLAN_GENERATED]\` and proceed immediately.
+- **Simple** (focused change, 1-3 files, clear requirements): Write a brief plan:
+  1. **Goal**: 1 sentence
+  2. **Approach**: 2-3 sentences
+  3. **Files to Touch**: List files and changes
+  4. **Tasks**: Numbered list (3-5 items)
+  Output \`[PLAN_GENERATED]\` and proceed to implementation.
+- **Needs deeper analysis**: Continue to Step 2.
+
+### Step 2: Codebase Scan (only if Step 1 determined it's needed)
+Explore the relevant parts of the codebase using Read, Glob, and Grep tools. After scanning, re-assess:
+- **Moderate** (multi-file, new component, API + UI): Write a structured spec:
+  1. **Problem**: What are we solving? (user perspective)
+  2. **Solution**: Brief approach (1-2 sentences)
+  3. **Acceptance Criteria**: 3-5 GIVEN-WHEN-THEN items
+  4. **Files to Modify**: Table with File | Purpose | Action
+  5. **Implementation Tasks**: Use this EXACT format:
+     \`\`\`tasks
+     - [ ] T001: [Description] | File: [path/to/file]
+     - [ ] T002: [Description] | File: [path/to/file]
+     \`\`\`
+  6. **Verification**: How to confirm it works
+  Output \`[SPEC_GENERATED]\` and WAIT for approval.
+- **Still needs more**: Continue to Step 3.
+
+### Step 3: Full Specification (only if Step 2 determined it's needed)
+Generate a comprehensive specification with phased task breakdown:
+1. **Problem Statement**: 2-3 sentences from user perspective
+2. **Acceptance Criteria**: GIVEN-WHEN-THEN for happy path, edge cases, and error handling
+3. **Technical Context**:
+   | Aspect | Value |
+   |--------|-------|
+   | Affected Files | list |
+   | Dependencies | external libs |
+   | Constraints | limitations |
+   | Patterns to Follow | existing patterns |
+4. **Non-Goals**: What this explicitly does NOT include
+5. **Implementation Tasks** (phased):
+   \`\`\`tasks
+   ## Phase 1: Foundation
+   - [ ] T001: [Description] | File: [path/to/file]
+   - [ ] T002: [Description] | File: [path/to/file]
+
+   ## Phase 2: Core Implementation
+   - [ ] T003: [Description] | File: [path/to/file]
+
+   ## Phase 3: Integration & Testing
+   - [ ] T004: [Description] | File: [path/to/file]
+   \`\`\`
+6. **Risks & Mitigations**: Table of risks and approaches
+
+Output \`[SPEC_GENERATED]\` and WAIT for approval.
+
+### Escalation Rules
+- You MUST start at Step 1. Never skip to Step 2 or 3.
+- Move to the next step ONLY when you genuinely cannot plan at the current level.
+- If you reach Step 2 or 3, carry forward what you learned from earlier steps — do not re-scan.
+- Simpler is better. Most features are simpler than they look.
+
+### Markers
+- \`[PLAN_GENERATED]\` = lite plan, proceed to implementation immediately (no approval needed)
+- \`[SPEC_GENERATED]\` = structured spec, WAIT for user approval before implementing
+
+### After approval (or after [PLAN_GENERATED]):
+Execute tasks SEQUENTIALLY. For each task:
+1. BEFORE starting, output: "[TASK_START] T###: Description"
+2. Implement the task
+3. AFTER completing, output: "[TASK_COMPLETE] T###: Brief summary"
+
+After completing all tasks in a phase, output:
+"[PHASE_COMPLETE] Phase N complete"
+`;
+
 export const DEFAULT_AUTO_MODE_FEATURE_PROMPT_TEMPLATE = `## Feature Implementation Task
 
 **Feature ID:** {{featureId}}
@@ -267,6 +346,7 @@ export const DEFAULT_AUTO_MODE_PROMPTS: ResolvedAutoModePrompts = {
   planningLiteWithApproval: DEFAULT_AUTO_MODE_PLANNING_LITE_WITH_APPROVAL,
   planningSpec: DEFAULT_AUTO_MODE_PLANNING_SPEC,
   planningFull: DEFAULT_AUTO_MODE_PLANNING_FULL,
+  planningAdaptive: DEFAULT_AUTO_MODE_PLANNING_ADAPTIVE,
   featurePromptTemplate: DEFAULT_AUTO_MODE_FEATURE_PROMPT_TEMPLATE,
   followUpPromptTemplate: DEFAULT_AUTO_MODE_FOLLOW_UP_PROMPT_TEMPLATE,
   continuationPromptTemplate: DEFAULT_AUTO_MODE_CONTINUATION_PROMPT_TEMPLATE,
@@ -477,14 +557,15 @@ export const DEFAULT_COMMIT_MESSAGE_PROMPTS: ResolvedCommitMessagePrompts = {
  * ========================================================================
  */
 
-export const DEFAULT_TITLE_GENERATION_SYSTEM_PROMPT = `You are a title generator. Your task is to create a concise, descriptive title (5-10 words max) for a software feature based on its description.
+export const DEFAULT_TITLE_GENERATION_SYSTEM_PROMPT = `You are a title generator. Given ANY input, output a short title (5-10 words max) and absolutely nothing else.
 
 Rules:
-- Output ONLY the title, nothing else
+- Output ONLY the title text — no explanations, questions, clarifications, or refusals
 - Keep it short and action-oriented (e.g., "Add dark mode toggle", "Fix login validation")
 - Start with a verb when possible (Add, Fix, Update, Implement, Create, etc.)
 - No quotes, periods, or extra formatting
-- Capture the essence of the feature in a scannable way`;
+- If the input is vague or unclear, still produce your best title from whatever was given
+- NEVER ask for more information or say the input is invalid — always return a title`;
 
 /**
  * Default Title Generation prompts (for AI feature title generation)

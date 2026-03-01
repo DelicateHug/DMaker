@@ -6,7 +6,7 @@
  */
 
 import { useState } from 'react';
-import { Badge } from '@/components/ui/badge';
+import { Badge } from '@/components/ui/layout';
 import { Markdown } from '@/components/ui/markdown';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';

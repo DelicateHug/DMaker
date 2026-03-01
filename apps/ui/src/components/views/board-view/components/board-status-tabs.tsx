@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { memo } from 'react';
 import { cn } from '@/lib/utils';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/layout';
 import type { StatusTabId, StatusTab } from '../hooks/use-board-status-tabs';
 
 export interface BoardStatusTabsProps {

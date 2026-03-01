@@ -99,7 +99,7 @@ import {
 
 // Reuse components from agent-view
 import { AgentHeader, ChatArea } from '../../agent-view/components';
-import { AgentInputArea } from '../../agent-view/input-area';
+import { AgentInputArea } from '../../agent-view/agent-input';
 
 export interface AgentChatPanelProps {
   /** Additional CSS classes for the container */
@@ -235,6 +235,30 @@ export const AgentChatPanel = memo(function AgentChatPanel({
       handleSelectSession(result.session.id);
     }
   }, [projectPath, handleSelectSession, bumpSessionListVersion]);
+
+  // Pick up pending chat session from feature card "Chat" action
+  const pendingChatSessionId = useAppStore((state) => state.pendingChatSessionId);
+  const pendingChatInput = useAppStore((state) => state.pendingChatInput);
+  const clearPendingChat = useAppStore((state) => state.clearPendingChat);
+
+  useEffect(() => {
+    if (pendingChatSessionId) {
+      handleSelectSession(pendingChatSessionId);
+      if (pendingChatInput) {
+        setInput(pendingChatInput);
+      }
+      clearPendingChat();
+      // Focus input at the end after panel renders
+      setTimeout(() => {
+        const el = inputRef.current;
+        if (el) {
+          el.focus();
+          el.selectionStart = el.selectionEnd = el.value.length;
+          el.scrollTop = el.scrollHeight;
+        }
+      }, 300);
+    }
+  }, [pendingChatSessionId, pendingChatInput, clearPendingChat, handleSelectSession]);
 
   // Use the Electron agent hook (only if we have a session)
   const {

@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/store/app-store';
-import { useIsMobile } from '@/hooks/use-media-query';
+import { useIsMobile } from '@/hooks/utilities';
 import type {
   ModelAlias,
   CursorModelId,
@@ -35,7 +35,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
+} from '@/components/ui/forms';
 import type { ThinkingLevel, ReasoningEffort } from '@dmaker/types';
 import { Check, ChevronsUpDown, Star, ChevronRight } from 'lucide-react';
 import {
@@ -54,8 +54,8 @@ import {
   CommandItem,
   CommandList,
   CommandSeparator,
-} from '@/components/ui/command';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+} from '@/components/ui/overlays';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/overlays';
 
 const OPENCODE_CLI_GROUP_LABEL = 'OpenCode CLI';
 const OPENCODE_PROVIDER_FALLBACK = 'opencode';
@@ -1282,15 +1282,18 @@ export function PhaseModelSelector({
   );
 
   // Compact mode - just the popover with compact trigger
+  // Thinking/reasoning dropdowns appear below on hover, aligned right of model
   if (compact) {
     return (
-      <div className="flex items-center gap-1.5">
+      <div className="group/model flex items-center gap-1.5">
         <Popover open={open} onOpenChange={setOpen} modal={false}>
           <PopoverTrigger asChild>{compactTrigger}</PopoverTrigger>
           {popoverContent}
         </Popover>
-        {compactThinkingDropdown}
-        {compactReasoningDropdown}
+        <div className="hidden group-hover/model:flex items-center gap-1.5">
+          {compactThinkingDropdown}
+          {compactReasoningDropdown}
+        </div>
       </div>
     );
   }

@@ -1,8 +1,5 @@
 import { Button } from '@/components/ui/button';
-import {
-  HeaderActionsPanel,
-  HeaderActionsPanelTrigger,
-} from '@/components/ui/header-actions-panel';
+import { HeaderActionsPanel, HeaderActionsPanelTrigger } from '@/components/ui/feedback';
 import { Save, Sparkles, Loader2, FileText, AlertCircle, ListPlus, RefreshCcw } from 'lucide-react';
 import { PHASE_LABELS } from '../constants';
 

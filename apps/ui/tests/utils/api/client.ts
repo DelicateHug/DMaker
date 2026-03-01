@@ -272,101 +272,25 @@ export async function apiListBranches(
 }
 
 // ============================================================================
-// Authentication Utilities
+// Authentication Utilities (no-op, auth has been removed)
 // ============================================================================
 
 /**
- * Authenticate with the server using an API key
- * This sets a session cookie that will be used for subsequent requests
- * Uses browser context to ensure cookies are properly set
+ * No-op: auth has been removed. Waits for backend health only.
  */
-export async function authenticateWithApiKey(page: Page, apiKey: string): Promise<boolean> {
-  try {
-    // Ensure the backend is up before attempting login (especially in local runs where
-    // the backend may be started separately from Playwright).
-    const start = Date.now();
-    while (Date.now() - start < 15000) {
-      try {
-        const health = await page.request.get(`${API_BASE_URL}/api/health`, {
-          timeout: 3000,
-        });
-        if (health.ok()) break;
-      } catch {
-        // Retry
-      }
-      await page.waitForTimeout(250);
-    }
-
-    // Ensure we're on a page (needed for cookies to work)
-    const currentUrl = page.url();
-    if (!currentUrl || currentUrl === 'about:blank') {
-      await page.goto('http://localhost:3007', { waitUntil: 'domcontentloaded' });
-    }
-
-    // Use Playwright request API (tied to this browser context) to avoid flakiness
-    // with cross-origin fetch inside page.evaluate.
-    const loginResponse = await page.request.post(`${API_BASE_URL}/api/auth/login`, {
-      data: { apiKey },
-      headers: { 'Content-Type': 'application/json' },
-      timeout: 15000,
-    });
-    const response = (await loginResponse.json().catch(() => null)) as {
-      success?: boolean;
-      token?: string;
-    } | null;
-
-    if (response?.success && response.token) {
-      // Manually set the cookie in the browser context
-      // The server sets a cookie named 'dmaker_session' (see SESSION_COOKIE_NAME in auth.ts)
-      await page.context().addCookies([
-        {
-          name: 'dmaker_session',
-          value: response.token,
-          domain: 'localhost',
-          path: '/',
-          httpOnly: true,
-          sameSite: 'Lax',
-        },
-      ]);
-
-      // Verify the session is working by polling auth status
-      // This replaces arbitrary timeout with actual condition check
-      let attempts = 0;
-      const maxAttempts = 10;
-      while (attempts < maxAttempts) {
-        const statusRes = await page.request.get(`${API_BASE_URL}/api/auth/status`, {
-          timeout: 5000,
-        });
-        const statusResponse = (await statusRes.json().catch(() => null)) as {
-          authenticated?: boolean;
-        } | null;
-
-        if (statusResponse?.authenticated === true) {
-          return true;
-        }
-        attempts++;
-        // Use a very short wait between polling attempts (this is acceptable for polling)
-        await page.waitForTimeout(50);
-      }
-
-      return false;
-    }
-
-    return false;
-  } catch (error) {
-    console.error('Authentication error:', error);
-    return false;
-  }
+export async function authenticateWithApiKey(page: Page, _apiKey: string): Promise<boolean> {
+  return waitForBackendHealth(page)
+    .then(() => true)
+    .catch(() => false);
 }
 
 /**
- * Authenticate using the API key from environment variable
- * Falls back to a test default if DMAKER_API_KEY is not set
+ * No-op: auth has been removed. Waits for backend health only.
  */
 export async function authenticateForTests(page: Page): Promise<boolean> {
-  // Use the API key from environment, or a test default
-  const apiKey = process.env.DMAKER_API_KEY || 'test-api-key-for-e2e-tests';
-  return authenticateWithApiKey(page, apiKey);
+  return waitForBackendHealth(page)
+    .then(() => true)
+    .catch(() => false);
 }
 
 /**

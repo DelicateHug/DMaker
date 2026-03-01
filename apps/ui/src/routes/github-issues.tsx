@@ -1,11 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { lazyRouteComponent } from '@/components/ui/route-error-boundary';
 
-const LazyGitHubIssuesView = lazyRouteComponent(
-  () => import('@/components/views/github-issues-view'),
-  'GitHubIssuesView'
-);
-
+// This route is handled by the layer system.
+// Navigation to this path triggers a redirect to /board with the layer opened (see __root.tsx).
 export const Route = createFileRoute('/github-issues')({
-  component: LazyGitHubIssuesView,
+  component: () => null,
 });

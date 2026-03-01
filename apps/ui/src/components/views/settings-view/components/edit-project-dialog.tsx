@@ -6,10 +6,10 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
+} from '@/components/ui/overlays';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/forms';
+import { Label } from '@/components/ui/forms';
 import { Folder, Pencil, Upload, X, ImageIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { IconPicker } from '@/components/ui/icon-picker';

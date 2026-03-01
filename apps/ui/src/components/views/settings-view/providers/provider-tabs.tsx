@@ -1,5 +1,5 @@
 import React from 'react';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/layout';
 import { AnthropicIcon, CursorIcon, OpenAIIcon, GcpIcon } from '@/components/ui/provider-icon';
 import { Cpu } from 'lucide-react';
 import { CursorSettingsTab } from './cursor-settings-tab';

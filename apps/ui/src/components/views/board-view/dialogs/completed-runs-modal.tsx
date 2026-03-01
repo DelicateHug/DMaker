@@ -5,10 +5,10 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
+} from '@/components/ui/overlays';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { ScrollArea } from '@/components/ui/scroll-area';
+import { Badge } from '@/components/ui/layout';
+import { ScrollArea } from '@/components/ui/layout';
 import { DeployLogOutput } from '../components/deploy-log-output';
 import { cn } from '@/lib/utils';
 import {

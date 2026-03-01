@@ -6,16 +6,16 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
+} from '@/components/ui/overlays';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/forms';
+import { Label } from '@/components/ui/forms';
+import { Textarea } from '@/components/ui/forms';
 import { Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import type { PipelineStep } from '@dmaker/types';
 import { cn } from '@/lib/utils';
-import { STEP_TEMPLATES } from './pipeline-step-templates';
+import { STEP_TEMPLATES } from './pipeline-templates';
 
 // Color options for pipeline columns
 const COLOR_OPTIONS = [

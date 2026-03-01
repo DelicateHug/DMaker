@@ -1,7 +1,7 @@
 import { spawn } from 'child_process';
 import * as os from 'os';
 import * as pty from 'node-pty';
-import { ClaudeUsage } from '../routes/claude/types.js';
+import { ClaudeUsage } from '../routes/claude.js';
 import { createLogger } from '@dmaker/utils';
 import type { EventEmitter } from '../lib/events.js';
 

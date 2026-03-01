@@ -8,7 +8,7 @@ const logger = createLogger('TaskProgressPanel');
 import { Check, Loader2, Circle, ChevronDown, ChevronRight, FileCode } from 'lucide-react';
 import { getElectronAPI } from '@/lib/electron';
 import type { AutoModeEvent } from '@/types/electron';
-import { Badge } from '@/components/ui/badge';
+import { Badge } from '@/components/ui/layout';
 import { parseAgentContext } from '@/lib/agent-context-parser';
 
 interface TaskInfo {

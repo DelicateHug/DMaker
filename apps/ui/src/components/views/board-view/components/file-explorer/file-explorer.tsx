@@ -9,7 +9,7 @@ import {
   FileText,
   RefreshCw,
 } from 'lucide-react';
-import { ScrollArea } from '@/components/ui/scroll-area';
+import { ScrollArea } from '@/components/ui/layout';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { getElectronAPI, type FileEntry } from '@/lib/electron';

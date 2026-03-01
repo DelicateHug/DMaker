@@ -6,7 +6,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
-} from '@/components/ui/dialog';
+} from '@/components/ui/overlays';
 import { Button } from '@/components/ui/button';
 import { JsonSyntaxEditor } from '@/components/ui/json-syntax-editor';
 import { apiGet, apiPut } from '@/lib/api-fetch';

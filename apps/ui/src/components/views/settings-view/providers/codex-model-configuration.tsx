@@ -1,13 +1,13 @@
-import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
-import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/forms';
+import { Badge } from '@/components/ui/layout';
+import { Checkbox } from '@/components/ui/forms';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
+} from '@/components/ui/forms';
 import { cn } from '@/lib/utils';
 import type { CodexModelId } from '@dmaker/types';
 import { OpenAIIcon } from '@/components/ui/provider-icon';

@@ -8,9 +8,8 @@
  */
 
 import { createLogger, atomicWriteJson, DEFAULT_BACKUP_COUNT } from '@dmaker/utils';
-import * as secureFs from '../lib/secure-fs.js';
-
 import {
+  secureFs,
   getGlobalSettingsPath,
   getCredentialsPath,
   getProjectSettingsPath,
@@ -608,8 +607,6 @@ export class SettingsService {
           appState.skipVerificationInAutoMode !== undefined
             ? (appState.skipVerificationInAutoMode as boolean)
             : false,
-        useWorktrees:
-          appState.useWorktrees !== undefined ? (appState.useWorktrees as boolean) : true,
         muteDoneSound: (appState.muteDoneSound as boolean) || false,
         enhancementModel:
           (appState.enhancementModel as GlobalSettings['enhancementModel']) || 'sonnet',

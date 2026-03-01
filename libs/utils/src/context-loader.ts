@@ -23,6 +23,9 @@ import {
   calculateUsageScore,
   countMatches,
   incrementUsageStat,
+  getMemoryTierForModel,
+  getTierFileName,
+  isTierSystemFile,
   type MemoryFsModule,
   type MemoryMetadata,
 } from './memory-loader.js';
@@ -32,7 +35,7 @@ import {
  * Stored in {projectPath}/.dmaker/context/context-metadata.json
  */
 export interface ContextMetadata {
-  files: Record<string, { description: string }>;
+  files: Record<string, { description?: string; enabled?: boolean }>;
 }
 
 /**
@@ -105,6 +108,16 @@ export interface LoadContextFilesOptions {
   taskContext?: TaskContext;
   /** Maximum number of memory files to load (default: 5) */
   maxMemoryFiles?: number;
+  /** Globally enabled context file names. If undefined, all files are loaded. */
+  enabledFiles?: string[];
+  /** Per-feature selected context file names. If provided, only these are loaded (intersected with enabled). */
+  selectedFiles?: string[];
+  /** Globally enabled memory file names. If undefined, all memory files are eligible for smart selection. */
+  enabledMemoryFiles?: string[];
+  /** Model being used for execution — used to determine memory tier */
+  executionModel?: string;
+  /** Override: force a specific memory tier ('small' | 'medium' | 'high' | 'legacy') */
+  memoryTier?: 'small' | 'medium' | 'high' | 'legacy';
 }
 
 /**
@@ -112,6 +125,53 @@ export interface LoadContextFilesOptions {
  */
 function getContextDir(projectPath: string): string {
   return path.join(projectPath, '.dmaker', 'context');
+}
+
+/**
+ * Check if a filename is a context file (md/txt, not metadata)
+ */
+function isContextFile(name: string): boolean {
+  const lower = name.toLowerCase();
+  return (lower.endsWith('.md') || lower.endsWith('.txt')) && name !== 'context-metadata.json';
+}
+
+/**
+ * Recursively scan a context directory for text files.
+ * Returns relative paths from contextDir using forward slashes (e.g., "test/coding-standard.md").
+ */
+async function scanContextDir(
+  dir: string,
+  contextDir: string,
+  fsModule: ContextFsModule
+): Promise<string[]> {
+  let entries: string[];
+  try {
+    entries = await fsModule.readdir(dir);
+  } catch {
+    return [];
+  }
+
+  const results: string[] = [];
+
+  for (const entry of entries) {
+    const fullPath = path.join(dir, entry);
+
+    if (isContextFile(entry)) {
+      // It's a context file — compute relative path from context root
+      const rel = path.relative(contextDir, fullPath).split(path.sep).join('/');
+      results.push(rel);
+    } else if (!entry.includes('.')) {
+      // Might be a directory (no extension) — try to recurse into it
+      try {
+        const subResults = await scanContextDir(fullPath, contextDir, fsModule);
+        results.push(...subResults);
+      } catch {
+        // Not a directory or inaccessible — skip
+      }
+    }
+  }
+
+  return results;
 }
 
 /**
@@ -214,43 +274,52 @@ export async function loadContextFiles(
     initializeMemory = true,
     taskContext,
     maxMemoryFiles = 5,
+    enabledFiles,
+    selectedFiles,
+    enabledMemoryFiles,
+    executionModel,
+    memoryTier,
   } = options;
   const contextDir = path.resolve(getContextDir(projectPath));
 
   const files: ContextFileInfo[] = [];
   const memoryFiles: MemoryFileInfo[] = [];
 
-  // Load context files
+  // Load context files (recursively scanning subdirectories)
   try {
     // Check if directory exists
     await fsModule.access(contextDir);
 
-    // Read directory contents
-    const allFiles = await fsModule.readdir(contextDir);
+    // Recursively scan for context files (returns relative paths like "test/coding-standard.md")
+    let textFiles = await scanContextDir(contextDir, contextDir, fsModule);
 
-    // Filter for text-based context files (case-insensitive for cross-platform)
-    const textFiles = allFiles.filter((f) => {
-      const lower = f.toLowerCase();
-      return (lower.endsWith('.md') || lower.endsWith('.txt')) && f !== 'context-metadata.json';
-    });
+    // Apply global enable filter
+    if (enabledFiles !== undefined) {
+      textFiles = textFiles.filter((f) => enabledFiles.includes(f));
+    }
+
+    // Apply per-feature selection filter (intersect with enabled)
+    if (selectedFiles !== undefined && selectedFiles.length > 0) {
+      textFiles = textFiles.filter((f) => selectedFiles.includes(f));
+    }
 
     if (textFiles.length > 0) {
       // Load metadata for descriptions
       const metadata = await loadContextMetadata(contextDir, fsModule);
 
       // Load each file with its content and metadata
-      for (const fileName of textFiles) {
-        const filePath = path.join(contextDir, fileName);
+      for (const relPath of textFiles) {
+        const filePath = path.join(contextDir, relPath);
         try {
           const content = await fsModule.readFile(filePath, 'utf-8');
           files.push({
-            name: fileName,
+            name: relPath,
             path: filePath,
             content: content as string,
-            description: metadata.files[fileName]?.description,
+            description: metadata.files[relPath]?.description,
           });
         } catch (error) {
-          console.warn(`[ContextLoader] Failed to read context file ${fileName}:`, error);
+          console.warn(`[ContextLoader] Failed to read context file ${relPath}:`, error);
         }
       }
     }
@@ -273,129 +342,168 @@ export async function loadContextFiles(
 
     try {
       await fsModule.access(memoryDir);
-      const allMemoryFiles = await fsModule.readdir(memoryDir);
 
-      // Filter for markdown memory files (except _index.md, case-insensitive)
-      const memoryMdFiles = allMemoryFiles.filter((f) => {
-        const lower = f.toLowerCase();
-        return lower.endsWith('.md') && lower !== '_index.md';
-      });
+      // Determine which tier to use (tiered memory takes priority over legacy scoring)
+      const requestedTier =
+        memoryTier || (executionModel ? getMemoryTierForModel(executionModel) : undefined);
+      let usedTier = false;
 
-      // Extract terms from task context for matching
-      const taskTerms = taskContext
-        ? extractTerms(taskContext.title + ' ' + (taskContext.description || ''))
-        : [];
-
-      // Score and load memory files
-      const scoredFiles: Array<{
-        fileName: string;
-        filePath: string;
-        body: string;
-        metadata: MemoryMetadata;
-        score: number;
-      }> = [];
-
-      for (const fileName of memoryMdFiles) {
-        const filePath = path.join(memoryDir, fileName);
+      // Try loading tiered memory file if not explicitly set to 'legacy'
+      if (requestedTier && requestedTier !== 'legacy') {
+        const tierFileName = getTierFileName(requestedTier);
+        const tierFilePath = path.join(memoryDir, tierFileName);
         try {
-          const rawContent = await fsModule.readFile(filePath, 'utf-8');
-          const { metadata, body } = parseFrontmatter(rawContent as string);
+          await fsModule.access(tierFilePath);
+          const tierContent = (await fsModule.readFile(tierFilePath, 'utf-8')) as string;
 
-          // Skip empty files
-          if (!body.trim()) continue;
-
-          // Calculate relevance score
-          let score = 0;
-
-          if (taskTerms.length > 0) {
-            // Match task terms against file metadata
-            const tagScore = countMatches(metadata.tags, taskTerms) * 3;
-            const relevantToScore = countMatches(metadata.relevantTo, taskTerms) * 2;
-            const summaryTerms = extractTerms(metadata.summary);
-            const summaryScore = countMatches(summaryTerms, taskTerms);
-            // Split category name on hyphens/underscores for better matching
-            // e.g., "authentication-decisions" matches "authentication"
-            const categoryTerms = fileName
-              .replace('.md', '')
-              .split(/[-_]/)
-              .filter((t) => t.length > 2);
-            const categoryScore = countMatches(categoryTerms, taskTerms) * 4;
-
-            // Usage-based scoring (files that helped before rank higher)
-            const usageScore = calculateUsageScore(metadata.usageStats);
-
-            score =
-              (tagScore + relevantToScore + summaryScore + categoryScore) *
-              metadata.importance *
-              usageScore;
-          } else {
-            // No task context - use importance as score
-            score = metadata.importance;
+          if (tierContent.trim()) {
+            memoryFiles.push({
+              name: tierFileName,
+              path: tierFilePath,
+              content: tierContent,
+              category: `memory-${requestedTier}`,
+            });
+            usedTier = true;
+            console.log(
+              `[ContextLoader] Using tiered memory: ${tierFileName} (tier: ${requestedTier})`
+            );
           }
-
-          scoredFiles.push({ fileName, filePath, body, metadata, score });
-        } catch (error) {
-          console.warn(`[ContextLoader] Failed to read memory file ${fileName}:`, error);
+        } catch {
+          // Tier file doesn't exist yet — fall back to legacy scoring
         }
       }
 
-      // Sort by score (highest first)
-      scoredFiles.sort((a, b) => b.score - a.score);
+      // Fall back to legacy per-file scoring if tier files are not available
+      if (!usedTier) {
+        const allMemoryFiles = await fsModule.readdir(memoryDir);
 
-      // Select files to load:
-      // 1. Always include gotchas.md if it exists (unless maxMemoryFiles=0)
-      // 2. Include high-importance files (importance >= 0.9)
-      // 3. Include top scoring files up to maxMemoryFiles
-      const selectedFiles = new Set<string>();
+        // Filter for markdown memory files (except _index.md and tier system files)
+        let memoryMdFiles = allMemoryFiles.filter((f) => {
+          const lower = f.toLowerCase();
+          return lower.endsWith('.md') && lower !== '_index.md' && !isTierSystemFile(f);
+        });
 
-      // Skip selection if maxMemoryFiles is 0
-      if (maxMemoryFiles > 0) {
-        // Always include gotchas.md
-        const gotchasFile = scoredFiles.find((f) => f.fileName === 'gotchas.md');
-        if (gotchasFile) {
-          selectedFiles.add('gotchas.md');
+        // Apply enabled memory files filter from memory-metadata.json
+        if (enabledMemoryFiles !== undefined) {
+          memoryMdFiles = memoryMdFiles.filter((f) => enabledMemoryFiles.includes(f));
         }
 
-        // Add high-importance files
-        for (const file of scoredFiles) {
-          if (file.metadata.importance >= 0.9 && selectedFiles.size < maxMemoryFiles) {
-            selectedFiles.add(file.fileName);
+        // Extract terms from task context for matching
+        const taskTerms = taskContext
+          ? extractTerms(taskContext.title + ' ' + (taskContext.description || ''))
+          : [];
+
+        // Score and load memory files
+        const scoredFiles: Array<{
+          fileName: string;
+          filePath: string;
+          body: string;
+          metadata: MemoryMetadata;
+          score: number;
+        }> = [];
+
+        for (const fileName of memoryMdFiles) {
+          const filePath = path.join(memoryDir, fileName);
+          try {
+            const rawContent = await fsModule.readFile(filePath, 'utf-8');
+            const { metadata, body } = parseFrontmatter(rawContent as string);
+
+            // Skip empty files
+            if (!body.trim()) continue;
+
+            // Calculate relevance score
+            let score = 0;
+
+            if (taskTerms.length > 0) {
+              // Match task terms against file metadata
+              const tagScore = countMatches(metadata.tags, taskTerms) * 3;
+              const relevantToScore = countMatches(metadata.relevantTo, taskTerms) * 2;
+              const summaryTerms = extractTerms(metadata.summary);
+              const summaryScore = countMatches(summaryTerms, taskTerms);
+              // Split category name on hyphens/underscores for better matching
+              // e.g., "authentication-decisions" matches "authentication"
+              const categoryTerms = fileName
+                .replace('.md', '')
+                .split(/[-_]/)
+                .filter((t) => t.length > 2);
+              const categoryScore = countMatches(categoryTerms, taskTerms) * 4;
+
+              // Usage-based scoring (files that helped before rank higher)
+              const usageScore = calculateUsageScore(metadata.usageStats);
+
+              score =
+                (tagScore + relevantToScore + summaryScore + categoryScore) *
+                metadata.importance *
+                usageScore;
+            } else {
+              // No task context - use importance as score
+              score = metadata.importance;
+            }
+
+            scoredFiles.push({ fileName, filePath, body, metadata, score });
+          } catch (error) {
+            console.warn(`[ContextLoader] Failed to read memory file ${fileName}:`, error);
           }
         }
 
-        // Add top scoring files (if we have task context and room)
-        if (taskTerms.length > 0) {
+        // Sort by score (highest first)
+        scoredFiles.sort((a, b) => b.score - a.score);
+
+        // Select files to load:
+        // 1. Always include gotchas.md if it exists (unless maxMemoryFiles=0)
+        // 2. Include high-importance files (importance >= 0.9)
+        // 3. Include top scoring files up to maxMemoryFiles
+        const selectedMemFiles = new Set<string>();
+
+        // Skip selection if maxMemoryFiles is 0
+        if (maxMemoryFiles > 0) {
+          // Always include gotchas.md
+          const gotchasFile = scoredFiles.find((f) => f.fileName === 'gotchas.md');
+          if (gotchasFile) {
+            selectedMemFiles.add('gotchas.md');
+          }
+
+          // Add high-importance files
           for (const file of scoredFiles) {
-            if (file.score > 0 && selectedFiles.size < maxMemoryFiles) {
-              selectedFiles.add(file.fileName);
+            if (file.metadata.importance >= 0.9 && selectedMemFiles.size < maxMemoryFiles) {
+              selectedMemFiles.add(file.fileName);
+            }
+          }
+
+          // Add top scoring files (if we have task context and room)
+          if (taskTerms.length > 0) {
+            for (const file of scoredFiles) {
+              if (file.score > 0 && selectedMemFiles.size < maxMemoryFiles) {
+                selectedMemFiles.add(file.fileName);
+              }
             }
           }
         }
-      }
 
-      // Load selected files and increment loaded stat
-      for (const file of scoredFiles) {
-        if (selectedFiles.has(file.fileName)) {
-          memoryFiles.push({
-            name: file.fileName,
-            path: file.filePath,
-            content: file.body,
-            category: file.fileName.replace('.md', ''),
-          });
+        // Load selected files and increment loaded stat
+        for (const file of scoredFiles) {
+          if (selectedMemFiles.has(file.fileName)) {
+            memoryFiles.push({
+              name: file.fileName,
+              path: file.filePath,
+              content: file.body,
+              category: file.fileName.replace('.md', ''),
+            });
 
-          // Increment the 'loaded' stat for this file (CRITICAL FIX)
-          // This makes calculateUsageScore work correctly
-          try {
-            await incrementUsageStat(file.filePath, 'loaded', fsModule as MemoryFsModule);
-          } catch {
-            // Non-critical - continue even if stat update fails
+            // Increment the 'loaded' stat for this file (CRITICAL FIX)
+            // This makes calculateUsageScore work correctly
+            try {
+              await incrementUsageStat(file.filePath, 'loaded', fsModule as MemoryFsModule);
+            } catch {
+              // Non-critical - continue even if stat update fails
+            }
           }
         }
-      }
 
-      if (memoryFiles.length > 0) {
-        const selectedNames = memoryFiles.map((f) => f.category).join(', ');
-        console.log(`[ContextLoader] Selected memory files: ${selectedNames}`);
+        if (memoryFiles.length > 0) {
+          const selectedNames = memoryFiles.map((f) => f.category).join(', ');
+          console.log(`[ContextLoader] Selected memory files (legacy): ${selectedNames}`);
+        }
       }
     } catch {
       // Memory directory doesn't exist - that's fine
@@ -449,6 +557,28 @@ ${sections.join('\n\n---\n\n')}
 }
 
 /**
+ * Get the list of globally enabled context file names by reading context-metadata.json.
+ * Files without an explicit `enabled` field default to true (backward-compatible).
+ * Returns undefined if the context directory doesn't exist (meaning "load all").
+ */
+export async function getEnabledContextFileNames(
+  projectPath: string,
+  fsModule: ContextFsModule = secureFs
+): Promise<string[] | undefined> {
+  const contextDir = path.resolve(getContextDir(projectPath));
+  try {
+    await fsModule.access(contextDir);
+    // Recursively scan for context files (returns relative paths)
+    const textFiles = await scanContextDir(contextDir, contextDir, fsModule);
+    const metadata = await loadContextMetadata(contextDir, fsModule);
+    // Return files that are not explicitly disabled
+    return textFiles.filter((f) => metadata.files[f]?.enabled !== false);
+  } catch {
+    return undefined; // No context dir = load all
+  }
+}
+
+/**
  * Get a summary of available context files (names and descriptions only)
  * Useful for informing the agent about what context is available without
  * loading full content.
@@ -461,12 +591,8 @@ export async function getContextFilesSummary(
 
   try {
     await fsModule.access(contextDir);
-    const allFiles = await fsModule.readdir(contextDir);
-
-    const textFiles = allFiles.filter((f) => {
-      const lower = f.toLowerCase();
-      return (lower.endsWith('.md') || lower.endsWith('.txt')) && f !== 'context-metadata.json';
-    });
+    // Recursively scan for context files (returns relative paths)
+    const textFiles = await scanContextDir(contextDir, contextDir, fsModule);
 
     if (textFiles.length === 0) {
       return [];
@@ -474,12 +600,47 @@ export async function getContextFilesSummary(
 
     const metadata = await loadContextMetadata(contextDir, fsModule);
 
-    return textFiles.map((fileName) => ({
-      name: fileName,
-      path: path.join(contextDir, fileName),
-      description: metadata.files[fileName]?.description,
+    return textFiles.map((relPath) => ({
+      name: relPath,
+      path: path.join(contextDir, relPath),
+      description: metadata.files[relPath]?.description,
     }));
   } catch {
     return [];
+  }
+}
+
+/**
+ * Get the list of globally enabled memory file names by reading memory-metadata.json.
+ * Files without an explicit `enabled` field default to true (backward-compatible).
+ * Returns undefined if the memory directory doesn't exist (meaning "load all eligible").
+ */
+export async function getEnabledMemoryFileNames(
+  projectPath: string,
+  fsModule: ContextFsModule = secureFs
+): Promise<string[] | undefined> {
+  const memoryDir = path.resolve(getMemoryDir(projectPath));
+  try {
+    await fsModule.access(memoryDir);
+    const allFiles = await fsModule.readdir(memoryDir);
+    const memoryMdFiles = allFiles.filter((f) => {
+      const lower = f.toLowerCase();
+      return lower.endsWith('.md') && lower !== '_index.md';
+    });
+
+    // Load memory-metadata.json
+    const metadataPath = path.join(memoryDir, 'memory-metadata.json');
+    let metadata: { files: Record<string, { enabled?: boolean }> } = { files: {} };
+    try {
+      const content = await fsModule.readFile(metadataPath, 'utf-8');
+      metadata = JSON.parse(content as string);
+    } catch {
+      // No metadata file = all enabled
+    }
+
+    // Return files not explicitly disabled
+    return memoryMdFiles.filter((f) => metadata.files[f]?.enabled !== false);
+  } catch {
+    return undefined; // No memory dir = load all
   }
 }

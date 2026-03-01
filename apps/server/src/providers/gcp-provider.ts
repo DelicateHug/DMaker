@@ -12,7 +12,7 @@ import type {
   ProviderMessage,
   InstallationStatus,
   ModelDefinition,
-} from './types.js';
+} from '@dmaker/types';
 
 const logger = createLogger('GcpProvider');
 

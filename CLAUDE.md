@@ -83,7 +83,7 @@ The server (`apps/server/src/`) follows a modular pattern:
 - `routes/` - Express route handlers organized by feature (agent, features, auto-mode, worktree, etc.)
 - `services/` - Business logic (AgentService, AutoModeService, FeatureLoader, TerminalService)
 - `providers/` - AI provider abstraction (currently Claude via Claude Agent SDK)
-- `lib/` - Utilities (events, auth, worktree metadata)
+- `lib/` - Utilities (events, worktree metadata)
 
 ### Frontend Architecture
 

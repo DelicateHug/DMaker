@@ -4,7 +4,7 @@ import { Wand2, ClipboardCheck, Zap, CheckCircle2, RefreshCw } from 'lucide-reac
 import { UsagePopover } from '@/components/usage-popover';
 import { useAppStore } from '@/store/app-store';
 import { useSetupStore } from '@/store/setup-store';
-import { useIsTablet } from '@/hooks/use-media-query';
+import { useIsTablet } from '@/hooks/utilities';
 import { AutoModeModal } from '@/components/dialogs/auto-mode-modal';
 import { PlanSettingsPopover } from './dialogs/plan-settings-popover';
 import { BoardSearchBar } from './board-search-bar';

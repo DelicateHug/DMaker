@@ -1,7 +1,7 @@
 import { useAppStore } from '@/store/app-store';
 import type { ModelProvider } from '@dmaker/types';
-import { Switch } from '@/components/ui/switch';
-import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/forms';
+import { Label } from '@/components/ui/forms';
 import { EyeOff, Eye } from 'lucide-react';
 
 interface ProviderToggleProps {

@@ -27,9 +27,9 @@ import type {
   InstallationStatus,
   ModelDefinition,
   ContentBlock,
-} from './types.js';
+} from '@dmaker/types';
 import { validateBareModelId } from '@dmaker/types';
-import { validateApiKey } from '../lib/auth-utils.js';
+import { validateApiKey } from '../lib/security.js';
 import { getEffectivePermissions } from '../services/cursor-config-service.js';
 import {
   type CursorStreamEvent,

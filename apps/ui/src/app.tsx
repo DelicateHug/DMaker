@@ -5,7 +5,7 @@ import { router } from './utils/router';
 import { useSettingsSync } from './hooks/use-settings-sync';
 import { useCursorStatusInit } from './hooks/use-cursor-status-init';
 import { useProviderAuthInit } from './hooks/use-provider-auth-init';
-import { TooltipProvider } from './components/ui/tooltip';
+import { TooltipProvider } from './components/ui/overlays';
 import { getStoredTheme } from './store/app-store';
 import { loadStoredTheme } from './lib/theme-loader';
 import './styles/global.css';

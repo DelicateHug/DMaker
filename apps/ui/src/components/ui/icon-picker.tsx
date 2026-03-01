@@ -1,8 +1,8 @@
 import { useState, useMemo } from 'react';
 import { X, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Input } from '@/components/ui/input';
-import { ScrollArea } from '@/components/ui/scroll-area';
+import { Input } from '@/components/ui/forms';
+import { ScrollArea } from '@/components/ui/layout';
 import {
   searchIcons,
   getIcon,

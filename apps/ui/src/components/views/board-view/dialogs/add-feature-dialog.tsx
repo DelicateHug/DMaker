@@ -8,23 +8,37 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
+} from '@/components/ui/overlays';
 import { Button } from '@/components/ui/button';
-import { HotkeyButton } from '@/components/ui/hotkey-button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Checkbox } from '@/components/ui/checkbox';
-import { CategoryAutocomplete } from '@/components/ui/category-autocomplete';
-import { DependencySelector } from '@/components/ui/dependency-selector';
+import { HotkeyButton } from '@/components/ui/feedback';
+import { Input } from '@/components/ui/forms';
+import { Label } from '@/components/ui/forms';
+import { Checkbox } from '@/components/ui/forms';
+import { CategoryAutocomplete } from '@/components/ui/forms';
+import { DependencySelector } from '@/components/ui/feedback';
 import {
   DescriptionImageDropZone,
   FeatureImagePath as DescriptionImagePath,
   FeatureTextFilePath as DescriptionTextFilePath,
   ImagePreviewMap,
 } from '@/components/ui/description-image-dropzone';
-import { Play, Settings2, Check, ChevronDown, HardDrive, CircleDot } from 'lucide-react';
-import { useNavigate } from '@tanstack/react-router';
+import {
+  Play,
+  Settings2,
+  Check,
+  ChevronDown,
+  ChevronRight,
+  HardDrive,
+  CircleDot,
+  GitBranch,
+  SlidersHorizontal,
+  ToggleRight,
+} from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/overlays';
+import { AgentSelector } from '@/components/ui/agent-selector';
+import { ContextFileSelector } from '@/components/ui/context-file-selector';
 import { toast } from 'sonner';
+import { useLayerStore } from '@/store/layer-store';
 import { cn } from '@/lib/utils';
 import { modelSupportsThinking } from '@/lib/utils';
 import { useAppStore, ModelAlias, ThinkingLevel, FeatureImage, Feature } from '@/store/app-store';
@@ -33,15 +47,13 @@ import { supportsReasoningEffort } from '@dmaker/types';
 import {
   TestingTabContent,
   PrioritySelector,
-  WorkModeSelector,
   AncestorContextSection,
   EnhanceWithAI,
   EnhancementHistoryButton,
   PhaseModelSelector,
   type BaseHistoryEntry,
 } from '../shared';
-import type { WorkMode } from '../shared';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/overlays';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -58,32 +70,6 @@ import {
 
 const logger = createLogger('AddFeatureDialog');
 
-/**
- * Determines the default work mode based on global settings and current worktree selection.
- *
- * Priority:
- * 1. If forceCurrentBranchMode is true, always defaults to 'current' (work on current branch)
- * 2. If a non-main worktree is selected in the board header, defaults to 'custom' (use that branch)
- * 3. If useWorktrees global setting is enabled, defaults to 'auto' (automatic worktree creation)
- * 4. Otherwise, defaults to 'current' (work on current branch without isolation)
- */
-const getDefaultWorkMode = (
-  useWorktrees: boolean,
-  selectedNonMainWorktreeBranch?: string,
-  forceCurrentBranchMode?: boolean
-): WorkMode => {
-  // If force current branch mode is enabled (worktree setting is off), always use 'current'
-  if (forceCurrentBranchMode) {
-    return 'current';
-  }
-  // If a non-main worktree is selected, default to 'custom' mode with that branch
-  if (selectedNonMainWorktreeBranch) {
-    return 'custom';
-  }
-  // Otherwise, respect the global worktree setting
-  return useWorktrees ? 'auto' : 'current';
-};
-
 type FeatureData = {
   title: string;
   category: string;
@@ -92,16 +78,17 @@ type FeatureData = {
   imagePaths: DescriptionImagePath[];
   textFilePaths: DescriptionTextFilePath[];
   skipTests: boolean;
+  buildRequired: boolean;
   model: AgentModel;
   thinkingLevel: ThinkingLevel;
   reasoningEffort: ReasoningEffort;
-  branchName: string;
   priority: number;
   autoDeploy: boolean;
+  requireApproval: boolean;
+  selectedAgents?: string[];
   dependencies?: string[];
   childDependencies?: string[]; // Feature IDs that should depend on this feature
   waitForDependencies?: boolean; // If true, this feature won't start until all dependencies are completed/verified
-  workMode: WorkMode;
   selectedProjectPath?: string; // The project path to add this feature to
   source: 'local' | 'github'; // Where this feature should be created
 };
@@ -112,24 +99,10 @@ interface AddFeatureDialogProps {
   onAdd: (feature: FeatureData) => void;
   onAddAndStart?: (feature: FeatureData) => void;
   categorySuggestions: string[];
-  branchSuggestions: string[];
-  branchCardCounts?: Record<string, number>;
   defaultSkipTests: boolean;
-  defaultBranch?: string;
-  currentBranch?: string;
   isMaximized: boolean;
   parentFeature?: Feature | null;
   allFeatures?: Feature[];
-  /**
-   * When a non-main worktree is selected in the board header, this will be set to that worktree's branch.
-   * When set, the dialog will default to 'custom' work mode with this branch pre-filled.
-   */
-  selectedNonMainWorktreeBranch?: string;
-  /**
-   * When true, forces the dialog to default to 'current' work mode (work on current branch).
-   * This is used when the "Default to worktree mode" setting is disabled.
-   */
-  forceCurrentBranchMode?: boolean;
   /**
    * All available projects for project selection.
    * When provided, a project selector will be shown.
@@ -165,24 +138,16 @@ export function AddFeatureDialog({
   onAdd,
   onAddAndStart,
   categorySuggestions,
-  branchSuggestions,
-  branchCardCounts,
   defaultSkipTests,
-  defaultBranch = 'main',
-  currentBranch,
   isMaximized,
   parentFeature = null,
   allFeatures = [],
-  selectedNonMainWorktreeBranch,
-  forceCurrentBranchMode,
   projects = [],
   selectedProject,
   showAllProjectsMode = false,
   activeModes = ['local'],
 }: AddFeatureDialogProps) {
   const isSpawnMode = !!parentFeature;
-  const navigate = useNavigate();
-  const [workMode, setWorkMode] = useState<WorkMode>('current');
 
   // Form state
   const [title, setTitle] = useState('');
@@ -192,7 +157,7 @@ export function AddFeatureDialog({
   const [imagePaths, setImagePaths] = useState<DescriptionImagePath[]>([]);
   const [textFilePaths, setTextFilePaths] = useState<DescriptionTextFilePath[]>([]);
   const [skipTests, setSkipTests] = useState(false);
-  const [branchName, setBranchName] = useState('');
+  const [buildRequired, setBuildRequired] = useState(false);
   const [priority, setPriority] = useState(2);
 
   // Source selection state (local or github)
@@ -204,10 +169,14 @@ export function AddFeatureDialog({
   const [modelEntry, setModelEntry] = useState<PhaseModelEntry>({ model: 'opus' });
 
   const [autoDeploy, setAutoDeploy] = useState(false);
+  const [requireApproval, setRequireApproval] = useState(false);
+  const [selectedAgents, setSelectedAgents] = useState<string[]>([]);
+  const [selectedContextFiles, setSelectedContextFiles] = useState<string[]>([]);
 
   // UI state
   const [previewMap, setPreviewMap] = useState<ImagePreviewMap>(() => new Map());
   const [descriptionError, setDescriptionError] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Description history state
   const [descriptionHistory, setDescriptionHistory] = useState<DescriptionHistoryEntry[]>([]);
@@ -220,6 +189,8 @@ export function AddFeatureDialog({
   const [parentDependencies, setParentDependencies] = useState<string[]>([]);
   const [childDependencies, setChildDependencies] = useState<string[]>([]);
   const [waitForDependencies, setWaitForDependencies] = useState(false);
+  const [showDependencies, setShowDependencies] = useState(false);
+  const [showOptionals, setShowOptionals] = useState(false);
 
   // Project selection state (for multi-project mode)
   const [dialogSelectedProject, setDialogSelectedProject] = useState<Project | null>(
@@ -228,7 +199,8 @@ export function AddFeatureDialog({
   const [isProjectDropdownOpen, setIsProjectDropdownOpen] = useState(false);
 
   // Get defaults from store
-  const { useWorktrees, defaultFeatureModel, defaultAutoDeploy } = useAppStore();
+  const { defaultFeatureModel, defaultAutoDeploy, defaultBuildRequired, defaultAgents } =
+    useAppStore();
 
   // Track previous open state to detect when dialog opens
   const wasOpenRef = useRef(false);
@@ -240,13 +212,10 @@ export function AddFeatureDialog({
 
     if (justOpened) {
       setSkipTests(defaultSkipTests);
-      // When a non-main worktree is selected, use its branch name for custom mode
-      // Otherwise, use the default branch
-      setBranchName(selectedNonMainWorktreeBranch || defaultBranch || '');
-      setWorkMode(
-        getDefaultWorkMode(useWorktrees, selectedNonMainWorktreeBranch, forceCurrentBranchMode)
-      );
+      setBuildRequired(defaultBuildRequired ?? false);
       setAutoDeploy(defaultAutoDeploy ?? false);
+      setRequireApproval(false);
+      setSelectedAgents(defaultAgents ?? []);
       setModelEntry(defaultFeatureModel);
 
       // Initialize description history (empty for new feature)
@@ -276,12 +245,9 @@ export function AddFeatureDialog({
   }, [
     open,
     defaultSkipTests,
-    defaultBranch,
+    defaultBuildRequired,
     defaultAutoDeploy,
     defaultFeatureModel,
-    useWorktrees,
-    selectedNonMainWorktreeBranch,
-    forceCurrentBranchMode,
     parentFeature,
     allFeatures,
     selectedProject,
@@ -295,11 +261,6 @@ export function AddFeatureDialog({
   const buildFeatureData = (): FeatureData | null => {
     if (!description.trim()) {
       setDescriptionError(true);
-      return null;
-    }
-
-    if (workMode === 'custom' && !branchName.trim()) {
-      toast.error('Please select a branch name');
       return null;
     }
 
@@ -317,11 +278,6 @@ export function AddFeatureDialog({
     const normalizedReasoning = supportsReasoningEffort(selectedModel)
       ? modelEntry.reasoningEffort || 'none'
       : 'none';
-
-    // For 'current' mode, use empty string (work on current branch)
-    // For 'auto' mode, use empty string (will be auto-generated in use-board-actions)
-    // For 'custom' mode, use the specified branch name
-    const finalBranchName = workMode === 'custom' ? branchName || '' : '';
 
     // Build final description with ancestor context in spawn mode
     let finalDescription = description;
@@ -364,17 +320,19 @@ export function AddFeatureDialog({
       imagePaths,
       textFilePaths,
       skipTests,
+      buildRequired,
       model: selectedModel,
       thinkingLevel: normalizedThinking,
       reasoningEffort: normalizedReasoning,
-      branchName: finalBranchName,
       priority,
       autoDeploy,
+      requireApproval,
+      selectedAgents: selectedAgents.length > 0 ? selectedAgents : undefined,
+      selectedContextFiles: selectedContextFiles.length > 0 ? selectedContextFiles : undefined,
       dependencies: finalDependencies,
       childDependencies: childDependencies.length > 0 ? childDependencies : undefined,
       waitForDependencies:
         finalDependencies && finalDependencies.length > 0 ? waitForDependencies : undefined,
-      workMode,
       // Include selected project path for multi-project support
       selectedProjectPath: dialogSelectedProject?.path,
       source,
@@ -389,28 +347,29 @@ export function AddFeatureDialog({
     setImagePaths([]);
     setTextFilePaths([]);
     setSkipTests(defaultSkipTests);
-    // When a non-main worktree is selected, use its branch name for custom mode
-    setBranchName(selectedNonMainWorktreeBranch || '');
+    setBuildRequired(defaultBuildRequired ?? false);
     setPriority(2);
     setModelEntry(defaultFeatureModel);
-    setWorkMode(
-      getDefaultWorkMode(useWorktrees, selectedNonMainWorktreeBranch, forceCurrentBranchMode)
-    );
     setAutoDeploy(defaultAutoDeploy ?? false);
+    setRequireApproval(false);
+    setSelectedAgents(defaultAgents ?? []);
     setPreviewMap(new Map());
     setDescriptionError(false);
     setDescriptionHistory([]);
     setParentDependencies([]);
     setChildDependencies([]);
     setWaitForDependencies(false);
+    setShowDependencies(false);
+    setShowOptionals(false);
     setSource(activeModes.includes('github') ? 'github' : 'local');
     onOpenChange(false);
   };
 
-  const handleAction = (actionFn?: (data: FeatureData) => void) => {
+  const handleAction = (actionFn?: (data: FeatureData) => void | Promise<void>) => {
     if (!actionFn) return;
     const featureData = buildFeatureData();
     if (!featureData) return;
+    // Fire-and-forget: don't block the dialog waiting for the server
     actionFn(featureData);
     resetForm();
   };
@@ -450,132 +409,12 @@ export function AddFeatureDialog({
       >
         <DialogHeader>
           <DialogTitle>{isSpawnMode ? 'Spawn Sub-Task' : 'Add New Feature'}</DialogTitle>
-          <DialogDescription>
-            {isSpawnMode
-              ? `Create a sub-task that depends on "${parentFeature?.title || parentFeature?.description.slice(0, 50)}..."`
-              : 'Create a new feature card for the Kanban board.'}
-          </DialogDescription>
+          {isSpawnMode && (
+            <DialogDescription>
+              {`Create a sub-task that depends on "${parentFeature?.title || parentFeature?.description.slice(0, 50)}..."`}
+            </DialogDescription>
+          )}
         </DialogHeader>
-
-        {/* Project Indicator/Selector - Always show which project the feature will be added to */}
-        {(projects.length > 0 || dialogSelectedProject) && (
-          <div
-            className={cn(
-              'flex items-center gap-2 px-3 py-2 rounded-md border',
-              showAllProjectsMode && !dialogSelectedProject
-                ? 'border-destructive/50 bg-destructive/10'
-                : 'border-border/50 bg-muted/30'
-            )}
-          >
-            <span className="text-xs text-muted-foreground">Adding to:</span>
-            {projects.length > 1 ? (
-              // Show dropdown when multiple projects are available
-              <DropdownMenu open={isProjectDropdownOpen} onOpenChange={setIsProjectDropdownOpen}>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className={cn(
-                      'flex items-center gap-1.5 h-7 px-2',
-                      'hover:bg-accent/50 transition-colors duration-150',
-                      'font-medium text-xs',
-                      !dialogSelectedProject && 'text-destructive'
-                    )}
-                    data-testid="add-feature-project-dropdown-trigger"
-                  >
-                    {dialogSelectedProject ? (
-                      <>
-                        {(() => {
-                          const ProjectIcon = getProjectIcon(dialogSelectedProject?.icon);
-                          return (
-                            <div className="w-4 h-4 rounded flex items-center justify-center bg-brand-500/10">
-                              <ProjectIcon className="w-2.5 h-2.5 text-brand-500" />
-                            </div>
-                          );
-                        })()}
-                        <span className="max-w-[150px] truncate">{dialogSelectedProject.name}</span>
-                      </>
-                    ) : (
-                      <span>Select project...</span>
-                    )}
-                    <ChevronDown className="w-3 h-3 text-muted-foreground" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent
-                  align="start"
-                  className="w-56"
-                  data-testid="add-feature-project-dropdown-content"
-                >
-                  {projects.map((project) => {
-                    const ProjectIcon = getProjectIcon(project.icon);
-                    const isActive = dialogSelectedProject?.id === project.id;
-                    return (
-                      <DropdownMenuItem
-                        key={project.id}
-                        onClick={() => {
-                          setDialogSelectedProject(project);
-                          setIsProjectDropdownOpen(false);
-                        }}
-                        className={cn(
-                          'flex items-center gap-2 cursor-pointer',
-                          isActive && 'bg-brand-500/10'
-                        )}
-                        data-testid={`add-feature-project-option-${project.id}`}
-                      >
-                        <div
-                          className={cn(
-                            'w-5 h-5 rounded flex items-center justify-center',
-                            isActive ? 'bg-brand-500/20' : 'bg-muted'
-                          )}
-                        >
-                          <ProjectIcon
-                            className={cn(
-                              'w-3 h-3',
-                              isActive ? 'text-brand-500' : 'text-muted-foreground'
-                            )}
-                          />
-                        </div>
-                        <span className="flex-1 text-sm truncate">{project.name}</span>
-                        {isActive && <Check className="w-3.5 h-3.5 text-brand-500" />}
-                      </DropdownMenuItem>
-                    );
-                  })}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            ) : dialogSelectedProject ? (
-              // Show static project indicator when only one project exists
-              <div className="flex items-center gap-1.5">
-                {(() => {
-                  const ProjectIcon = getProjectIcon(dialogSelectedProject?.icon);
-                  return (
-                    <div className="w-4 h-4 rounded flex items-center justify-center bg-brand-500/10">
-                      <ProjectIcon className="w-2.5 h-2.5 text-brand-500" />
-                    </div>
-                  );
-                })()}
-                <span className="text-sm font-medium">{dialogSelectedProject.name}</span>
-              </div>
-            ) : projects.length === 1 ? (
-              // Single project available, show it
-              <div className="flex items-center gap-1.5">
-                {(() => {
-                  const project = projects[0];
-                  const ProjectIcon = getProjectIcon(project.icon);
-                  return (
-                    <>
-                      <div className="w-4 h-4 rounded flex items-center justify-center bg-brand-500/10">
-                        <ProjectIcon className="w-2.5 h-2.5 text-brand-500" />
-                      </div>
-                      <span className="text-sm font-medium">{project.name}</span>
-                    </>
-                  );
-                })()}
-              </div>
-            ) : (
-              <span className="text-sm text-muted-foreground">No project selected</span>
-            )}
-          </div>
-        )}
 
         <div className="py-4 space-y-4 overflow-y-auto flex-1 min-h-0">
           {/* Ancestor Context Section - only in spawn mode */}
@@ -594,20 +433,155 @@ export function AddFeatureDialog({
             />
           )}
 
-          {/* Task Details Section */}
+          {/* Feature Options Section */}
           <div className={cardClass}>
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <Label htmlFor="description">Description</Label>
-                {/* Version History Button */}
-                <EnhancementHistoryButton
-                  history={descriptionHistory}
-                  currentValue={description}
-                  onRestore={setDescription}
-                  valueAccessor={(entry) => entry.description}
-                  title="Version History"
-                  restoreMessage="Description restored from history"
-                />
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="description">Description</Label>
+                  {/* Project Indicator - hover to show dropdown */}
+                  {(projects.length > 0 || dialogSelectedProject) &&
+                    (() => {
+                      const displayProject = dialogSelectedProject ?? projects[0];
+                      const DisplayIcon = displayProject
+                        ? getProjectIcon(displayProject.icon)
+                        : null;
+                      return projects.length > 1 ? (
+                        <div
+                          className="relative"
+                          onMouseEnter={() => setIsProjectDropdownOpen(true)}
+                          onMouseLeave={() => setIsProjectDropdownOpen(false)}
+                        >
+                          <button
+                            type="button"
+                            className={cn(
+                              'flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium transition-colors border bg-background',
+                              dialogSelectedProject
+                                ? 'border-brand-500/50 text-brand-500'
+                                : 'border-destructive/50 text-destructive'
+                            )}
+                            data-testid="add-feature-project-dropdown-trigger"
+                          >
+                            {DisplayIcon && <DisplayIcon className="w-3 h-3" />}
+                            <span className="max-w-[100px] truncate">
+                              {displayProject?.name ?? 'Project...'}
+                            </span>
+                          </button>
+                          {isProjectDropdownOpen && (
+                            <div
+                              className="absolute top-full left-0 mt-1 w-56 z-50 rounded-md border bg-popover p-1 shadow-md"
+                              data-testid="add-feature-project-dropdown-content"
+                            >
+                              <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
+                                Project
+                              </div>
+                              {dialogSelectedProject &&
+                                (() => {
+                                  const ProjectIcon = getProjectIcon(dialogSelectedProject.icon);
+                                  return (
+                                    <button
+                                      type="button"
+                                      className="flex items-center gap-2 w-full px-2 py-1.5 rounded-sm text-sm bg-brand-500/10 cursor-default"
+                                    >
+                                      <ProjectIcon className="w-3 h-3 text-brand-500" />
+                                      <span className="flex-1 text-left truncate">
+                                        {dialogSelectedProject.name}
+                                      </span>
+                                      <Check className="w-3.5 h-3.5 text-foreground" />
+                                    </button>
+                                  );
+                                })()}
+                              {projects
+                                .filter((p) => p.id !== dialogSelectedProject?.id)
+                                .map((project) => {
+                                  const ProjectIcon = getProjectIcon(project.icon);
+                                  return (
+                                    <button
+                                      key={project.id}
+                                      type="button"
+                                      onClick={() => {
+                                        setDialogSelectedProject(project);
+                                        setIsProjectDropdownOpen(false);
+                                      }}
+                                      className="flex items-center gap-2 w-full px-2 py-1.5 rounded-sm text-sm hover:bg-accent cursor-pointer"
+                                      data-testid={`add-feature-project-option-${project.id}`}
+                                    >
+                                      <ProjectIcon className="w-3 h-3 text-muted-foreground" />
+                                      <span className="flex-1 text-left truncate">
+                                        {project.name}
+                                      </span>
+                                    </button>
+                                  );
+                                })}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium border border-border bg-background text-muted-foreground">
+                          {DisplayIcon && <DisplayIcon className="w-3 h-3" />}
+                          <span className="max-w-[100px] truncate">
+                            {displayProject?.name ?? 'No project'}
+                          </span>
+                        </div>
+                      );
+                    })()}
+                </div>
+                <div className="flex items-center gap-2">
+                  <EnhancementHistoryButton
+                    history={descriptionHistory}
+                    currentValue={description}
+                    onRestore={setDescription}
+                    valueAccessor={(entry) => entry.description}
+                    title="Version History"
+                    restoreMessage="Description restored from history"
+                  />
+                  <EnhanceWithAI
+                    value={description}
+                    onChange={setDescription}
+                    compact
+                    onHistoryAdd={({ mode, originalText, enhancedText }) => {
+                      const timestamp = new Date().toISOString();
+                      setDescriptionHistory((prev) => {
+                        const newHistory = [...prev];
+                        const lastEntry = prev[prev.length - 1];
+                        if (!lastEntry || lastEntry.description !== originalText) {
+                          newHistory.push({
+                            description: originalText,
+                            timestamp,
+                            source: prev.length === 0 ? 'initial' : 'edit',
+                          });
+                        }
+                        newHistory.push({
+                          description: enhancedText,
+                          timestamp,
+                          source: 'enhance',
+                          enhancementMode: mode,
+                        });
+                        return newHistory;
+                      });
+                    }}
+                  />
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onOpenChange(false);
+                            useLayerStore.getState().openLayer('settings');
+                          }}
+                          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                        >
+                          <Settings2 className="w-3.5 h-3.5" />
+                          <span>Edit Defaults</span>
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Change default model and planning settings for new features</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
               </div>
               <DescriptionImageDropZone
                 value={description}
@@ -625,236 +599,254 @@ export function AddFeatureDialog({
                 autoFocus
                 error={descriptionError}
                 onAltEnter={handleAdd}
+                hideHint
               />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="title">Title (optional)</Label>
-              <Input
-                id="title"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="Leave blank to auto-generate"
-              />
-            </div>
-
-            {/* Enhancement Section */}
-            <EnhanceWithAI
-              value={description}
-              onChange={setDescription}
-              onHistoryAdd={({ mode, originalText, enhancedText }) => {
-                const timestamp = new Date().toISOString();
-                setDescriptionHistory((prev) => {
-                  const newHistory = [...prev];
-                  // Add original text first (so user can restore to pre-enhancement state)
-                  // Only add if it's different from the last entry to avoid duplicates
-                  const lastEntry = prev[prev.length - 1];
-                  if (!lastEntry || lastEntry.description !== originalText) {
-                    newHistory.push({
-                      description: originalText,
-                      timestamp,
-                      source: prev.length === 0 ? 'initial' : 'edit',
-                    });
-                  }
-                  // Add enhanced text
-                  newHistory.push({
-                    description: enhancedText,
-                    timestamp,
-                    source: 'enhance',
-                    enhancementMode: mode,
-                  });
-                  return newHistory;
-                });
-              }}
-            />
-          </div>
-
-          {/* Feature Options Section */}
-          <div className={cardClass}>
-            <div className="flex items-center justify-between">
-              <div className={sectionHeaderClass}>
-                <Settings2 className="w-4 h-4 text-muted-foreground" />
-                <span>Feature Options</span>
-              </div>
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        onOpenChange(false);
-                        navigate({ to: '/settings', search: { view: 'defaults' } });
-                      }}
-                      className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-                    >
-                      <Settings2 className="w-3.5 h-3.5" />
-                      <span>Edit Defaults</span>
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Change default model and planning settings for new features</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Model</Label>
+            <div className="flex items-center gap-2">
               <PhaseModelSelector
                 value={modelEntry}
                 onChange={handleModelChange}
                 compact
                 align="end"
               />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Options</Label>
-              <div className="flex flex-col gap-2 pt-1">
-                <div className="flex items-center gap-2">
-                  <Checkbox
-                    id="add-feature-skip-tests"
-                    checked={!skipTests}
-                    onCheckedChange={(checked) => setSkipTests(!checked)}
-                    data-testid="add-feature-skip-tests-checkbox"
-                  />
-                  <Label
-                    htmlFor="add-feature-skip-tests"
-                    className="text-xs font-normal cursor-pointer"
-                  >
-                    Run tests
-                  </Label>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Checkbox
-                    id="add-feature-auto-deploy"
-                    checked={autoDeploy}
-                    onCheckedChange={(checked) => setAutoDeploy(!!checked)}
-                    data-testid="add-feature-auto-deploy-checkbox"
-                  />
-                  <Label
-                    htmlFor="add-feature-auto-deploy"
-                    className="text-xs font-normal cursor-pointer"
-                  >
-                    Auto-deploy
-                  </Label>
-                </div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">Category</Label>
-                <CategoryAutocomplete
-                  value={category}
-                  onChange={setCategory}
-                  suggestions={categorySuggestions}
-                  placeholder="e.g., Core, UI, API"
-                  data-testid="feature-category-input"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">Priority</Label>
-                <PrioritySelector
-                  selectedPriority={priority}
-                  onPrioritySelect={setPriority}
-                  testIdPrefix="priority"
-                />
-              </div>
-            </div>
-
-            {/* Source Selector */}
-            <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Source</Label>
-              <div className="flex gap-1">
-                <button
-                  type="button"
-                  onClick={() => setSource('local')}
-                  className={cn(
-                    'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors border',
-                    source === 'local'
-                      ? 'bg-foreground text-background border-foreground'
-                      : 'bg-muted/30 text-muted-foreground border-border/50 hover:bg-muted/50'
-                  )}
-                >
-                  <HardDrive className="w-3.5 h-3.5" />
-                  Local
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSource('github')}
-                  className={cn(
-                    'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors border',
-                    source === 'github'
-                      ? 'bg-purple-600 text-white border-purple-600'
-                      : 'bg-muted/30 text-muted-foreground border-border/50 hover:bg-muted/50'
-                  )}
-                >
-                  <CircleDot className="w-3.5 h-3.5" />
-                  GitHub
-                </button>
-              </div>
-            </div>
-
-            {/* Work Mode Selector */}
-            <div className="pt-2">
-              <WorkModeSelector
-                workMode={workMode}
-                onWorkModeChange={setWorkMode}
-                branchName={branchName}
-                onBranchNameChange={setBranchName}
-                branchSuggestions={branchSuggestions}
-                branchCardCounts={branchCardCounts}
-                currentBranch={currentBranch}
-                testIdPrefix="feature-work-mode"
+              <PrioritySelector
+                selectedPriority={priority}
+                onPrioritySelect={setPriority}
+                testIdPrefix="priority"
               />
+              <CategoryAutocomplete
+                value={category}
+                onChange={setCategory}
+                suggestions={categorySuggestions}
+                placeholder="Category"
+                compact
+                data-testid="feature-category-input"
+              />
+              <AgentSelector
+                value={selectedAgents}
+                onChange={setSelectedAgents}
+                placeholder="Agents..."
+                compact
+                projectName={dialogSelectedProject?.name}
+              />
+              {/* Options chip */}
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    className={cn(
+                      'flex items-center gap-1.5 px-2 py-1.5 rounded-md text-xs font-medium transition-colors border bg-background',
+                      !skipTests || buildRequired || autoDeploy || requireApproval
+                        ? 'border-foreground/30 text-foreground'
+                        : 'border-border text-muted-foreground'
+                    )}
+                  >
+                    <ToggleRight className="w-3 h-3" />
+                    Options
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-3" align="start">
+                  <div className="flex flex-col gap-2.5">
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        id="add-feature-skip-tests"
+                        checked={!skipTests}
+                        onCheckedChange={(checked) => setSkipTests(!checked)}
+                        data-testid="add-feature-skip-tests-checkbox"
+                      />
+                      <Label
+                        htmlFor="add-feature-skip-tests"
+                        className="text-xs font-normal cursor-pointer"
+                      >
+                        Run tests
+                      </Label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        id="add-feature-build-required"
+                        checked={buildRequired}
+                        onCheckedChange={(checked) => setBuildRequired(!!checked)}
+                        data-testid="add-feature-build-required-checkbox"
+                      />
+                      <Label
+                        htmlFor="add-feature-build-required"
+                        className="text-xs font-normal cursor-pointer"
+                      >
+                        Verify build
+                      </Label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        id="add-feature-auto-deploy"
+                        checked={autoDeploy}
+                        onCheckedChange={(checked) => setAutoDeploy(!!checked)}
+                        data-testid="add-feature-auto-deploy-checkbox"
+                      />
+                      <Label
+                        htmlFor="add-feature-auto-deploy"
+                        className="text-xs font-normal cursor-pointer"
+                      >
+                        Auto-deploy
+                      </Label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        id="add-feature-require-approval"
+                        checked={requireApproval}
+                        onCheckedChange={(checked) => setRequireApproval(!!checked)}
+                        data-testid="add-feature-require-approval-checkbox"
+                      />
+                      <Label
+                        htmlFor="add-feature-require-approval"
+                        className="text-xs font-normal cursor-pointer"
+                      >
+                        Require plan approval
+                      </Label>
+                    </div>
+                  </div>
+                </PopoverContent>
+              </Popover>
             </div>
+          </div>
 
-            {/* Dependencies - only show when not in spawn mode */}
-            {!isSpawnMode && allFeatures.length > 0 && (
-              <div className="pt-2 space-y-3">
-                <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground">
-                    Parent Dependencies (this feature depends on)
-                  </Label>
-                  <DependencySelector
-                    value={parentDependencies}
-                    onChange={setParentDependencies}
-                    features={allFeatures}
-                    type="parent"
-                    placeholder="Select features this depends on..."
-                    data-testid="add-feature-parent-deps"
+          {/* Optionals Section - collapsed by default */}
+          <div className={cardClass}>
+            <button
+              type="button"
+              onClick={() => setShowOptionals((v) => !v)}
+              className="flex items-center gap-1.5 text-sm font-medium text-foreground hover:text-foreground/80 transition-colors"
+            >
+              {showOptionals ? (
+                <ChevronDown className="w-4 h-4 text-muted-foreground" />
+              ) : (
+                <ChevronRight className="w-4 h-4 text-muted-foreground" />
+              )}
+              <SlidersHorizontal className="w-4 h-4 text-muted-foreground" />
+              <span>More Options</span>
+            </button>
+
+            {showOptionals && (
+              <div className="space-y-3 pt-1">
+                <div className="space-y-2">
+                  <Label htmlFor="title">Title (optional)</Label>
+                  <Input
+                    id="title"
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    placeholder="Leave blank to auto-generate"
                   />
                 </div>
+
                 <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground">
-                    Child Dependencies (features that depend on this)
-                  </Label>
-                  <DependencySelector
-                    value={childDependencies}
-                    onChange={setChildDependencies}
-                    features={allFeatures}
-                    type="child"
-                    placeholder="Select features that will depend on this..."
-                    data-testid="add-feature-child-deps"
+                  <Label className="text-xs text-muted-foreground">Context Files</Label>
+                  <ContextFileSelector
+                    value={selectedContextFiles}
+                    onChange={setSelectedContextFiles}
                   />
                 </div>
-                {/* Wait for dependencies option - only show when there are parent dependencies */}
-                {parentDependencies.length > 0 && (
-                  <div className="flex items-center gap-2 pt-1">
-                    <Checkbox
-                      id="add-feature-wait-for-deps"
-                      checked={waitForDependencies}
-                      onCheckedChange={(checked) => setWaitForDependencies(!!checked)}
-                      data-testid="add-feature-wait-for-deps-checkbox"
-                    />
-                    <Label
-                      htmlFor="add-feature-wait-for-deps"
-                      className="text-xs font-normal cursor-pointer"
+
+                {/* Source Selector */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">Source</Label>
+                  <div className="flex gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setSource('local')}
+                      className={cn(
+                        'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors border',
+                        source === 'local'
+                          ? 'bg-foreground text-background border-foreground'
+                          : 'bg-muted/30 text-muted-foreground border-border/50 hover:bg-muted/50'
+                      )}
                     >
-                      Wait for dependencies before starting (block in auto mode until all
-                      dependencies are completed)
-                    </Label>
+                      <HardDrive className="w-3.5 h-3.5" />
+                      Local
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSource('github')}
+                      className={cn(
+                        'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors border',
+                        source === 'github'
+                          ? 'bg-purple-600 text-white border-purple-600'
+                          : 'bg-muted/30 text-muted-foreground border-border/50 hover:bg-muted/50'
+                      )}
+                    >
+                      <CircleDot className="w-3.5 h-3.5" />
+                      GitHub
+                    </button>
+                  </div>
+                </div>
+
+                {/* Dependencies - nested collapsible, only when not in spawn mode */}
+                {!isSpawnMode && allFeatures.length > 0 && (
+                  <div>
+                    <button
+                      type="button"
+                      onClick={() => setShowDependencies((v) => !v)}
+                      className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      {showDependencies ? (
+                        <ChevronDown className="w-3.5 h-3.5" />
+                      ) : (
+                        <ChevronRight className="w-3.5 h-3.5" />
+                      )}
+                      <GitBranch className="w-3.5 h-3.5" />
+                      <span>Dependencies</span>
+                      {(parentDependencies.length > 0 || childDependencies.length > 0) && (
+                        <span className="ml-1 px-1.5 py-0.5 rounded-full bg-brand-500/10 text-brand-500 text-[10px] font-medium">
+                          {parentDependencies.length + childDependencies.length}
+                        </span>
+                      )}
+                    </button>
+                    {showDependencies && (
+                      <div className="pt-2 pl-5 space-y-3">
+                        <div className="space-y-1.5">
+                          <Label className="text-xs text-muted-foreground">
+                            Parent Dependencies (this feature depends on)
+                          </Label>
+                          <DependencySelector
+                            value={parentDependencies}
+                            onChange={setParentDependencies}
+                            features={allFeatures}
+                            type="parent"
+                            placeholder="Select features this depends on..."
+                            data-testid="add-feature-parent-deps"
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs text-muted-foreground">
+                            Child Dependencies (features that depend on this)
+                          </Label>
+                          <DependencySelector
+                            value={childDependencies}
+                            onChange={setChildDependencies}
+                            features={allFeatures}
+                            type="child"
+                            placeholder="Select features that will depend on this..."
+                            data-testid="add-feature-child-deps"
+                          />
+                        </div>
+                        {parentDependencies.length > 0 && (
+                          <div className="flex items-center gap-2 pt-1">
+                            <Checkbox
+                              id="add-feature-wait-for-deps"
+                              checked={waitForDependencies}
+                              onCheckedChange={(checked) => setWaitForDependencies(!!checked)}
+                              data-testid="add-feature-wait-for-deps-checkbox"
+                            />
+                            <Label
+                              htmlFor="add-feature-wait-for-deps"
+                              className="text-xs font-normal cursor-pointer"
+                            >
+                              Wait for dependencies before starting (block in auto mode until all
+                              dependencies are completed)
+                            </Label>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -863,26 +855,26 @@ export function AddFeatureDialog({
         </div>
 
         <DialogFooter>
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>
+          <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
             Cancel
           </Button>
           {onAddAndStart && source !== 'local' && (
             <Button
               onClick={handleAddAndStart}
               variant="secondary"
+              disabled={isSubmitting}
               data-testid="confirm-add-and-start-feature"
-              disabled={workMode === 'custom' && !branchName.trim()}
             >
               <Play className="w-4 h-4 mr-2" />
-              Make
+              {isSubmitting ? 'Starting...' : 'Make'}
             </Button>
           )}
           <HotkeyButton
             onClick={handleAdd}
             hotkey={{ key: 'Enter', cmdCtrl: true }}
-            hotkeyActive={open}
+            hotkeyActive={open && !isSubmitting}
+            disabled={isSubmitting}
             data-testid="confirm-add-feature"
-            disabled={workMode === 'custom' && !branchName.trim()}
           >
             {isSpawnMode ? 'Spawn Task' : source === 'local' ? 'Add to Local' : 'Add to Backlog'}
           </HotkeyButton>

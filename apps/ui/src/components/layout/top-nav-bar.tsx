@@ -1,13 +1,10 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useNavigate, useLocation } from '@tanstack/react-router';
 import {
-  ChevronDown,
-  Check,
   Layers,
   CircleDot,
   GitPullRequest,
   GitBranch,
-  Wrench,
   Lightbulb,
   FileText,
   Brain,
@@ -18,7 +15,6 @@ import {
   Plus,
   RefreshCw,
   PanelTop,
-  Settings2,
   CheckCircle2,
   Wand2,
   Bot,
@@ -27,22 +23,13 @@ import { cn, isMac, pathsEqual } from '@/lib/utils';
 import { getProjectIcon } from '@/lib/icon-registry';
 import { isElectron, getElectronAPI, type Project } from '@/lib/electron';
 import { useShallow } from 'zustand/react/shallow';
-import { useAppStore, formatShortcut, type ThemeMode } from '@/store/app-store';
+import { useAppStore, type ThemeMode } from '@/store/app-store';
 import { getHttpApiClient } from '@/lib/http-api-client';
 import { Button } from '@/components/ui/button';
-import { Switch } from '@/components/ui/switch';
-import { Label } from '@/components/ui/label';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Slider } from '@/components/ui/slider';
+import { Switch } from '@/components/ui/forms';
+import { Label } from '@/components/ui/forms';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/overlays';
+import { Slider } from '@/components/ui/forms';
 import {
   useKeyboardShortcuts,
   useKeyboardShortcutsConfig,
@@ -65,7 +52,8 @@ import { BoardFilterDropdown } from '@/components/views/board-view/components/bo
 import { CompletedFeaturesModal } from '@/components/views/board-view/dialogs';
 import { AutoModeModal } from '@/components/dialogs/auto-mode-modal';
 import { useBoardControlsStore, getBoardControlsForTopNav } from '@/store/board-controls-store';
-import { useIsTablet } from '@/hooks/use-media-query';
+import { useIsTablet } from '@/hooks/utilities';
+import { useLayerStore, type LayerId } from '@/store/layer-store';
 
 const logger = createLogger('TopNavigationBar');
 
@@ -362,66 +350,69 @@ export function TopNavigationBar({
 
     // Only enable nav shortcuts if there's a current project
     if (currentProject) {
-      // Navigation shortcuts
+      const { toggleLayer, closeAllLayers } = useLayerStore.getState();
+
+      // Board shortcut - close all layers to return to board
       shortcutsList.push({
         key: shortcuts.board,
-        action: () => navigate({ to: '/board' }),
-        description: 'Navigate to Kanban Board',
+        action: () => closeAllLayers(),
+        description: 'Return to Kanban Board',
       });
 
       shortcutsList.push({
         key: shortcuts.agent,
-        action: () => navigate({ to: '/board' }),
-        description: 'Navigate to Board (includes Agent Chat)',
+        action: () => closeAllLayers(),
+        description: 'Return to Board (includes Agent Chat)',
       });
 
+      // Tool shortcuts - toggle layers
       shortcutsList.push({
         key: shortcuts.terminal,
-        action: () => navigate({ to: '/terminal' }),
-        description: 'Navigate to Terminal',
+        action: () => toggleLayer('terminal'),
+        description: 'Toggle Terminal',
       });
 
       shortcutsList.push({
         key: shortcuts.ideation,
-        action: () => navigate({ to: '/ideation' }),
-        description: 'Navigate to Ideation',
+        action: () => toggleLayer('ideation'),
+        description: 'Toggle Ideation',
       });
 
       shortcutsList.push({
         key: shortcuts.spec,
-        action: () => navigate({ to: '/spec' }),
-        description: 'Navigate to Spec Editor',
+        action: () => toggleLayer('spec'),
+        description: 'Toggle Spec Editor',
       });
 
       shortcutsList.push({
         key: shortcuts.memory,
-        action: () => navigate({ to: '/memory' }),
-        description: 'Navigate to Memory',
+        action: () => toggleLayer('memory'),
+        description: 'Toggle Memory',
       });
 
       shortcutsList.push({
         key: shortcuts.githubIssues,
-        action: () => navigate({ to: '/github-issues' }),
-        description: 'Navigate to GitHub Issues',
+        action: () => toggleLayer('github-issues'),
+        description: 'Toggle GitHub Issues',
       });
 
       shortcutsList.push({
         key: shortcuts.githubPrs,
-        action: () => navigate({ to: '/github-prs' }),
-        description: 'Navigate to GitHub Pull Requests',
+        action: () => toggleLayer('github-prs'),
+        description: 'Toggle GitHub Pull Requests',
       });
 
       shortcutsList.push({
         key: shortcuts.projectSettings,
-        action: () => navigate({ to: '/project-settings' }),
-        description: 'Navigate to Project Settings',
+        action: () => toggleLayer('project-settings'),
+        description: 'Toggle Project Settings',
       });
 
       // Global settings shortcut
       shortcutsList.push({
         key: shortcuts.settings,
-        action: () => navigate({ to: '/settings' }),
-        description: 'Navigate to Global Settings',
+        action: () => toggleLayer('settings'),
+        description: 'Toggle Global Settings',
       });
     }
 
@@ -429,7 +420,6 @@ export function TopNavigationBar({
   }, [
     shortcuts,
     currentProject,
-    navigate,
     handleOpenFolder,
     projectHistory.length,
     cyclePrevProject,
@@ -460,8 +450,8 @@ export function TopNavigationBar({
   const CurrentIcon = selectedProject ? getProjectIcon(selectedProject.icon) : Layers;
   const hasCustomIcon = selectedProject?.customIconPath;
 
-  // Check if we're on the board/tasks view
-  const isOnBoardView = location.pathname === '/board';
+  // Board is always the base view in the layer-based UI
+  const isOnBoardView = true;
 
   return (
     <header
@@ -555,22 +545,16 @@ export function TopNavigationBar({
             />
           )}
 
-        {/* T013: Tools button with tabs (Ideation, Spec, Memory, Terminal) + Board Actions */}
-        <ToolsButton
-          location={location}
-          onNavigate={(path) => navigate({ to: path })}
+        {/* Quick launcher [+] for tools, plan, git */}
+        <QuickLauncher
           boardControls={boardControls}
           isOnBoardView={isOnBoardView}
-          planUseSelectedWorktreeBranch={planUseSelectedWorktreeBranch}
-          onPlanUseSelectedWorktreeBranchChange={setPlanUseSelectedWorktreeBranch}
-        />
-
-        {/* Git button with branch/worktree controls */}
-        <GitButton
           currentProject={currentProject}
           onCreateWorktree={onCreateWorktree}
           onWorktreeRefresh={onWorktreeRefresh}
           worktreeRefreshTrigger={worktreeRefreshTrigger}
+          planUseSelectedWorktreeBranch={planUseSelectedWorktreeBranch}
+          onPlanUseSelectedWorktreeBranchChange={setPlanUseSelectedWorktreeBranch}
         />
       </div>
 
@@ -619,11 +603,11 @@ export function TopNavigationBar({
         >
           {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
         </Button>
-        {/* T014: Settings button - hidden on mobile (available in mobile menu) */}
+        {/* Settings gear icon - hidden on mobile (available in mobile menu) */}
         <div className="hidden lg:block">
-          <SettingsButton location={location} onNavigate={(path) => navigate({ to: path })} />
+          <SettingsGearButton />
         </div>
-        {/* T015: Running agents indicator with dual counts */}
+        {/* Running agents indicator with dual counts */}
         <RunningAgentsIndicator location={location} onNavigate={(path) => navigate({ to: path })} />
       </div>
 
@@ -699,279 +683,62 @@ function AgConfigurationSection() {
 }
 
 /**
- * ToolsButton - Combined Tools button with tabs for Ideation, Spec, Memory, Agent Runner, Terminal
- *
- * Phase 3: T013 - Create combined Tools button with tabs
+ * QuickLauncher - Single [+] button that opens a popover with all tools, git, and actions.
+ * Replaces the separate Tools, Git, and GitHub dropdown menus.
  */
-interface ToolsButtonProps {
-  location: { pathname: string };
-  onNavigate: (path: string) => void;
-}
-
-// Define tool tabs configuration - navigation tools only
-const TOOLS_TABS = [
-  { id: 'ideation', label: 'Ideation', icon: Lightbulb, path: '/ideation' },
-  { id: 'spec', label: 'Spec', icon: FileText, path: '/spec' },
-  { id: 'memory', label: 'Memory', icon: Brain, path: '/memory' },
-  { id: 'terminal', label: 'Terminal', icon: Terminal, path: '/terminal' },
-] as const;
-
-type ToolTabId = (typeof TOOLS_TABS)[number]['id'];
-
-// Extended ToolsButton props to include board actions
-interface ExtendedToolsButtonProps extends ToolsButtonProps {
-  boardControls?: {
-    onOpenPlanDialog: () => void;
-    hasPendingPlan: boolean;
-    onOpenPendingPlan?: () => void;
-    isMounted: boolean;
-  } | null;
+interface QuickLauncherProps {
+  boardControls?: TopNavigationBarProps['boardControls'];
   isOnBoardView?: boolean;
-  planUseSelectedWorktreeBranch?: boolean;
-  onPlanUseSelectedWorktreeBranchChange?: (value: boolean) => void;
-}
-
-function ToolsButton({
-  location,
-  onNavigate,
-  boardControls,
-  isOnBoardView,
-  planUseSelectedWorktreeBranch,
-  onPlanUseSelectedWorktreeBranchChange,
-}: ExtendedToolsButtonProps) {
-  const [open, setOpen] = useState(false);
-  const [showCompletedModal, setShowCompletedModal] = useState(false);
-  const [completedCount, setCompletedCount] = useState(0);
-
-  // Get current project from app store for completed features
-  const currentProject = useAppStore((s) => s.currentProject);
-  const projects = useAppStore((s) => s.projects);
-
-  // Fetch completed count independently when dropdown opens or project changes
-  useEffect(() => {
-    if (!currentProject?.path) return;
-    const api = getElectronAPI();
-    if (!api.features?.getCountsByStatus) return;
-
-    api.features.getCountsByStatus(currentProject.path).then((result: any) => {
-      if (result.success && result.counts) {
-        setCompletedCount(result.counts.completed ?? 0);
-      }
-    });
-  }, [currentProject?.path, open]);
-
-  // Get expanded states from board controls store
-
-  // Check if we're on any Tools-related view
-  const isOnIdeation = location.pathname === '/ideation';
-  const isOnSpec = location.pathname === '/spec';
-  const isOnMemory = location.pathname === '/memory';
-  const isOnTerminal = location.pathname === '/terminal';
-  const isOnToolsView = isOnIdeation || isOnSpec || isOnMemory || isOnTerminal;
-
-  // Determine the active tab based on current route
-  const getActiveTab = (): ToolTabId => {
-    if (isOnIdeation) return 'ideation';
-    if (isOnSpec) return 'spec';
-    if (isOnMemory) return 'memory';
-    if (isOnTerminal) return 'terminal';
-    return 'ideation'; // Default to ideation
-  };
-
-  const activeTab = getActiveTab();
-
-  const handleTabChange = (value: string) => {
-    const tab = TOOLS_TABS.find((t) => t.id === value);
-    if (tab) {
-      onNavigate(tab.path);
-    }
-    setOpen(false);
-  };
-
-  // Get label for current view description
-  const getCurrentViewLabel = (): string => {
-    const tab = TOOLS_TABS.find((t) => t.id === activeTab);
-    if (isOnToolsView && tab) {
-      return `Viewing ${tab.label}`;
-    }
-    return 'Select a tool to open';
-  };
-
-  return (
-    <>
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
-          <Button
-            variant="ghost"
-            size="sm"
-            className={cn(
-              'flex items-center gap-2 h-8 px-3',
-              'hover:bg-accent/50 transition-colors duration-150',
-              'font-medium text-sm',
-              isOnToolsView && 'bg-brand-500/10 text-brand-500'
-            )}
-            data-testid="tools-dropdown-trigger"
-          >
-            {/* Tools Icon */}
-            <div
-              className={cn(
-                'w-5 h-5 rounded flex items-center justify-center',
-                isOnToolsView ? 'bg-brand-500/20' : 'bg-muted'
-              )}
-            >
-              <Wrench
-                className={cn(
-                  'w-3.5 h-3.5',
-                  isOnToolsView ? 'text-brand-500' : 'text-muted-foreground'
-                )}
-              />
-            </div>
-
-            {/* Label */}
-            <span>Tools</span>
-
-            {/* Chevron */}
-            <ChevronDown className="w-4 h-4 text-muted-foreground" />
-          </Button>
-        </PopoverTrigger>
-
-        <PopoverContent align="center" className="w-auto p-2" data-testid="tools-dropdown-content">
-          <div className="flex flex-col gap-3">
-            {/* Section Header */}
-            <div className="text-xs font-medium text-muted-foreground px-1">Tools</div>
-
-            {/* Tabs for navigation tools */}
-            <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-              <TabsList className="w-full grid grid-cols-4 h-auto p-1">
-                {TOOLS_TABS.map((tab) => {
-                  const IconComponent = tab.icon;
-                  return (
-                    <TabsTrigger
-                      key={tab.id}
-                      value={tab.id}
-                      className="flex flex-col items-center gap-1 py-2 px-2 h-auto min-w-[60px]"
-                      data-testid={`tools-tab-${tab.id}`}
-                    >
-                      <IconComponent className="w-4 h-4" />
-                      <span className="text-[10px] leading-tight">{tab.label}</span>
-                    </TabsTrigger>
-                  );
-                })}
-              </TabsList>
-            </Tabs>
-
-            {/* Quick info / description */}
-            <div className="text-[10px] text-muted-foreground px-1">{getCurrentViewLabel()}</div>
-
-            {/* Completed Features - direct button */}
-            {currentProject && (
-              <>
-                <div className="h-px bg-border my-1" />
-                <button
-                  className="w-full flex items-center gap-3 px-2 py-2 rounded-md hover:bg-accent/50 transition-colors"
-                  data-testid="tools-completed-button"
-                  onClick={() => {
-                    setShowCompletedModal(true);
-                    setOpen(false);
-                  }}
-                >
-                  <CheckCircle2 className="w-4 h-4 text-muted-foreground shrink-0" />
-                  <span className="text-sm font-medium flex-1 text-left">Completed</span>
-                  {completedCount > 0 && (
-                    <span className="bg-brand-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
-                      {completedCount > 99 ? '99+' : completedCount}
-                    </span>
-                  )}
-                </button>
-              </>
-            )}
-
-            {/* Plan - direct button (only on board view) */}
-            {isOnBoardView && boardControls && boardControls.isMounted && (
-              <button
-                className="w-full flex items-center gap-3 px-2 py-2 rounded-md hover:bg-accent/50 transition-colors"
-                data-testid="tools-plan-button"
-                onClick={() => {
-                  boardControls.onOpenPlanDialog();
-                  setOpen(false);
-                }}
-              >
-                <Wand2 className="w-4 h-4 text-muted-foreground shrink-0" />
-                <span className="text-sm font-medium flex-1 text-left">Plan</span>
-                {boardControls.hasPendingPlan && (
-                  <span className="text-[10px] text-emerald-500 font-medium">Review ready</span>
-                )}
-              </button>
-            )}
-
-            {/* AG Configuration - always visible */}
-            <div className="h-px bg-border my-1" />
-            <div className="text-xs font-medium text-muted-foreground px-1">AG Configuration</div>
-            <AgConfigurationSection />
-          </div>
-        </PopoverContent>
-      </Popover>
-
-      {/* Self-contained Completed Features Modal */}
-      <CompletedFeaturesModal
-        open={showCompletedModal}
-        onOpenChange={setShowCompletedModal}
-        currentProjectPath={currentProject?.path}
-        projectPaths={currentProject ? [currentProject.path] : []}
-        availableProjects={new Map(projects.map((p) => [p.path, p.name]))}
-      />
-    </>
-  );
-}
-
-/**
- * GitButton - Git dropdown button with branch/worktree controls
- *
- * This button provides access to:
- * - Branch/worktree selector dropdown
- * - Create new worktree button
- * - Refresh worktrees button
- * - Worktree Bar visibility toggle (T001: moved from BoardHeader)
- * - Worktree settings (default to worktree mode for new features)
- */
-interface GitButtonProps {
   currentProject: Project | null;
   onCreateWorktree?: () => void;
   onWorktreeRefresh?: () => void;
   worktreeRefreshTrigger?: number;
+  planUseSelectedWorktreeBranch?: boolean;
+  onPlanUseSelectedWorktreeBranchChange?: (value: boolean) => void;
 }
 
-function GitButton({
+// All launcher items
+const LAUNCHER_ITEMS: { id: LayerId; label: string; icon: typeof CircleDot; section: string }[] = [
+  { id: 'ideation', label: 'Ideation', icon: Lightbulb, section: 'Tools' },
+  { id: 'spec', label: 'Spec Editor', icon: FileText, section: 'Tools' },
+  { id: 'memory', label: 'Memory', icon: Brain, section: 'Tools' },
+  { id: 'terminal', label: 'Terminal', icon: Terminal, section: 'Tools' },
+  { id: 'github-issues', label: 'GitHub Issues', icon: CircleDot, section: 'GitHub' },
+  { id: 'github-prs', label: 'GitHub PRs', icon: GitPullRequest, section: 'GitHub' },
+  { id: 'project-settings', label: 'Project Settings', icon: Settings, section: 'Settings' },
+  { id: 'interview', label: 'Interview', icon: Wand2, section: 'Settings' },
+];
+
+function QuickLauncher({
+  boardControls,
+  isOnBoardView,
   currentProject,
   onCreateWorktree,
   onWorktreeRefresh,
   worktreeRefreshTrigger = 0,
-}: GitButtonProps) {
+}: QuickLauncherProps) {
   const [open, setOpen] = useState(false);
+  const [showCompletedModal, setShowCompletedModal] = useState(false);
+  const openLayer = useLayerStore((s) => s.openLayer);
+  const layers = useLayerStore((s) => s.layers);
+  const projects = useAppStore((s) => s.projects);
+
+  // Git worktree state
   const [worktrees, setWorktrees] = useState<WorktreeInfo[]>([]);
   const [isLoadingWorktrees, setIsLoadingWorktrees] = useState(false);
-  const [showWorktreeSettings, setShowWorktreeSettings] = useState(false);
-
-  // Git/worktree store state - consolidated with useShallow
   const {
     getCurrentWorktree,
     setCurrentWorktree,
     setWorktrees: setWorktreesInStore,
-    useWorktrees: useWorktreesEnabled,
     worktreePanelVisibleByProject,
     setWorktreePanelVisible,
-    addFeatureUseSelectedWorktreeBranch,
-    setAddFeatureUseSelectedWorktreeBranch,
   } = useAppStore(
     useShallow((state) => ({
       getCurrentWorktree: state.getCurrentWorktree,
       setCurrentWorktree: state.setCurrentWorktree,
       setWorktrees: state.setWorktrees,
-      useWorktrees: state.useWorktrees,
       worktreePanelVisibleByProject: state.worktreePanelVisibleByProject,
       setWorktreePanelVisible: state.setWorktreePanelVisible,
-      addFeatureUseSelectedWorktreeBranch: state.addFeatureUseSelectedWorktreeBranch,
-      setAddFeatureUseSelectedWorktreeBranch: state.setAddFeatureUseSelectedWorktreeBranch,
     }))
   );
 
@@ -979,14 +746,10 @@ function GitButton({
     ? (worktreePanelVisibleByProject[currentProject.path] ?? true)
     : true;
 
-  // Handle worktree panel visibility toggle
   const handleWorktreePanelToggle = useCallback(
     async (visible: boolean) => {
       if (!currentProject) return;
-      // Update local store
       setWorktreePanelVisible(currentProject.path, visible);
-
-      // Persist to server
       try {
         const httpClient = getHttpApiClient();
         await httpClient.settings.updateProject(currentProject.path, {
@@ -1002,15 +765,12 @@ function GitButton({
   const currentWorktree = currentProject ? getCurrentWorktree(currentProject.path) : null;
   const currentWorktreePath = currentWorktree?.path ?? null;
 
-  // Fetch worktrees
   const fetchWorktrees = useCallback(async () => {
     if (!currentProject?.path) return;
     setIsLoadingWorktrees(true);
     try {
       const api = getElectronAPI();
-      if (!api?.worktree?.listAll) {
-        return;
-      }
+      if (!api?.worktree?.listAll) return;
       const result = await api.worktree.listAll(currentProject.path, true, false);
       if (result.success && result.worktrees) {
         setWorktrees(result.worktrees);
@@ -1023,16 +783,13 @@ function GitButton({
     }
   }, [currentProject?.path, setWorktreesInStore]);
 
-  // Initial fetch and refresh on trigger
   useEffect(() => {
     fetchWorktrees();
   }, [fetchWorktrees, worktreeRefreshTrigger]);
 
-  // Get main worktree and non-main worktrees
   const mainWorktree = useMemo(() => worktrees.find((w) => w.isMain), [worktrees]);
   const nonMainWorktrees = useMemo(() => worktrees.filter((w) => !w.isMain), [worktrees]);
 
-  // Check if a worktree is selected
   const isWorktreeSelected = useCallback(
     (worktree: WorktreeInfo) => {
       return worktree.isMain
@@ -1042,7 +799,6 @@ function GitButton({
     [currentWorktreePath]
   );
 
-  // Handle worktree selection
   const handleSelectWorktree = useCallback(
     (worktree: WorktreeInfo) => {
       if (!currentProject) return;
@@ -1056,286 +812,275 @@ function GitButton({
     [currentProject, setCurrentWorktree]
   );
 
-  // Handle create worktree - dispatch custom event for BoardView to handle
   const handleCreateWorktree = useCallback(() => {
     if (onCreateWorktree) {
       onCreateWorktree();
     } else {
-      // Dispatch a custom event that BoardView will listen for
       window.dispatchEvent(new CustomEvent('dmaker:create-worktree'));
     }
     setOpen(false);
   }, [onCreateWorktree]);
 
-  // Get currently selected worktree for display
   const selectedWorktree = useMemo(() => {
-    if (currentWorktreePath === null) {
-      return mainWorktree;
-    }
+    if (currentWorktreePath === null) return mainWorktree;
     return (
       worktrees.find((w) => !w.isMain && pathsEqual(w.path, currentWorktreePath)) || mainWorktree
     );
   }, [worktrees, currentWorktreePath, mainWorktree]);
 
-  // Don't render if no project selected
-  if (!currentProject) {
-    return null;
-  }
+  // Check if any launcher layer is open
+  const hasOpenLayer = LAUNCHER_ITEMS.some((item) => layers.includes(item.id));
+
+  // Group items by section
+  const sections = useMemo(() => {
+    const map = new Map<string, typeof LAUNCHER_ITEMS>();
+    for (const item of LAUNCHER_ITEMS) {
+      const arr = map.get(item.section) || [];
+      arr.push(item);
+      map.set(item.section, arr);
+    }
+    return map;
+  }, []);
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          variant="ghost"
-          size="sm"
-          className={cn(
-            'flex items-center gap-2 h-8 px-3',
-            'hover:bg-accent/50 transition-colors duration-150',
-            'font-medium text-sm'
-          )}
-          data-testid="git-dropdown-trigger"
-        >
-          {/* Git Icon */}
-          <div className="w-5 h-5 rounded flex items-center justify-center bg-muted">
-            <GitBranch className="w-3.5 h-3.5 text-muted-foreground" />
-          </div>
-
-          {/* Label */}
-          <span>Git</span>
-
-          {/* Chevron */}
-          <ChevronDown className="w-4 h-4 text-muted-foreground" />
-        </Button>
-      </PopoverTrigger>
-
-      <PopoverContent align="center" className="w-64 p-2" data-testid="git-dropdown-content">
-        <div className="flex flex-col gap-3">
-          {/* Section Header with Actions */}
-          <div className="flex items-center justify-between px-1">
-            <div className="text-xs font-medium text-muted-foreground">Branch / Worktree</div>
-            <div className="flex items-center gap-1">
-              {/* Create Worktree Button */}
-              {useWorktreesEnabled && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-6 w-6 p-0"
-                  onClick={handleCreateWorktree}
-                  title="Create new worktree"
-                  data-testid="git-create-worktree-button"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                </Button>
-              )}
-              {/* Refresh Button */}
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-6 w-6 p-0"
-                onClick={() => {
-                  fetchWorktrees();
-                  onWorktreeRefresh?.();
-                }}
-                disabled={isLoadingWorktrees}
-                title="Refresh worktrees"
-                data-testid="git-refresh-button"
-              >
-                <RefreshCw className={cn('w-3.5 h-3.5', isLoadingWorktrees && 'animate-spin')} />
-              </Button>
-            </div>
-          </div>
-
-          {/* Branch/Worktree List */}
-          <div className="flex flex-col gap-1 max-h-60 overflow-y-auto">
-            {/* Main Branch */}
-            {mainWorktree && (
-              <button
-                onClick={() => handleSelectWorktree(mainWorktree)}
-                className={cn(
-                  'flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-mono cursor-pointer transition-colors',
-                  'hover:bg-accent/50',
-                  isWorktreeSelected(mainWorktree) && 'bg-accent'
-                )}
-                data-testid="git-option-main"
-              >
-                <GitBranch className="w-3.5 h-3.5 text-muted-foreground" />
-                <span className="flex-1 truncate text-left">{mainWorktree.branch}</span>
-                {isWorktreeSelected(mainWorktree) && (
-                  <span className="text-[10px] text-brand-500 font-medium">Active</span>
-                )}
-              </button>
+    <>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            variant="ghost"
+            size="sm"
+            className={cn(
+              'h-8 w-8 p-0',
+              'hover:bg-accent/50 transition-colors duration-150',
+              hasOpenLayer && 'bg-brand-500/10 text-brand-500'
             )}
+            data-testid="quick-launcher-trigger"
+            title="Open tools & navigation"
+          >
+            <Plus
+              className={cn('w-4 h-4', hasOpenLayer ? 'text-brand-500' : 'text-muted-foreground')}
+            />
+          </Button>
+        </PopoverTrigger>
 
-            {/* Worktrees Section */}
-            {useWorktreesEnabled && nonMainWorktrees.length > 0 && (
-              <>
-                <div className="h-px bg-border my-1" />
-                <div className="px-2 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-                  Worktrees
+        <PopoverContent align="start" className="w-72 p-2" data-testid="quick-launcher-content">
+          <div className="flex flex-col gap-1">
+            {/* Layer items grouped by section */}
+            {Array.from(sections).map(([section, items], idx) => (
+              <div key={section}>
+                {idx > 0 && <div className="h-px bg-border my-1.5" />}
+                <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-2 py-1">
+                  {section}
                 </div>
-                {nonMainWorktrees.map((worktree) => (
+                {items.map((item) => {
+                  const IconComponent = item.icon;
+                  const isActive = layers.includes(item.id);
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => {
+                        openLayer(item.id);
+                        setOpen(false);
+                      }}
+                      className={cn(
+                        'w-full flex items-center gap-3 px-2 py-1.5 rounded-md transition-colors text-left',
+                        isActive
+                          ? 'bg-brand-500/10 text-brand-500'
+                          : 'hover:bg-accent/50 text-foreground'
+                      )}
+                      data-testid={`launcher-${item.id}`}
+                    >
+                      <IconComponent
+                        className={cn(
+                          'w-4 h-4 shrink-0',
+                          isActive ? 'text-brand-500' : 'text-muted-foreground'
+                        )}
+                      />
+                      <span className="text-sm font-medium">{item.label}</span>
+                      {isActive && (
+                        <span className="ml-auto text-[10px] text-brand-500 font-medium">Open</span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            ))}
+
+            {/* Plan & Closed Issues */}
+            {(currentProject || (isOnBoardView && boardControls?.isMounted)) && (
+              <>
+                <div className="h-px bg-border my-1.5" />
+                <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-2 py-1">
+                  Actions
+                </div>
+                {currentProject && (
                   <button
-                    key={worktree.path}
-                    onClick={() => handleSelectWorktree(worktree)}
-                    className={cn(
-                      'flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-mono cursor-pointer transition-colors',
-                      'hover:bg-accent/50',
-                      isWorktreeSelected(worktree) && 'bg-accent'
-                    )}
-                    data-testid={`git-option-${worktree.branch}`}
+                    className="w-full flex items-center gap-3 px-2 py-1.5 rounded-md hover:bg-accent/50 transition-colors text-left"
+                    data-testid="launcher-completed"
+                    onClick={() => {
+                      setShowCompletedModal(true);
+                      setOpen(false);
+                    }}
                   >
-                    <GitBranch className="w-3.5 h-3.5 text-muted-foreground" />
-                    <span className="flex-1 truncate text-left">{worktree.branch}</span>
-                    {isWorktreeSelected(worktree) && (
-                      <span className="text-[10px] text-brand-500 font-medium">Active</span>
+                    <CheckCircle2 className="w-4 h-4 text-muted-foreground shrink-0" />
+                    <span className="text-sm font-medium">Closed Issues</span>
+                  </button>
+                )}
+                {isOnBoardView && boardControls && boardControls.isMounted && (
+                  <button
+                    className="w-full flex items-center gap-3 px-2 py-1.5 rounded-md hover:bg-accent/50 transition-colors text-left"
+                    data-testid="launcher-plan"
+                    onClick={() => {
+                      boardControls.onOpenPlanDialog();
+                      setOpen(false);
+                    }}
+                  >
+                    <Wand2 className="w-4 h-4 text-muted-foreground shrink-0" />
+                    <span className="text-sm font-medium">Plan</span>
+                    {boardControls.hasPendingPlan && (
+                      <span className="ml-auto text-[10px] text-emerald-500 font-medium">
+                        Review ready
+                      </span>
                     )}
                   </button>
-                ))}
+                )}
               </>
             )}
 
-            {/* Create Worktree Option */}
-            {useWorktreesEnabled && (
+            {/* Git / Worktree section */}
+            {currentProject && (
               <>
-                <div className="h-px bg-border my-1" />
-                <button
-                  onClick={handleCreateWorktree}
-                  className="flex items-center gap-2 px-2 py-1.5 rounded-md text-xs cursor-pointer text-brand-500 hover:bg-accent/50 transition-colors"
-                  data-testid="git-create-option"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span className="font-medium">Create Worktree</span>
-                </button>
-              </>
-            )}
-          </div>
-
-          {/* Current selection info */}
-          <div className="text-[10px] text-muted-foreground px-1 border-t border-border pt-2">
-            Current: <span className="font-mono">{selectedWorktree?.branch || 'main'}</span>
-          </div>
-
-          {/* Worktree Bar Toggle - T001: Moved from BoardHeader */}
-          {useWorktreesEnabled && (
-            <>
-              <div className="h-px bg-border" />
-              <div className="flex items-center justify-between px-1 py-1">
-                <div className="flex items-center gap-2">
-                  <PanelTop className="w-3.5 h-3.5 text-muted-foreground" />
-                  <Label
-                    htmlFor="worktree-bar-toggle"
-                    className="text-xs font-medium cursor-pointer"
-                  >
-                    Worktree Bar
-                  </Label>
+                <div className="h-px bg-border my-1.5" />
+                <div className="flex items-center justify-between px-2 py-1">
+                  <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                    Git
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-5 w-5 p-0"
+                      onClick={handleCreateWorktree}
+                      title="Create new worktree"
+                    >
+                      <Plus className="w-3 h-3" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-5 w-5 p-0"
+                      onClick={() => {
+                        fetchWorktrees();
+                        onWorktreeRefresh?.();
+                      }}
+                      disabled={isLoadingWorktrees}
+                      title="Refresh worktrees"
+                    >
+                      <RefreshCw className={cn('w-3 h-3', isLoadingWorktrees && 'animate-spin')} />
+                    </Button>
+                  </div>
                 </div>
-                <div className="flex items-center gap-1">
+                <div className="flex flex-col gap-0.5 max-h-32 overflow-y-auto">
+                  {mainWorktree && (
+                    <button
+                      onClick={() => handleSelectWorktree(mainWorktree)}
+                      className={cn(
+                        'flex items-center gap-2 px-2 py-1 rounded-md text-xs font-mono cursor-pointer transition-colors',
+                        'hover:bg-accent/50',
+                        isWorktreeSelected(mainWorktree) && 'bg-accent'
+                      )}
+                    >
+                      <GitBranch className="w-3.5 h-3.5 text-muted-foreground" />
+                      <span className="flex-1 truncate text-left">{mainWorktree.branch}</span>
+                      {isWorktreeSelected(mainWorktree) && (
+                        <span className="text-[10px] text-brand-500 font-medium">Active</span>
+                      )}
+                    </button>
+                  )}
+                  {nonMainWorktrees.map((worktree) => (
+                    <button
+                      key={worktree.path}
+                      onClick={() => handleSelectWorktree(worktree)}
+                      className={cn(
+                        'flex items-center gap-2 px-2 py-1 rounded-md text-xs font-mono cursor-pointer transition-colors',
+                        'hover:bg-accent/50',
+                        isWorktreeSelected(worktree) && 'bg-accent'
+                      )}
+                    >
+                      <GitBranch className="w-3.5 h-3.5 text-muted-foreground" />
+                      <span className="flex-1 truncate text-left">{worktree.branch}</span>
+                      {isWorktreeSelected(worktree) && (
+                        <span className="text-[10px] text-brand-500 font-medium">Active</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+                <div className="text-[10px] text-muted-foreground px-2 pt-1">
+                  Branch: <span className="font-mono">{selectedWorktree?.branch || 'main'}</span>
+                </div>
+                <div className="flex items-center justify-between px-2 py-1">
+                  <div className="flex items-center gap-2">
+                    <PanelTop className="w-3.5 h-3.5 text-muted-foreground" />
+                    <Label htmlFor="wt-bar-toggle" className="text-xs font-medium cursor-pointer">
+                      Worktree Bar
+                    </Label>
+                  </div>
                   <Switch
-                    id="worktree-bar-toggle"
+                    id="wt-bar-toggle"
                     checked={isWorktreePanelVisible}
                     onCheckedChange={handleWorktreePanelToggle}
-                    data-testid="worktree-bar-toggle"
                   />
-                  {/* Worktree Settings Popover */}
-                  <Popover open={showWorktreeSettings} onOpenChange={setShowWorktreeSettings}>
-                    <PopoverTrigger asChild>
-                      <button
-                        className="p-1 rounded hover:bg-accent/50 transition-colors"
-                        title="Worktree Settings"
-                        data-testid="worktree-settings-button"
-                      >
-                        <Settings2 className="w-3.5 h-3.5 text-muted-foreground" />
-                      </button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-72" align="end" sideOffset={8}>
-                      <div className="space-y-3">
-                        <div>
-                          <h4 className="font-medium text-sm mb-1">Worktree Settings</h4>
-                          <p className="text-xs text-muted-foreground">
-                            Configure how worktrees affect feature creation.
-                          </p>
-                        </div>
-
-                        <div className="flex items-center justify-between gap-3 p-2 rounded-md bg-secondary/50">
-                          <div className="flex items-center gap-2 flex-1 min-w-0">
-                            <GitBranch className="w-4 h-4 text-brand-500 shrink-0" />
-                            <Label
-                              htmlFor="worktree-branch-toggle"
-                              className="text-xs font-medium cursor-pointer"
-                            >
-                              Default to worktree mode
-                            </Label>
-                          </div>
-                          <Switch
-                            id="worktree-branch-toggle"
-                            checked={addFeatureUseSelectedWorktreeBranch}
-                            onCheckedChange={setAddFeatureUseSelectedWorktreeBranch}
-                            data-testid="worktree-branch-toggle"
-                          />
-                        </div>
-
-                        <p className="text-[10px] text-muted-foreground leading-relaxed">
-                          New features will automatically use isolated worktrees, keeping changes
-                          separate from your main branch until you're ready to merge.
-                        </p>
-                      </div>
-                    </PopoverContent>
-                  </Popover>
                 </div>
-              </div>
-            </>
-          )}
-        </div>
-      </PopoverContent>
-    </Popover>
+              </>
+            )}
+
+            {/* AG Configuration */}
+            <div className="h-px bg-border my-1.5" />
+            <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-2 py-1">
+              Agents
+            </div>
+            <AgConfigurationSection />
+          </div>
+        </PopoverContent>
+      </Popover>
+
+      {/* Completed Features Modal */}
+      <CompletedFeaturesModal
+        open={showCompletedModal}
+        onOpenChange={setShowCompletedModal}
+        componentProps={{
+          currentProjectPath: currentProject?.path,
+          projectPaths: projects.map((p) => p.path),
+          availableProjects: new Map(projects.map((p) => [p.path, p.name])),
+        }}
+      />
+    </>
   );
 }
 
 /**
- * SettingsButton - Settings navigation button
- *
- * Phase 3: T014 - Add Settings button to top bar
+ * SettingsGearButton - Minimal gear icon that opens the settings layer.
  */
-interface SettingsButtonProps {
-  location: { pathname: string };
-  onNavigate: (path: string) => void;
-}
-
-function SettingsButton({ location, onNavigate }: SettingsButtonProps) {
-  // Check if we're on the settings view
-  const isOnSettings = location.pathname === '/settings';
-
-  const handleClick = () => {
-    onNavigate('/settings');
-  };
+function SettingsGearButton() {
+  const isOnSettings = useLayerStore((s) => s.layers.includes('settings'));
+  const toggleLayer = useLayerStore((s) => s.toggleLayer);
 
   return (
     <Button
       variant="ghost"
       size="sm"
-      onClick={handleClick}
+      onClick={() => toggleLayer('settings')}
       className={cn(
-        'flex items-center gap-2 h-8 px-3',
+        'h-8 w-8 p-0',
         'hover:bg-accent/50 transition-colors duration-150',
-        'font-medium text-sm',
         isOnSettings && 'bg-brand-500/10 text-brand-500'
       )}
       data-testid="settings-button"
+      title="Settings"
     >
-      {/* Settings Icon */}
-      <div
-        className={cn(
-          'w-5 h-5 rounded flex items-center justify-center',
-          isOnSettings ? 'bg-brand-500/20' : 'bg-muted'
-        )}
-      >
-        <Settings
-          className={cn('w-3.5 h-3.5', isOnSettings ? 'text-brand-500' : 'text-muted-foreground')}
-        />
-      </div>
-
-      {/* Label */}
-      <span>Settings</span>
+      <Settings
+        className={cn('w-4 h-4', isOnSettings ? 'text-brand-500' : 'text-muted-foreground')}
+      />
     </Button>
   );
 }
@@ -1370,67 +1115,52 @@ function MobileNavigationMenu({
   showAllProjects,
   projects,
 }: MobileNavigationMenuProps) {
-  // Check current view states
-  const isOnGitHubIssues = location.pathname === '/github-issues';
-  const isOnGitHubPRs = location.pathname === '/github-prs';
-  const isOnGitHubView = isOnGitHubIssues || isOnGitHubPRs;
-  const isOnIdeation = location.pathname === '/ideation';
-  const isOnSpec = location.pathname === '/spec';
-  const isOnMemory = location.pathname === '/memory';
-  const isOnTerminal = location.pathname === '/terminal';
-  const isOnToolsView = isOnIdeation || isOnSpec || isOnMemory || isOnTerminal;
-  const isOnSettings = location.pathname === '/settings';
+  const layers = useLayerStore((s) => s.layers);
+  const openLayer = useLayerStore((s) => s.openLayer);
 
-  // Navigation items configuration
-  const navItems = [
+  // Navigation items configuration - open as layers
+  const navItems: { id: LayerId; label: string; icon: typeof CircleDot; isActive: boolean }[] = [
     {
       id: 'github-issues',
       label: 'GitHub Issues',
       icon: CircleDot,
-      path: '/github-issues',
-      isActive: isOnGitHubIssues,
+      isActive: layers.includes('github-issues'),
     },
     {
       id: 'github-prs',
       label: 'GitHub PRs',
       icon: GitPullRequest,
-      path: '/github-prs',
-      isActive: isOnGitHubPRs,
+      isActive: layers.includes('github-prs'),
     },
     {
       id: 'ideation',
       label: 'Ideation',
       icon: Lightbulb,
-      path: '/ideation',
-      isActive: isOnIdeation,
+      isActive: layers.includes('ideation'),
     },
     {
       id: 'spec',
       label: 'Spec Editor',
       icon: FileText,
-      path: '/spec',
-      isActive: isOnSpec,
+      isActive: layers.includes('spec'),
     },
     {
       id: 'memory',
       label: 'Memory',
       icon: Brain,
-      path: '/memory',
-      isActive: isOnMemory,
+      isActive: layers.includes('memory'),
     },
     {
       id: 'terminal',
       label: 'Terminal',
       icon: Terminal,
-      path: '/terminal',
-      isActive: isOnTerminal,
+      isActive: layers.includes('terminal'),
     },
     {
       id: 'settings',
       label: 'Settings',
       icon: Settings,
-      path: '/settings',
-      isActive: isOnSettings,
+      isActive: layers.includes('settings'),
     },
   ];
 
@@ -1455,7 +1185,10 @@ function MobileNavigationMenu({
           return (
             <button
               key={item.id}
-              onClick={() => onNavigate(item.path)}
+              onClick={() => {
+                openLayer(item.id);
+                onClose();
+              }}
               className={cn(
                 'flex items-center gap-3 px-4 py-3 rounded-lg',
                 'transition-colors duration-150',

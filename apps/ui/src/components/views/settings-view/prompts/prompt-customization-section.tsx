@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/layout';
 import { MessageSquareText, RotateCcw, Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { PromptCustomization, CustomPrompt } from '@dmaker/types';

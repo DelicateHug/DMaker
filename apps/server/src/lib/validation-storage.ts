@@ -5,8 +5,7 @@
  * Results include the validation verdict, metadata, and timestamp for cache invalidation.
  */
 
-import * as secureFs from './secure-fs.js';
-import { getValidationsDir, getValidationDir, getValidationPath } from '@dmaker/platform';
+import { secureFs, getValidationsDir, getValidationDir, getValidationPath } from '@dmaker/platform';
 import type { StoredValidation } from '@dmaker/types';
 
 // Re-export StoredValidation for convenience

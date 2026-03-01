@@ -22,8 +22,8 @@ import {
 import { useShallow } from 'zustand/react/shallow';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { ScrollArea } from '@/components/ui/scroll-area';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/overlays';
+import { ScrollArea } from '@/components/ui/layout';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useRunningAgents, type RunningAgentFeature } from '@/hooks/use-running-agents';
 import { getElectronAPI } from '@/lib/electron';

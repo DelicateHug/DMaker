@@ -5,21 +5,18 @@ import os from 'os';
 import { PipelineService } from '@/services/pipeline-service.js';
 import type { PipelineConfig, PipelineStep } from '@dmaker/types';
 
-// Mock secure-fs
-vi.mock('@/lib/secure-fs.js', () => ({
-  readFile: vi.fn(),
-  writeFile: vi.fn(),
-  rename: vi.fn(),
-  unlink: vi.fn(),
-}));
-
-// Mock ensureDmakerDir
+// Mock @dmaker/platform with secureFs and ensureDmakerDir
 vi.mock('@dmaker/platform', () => ({
+  secureFs: {
+    readFile: vi.fn(),
+    writeFile: vi.fn(),
+    rename: vi.fn(),
+    unlink: vi.fn(),
+  },
   ensureDmakerDir: vi.fn(),
 }));
 
-import * as secureFs from '@/lib/secure-fs.js';
-import { ensureDmakerDir } from '@dmaker/platform';
+import { secureFs, ensureDmakerDir } from '@dmaker/platform';
 
 describe('pipeline-service.ts', () => {
   let testProjectDir: string;

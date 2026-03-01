@@ -16,7 +16,7 @@ import type {
   ProviderMessage,
   InstallationStatus,
   ModelDefinition,
-} from './types.js';
+} from '@dmaker/types';
 
 // Explicit allowlist of environment variables to pass to the SDK.
 // Only these vars are passed - nothing else from process.env leaks through.

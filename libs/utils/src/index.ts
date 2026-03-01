@@ -50,8 +50,8 @@ export {
   type Logger,
 } from './logger.js';
 
-// File system utilities
-export { mkdirSafe, existsSafe } from './fs-utils.js';
+// File and path utilities (consolidated from fs-utils + path-utils)
+export { mkdirSafe, existsSafe, normalizePath, pathsEqual } from './file-utils.js';
 
 // Atomic file operations
 export {
@@ -67,13 +67,12 @@ export {
   type ReadJsonRecoveryOptions,
 } from './atomic-writer.js';
 
-// Path utilities
-export { normalizePath, pathsEqual } from './path-utils.js';
-
 // Context file loading
 export {
   loadContextFiles,
   getContextFilesSummary,
+  getEnabledContextFileNames,
+  getEnabledMemoryFileNames,
   type ContextMetadata,
   type ContextFileInfo,
   type ContextFilesResult,
@@ -107,6 +106,13 @@ export {
   countMatches,
   incrementUsageStat,
   formatLearning,
+  // Tiered memory system
+  consolidateMemoryToMaster,
+  memoryTiersNeedRegeneration,
+  writeMemoryTiers,
+  getMemoryTierForModel,
+  getTierFileName,
+  isTierSystemFile,
   type MemoryFsModule,
   type MemoryMetadata,
   type MemoryFile,
@@ -114,4 +120,6 @@ export {
   type UsageStats,
   type LearningEntry,
   type SimpleMemoryFile,
+  type MemoryTier,
+  type MemoryTierMeta,
 } from './memory-loader.js';

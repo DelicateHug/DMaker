@@ -1,71 +1,24 @@
 /**
- * Dynamic theme CSS loader.
+ * Theme loader stubs.
  *
- * Instead of importing all 40 theme CSS files synchronously at startup,
- * this module loads theme CSS on demand using Vite's dynamic import().
- * Base themes (dark, light) are always loaded synchronously via theme-imports.ts.
+ * All theme CSS is now bundled into a single synchronously-loaded file
+ * (styles/themes.css), so dynamic loading is no longer necessary.
+ * These functions are kept as no-ops to preserve the existing API surface
+ * used by components that call loadTheme / preloadTheme / loadStoredTheme.
  */
-
-/** Tracks which theme CSS modules have already been loaded. */
-const loadedThemes = new Set<string>(['dark', 'light']);
-
-/** Maps theme names to their dynamic import() promises to deduplicate concurrent requests. */
-const pendingLoads = new Map<string, Promise<void>>();
 
 /**
- * Vite glob import for all theme CSS files (lazy).
- * Each entry is a function that returns a Promise which, when called,
- * injects the CSS into the document.
+ * No-op — all themes are loaded synchronously at startup.
  */
-const themeModules = import.meta.glob('../styles/themes/*.css') as Record<
-  string,
-  () => Promise<unknown>
->;
-
-/** Resolve the glob key for a given theme name. */
-function getModuleKey(themeName: string): string {
-  return `../styles/themes/${themeName}.css`;
+export async function loadTheme(_themeName: string): Promise<void> {
+  // All themes are already available via the synchronous themes.css import.
 }
 
 /**
- * Load a theme's CSS dynamically. No-op if already loaded or if it's a base theme.
- * Returns a promise that resolves once the CSS is injected.
+ * No-op — all themes are loaded synchronously at startup.
  */
-export async function loadTheme(themeName: string): Promise<void> {
-  if (!themeName || loadedThemes.has(themeName)) return;
-
-  // Check for an in-flight load to avoid duplicate imports
-  const pending = pendingLoads.get(themeName);
-  if (pending) return pending;
-
-  const key = getModuleKey(themeName);
-  const loader = themeModules[key];
-  if (!loader) {
-    // Theme CSS not found — fall back silently (dark theme will be used)
-    return;
-  }
-
-  const promise = loader()
-    .then(() => {
-      loadedThemes.add(themeName);
-    })
-    .catch(() => {
-      // CSS failed to load — swallow error so the app doesn't break
-    })
-    .finally(() => {
-      pendingLoads.delete(themeName);
-    });
-
-  pendingLoads.set(themeName, promise);
-  return promise;
-}
-
-/**
- * Preload a theme's CSS (same as loadTheme, but semantically indicates
- * it's being loaded ahead of time, e.g. on hover).
- */
-export function preloadTheme(themeName: string): void {
-  void loadTheme(themeName);
+export function preloadTheme(_themeName: string): void {
+  // All themes are already available via the synchronous themes.css import.
 }
 
 /**
@@ -79,11 +32,12 @@ function resolveSystemTheme(themeMode: string): string {
 }
 
 /**
- * Load the user's stored theme CSS on app startup.
- * Called from app.tsx to eagerly load the active theme before first paint.
+ * No-op — all themes are loaded synchronously at startup.
+ * The resolveSystemTheme helper is kept in case callers rely on the
+ * side-effect of resolving 'system' to a concrete theme name.
  */
 export async function loadStoredTheme(storedTheme: string | null): Promise<void> {
   if (!storedTheme) return;
-  const resolved = resolveSystemTheme(storedTheme);
-  await loadTheme(resolved);
+  // Resolve so the function signature stays compatible, but no loading needed.
+  void resolveSystemTheme(storedTheme);
 }

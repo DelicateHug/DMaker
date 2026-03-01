@@ -11,8 +11,8 @@ import type { CursorModelId } from './cursor-models.js';
 import { CURSOR_MODEL_MAP, getAllCursorModelIds } from './cursor-models.js';
 import type { OpencodeModelId } from './opencode-models.js';
 import { getAllOpencodeModelIds, DEFAULT_OPENCODE_MODEL } from './opencode-models.js';
-import type { PromptCustomization } from './prompts.js';
-import type { CodexSandboxMode, CodexApprovalPolicy } from './codex.js';
+import type { PromptCustomization } from './core-types.js';
+import type { CodexSandboxMode, CodexApprovalPolicy } from './codex-types.js';
 import type { ReasoningEffort } from './provider.js';
 // Re-export ModelAlias for convenience
 export type { ModelAlias };
@@ -129,6 +129,28 @@ export function getThinkingTokenBudget(level: ThinkingLevel | undefined): number
 
 /** ModelProvider - AI model provider for credentials and API key management */
 export type ModelProvider = 'claude' | 'cursor' | 'codex' | 'opencode' | 'gcp';
+
+// ============================================================================
+// Build Verification - Configurable build commands for pre-approval validation
+// ============================================================================
+
+/** A configurable build command for build verification */
+export interface BuildCommand {
+  /** Shell command to execute (e.g., 'npm run lint') */
+  cmd: string;
+  /** Human-readable name for display (e.g., 'Lint') */
+  name: string;
+  /** Whether this command is enabled */
+  enabled: boolean;
+}
+
+/** Default build commands for new projects */
+export const DEFAULT_BUILD_COMMANDS: BuildCommand[] = [
+  { cmd: 'npm run lint', name: 'Lint', enabled: true },
+  { cmd: 'npm run typecheck', name: 'Type Check', enabled: true },
+  { cmd: 'npm test', name: 'Tests', enabled: true },
+  { cmd: 'npm run build', name: 'Build', enabled: true },
+];
 
 // ============================================================================
 // Deploy Scripts - Folder-based deployment script discovery and execution
@@ -249,6 +271,8 @@ export interface PhaseModelConfig {
   // Memory tasks - for learning extraction and memory operations
   /** Model for extracting learnings from completed agent sessions */
   memoryExtractionModel: PhaseModelEntry;
+  /** Model for summarizing memory into tiered files (small/medium/high) */
+  memorySummarizationModel: PhaseModelEntry;
 
   // Quick tasks - commit messages
   /** Model for generating git commit messages from diffs */
@@ -494,12 +518,16 @@ export interface GlobalSettings {
   agentMultiplier?: number;
   /** Default: skip tests during feature generation */
   defaultSkipTests: boolean;
+  /** Default: require build verification for new features (default: false) */
+  defaultBuildRequired: boolean;
+  /** Maximum build retry attempts before moving to backlog (default: 10) */
+  maxBuildRetries: number;
+  /** Build commands to run during build verification */
+  buildCommands: BuildCommand[];
   /** Default: enable dependency blocking */
   enableDependencyBlocking: boolean;
   /** Skip verification requirement in auto-mode (treat 'completed' same as 'verified') */
   skipVerificationInAutoMode: boolean;
-  /** Default: use git worktrees for feature branches */
-  useWorktrees: boolean;
   /** Default model and thinking level for new feature cards */
   defaultFeatureModel: PhaseModelEntry;
 
@@ -580,8 +608,6 @@ export interface GlobalSettings {
   // Claude Agent SDK Settings
   /** Auto-load CLAUDE.md files using SDK's settingSources option */
   autoLoadClaudeMd?: boolean;
-  /** Skip the sandbox environment warning dialog on startup */
-  skipSandboxWarning?: boolean;
 
   // Codex CLI Settings
   /** Auto-load .codex/AGENTS.md instructions into Codex prompts */
@@ -647,6 +673,17 @@ export interface GlobalSettings {
    * Value: agent configuration
    */
   customSubagents?: Record<string, import('./provider.js').AgentDefinition>;
+
+  // Planning Strategy
+  /**
+   * How feature planning depth is determined.
+   * - 'auto': Agent starts with lite planning and escalates if needed (adaptive)
+   * - 'always-lite': Always use lite planning (no approval)
+   * - 'always-spec': Always use spec planning (with approval)
+   * - 'always-full': Always use full SDD planning (with approval)
+   * @default 'auto'
+   */
+  planningStrategy?: 'auto' | 'always-lite' | 'always-spec' | 'always-full';
 
   // Claude Account Management
   /**
@@ -765,8 +802,6 @@ export interface ProjectSettings {
   githubRepo?: string;
 
   // Worktree Management
-  /** Project-specific worktree preference override */
-  useWorktrees?: boolean;
   /** Current worktree being used in this project */
   currentWorktree?: { path: string | null; branch: string };
   /** List of worktrees available in this project */
@@ -791,6 +826,14 @@ export interface ProjectSettings {
   defaultDeleteBranchWithWorktree?: boolean;
   /** Auto-dismiss init script indicator after completion (default: true) */
   autoDismissInitScriptIndicator?: boolean;
+
+  // Build Verification (project overrides)
+  /** Project override: default build required for new features */
+  defaultBuildRequired?: boolean;
+  /** Project override: max build retries */
+  maxBuildRetries?: number;
+  /** Project override: build commands */
+  buildCommands?: BuildCommand[];
 
   // Session Tracking
   /** Last chat session selected in this project */
@@ -833,6 +876,7 @@ export const DEFAULT_PHASE_MODELS: PhaseModelConfig = {
 
   // Memory - use fast model for learning extraction (cost-effective)
   memoryExtractionModel: { model: 'haiku' },
+  memorySummarizationModel: { model: 'haiku' },
 
   // Commit messages - use fast model for speed
   commitMessageModel: { model: 'haiku' },
@@ -885,9 +929,11 @@ export const DEFAULT_GLOBAL_SETTINGS: GlobalSettings = {
   maxConcurrency: 5,
   agentMultiplier: 5,
   defaultSkipTests: true,
+  defaultBuildRequired: false,
+  maxBuildRetries: 10,
+  buildCommands: DEFAULT_BUILD_COMMANDS,
   enableDependencyBlocking: true,
   skipVerificationInAutoMode: false,
-  useWorktrees: true,
   defaultFeatureModel: { model: 'opus' },
   muteDoneSound: false,
   serverLogLevel: 'info',
@@ -913,7 +959,6 @@ export const DEFAULT_GLOBAL_SETTINGS: GlobalSettings = {
   worktreePanelCollapsed: false,
   lastSelectedSessionByProject: {},
   autoLoadClaudeMd: true,
-  skipSandboxWarning: false,
   codexAutoLoadAgents: DEFAULT_CODEX_AUTO_LOAD_AGENTS,
   codexSandboxMode: DEFAULT_CODEX_SANDBOX_MODE,
   codexApprovalPolicy: DEFAULT_CODEX_APPROVAL_POLICY,
@@ -927,6 +972,7 @@ export const DEFAULT_GLOBAL_SETTINGS: GlobalSettings = {
   skillsSources: ['user', 'project'],
   enableSubagents: true,
   subagentsSources: ['user', 'project'],
+  planningStrategy: 'auto',
   claudeAccounts: [],
 };
 

@@ -10,9 +10,9 @@
  */
 
 import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
-import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/forms';
+import { Switch } from '@/components/ui/forms';
+import { Checkbox } from '@/components/ui/forms';
 import { cn } from '@/lib/utils';
 import {
   Bot,

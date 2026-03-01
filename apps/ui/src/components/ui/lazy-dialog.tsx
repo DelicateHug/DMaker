@@ -1,6 +1,6 @@
 import { Component, ErrorInfo, ReactNode, Suspense, lazy, ComponentType } from 'react';
 import { Loader2, AlertCircle, RefreshCw } from 'lucide-react';
-import { Dialog, DialogContent } from './dialog';
+import { Dialog, DialogContent } from './overlays';
 import { Button } from './button';
 
 // ---------------------------------------------------------------------------

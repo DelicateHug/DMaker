@@ -15,12 +15,19 @@ import type { StatusTabId, StatusTab } from '../hooks/use-board-status-tabs';
 
 /** Base (non-deletable) status IDs */
 const BASE_STATUS_IDS = new Set<string>([
+  'local',
   'backlog',
+  'planning',
   'in_progress',
   'waiting_approval',
-  'completed',
   'all',
 ]);
+
+/** Strict order for default statuses in the dropdown */
+const DEFAULT_STATUS_ORDER = ['local', 'backlog', 'planning', 'in_progress', 'waiting_approval'];
+
+/** Special view tab IDs (shown at top of dropdown) */
+const SPECIAL_TAB_IDS = new Set<string>(['all']);
 
 /** Color options for new statuses */
 const STATUS_COLORS = [
@@ -177,6 +184,74 @@ function DiffBadge({ diffState }: { diffState: DiffState }) {
 }
 
 /**
+ * Reusable dropdown item for a status tab with checkbox, color dot, label, count, and optional delete.
+ */
+function StatusDropdownItem({
+  tab,
+  isStaged,
+  diffState,
+  count,
+  isDeletable,
+  onToggle,
+  onDelete,
+}: {
+  tab: StatusTab;
+  isStaged: boolean;
+  diffState: DiffState;
+  count?: number;
+  isDeletable: boolean;
+  onToggle: (tabId: StatusTabId) => void;
+  onDelete?: (e: React.MouseEvent, tabId: StatusTabId) => void;
+}) {
+  return (
+    <DropdownMenuItem
+      onClick={(e) => {
+        e.preventDefault();
+        onToggle(tab.id);
+      }}
+      className={cn(
+        'flex items-center gap-2 cursor-pointer min-h-[2.25rem]',
+        isStaged && 'bg-accent',
+        diffState === 'added' && 'bg-emerald-500/5',
+        diffState === 'removed' && 'bg-red-500/5'
+      )}
+      data-testid={`board-status-dropdown-option-${tab.id}`}
+      role="option"
+      aria-selected={isStaged}
+    >
+      <CheckboxIndicator checked={isStaged} diffState={diffState} />
+      <StatusColorDot colorClass={tab.colorClass} size="md" />
+      <span
+        className={cn(
+          'flex-1 text-sm truncate',
+          diffState === 'removed' && 'text-muted-foreground line-through'
+        )}
+      >
+        {tab.label}
+      </span>
+      {count !== undefined && <InlineCountBadge count={count} />}
+      <DiffBadge diffState={diffState} />
+      {isDeletable && onDelete && (
+        <button
+          type="button"
+          className={cn(
+            'flex items-center justify-center shrink-0',
+            'w-5 h-5 rounded-sm',
+            'text-muted-foreground/50 hover:text-destructive hover:bg-destructive/10',
+            'transition-colors duration-150'
+          )}
+          onClick={(e) => onDelete(e, tab.id)}
+          title={`Delete "${tab.label}" status`}
+          aria-label={`Delete ${tab.label} status`}
+        >
+          <Trash2 className="w-3 h-3" />
+        </button>
+      )}
+    </DropdownMenuItem>
+  );
+}
+
+/**
  * BoardStatusDropdown – a dropdown-menu variant for switching between board status columns.
  *
  * Maintains internal staged selection state so multiple toggles can be made before
@@ -250,6 +325,33 @@ export const BoardStatusDropdown = memo(function BoardStatusDropdown({
     () => tabs.filter((t) => !BASE_STATUS_IDS.has(t.id)).length,
     [tabs]
   );
+
+  // Split tabs into sections: special (All/Agents), default (strict order), custom (pipeline)
+  const { specialTabs, defaultTabs, customTabs } = useMemo(() => {
+    const defaultOrderMap = new Map(DEFAULT_STATUS_ORDER.map((id, i) => [id, i]));
+
+    const specials: StatusTab[] = [];
+    const defaults: StatusTab[] = [];
+    const customs: StatusTab[] = [];
+
+    for (const tab of tabs) {
+      // Filter out 'completed' entirely
+      if (tab.id === 'completed') continue;
+
+      if (SPECIAL_TAB_IDS.has(tab.id)) {
+        specials.push(tab);
+      } else if (defaultOrderMap.has(tab.id)) {
+        defaults.push(tab);
+      } else {
+        customs.push(tab);
+      }
+    }
+
+    // Sort defaults by their canonical order
+    defaults.sort((a, b) => (defaultOrderMap.get(a.id) ?? 99) - (defaultOrderMap.get(b.id) ?? 99));
+
+    return { specialTabs: specials, defaultTabs: defaults, customTabs: customs };
+  }, [tabs]);
 
   /**
    * Handle open/close state changes.
@@ -389,76 +491,73 @@ export const BoardStatusDropdown = memo(function BoardStatusDropdown({
 
         <DropdownMenuSeparator />
 
-        {tabs.map((tab) => {
+        {/* Special tabs (All Statuses, Agents) */}
+        {specialTabs.map((tab) => {
           const isStaged = stagedTabs.includes(tab.id);
           const diffState = getTabDiffState(tab.id, activeTabs, stagedTabs);
           const count = tabCounts?.[tab.id];
-          const isDeletable = onDeleteStatus && !BASE_STATUS_IDS.has(tab.id);
-
           return (
-            <DropdownMenuItem
+            <StatusDropdownItem
               key={tab.id}
-              onClick={(e) => {
-                // Prevent the dropdown from closing on item click —
-                // multi-select: allow toggling multiple items before committing on close
-                e.preventDefault();
-                handleToggle(tab.id);
-              }}
-              className={cn(
-                'flex items-center gap-2 cursor-pointer min-h-[2.25rem]',
-                // Background highlight for staged (checked) items
-                isStaged && 'bg-accent',
-                // Subtle visual diff backgrounds for pending changes
-                diffState === 'added' && 'bg-emerald-500/5',
-                diffState === 'removed' && 'bg-red-500/5'
-              )}
-              data-testid={`board-status-dropdown-option-${tab.id}`}
-              role="option"
-              aria-selected={isStaged}
-            >
-              {/* Checkbox indicator for multi-select */}
-              <CheckboxIndicator checked={isStaged} diffState={diffState} />
-
-              {/* Status color indicator */}
-              <StatusColorDot colorClass={tab.colorClass} size="md" />
-
-              {/* Status label */}
-              <span
-                className={cn(
-                  'flex-1 text-sm truncate',
-                  // Dim labels for items being removed
-                  diffState === 'removed' && 'text-muted-foreground line-through'
-                )}
-              >
-                {tab.label}
-              </span>
-
-              {/* Count badge */}
-              {count !== undefined && <InlineCountBadge count={count} />}
-
-              {/* Diff badge for pending changes */}
-              <DiffBadge diffState={diffState} />
-
-              {/* Delete button for custom (pipeline) statuses */}
-              {isDeletable && (
-                <button
-                  type="button"
-                  className={cn(
-                    'flex items-center justify-center shrink-0',
-                    'w-5 h-5 rounded-sm',
-                    'text-muted-foreground/50 hover:text-destructive hover:bg-destructive/10',
-                    'transition-colors duration-150'
-                  )}
-                  onClick={(e) => handleDeleteStatus(e, tab.id)}
-                  title={`Delete "${tab.label}" status`}
-                  aria-label={`Delete ${tab.label} status`}
-                >
-                  <Trash2 className="w-3 h-3" />
-                </button>
-              )}
-            </DropdownMenuItem>
+              tab={tab}
+              isStaged={isStaged}
+              diffState={diffState}
+              count={count}
+              isDeletable={false}
+              onToggle={handleToggle}
+            />
           );
         })}
+
+        {specialTabs.length > 0 && <DropdownMenuSeparator />}
+
+        {/* Default section */}
+        <DropdownMenuLabel className="text-[10px] font-medium text-muted-foreground/70 uppercase tracking-wider px-2 py-1">
+          Default
+        </DropdownMenuLabel>
+        {defaultTabs.map((tab) => {
+          const isStaged = stagedTabs.includes(tab.id);
+          const diffState = getTabDiffState(tab.id, activeTabs, stagedTabs);
+          const count = tabCounts?.[tab.id];
+          return (
+            <StatusDropdownItem
+              key={tab.id}
+              tab={tab}
+              isStaged={isStaged}
+              diffState={diffState}
+              count={count}
+              isDeletable={false}
+              onToggle={handleToggle}
+            />
+          );
+        })}
+
+        {/* Custom section (pipeline steps) */}
+        {customTabs.length > 0 && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel className="text-[10px] font-medium text-muted-foreground/70 uppercase tracking-wider px-2 py-1">
+              Custom
+            </DropdownMenuLabel>
+            {customTabs.map((tab) => {
+              const isStaged = stagedTabs.includes(tab.id);
+              const diffState = getTabDiffState(tab.id, activeTabs, stagedTabs);
+              const count = tabCounts?.[tab.id];
+              return (
+                <StatusDropdownItem
+                  key={tab.id}
+                  tab={tab}
+                  isStaged={isStaged}
+                  diffState={diffState}
+                  count={count}
+                  isDeletable={!!onDeleteStatus}
+                  onToggle={handleToggle}
+                  onDelete={handleDeleteStatus}
+                />
+              );
+            })}
+          </>
+        )}
 
         {/* Pending changes hint */}
         {hasPendingChanges && (

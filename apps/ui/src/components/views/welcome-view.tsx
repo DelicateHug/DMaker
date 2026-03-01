@@ -8,7 +8,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
+} from '@/components/ui/overlays';
 import { useAppStore, type ThemeMode } from '@/store/app-store';
 import { getElectronAPI } from '@/lib/electron';
 import { initializeProject } from '@/lib/project-init';
@@ -34,6 +34,7 @@ import { NewProjectModal } from '@/components/dialogs/new-project-modal';
 import { getHttpApiClient } from '@/lib/http-api-client';
 import type { StarterTemplate } from '@/lib/templates';
 import { useNavigate } from '@tanstack/react-router';
+import { useLayerStore } from '@/store/layer-store';
 
 const logger = createLogger('WelcomeView');
 
@@ -221,7 +222,7 @@ export function WelcomeView() {
   };
 
   const handleInteractiveMode = () => {
-    navigate({ to: '/interview' });
+    useLayerStore.getState().openLayer('interview');
   };
 
   /**

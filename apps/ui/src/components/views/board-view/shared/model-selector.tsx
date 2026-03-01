@@ -1,6 +1,6 @@
 // @ts-nocheck
-import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
+import { Label } from '@/components/ui/forms';
+import { Badge } from '@/components/ui/layout';
 import { Brain, AlertTriangle } from 'lucide-react';
 import { AnthropicIcon, CursorIcon, OpenAIIcon, GcpIcon } from '@/components/ui/provider-icon';
 import { cn } from '@/lib/utils';

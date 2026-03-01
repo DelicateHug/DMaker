@@ -33,7 +33,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/overlays';
 import { getAuthenticatedImageUrl } from '@/lib/api-fetch';
 import { LazyImage } from '@/components/ui/lazy-image';
 import type { Project } from '@/lib/electron';
@@ -42,8 +42,7 @@ import { initializeProject, hasDMakerDir, hasAppSpec } from '@/lib/project-init'
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import { useAutoMode } from '@/hooks/use-auto-mode';
 import { useKeyboardShortcutsConfig } from '@/hooks/use-keyboard-shortcuts';
-import { useWindowState } from '@/hooks/use-window-state';
-import { useIsTablet } from '@/hooks/use-media-query';
+import { useWindowState, useIsTablet } from '@/hooks/utilities';
 // Board-view specific imports
 // BoardHeader is now integrated into top-nav-bar
 // import { BoardHeader } from './board-view/board-header';
@@ -93,6 +92,7 @@ import {
   BoardSkeleton,
   RunningAgentsPanel,
 } from './board-view/components';
+import { AgentsSkillsSection } from '@/components/views/settings-view/agents-skills/agents-skills-section';
 import { InitScriptIndicator } from './board-view/init-script-indicator';
 import { useInitScriptEvents } from '@/hooks/use-init-script-events';
 import { useBoardControlsStore } from '@/store/board-controls-store';
@@ -118,7 +118,6 @@ export function BoardView() {
     setCurrentWorktree,
     getWorktrees,
     setWorktrees,
-    useWorktrees,
     enableDependencyBlocking,
     skipVerificationInAutoMode,
     setSkipVerificationInAutoMode,
@@ -139,6 +138,10 @@ export function BoardView() {
     setAgentChatPanelSize,
     setKanbanPanelCollapsed,
     setAgentChatPanelCollapsed,
+    agentsPanelSize,
+    isAgentsPanelCollapsed,
+    setAgentsPanelSize,
+    setAgentsPanelCollapsed,
     deployPanelSize,
     setDeployPanelSize,
     setDeployPanelCollapsed,
@@ -163,7 +166,6 @@ export function BoardView() {
       setCurrentWorktree: state.setCurrentWorktree,
       getWorktrees: state.getWorktrees,
       setWorktrees: state.setWorktrees,
-      useWorktrees: state.useWorktrees,
       enableDependencyBlocking: state.enableDependencyBlocking,
       skipVerificationInAutoMode: state.skipVerificationInAutoMode,
       setSkipVerificationInAutoMode: state.setSkipVerificationInAutoMode,
@@ -184,6 +186,10 @@ export function BoardView() {
       setAgentChatPanelSize: state.setAgentChatPanelSize,
       setKanbanPanelCollapsed: state.setKanbanPanelCollapsed,
       setAgentChatPanelCollapsed: state.setAgentChatPanelCollapsed,
+      agentsPanelSize: state.agentsPanelSize,
+      isAgentsPanelCollapsed: state.isAgentsPanelCollapsed,
+      setAgentsPanelSize: state.setAgentsPanelSize,
+      setAgentsPanelCollapsed: state.setAgentsPanelCollapsed,
       deployPanelSize: state.deployPanelSize,
       setDeployPanelSize: state.setDeployPanelSize,
       setDeployPanelCollapsed: state.setDeployPanelCollapsed,
@@ -380,6 +386,14 @@ export function BoardView() {
       setAgentChatPanelCollapsed(collapsed);
     },
     [setAgentChatPanelCollapsed]
+  );
+
+  // Memoized callback for agents panel collapse changes
+  const handleAgentsPanelCollapseChange = useCallback(
+    (collapsed: boolean) => {
+      setAgentsPanelCollapsed(collapsed);
+    },
+    [setAgentsPanelCollapsed]
   );
 
   // Memoized callback for deploy panel collapse changes
@@ -646,9 +660,12 @@ export function BoardView() {
   const isTabletOrSmaller = useIsTablet();
   // Ref to track panel sizes during drag - only commit to Zustand when drag ends
   // This prevents excessive state updates/re-renders during resize
-  const pendingPanelSizesRef = useRef<{ kanban: number; agentChat: number; deploy: number } | null>(
-    null
-  );
+  const pendingPanelSizesRef = useRef<{
+    kanban: number;
+    agentChat: number;
+    agents: number;
+    deploy: number;
+  } | null>(null);
   // Derive spec creation state from store - check if current project is the one being created
   const isCreatingSpec = specCreatingForProject === currentProject?.path;
   const creatingSpecProjectPath = specCreatingForProject ?? undefined;
@@ -1000,88 +1017,22 @@ export function BoardView() {
 
   // Handler for bulk updating multiple features
   const handleBulkUpdate = useCallback(
-    async (updates: Partial<Feature>, workMode: 'current' | 'auto' | 'custom') => {
+    async (updates: Partial<Feature>) => {
       if (!boardSelectedProject || selectedFeatureIds.size === 0) return;
 
       try {
-        // Determine final branch name based on work mode:
-        // - 'current': Empty string to clear branch assignment (work on main/current branch)
-        // - 'auto': Auto-generate branch name based on current branch
-        // - 'custom': Use the provided branch name
-        let finalBranchName: string | undefined;
-
-        if (workMode === 'current') {
-          // Empty string clears the branch assignment, moving features to main/current branch
-          finalBranchName = '';
-        } else if (workMode === 'auto') {
-          // Auto-generate a branch name based on primary branch (main/master) and timestamp
-          // Always use primary branch to avoid nested feature/feature/... paths
-          const baseBranch = getPrimaryWorktreeBranch(boardSelectedProject.path) || 'main';
-          const timestamp = Date.now();
-          const randomSuffix = Math.random().toString(36).substring(2, 6);
-          finalBranchName = `feature/${baseBranch}-${timestamp}-${randomSuffix}`;
-        } else {
-          // Custom mode - use provided branch name
-          finalBranchName = updates.branchName || undefined;
-        }
-
-        // Create worktree for 'auto' or 'custom' modes when we have a branch name
-        if ((workMode === 'auto' || workMode === 'custom') && finalBranchName) {
-          try {
-            const electronApi = getElectronAPI();
-            if (electronApi?.worktree?.create) {
-              const result = await electronApi.worktree.create(
-                boardSelectedProject.path,
-                finalBranchName
-              );
-              if (result.success && result.worktree) {
-                logger.info(
-                  `Worktree for branch "${finalBranchName}" ${
-                    result.worktree?.isNew ? 'created' : 'already exists'
-                  }`
-                );
-                // Auto-select the worktree when creating/using it for bulk update
-                addAndSelectWorktree(result.worktree);
-                // Refresh worktree list in UI
-                setWorktreeRefreshKey((k) => k + 1);
-              } else if (!result.success) {
-                logger.error(
-                  `Failed to create worktree for branch "${finalBranchName}":`,
-                  result.error
-                );
-                toast.error('Failed to create worktree', {
-                  description: result.error || 'An error occurred',
-                });
-                return; // Don't proceed with update if worktree creation failed
-              }
-            }
-          } catch (error) {
-            logger.error('Error creating worktree:', error);
-            toast.error('Failed to create worktree', {
-              description: error instanceof Error ? error.message : 'An error occurred',
-            });
-            return; // Don't proceed with update if worktree creation failed
-          }
-        }
-
-        // Use the final branch name in updates
-        const finalUpdates = {
-          ...updates,
-          branchName: finalBranchName,
-        };
-
         const api = getHttpApiClient();
         const featureIds = Array.from(selectedFeatureIds);
         const result = await api.features.bulkUpdate(
           boardSelectedProject.path,
           featureIds,
-          finalUpdates
+          updates
         );
 
         if (result.success) {
           // Update local state
           featureIds.forEach((featureId) => {
-            updateFeature(featureId, finalUpdates);
+            updateFeature(featureId, updates);
           });
           toast.success(`Updated ${result.updatedCount} features`);
           exitSelectionMode();
@@ -1095,15 +1046,7 @@ export function BoardView() {
         toast.error('Failed to update features');
       }
     },
-    [
-      boardSelectedProject,
-      selectedFeatureIds,
-      updateFeature,
-      exitSelectionMode,
-      getPrimaryWorktreeBranch,
-      addAndSelectWorktree,
-      setWorktreeRefreshKey,
-    ]
+    [boardSelectedProject, selectedFeatureIds, updateFeature, exitSelectionMode]
   );
 
   // Handler for bulk deleting multiple features
@@ -1269,7 +1212,6 @@ export function BoardView() {
         model: 'opus' as const,
         thinkingLevel: 'none' as const,
         branchName: worktree.branch,
-        workMode: 'custom' as const, // Use the worktree's branch
         priority: 1, // High priority for PR feedback
       };
 
@@ -1310,7 +1252,6 @@ export function BoardView() {
         model: 'opus' as const,
         thinkingLevel: 'none' as const,
         branchName: worktree.branch,
-        workMode: 'custom' as const, // Use the worktree's branch
         priority: 1, // High priority for conflict resolution
       };
 
@@ -1434,6 +1375,70 @@ export function BoardView() {
       }
     },
     [boardSelectedProject, currentProject, updateFeature, persistFeatureUpdate]
+  );
+
+  // Handler for opening an agent chat session pre-loaded with feature context
+  const handleChatWithFeature = useCallback(
+    async (feature: Feature) => {
+      const projectPath =
+        (feature as any).projectPath || boardSelectedProject?.path || currentProject?.path;
+      if (!projectPath) {
+        toast.error('No project path available');
+        return;
+      }
+
+      try {
+        const api = getElectronAPI();
+        if (!api?.sessions) {
+          toast.error('Sessions API not available');
+          return;
+        }
+
+        const sessionName = `Chat: ${(feature.title || feature.description || 'Feature').slice(0, 50)}`;
+        const result = await api.sessions.create(sessionName, projectPath, projectPath);
+
+        if (result.success && result.session?.id) {
+          useAppStore.getState().bumpSessionListVersion();
+          useAppStore.getState().setLastSelectedSession(projectPath, result.session.id);
+
+          // Build context message with feature file path and details
+          const featurePath = `.dmaker/features/${feature.id}/feature.json`;
+          const lines = [
+            `I want to discuss the following feature:`,
+            ``,
+            `**${feature.title || 'Untitled'}**`,
+            feature.description ? `\n${feature.description}` : '',
+            ``,
+            `Feature file: \`${featurePath}\``,
+            `Feature ID: ${feature.id}`,
+            feature.status ? `Status: ${feature.status}` : '',
+          ].filter(Boolean);
+
+          useAppStore.getState().setPendingChat(result.session.id, lines.join('\n') + '\n\n\n');
+
+          // Switch agent panel to this project if needed
+          const matchingProject = projects.find((p) => p.path === projectPath);
+          if (matchingProject) {
+            setAgentPanelProject(matchingProject);
+          }
+
+          // Expand agent chat panel
+          if (isAgentChatPanelCollapsed) {
+            setAgentChatPanelCollapsed(false);
+          }
+        }
+      } catch (error) {
+        logger.error('Error creating chat session for feature:', error);
+        toast.error('Failed to open chat for feature');
+      }
+    },
+    [
+      boardSelectedProject,
+      currentProject,
+      projects,
+      isAgentChatPanelCollapsed,
+      setAgentChatPanelCollapsed,
+    ]
   );
 
   // Client-side auto mode: periodically check for backlog items and move them to in-progress
@@ -1862,9 +1867,20 @@ export function BoardView() {
     return [...localGithubFeatures, ...uniqueGithubFeatures];
   }, [projectFilteredFeatures, githubFeatures, isLocalModeActive, isGithubModeActive]);
 
+  // View-layer "never go blank" guard: cache the last non-empty features list.
+  // If the data layer momentarily returns an empty array (race conditions during
+  // status changes, server cache misses, etc.), the view keeps showing the last
+  // known good state instead of blanking the board.
+  const lastGoodFeaturesRef = useRef<Feature[]>(modeFilteredFeatures);
+  if (modeFilteredFeatures.length > 0) {
+    lastGoodFeaturesRef.current = modeFilteredFeatures;
+  }
+  const displayFeatures =
+    modeFilteredFeatures.length > 0 ? modeFilteredFeatures : lastGoodFeaturesRef.current;
+
   // Use column features hook with single-column mode support
   const { getColumnFeatures, columnFeaturesMap, columnCounts } = useBoardColumnFeatures({
-    features: modeFilteredFeatures,
+    features: displayFeatures,
     runningAutoTasks,
     searchQuery,
     showFavoritesOnly,
@@ -1875,6 +1891,7 @@ export function BoardView() {
     activeStatusTabs,
     singleColumnMode: !isAllStatusMode,
     showAllProjects: showAllProjectsInBoard,
+    isGithubMode: isGithubModeActive,
   });
 
   // Use background hook
@@ -2251,7 +2268,7 @@ export function BoardView() {
                   ) : (
                     <ListView
                       columnFeaturesMap={columnFeaturesMap}
-                      allFeatures={hookFeatures}
+                      allFeatures={displayFeatures}
                       sortConfig={sortConfig}
                       onSortChange={setSortColumn}
                       actionHandlers={{
@@ -2286,6 +2303,7 @@ export function BoardView() {
                           }
                         },
                         onConvertToIssue: handleConvertToIssue,
+                        onChat: handleChatWithFeature,
                       }}
                       runningAutoTasks={runningAutoTasks}
                       pipelineConfig={pipelineConfig}
@@ -2311,15 +2329,10 @@ export function BoardView() {
                 </div>
               )}
 
-              {/* Running Agents Panel */}
+              {/* Agents Panel */}
               {activeMobilePanel === 'agents' && (
-                <div className="h-full overflow-hidden p-2">
-                  <RunningAgentsPanel
-                    compact
-                    maxHeight="calc(100vh - 200px)"
-                    defaultCollapsed={false}
-                    className="h-full"
-                  />
+                <div className="h-full overflow-auto p-3">
+                  <AgentsSkillsSection />
                 </div>
               )}
 
@@ -2426,6 +2439,7 @@ export function BoardView() {
 
             {/* Main Panel Group - only render visible panels */}
             <PanelGroup
+              id="board-panels"
               direction="horizontal"
               className="flex-1"
               onLayout={(sizes) => {
@@ -2439,17 +2453,27 @@ export function BoardView() {
                 const newAgentChatSize = !isAgentChatPanelCollapsed
                   ? sizes[sizeIndex++]
                   : agentChatPanelSize;
+                const newAgentsSize = !isAgentsPanelCollapsed
+                  ? sizes[sizeIndex++]
+                  : agentsPanelSize;
                 const newDeploySize = !isDeployPanelCollapsed ? sizes[sizeIndex] : deployPanelSize;
                 pendingPanelSizesRef.current = {
                   kanban: newKanbanSize,
                   agentChat: newAgentChatSize,
+                  agents: newAgentsSize,
                   deploy: newDeploySize,
                 };
               }}
             >
               {/* Kanban/List Panel */}
               {!isKanbanPanelCollapsed && (
-                <Panel defaultSize={kanbanPanelSize} minSize={25} className="overflow-hidden">
+                <Panel
+                  id="kanban"
+                  order={1}
+                  defaultSize={kanbanPanelSize}
+                  minSize={25}
+                  className="overflow-hidden"
+                >
                   <div className="h-full flex flex-col min-h-0">
                     {/* Kanban/List content - full-bleed container filling available space */}
                     <div className="flex-1 min-h-0 relative">
@@ -2466,7 +2490,7 @@ export function BoardView() {
                       ) : (
                         <ListView
                           columnFeaturesMap={columnFeaturesMap}
-                          allFeatures={hookFeatures}
+                          allFeatures={displayFeatures}
                           sortConfig={sortConfig}
                           onSortChange={setSortColumn}
                           actionHandlers={{
@@ -2500,6 +2524,7 @@ export function BoardView() {
                               }
                             },
                             onConvertToIssue: handleConvertToIssue,
+                            onChat: handleChatWithFeature,
                           }}
                           runningAutoTasks={runningAutoTasks}
                           pipelineConfig={pipelineConfig}
@@ -2537,6 +2562,7 @@ export function BoardView() {
                     if (!isDragging && pendingPanelSizesRef.current) {
                       setKanbanPanelSize(pendingPanelSizesRef.current.kanban);
                       setAgentChatPanelSize(pendingPanelSizesRef.current.agentChat);
+                      setAgentsPanelSize(pendingPanelSizesRef.current.agents);
                       setDeployPanelSize(pendingPanelSizesRef.current.deploy);
                       pendingPanelSizesRef.current = null;
                     }
@@ -2557,9 +2583,56 @@ export function BoardView() {
                 </PanelResizeHandle>
               )}
 
+              {/* Resize Handle between Kanban and Agents (when Chat is collapsed) */}
+              {!isKanbanPanelCollapsed && isAgentChatPanelCollapsed && !isAgentsPanelCollapsed && (
+                <PanelResizeHandle
+                  className="w-2 group relative flex items-center justify-center hover:bg-brand-500/10 transition-colors data-[resize-handle-active]:bg-brand-500/20"
+                  title="Drag to resize"
+                  onDragging={(isDragging) => {
+                    if (!isDragging && pendingPanelSizesRef.current) {
+                      setKanbanPanelSize(pendingPanelSizesRef.current.kanban);
+                      setAgentChatPanelSize(pendingPanelSizesRef.current.agentChat);
+                      setAgentsPanelSize(pendingPanelSizesRef.current.agents);
+                      setDeployPanelSize(pendingPanelSizesRef.current.deploy);
+                      pendingPanelSizesRef.current = null;
+                    }
+                  }}
+                >
+                  <div className="absolute inset-y-0 flex items-center">
+                    <div className="h-8 w-1 rounded-full bg-border group-hover:bg-brand-500/50 group-data-[resize-handle-active]:bg-brand-500 transition-colors" />
+                  </div>
+                </PanelResizeHandle>
+              )}
+
+              {/* Resize Handle between Kanban and Deploy (when Chat and Agents are collapsed) */}
+              {!isKanbanPanelCollapsed &&
+                isAgentChatPanelCollapsed &&
+                isAgentsPanelCollapsed &&
+                !isDeployPanelCollapsed && (
+                  <PanelResizeHandle
+                    className="w-2 group relative flex items-center justify-center hover:bg-brand-500/10 transition-colors data-[resize-handle-active]:bg-brand-500/20"
+                    title="Drag to resize"
+                    onDragging={(isDragging) => {
+                      if (!isDragging && pendingPanelSizesRef.current) {
+                        setKanbanPanelSize(pendingPanelSizesRef.current.kanban);
+                        setAgentChatPanelSize(pendingPanelSizesRef.current.agentChat);
+                        setAgentsPanelSize(pendingPanelSizesRef.current.agents);
+                        setDeployPanelSize(pendingPanelSizesRef.current.deploy);
+                        pendingPanelSizesRef.current = null;
+                      }
+                    }}
+                  >
+                    <div className="absolute inset-y-0 flex items-center">
+                      <div className="h-8 w-1 rounded-full bg-border group-hover:bg-brand-500/50 group-data-[resize-handle-active]:bg-brand-500 transition-colors" />
+                    </div>
+                  </PanelResizeHandle>
+                )}
+
               {/* Agent Chat Panel */}
               {!isAgentChatPanelCollapsed && (
                 <Panel
+                  id="agent-chat"
+                  order={2}
                   defaultSize={agentChatPanelSize}
                   minSize={25}
                   maxSize={60}
@@ -2577,28 +2650,96 @@ export function BoardView() {
                 </Panel>
               )}
 
-              {/* Resize Handle between Agent Chat and Deploy - with VS Code-style double-click snapping */}
-              {!isAgentChatPanelCollapsed && !isDeployPanelCollapsed && (
+              {/* Resize Handle between Agent Chat and Agents */}
+              {!isAgentChatPanelCollapsed && !isAgentsPanelCollapsed && (
                 <PanelResizeHandle
                   className="w-2 group relative flex items-center justify-center hover:bg-brand-500/10 transition-colors data-[resize-handle-active]:bg-brand-500/20"
-                  title="Drag to resize • Double-click to snap (25%, 50%, 75%)"
+                  title="Drag to resize"
                   onDragging={(isDragging) => {
-                    // Commit panel sizes to Zustand only when dragging ends
                     if (!isDragging && pendingPanelSizesRef.current) {
                       setKanbanPanelSize(pendingPanelSizesRef.current.kanban);
                       setAgentChatPanelSize(pendingPanelSizesRef.current.agentChat);
+                      setAgentsPanelSize(pendingPanelSizesRef.current.agents);
                       setDeployPanelSize(pendingPanelSizesRef.current.deploy);
                       pendingPanelSizesRef.current = null;
                     }
                   }}
-                  onDoubleClick={() => {
-                    // VS Code-style snap: cycle between 25%, 50%, 75% for deploy panel
-                    const snapPoints = [25, 50, 75];
-                    const currentIndex = snapPoints.findIndex(
-                      (p) => Math.abs(deployPanelSize - p) < 10
-                    );
-                    const nextIndex = (currentIndex + 1) % snapPoints.length;
-                    setDeployPanelSize(snapPoints[nextIndex]);
+                >
+                  <div className="absolute inset-y-0 flex items-center">
+                    <div className="h-8 w-1 rounded-full bg-border group-hover:bg-brand-500/50 group-data-[resize-handle-active]:bg-brand-500 transition-colors" />
+                  </div>
+                </PanelResizeHandle>
+              )}
+
+              {/* Agents Panel */}
+              {!isAgentsPanelCollapsed && (
+                <Panel
+                  id="agents"
+                  order={3}
+                  defaultSize={agentsPanelSize}
+                  minSize={15}
+                  maxSize={50}
+                  className="overflow-hidden"
+                >
+                  <div className="h-full flex flex-col border-l border-border">
+                    <div className="flex items-center justify-between h-10 px-3 border-b border-border bg-muted/30 shrink-0">
+                      <div className="flex items-center gap-2">
+                        <div className="p-1 rounded bg-violet-500/10">
+                          <Bot className="h-3.5 w-3.5 text-violet-500" />
+                        </div>
+                        <span className="text-sm font-medium">Agents</span>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6"
+                        onClick={() => setAgentsPanelCollapsed(true)}
+                        title="Close Agents Panel"
+                      >
+                        <ChevronRight className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                    <div className="flex-1 overflow-auto p-3">
+                      <AgentsSkillsSection />
+                    </div>
+                  </div>
+                </Panel>
+              )}
+
+              {/* Resize Handle between Agents and Deploy */}
+              {!isAgentsPanelCollapsed && !isDeployPanelCollapsed && (
+                <PanelResizeHandle
+                  className="w-2 group relative flex items-center justify-center hover:bg-brand-500/10 transition-colors data-[resize-handle-active]:bg-brand-500/20"
+                  title="Drag to resize"
+                  onDragging={(isDragging) => {
+                    if (!isDragging && pendingPanelSizesRef.current) {
+                      setKanbanPanelSize(pendingPanelSizesRef.current.kanban);
+                      setAgentChatPanelSize(pendingPanelSizesRef.current.agentChat);
+                      setAgentsPanelSize(pendingPanelSizesRef.current.agents);
+                      setDeployPanelSize(pendingPanelSizesRef.current.deploy);
+                      pendingPanelSizesRef.current = null;
+                    }
+                  }}
+                >
+                  <div className="absolute inset-y-0 flex items-center">
+                    <div className="h-8 w-1 rounded-full bg-border group-hover:bg-brand-500/50 group-data-[resize-handle-active]:bg-brand-500 transition-colors" />
+                  </div>
+                </PanelResizeHandle>
+              )}
+
+              {/* Resize Handle between Agent Chat and Deploy (when Agents is collapsed) */}
+              {!isAgentChatPanelCollapsed && isAgentsPanelCollapsed && !isDeployPanelCollapsed && (
+                <PanelResizeHandle
+                  className="w-2 group relative flex items-center justify-center hover:bg-brand-500/10 transition-colors data-[resize-handle-active]:bg-brand-500/20"
+                  title="Drag to resize"
+                  onDragging={(isDragging) => {
+                    if (!isDragging && pendingPanelSizesRef.current) {
+                      setKanbanPanelSize(pendingPanelSizesRef.current.kanban);
+                      setAgentChatPanelSize(pendingPanelSizesRef.current.agentChat);
+                      setAgentsPanelSize(pendingPanelSizesRef.current.agents);
+                      setDeployPanelSize(pendingPanelSizesRef.current.deploy);
+                      pendingPanelSizesRef.current = null;
+                    }
                   }}
                 >
                   <div className="absolute inset-y-0 flex items-center">
@@ -2610,6 +2751,8 @@ export function BoardView() {
               {/* Deploy Panel */}
               {!isDeployPanelCollapsed && (
                 <Panel
+                  id="deploy"
+                  order={4}
                   defaultSize={deployPanelSize}
                   minSize={15}
                   maxSize={40}
@@ -2647,6 +2790,31 @@ export function BoardView() {
                       style={{ writingMode: 'vertical-rl', textOrientation: 'mixed' }}
                     >
                       Chat
+                    </span>
+                  </div>
+                </Button>
+              </div>
+            )}
+
+            {/* Collapsed agents panel - show expand button (outside PanelGroup) */}
+            {isAgentsPanelCollapsed && (
+              <div className="flex items-center justify-center w-10 border-l border-border bg-muted/30 shrink-0">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-full w-full rounded-none hover:bg-brand-500/10"
+                  onClick={() => setAgentsPanelCollapsed(false)}
+                  title="Expand Agents Panel"
+                >
+                  <div className="flex flex-col items-center gap-2">
+                    <div className="p-1 rounded bg-violet-500/10">
+                      <Bot className="h-3.5 w-3.5 text-violet-500" />
+                    </div>
+                    <span
+                      className="text-xs font-medium text-muted-foreground"
+                      style={{ writingMode: 'vertical-rl', textOrientation: 'mixed' }}
+                    >
+                      Agents
                     </span>
                   </div>
                 </Button>

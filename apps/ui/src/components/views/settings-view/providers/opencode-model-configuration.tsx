@@ -1,6 +1,6 @@
-import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
-import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/forms';
+import { Badge } from '@/components/ui/layout';
+import { Checkbox } from '@/components/ui/forms';
 import { Button } from '@/components/ui/button';
 import {
   Select,
@@ -8,10 +8,10 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
+} from '@/components/ui/forms';
 import { Terminal, Cloud, Cpu, Brain, Github, Loader2, KeyRound, ShieldCheck } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Input } from '@/components/ui/input';
+import { Input } from '@/components/ui/forms';
 import type {
   OpencodeModelId,
   OpencodeProvider,

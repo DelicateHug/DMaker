@@ -200,6 +200,7 @@ export type AutoModeEvent = AutoModeEventBase &
         projectPath?: string;
         passes: boolean;
         message: string;
+        metrics?: import('@dmaker/types').ExecutionMetrics;
       }
     | {
         type: 'pipeline_step_started';
@@ -318,6 +319,12 @@ export type AutoModeEvent = AutoModeEventBase &
           status?: string;
         }>;
       }
+    | {
+        type: 'auto_mode_metrics_update';
+        featureId: string;
+        projectPath?: string;
+        metrics: import('@dmaker/types').ExecutionMetrics;
+      }
   );
 
 export type SpecRegenerationEvent =
@@ -414,7 +421,6 @@ export interface AutoModeAPI {
   runFeature: (
     projectPath: string,
     featureId: string,
-    useWorktrees?: boolean,
     forceRun?: boolean,
     forceRunClaimed?: boolean
   ) => Promise<{
@@ -427,6 +433,8 @@ export interface AutoModeAPI {
     message?: string;
     /** GitHub username that claimed the feature (when warning is 'claimed_by_other') */
     claimedBy?: string;
+    /** Whether the feature is already running */
+    alreadyRunning?: boolean;
     /** Details of blocking dependencies when warning is 'unsatisfied_dependencies' */
     blockingDependencies?: Array<{
       id: string;
@@ -447,8 +455,7 @@ export interface AutoModeAPI {
 
   resumeFeature: (
     projectPath: string,
-    featureId: string,
-    useWorktrees?: boolean
+    featureId: string
   ) => Promise<{
     success: boolean;
     passes?: boolean;
@@ -474,8 +481,7 @@ export interface AutoModeAPI {
     projectPath: string,
     featureId: string,
     prompt: string,
-    imagePaths?: string[],
-    useWorktrees?: boolean
+    imagePaths?: string[]
   ) => Promise<{
     success: boolean;
     passes?: boolean;

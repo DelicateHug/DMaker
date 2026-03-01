@@ -41,6 +41,12 @@ const BASE_STATUS_DISPLAY: Record<string, StatusDisplay> = {
     bgClass: 'bg-[var(--status-in-progress)]/15',
     borderClass: 'border-[var(--status-in-progress)]/30',
   },
+  building: {
+    label: 'Building',
+    colorClass: 'text-[var(--status-building)]',
+    bgClass: 'bg-[var(--status-building)]/15',
+    borderClass: 'border-[var(--status-building)]/30',
+  },
   waiting_approval: {
     label: 'Waiting Approval',
     colorClass: 'text-[var(--status-waiting)]',
@@ -219,6 +225,7 @@ export function getStatusOrder(status: FeatureStatusWithPipeline): number {
     backlog: 0,
     planning: 0.5,
     in_progress: 1,
+    building: 1.5,
     waiting_approval: 2,
     completed: 3,
   };

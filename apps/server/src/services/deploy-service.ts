@@ -13,8 +13,7 @@
 
 import { spawn, type ChildProcess } from 'child_process';
 import path from 'path';
-import * as secureFs from '../lib/secure-fs.js';
-import { getDmakerDir } from '@dmaker/platform';
+import { getDmakerDir, secureFs } from '@dmaker/platform';
 import { createLogger } from '@dmaker/utils';
 
 const logger = createLogger('DeployScriptRunner');

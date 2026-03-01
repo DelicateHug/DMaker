@@ -8,7 +8,7 @@
  */
 
 import { spawn, execSync, type ChildProcess } from 'child_process';
-import * as secureFs from '../lib/secure-fs.js';
+import { secureFs } from '@dmaker/platform';
 import path from 'path';
 import net from 'net';
 import { createLogger } from '@dmaker/utils';

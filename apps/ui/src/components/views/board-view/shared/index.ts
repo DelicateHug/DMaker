@@ -8,5 +8,5 @@ export * from './priority-selector';
 export * from './priority-select';
 export * from './branch-selector';
 export * from './ancestor-context-section';
-export * from './work-mode-selector';
 export * from './enhancement';
+export * from './enhance-with-ai';

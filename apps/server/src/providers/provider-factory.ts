@@ -6,7 +6,7 @@
  */
 
 import { BaseProvider } from './base-provider.js';
-import type { InstallationStatus, ModelDefinition } from './types.js';
+import type { InstallationStatus, ModelDefinition } from '@dmaker/types';
 import {
   isCursorModel,
   isCodexModel,

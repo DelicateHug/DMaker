@@ -23,18 +23,18 @@ import {
 } from '@/store/app-store';
 import { useShallow } from 'zustand/react/shallow';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Slider } from '@/components/ui/slider';
-import { Switch } from '@/components/ui/switch';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Input } from '@/components/ui/forms';
+import { Label } from '@/components/ui/forms';
+import { Slider } from '@/components/ui/forms';
+import { Switch } from '@/components/ui/forms';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/overlays';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
+} from '@/components/ui/forms';
 import { TERMINAL_FONT_OPTIONS } from '@/config/terminal-themes';
 import { DEFAULT_FONT_VALUE } from '@/config/ui-font-options';
 import { toast } from 'sonner';
@@ -59,7 +59,6 @@ import {
 } from '@dnd-kit/core';
 import { cn } from '@/lib/utils';
 import { apiFetch, apiGet, apiPost, apiDeleteRaw, getAuthHeaders } from '@/lib/api-fetch';
-import { getApiKey } from '@/lib/http-api-client';
 
 const logger = createLogger('Terminal');
 
@@ -510,12 +509,7 @@ export function TerminalView() {
         try {
           const xhr = new XMLHttpRequest();
           xhr.open('DELETE', url, false); // synchronous
-          xhr.withCredentials = true; // Include cookies for session auth
-          // Add API auth header
-          const apiKey = getApiKey();
-          if (apiKey) {
-            xhr.setRequestHeader('X-API-Key', apiKey);
-          }
+          xhr.withCredentials = true;
           // Add terminal-specific auth
           if (terminalState.authToken) {
             xhr.setRequestHeader('X-Terminal-Token', terminalState.authToken);

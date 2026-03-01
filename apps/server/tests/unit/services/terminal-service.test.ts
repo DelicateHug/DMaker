@@ -4,7 +4,8 @@ import * as pty from 'node-pty';
 import * as os from 'os';
 import * as path from 'path';
 import * as platform from '@dmaker/platform';
-import * as secureFs from '@/lib/secure-fs.js';
+
+const secureFs = platform.secureFs;
 
 vi.mock('node-pty');
 vi.mock('os');
@@ -12,6 +13,9 @@ vi.mock('@dmaker/platform', async () => {
   const actual = await vi.importActual('@dmaker/platform');
   return {
     ...actual,
+    secureFs: {
+      stat: vi.fn(),
+    },
     systemPathExists: vi.fn(),
     systemPathReadFileSync: vi.fn(),
     getWslVersionPath: vi.fn(),
@@ -19,7 +23,6 @@ vi.mock('@dmaker/platform', async () => {
     isAllowedSystemPath: vi.fn(() => true), // Allow all paths in tests
   };
 });
-vi.mock('@/lib/secure-fs.js');
 
 describe('terminal-service.ts', () => {
   let service: TerminalService;

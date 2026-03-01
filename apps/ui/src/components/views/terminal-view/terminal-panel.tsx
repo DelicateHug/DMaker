@@ -25,18 +25,18 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Slider } from '@/components/ui/slider';
-import { Label } from '@/components/ui/label';
-import { Input } from '@/components/ui/input';
-import { Switch } from '@/components/ui/switch';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/overlays';
+import { Slider } from '@/components/ui/forms';
+import { Label } from '@/components/ui/forms';
+import { Input } from '@/components/ui/forms';
+import { Switch } from '@/components/ui/forms';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
+} from '@/components/ui/forms';
 import { useDraggable, useDroppable } from '@dnd-kit/core';
 import { useAppStore, DEFAULT_KEYBOARD_SHORTCUTS, type KeyboardShortcuts } from '@/store/app-store';
 import { useShallow } from 'zustand/react/shallow';
@@ -50,10 +50,9 @@ import {
 import { DEFAULT_FONT_VALUE } from '@/config/ui-font-options';
 import { toast } from 'sonner';
 import { getElectronAPI } from '@/lib/electron';
-import { getApiKey, getSessionToken, getServerUrlSync } from '@/lib/http-api-client';
+import { getServerUrlSync } from '@/lib/http-api-client';
 
 const logger = createLogger('Terminal');
-const NO_STORE_CACHE_MODE: RequestCache = 'no-store';
 
 // Font size constraints
 const MIN_FONT_SIZE = 8;
@@ -498,41 +497,6 @@ export function TerminalPanel({
 
   const serverUrl = import.meta.env.VITE_SERVER_URL || getServerUrlSync();
   const wsUrl = serverUrl.replace(/^http/, 'ws');
-
-  // Fetch a short-lived WebSocket token for secure authentication
-  const fetchWsToken = useCallback(async (): Promise<string | null> => {
-    try {
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-      };
-
-      const sessionToken = getSessionToken();
-      if (sessionToken) {
-        headers['X-Session-Token'] = sessionToken;
-      }
-
-      const response = await fetch(`${serverUrl}/api/auth/token`, {
-        headers,
-        credentials: 'include',
-        cache: NO_STORE_CACHE_MODE,
-      });
-
-      if (!response.ok) {
-        logger.warn('Failed to fetch wsToken:', response.status);
-        return null;
-      }
-
-      const data = await response.json();
-      if (data.success && data.token) {
-        return data.token;
-      }
-
-      return null;
-    } catch (error) {
-      logger.error('Error fetching wsToken:', error);
-      return null;
-    }
-  }, [serverUrl]);
 
   // Draggable - only the drag handle triggers drag
   const {
@@ -989,21 +953,8 @@ export function TerminalPanel({
     if (!terminal) return;
 
     const connect = async () => {
-      // Build WebSocket URL with auth params
+      // Build WebSocket URL
       let url = `${wsUrl}/api/terminal/ws?sessionId=${sessionId}`;
-
-      // Add API key for Electron mode auth
-      const apiKey = getApiKey();
-      if (apiKey) {
-        url += `&apiKey=${encodeURIComponent(apiKey)}`;
-      } else {
-        // In web mode, fetch a short-lived wsToken for secure authentication
-        const wsToken = await fetchWsToken();
-        if (wsToken) {
-          url += `&wsToken=${encodeURIComponent(wsToken)}`;
-        }
-        // Cookies are also sent automatically with same-origin WebSocket
-      }
 
       // Add terminal password token if required
       if (authToken) {
@@ -1214,7 +1165,7 @@ export function TerminalPanel({
         wsRef.current = null;
       }
     };
-  }, [sessionId, authToken, wsUrl, isTerminalReady, fetchWsToken]);
+  }, [sessionId, authToken, wsUrl, isTerminalReady]);
 
   // Handle resize with debouncing
   const handleResize = useCallback(() => {

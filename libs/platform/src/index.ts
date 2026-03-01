@@ -46,12 +46,24 @@ export {
   ensureIdeationDir,
 } from './paths.js';
 
-// Subprocess management
+// Subprocess management and WSL utilities (consolidated)
 export {
   spawnJSONLProcess,
   spawnProcess,
   type SubprocessOptions,
   type SubprocessResult,
+  // WSL (Windows Subsystem for Linux) utilities
+  isWslAvailable,
+  clearWslCache,
+  getDefaultWslDistribution,
+  getWslDistributions,
+  findCliInWsl,
+  execInWsl,
+  createWslCommand,
+  windowsToWslPath,
+  wslToWindowsPath,
+  type WslCliResult,
+  type WslOptions,
 } from './subprocess.js';
 
 // Security
@@ -76,21 +88,6 @@ export {
   type NodeFinderResult,
   type NodeFinderOptions,
 } from './node-finder.js';
-
-// WSL (Windows Subsystem for Linux) utilities
-export {
-  isWslAvailable,
-  clearWslCache,
-  getDefaultWslDistribution,
-  getWslDistributions,
-  findCliInWsl,
-  execInWsl,
-  createWslCommand,
-  windowsToWslPath,
-  wslToWindowsPath,
-  type WslCliResult,
-  type WslOptions,
-} from './wsl.js';
 
 // System paths for tool detection (GitHub CLI, Claude CLI, Node.js, etc.)
 export * as systemPaths from './system-paths.js';
@@ -166,8 +163,8 @@ export {
   electronAppReadFile,
 } from './system-paths.js';
 
-// Port configuration
-export { STATIC_PORT, SERVER_PORT, RESERVED_PORTS } from './config/ports.js';
+// Port configuration (re-exported from @dmaker/types)
+export { STATIC_PORT, SERVER_PORT, RESERVED_PORTS } from '@dmaker/types';
 
 // Editor detection and launching (cross-platform)
 export {

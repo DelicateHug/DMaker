@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { ArrowRight, ArrowLeft, Check, Moon, Sun } from 'lucide-react';
-import { darkThemes, lightThemes } from '@/config/theme-options';
+import { darkThemes, lightThemes } from '@/config';
 import { useAppStore } from '@/store/app-store';
 import { cn } from '@/lib/utils';
 import { preloadTheme } from '@/lib/theme-loader';

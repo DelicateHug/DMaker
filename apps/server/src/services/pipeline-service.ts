@@ -7,8 +7,7 @@
 
 import path from 'path';
 import { createLogger } from '@dmaker/utils';
-import * as secureFs from '../lib/secure-fs.js';
-import { ensureDmakerDir } from '@dmaker/platform';
+import { ensureDmakerDir, secureFs } from '@dmaker/platform';
 import type { PipelineConfig, PipelineStep, FeatureStatusWithPipeline } from '@dmaker/types';
 
 const logger = createLogger('PipelineService');

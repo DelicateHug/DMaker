@@ -15,6 +15,7 @@ import {
   Github,
   Upload,
   Star,
+  MessageCircle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -54,6 +55,7 @@ export interface RowActionHandlers {
   onSpawnTask?: () => void;
   onConvertToIssue?: () => void;
   onToggleFavorite?: () => void;
+  onChat?: () => void;
   isFavorite?: boolean;
 }
 
@@ -139,6 +141,16 @@ function getPrimaryAction(
     return null;
   }
 
+  // Planning or In Progress (not running) - stop is always primary
+  if ((feature.status === 'planning' || feature.status === 'in_progress') && handlers.onForceStop) {
+    return {
+      icon: StopCircle,
+      label: 'Stop',
+      onClick: handlers.onForceStop,
+      variant: 'destructive',
+    };
+  }
+
   // Backlog - implement is primary
   if (feature.status === 'backlog' && handlers.onImplement) {
     return {
@@ -146,30 +158,6 @@ function getPrimaryAction(
       label: 'Make',
       onClick: handlers.onImplement,
       variant: 'primary',
-    };
-  }
-
-  // In progress with plan approval pending
-  if (
-    feature.status === 'in_progress' &&
-    feature.planSpec?.status === 'generated' &&
-    handlers.onApprovePlan
-  ) {
-    return {
-      icon: FileText,
-      label: 'Approve',
-      onClick: handlers.onApprovePlan,
-      variant: 'warning',
-    };
-  }
-
-  // In progress - resume is primary (but not if recently started, agent is likely still running)
-  if (feature.status === 'in_progress' && handlers.onResume && !isRecentlyStarted(feature)) {
-    return {
-      icon: RotateCcw,
-      label: 'Resume',
-      onClick: handlers.onResume,
-      variant: 'success',
     };
   }
 
@@ -449,6 +437,9 @@ export const RowActions = memo(function RowActions({
                   onClick={withClose(handlers.onSpawnTask)}
                 />
               )}
+              {handlers.onChat && (
+                <MenuItem icon={MessageCircle} label="Chat" onClick={withClose(handlers.onChat)} />
+              )}
               {handlers.onForceStop && (
                 <>
                   <DropdownMenuSeparator />
@@ -482,6 +473,9 @@ export const RowActions = memo(function RowActions({
                   onClick={withClose(handlers.onSpawnTask)}
                 />
               )}
+              {handlers.onChat && (
+                <MenuItem icon={MessageCircle} label="Chat" onClick={withClose(handlers.onChat)} />
+              )}
               <DropdownMenuSeparator />
               <MenuItem
                 icon={Trash2}
@@ -513,6 +507,9 @@ export const RowActions = memo(function RowActions({
                   label="Spawn Sub-Task"
                   onClick={withClose(handlers.onSpawnTask)}
                 />
+              )}
+              {handlers.onChat && (
+                <MenuItem icon={MessageCircle} label="Chat" onClick={withClose(handlers.onChat)} />
               )}
               <DropdownMenuSeparator />
               <MenuItem
@@ -566,6 +563,67 @@ export const RowActions = memo(function RowActions({
                   onClick={withClose(handlers.onSpawnTask)}
                 />
               )}
+              {handlers.onChat && (
+                <MenuItem icon={MessageCircle} label="Chat" onClick={withClose(handlers.onChat)} />
+              )}
+              {handlers.onForceStop && (
+                <MenuItem
+                  icon={StopCircle}
+                  label="Force Stop"
+                  onClick={withClose(handlers.onForceStop)}
+                  variant="destructive"
+                />
+              )}
+              <MenuItem
+                icon={Trash2}
+                label="Delete"
+                onClick={withClose(handlers.onDelete)}
+                variant="destructive"
+              />
+            </>
+          )}
+
+          {/* Planning actions (not running) */}
+          {!isCurrentAutoTask && feature.status === 'planning' && (
+            <>
+              {handlers.onViewOutput && (
+                <MenuItem
+                  icon={FileText}
+                  label="View Logs"
+                  onClick={withClose(handlers.onViewOutput)}
+                />
+              )}
+              {feature.planSpec?.status === 'generated' && handlers.onApprovePlan && (
+                <MenuItem
+                  icon={FileText}
+                  label="Approve Plan"
+                  onClick={withClose(handlers.onApprovePlan)}
+                  variant="warning"
+                />
+              )}
+              <MenuItem icon={Edit} label="Edit" onClick={withClose(handlers.onEdit)} />
+              {handlers.onSpawnTask && (
+                <MenuItem
+                  icon={GitFork}
+                  label="Spawn Sub-Task"
+                  onClick={withClose(handlers.onSpawnTask)}
+                />
+              )}
+              {handlers.onChat && (
+                <MenuItem icon={MessageCircle} label="Chat" onClick={withClose(handlers.onChat)} />
+              )}
+              {handlers.onForceStop && (
+                <>
+                  <DropdownMenuSeparator />
+                  <MenuItem
+                    icon={StopCircle}
+                    label="Force Stop"
+                    onClick={withClose(handlers.onForceStop)}
+                    variant="destructive"
+                  />
+                </>
+              )}
+              <DropdownMenuSeparator />
               <MenuItem
                 icon={Trash2}
                 label="Delete"
@@ -612,6 +670,9 @@ export const RowActions = memo(function RowActions({
                   onClick={withClose(handlers.onSpawnTask)}
                 />
               )}
+              {handlers.onChat && (
+                <MenuItem icon={MessageCircle} label="Chat" onClick={withClose(handlers.onChat)} />
+              )}
               <MenuItem
                 icon={Trash2}
                 label="Delete"
@@ -638,6 +699,9 @@ export const RowActions = memo(function RowActions({
                   label="Spawn Sub-Task"
                   onClick={withClose(handlers.onSpawnTask)}
                 />
+              )}
+              {handlers.onChat && (
+                <MenuItem icon={MessageCircle} label="Chat" onClick={withClose(handlers.onChat)} />
               )}
               <DropdownMenuSeparator />
               <MenuItem
@@ -674,6 +738,7 @@ export function createRowActionHandlers(
     spawnTask?: (id: string) => void;
     convertToIssue?: (id: string) => void;
     toggleFavorite?: (id: string) => void;
+    chat?: (id: string) => void;
     isFavorite?: boolean;
   }
 ): RowActionHandlers {
@@ -692,6 +757,7 @@ export function createRowActionHandlers(
     onSpawnTask: actions.spawnTask ? () => actions.spawnTask!(featureId) : undefined,
     onConvertToIssue: actions.convertToIssue ? () => actions.convertToIssue!(featureId) : undefined,
     onToggleFavorite: actions.toggleFavorite ? () => actions.toggleFavorite!(featureId) : undefined,
+    onChat: actions.chat ? () => actions.chat!(featureId) : undefined,
     isFavorite: actions.isFavorite,
   };
 }

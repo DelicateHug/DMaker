@@ -7,7 +7,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
+} from '@/components/ui/overlays';
 import { Button } from '@/components/ui/button';
 import { AlertTriangle, Play, GitBranch } from 'lucide-react';
 import type { Feature } from '@/store/app-store';

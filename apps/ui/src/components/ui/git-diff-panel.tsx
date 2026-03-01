@@ -347,7 +347,7 @@ export function GitDiffPanel({
   featureId,
   className,
   compact = true,
-  useWorktrees = false,
+  useWorktrees = true,
 }: GitDiffPanelProps) {
   const [isExpanded, setIsExpanded] = useState(!compact);
   const [isLoading, setIsLoading] = useState(false);

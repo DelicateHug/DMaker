@@ -16,7 +16,7 @@ export type {
   ProviderMessage,
   InstallationStatus,
   ModelDefinition,
-} from './types.js';
+} from '@dmaker/types';
 
 // Claude provider
 export { ClaudeProvider } from './claude-provider.js';

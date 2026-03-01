@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { createCreateHandler } from '@/routes/worktree/routes/create.js';
-import { DMAKER_INITIAL_COMMIT_MESSAGE } from '@/routes/worktree/common.js';
+import { createCreateHandler, DMAKER_INITIAL_COMMIT_MESSAGE } from '@/routes/worktree.js';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import * as fs from 'fs/promises';

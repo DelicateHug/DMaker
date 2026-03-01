@@ -1,6 +1,6 @@
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/forms';
+import { Textarea } from '@/components/ui/forms';
+import { Switch } from '@/components/ui/forms';
 import { Info, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { PromptCustomization, CustomPrompt } from '@dmaker/types';

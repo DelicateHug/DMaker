@@ -7,13 +7,13 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
+} from '@/components/ui/overlays';
 import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
-import { Checkbox } from '@/components/ui/checkbox';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Slider } from '@/components/ui/slider';
+import { Label } from '@/components/ui/forms';
+import { Switch } from '@/components/ui/forms';
+import { Checkbox } from '@/components/ui/forms';
+import { ScrollArea } from '@/components/ui/layout';
+import { Slider } from '@/components/ui/forms';
 import {
   Bot,
   FastForward,

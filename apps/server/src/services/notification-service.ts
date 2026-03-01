@@ -10,8 +10,7 @@
  */
 
 import { createLogger } from '@dmaker/utils';
-import * as secureFs from '../lib/secure-fs.js';
-import { getNotificationsPath, ensureDmakerDir } from '@dmaker/platform';
+import { getNotificationsPath, ensureDmakerDir, secureFs } from '@dmaker/platform';
 import type { Notification, NotificationsFile, NotificationType } from '@dmaker/types';
 import { DEFAULT_NOTIFICATIONS_FILE } from '@dmaker/types';
 import type { EventEmitter } from '../lib/events.js';

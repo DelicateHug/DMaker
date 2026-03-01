@@ -126,6 +126,34 @@ export interface FeatureTextFilePath {
   [key: string]: unknown;
 }
 
+export interface ExecutionMetrics {
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadInputTokens: number;
+  cacheCreationInputTokens: number;
+  totalCostUSD: number;
+  numTurns: number;
+  durationMs: number;
+  durationApiMs: number;
+  modelUsage: Record<
+    string,
+    {
+      inputTokens: number;
+      outputTokens: number;
+      cacheReadInputTokens: number;
+      cacheCreationInputTokens: number;
+      costUSD: number;
+    }
+  >;
+  skillsUsed: string[];
+  subagentsSpawned: number;
+  skillsLoaded: string[];
+  agentsLoaded: string[];
+  updatedAt: string;
+  /** Whether the execution used an API key or CLI subscription login */
+  authMethod?: 'cli' | 'api_key' | 'unknown';
+}
+
 export interface Feature {
   id: string;
   title?: string;
@@ -144,8 +172,19 @@ export interface Feature {
   // Branch info - worktree path is derived at runtime from branchName
   branchName?: string; // Name of the feature branch (undefined = use current worktree)
   skipTests?: boolean;
+  // Build verification
+  buildRequired?: boolean; // When true, run build commands after agent finishes
+  buildRetryCount?: number; // Current build retry count
+  maxBuildRetries?: number; // Per-feature max retries override
+  buildError?: string; // Last build failure message
   thinkingLevel?: ThinkingLevel;
   reasoningEffort?: ReasoningEffort;
+  enableSubagents?: boolean;
+  selectedAgents?: string[]; // Specific agent names to load (when empty + enableSubagents, loads all)
+  selectedContextFiles?: string[]; // Specific context file names to load (when empty, loads all enabled)
+  enableSkills?: boolean;
+  requireApproval?: boolean; // If true, pause after planning and wait for user to approve the plan before implementation
+  executionMetrics?: ExecutionMetrics;
   planSpec?: {
     status: 'pending' | 'generating' | 'generated' | 'approved' | 'rejected';
     content?: string;
@@ -169,6 +208,7 @@ export interface Feature {
   summaryHistory?: SummaryHistoryEntry[]; // History of summaries with timestamps for dropdown display
   startedAt?: string;
   completedAt?: string; // ISO timestamp when the feature was completed/archived
+  updatedAt?: string; // ISO timestamp when the feature was last updated
   owner?: FeatureOwner; // Git user identity who started/owns this feature
   remoteModified?: boolean; // True if this feature was modified by another team member
   remoteModifiedBy?: FeatureOwner; // The team member who last modified this feature remotely
@@ -191,10 +231,19 @@ export interface Feature {
   claimedAt?: string; // ISO timestamp when the feature was claimed
   // Source tracking for board mode filtering
   source?: 'local' | 'github'; // Where this feature originated from
+  // Adaptive planning
+  complexity?: ComplexityLevel; // Assessed complexity level (auto-detected or manual override)
+  planningMode?: PlanningMode; // Which planning mode was used/is active (can escalate mid-execution)
   [key: string]: unknown; // Keep catch-all for extensibility
 }
 
 export type FeatureStatus = 'pending' | 'running' | 'completed' | 'failed';
+
+/** Feature complexity level — determines planning depth */
+export type ComplexityLevel = 'trivial' | 'simple' | 'moderate' | 'complex';
+
+/** Planning mode — which planning prompt depth is in use */
+export type PlanningMode = 'lite' | 'liteWithApproval' | 'spec' | 'full';
 
 // ── Feature List Summary Types ──────────────────────────────────────────────
 
@@ -214,8 +263,10 @@ export interface FeatureListSummary {
   model?: string;
   thinkingLevel?: ThinkingLevel;
   branchName?: string;
+  buildRequired?: boolean;
   error?: string;
   startedAt?: string;
+  updatedAt?: string;
   /** Number of images attached to the feature (count only, not full paths) */
   imagePathsCount: number;
   /** GitHub issue claim state for collaboration */

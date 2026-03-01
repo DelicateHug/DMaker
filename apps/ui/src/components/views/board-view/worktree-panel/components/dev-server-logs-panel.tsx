@@ -1,5 +1,5 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/overlays';
 import { Button } from '@/components/ui/button';
 import {
   Loader2,
@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { XtermLogViewer, type XtermLogViewerRef } from '@/components/ui/xterm-log-viewer';
-import { useDevServerLogs } from '../hooks/use-dev-server-logs';
+import { useDevServerLogs } from '../worktree-hooks';
 import type { WorktreeInfo } from '../types';
 
 interface DevServerLogsPanelProps {

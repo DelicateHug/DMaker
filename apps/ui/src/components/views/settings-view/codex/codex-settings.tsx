@@ -1,5 +1,5 @@
-import { Label } from '@/components/ui/label';
-import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/forms';
+import { Checkbox } from '@/components/ui/forms';
 import { FileCode, Globe, ImageIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { OpenAIIcon } from '@/components/ui/provider-icon';

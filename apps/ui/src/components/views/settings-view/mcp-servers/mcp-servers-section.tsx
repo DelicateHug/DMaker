@@ -1,15 +1,15 @@
 import { Plug } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useMCPServers } from './hooks';
-import { MCPServerHeader, MCPToolsWarning, MCPServerCard } from './components';
-import {
-  AddEditServerDialog,
-  DeleteServerDialog,
-  ImportJsonDialog,
-  JsonEditDialog,
-  GlobalJsonEditDialog,
-  SecurityWarningDialog,
-} from './dialogs';
+import { useMCPServers } from './hooks/use-mcp-servers';
+import { MCPServerHeader } from './components/mcp-server-header';
+import { MCPToolsWarning } from './components/mcp-tools-warning';
+import { MCPServerCard } from './components/mcp-server-card';
+import { AddEditServerDialog } from './dialogs/add-edit-server-dialog';
+import { DeleteServerDialog } from './dialogs/delete-server-dialog';
+import { ImportJsonDialog } from './dialogs/import-json-dialog';
+import { JsonEditDialog } from './dialogs/json-edit-dialog';
+import { GlobalJsonEditDialog } from './dialogs/global-json-edit-dialog';
+import { SecurityWarningDialog } from './dialogs/security-warning-dialog';
 
 export function MCPServersSection() {
   const {

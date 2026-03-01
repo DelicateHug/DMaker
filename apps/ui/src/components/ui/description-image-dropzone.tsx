@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils';
 
 const logger = createLogger('DescriptionImageDropZone');
 import { ImageIcon, X, Loader2, FileText } from 'lucide-react';
-import { Textarea } from '@/components/ui/textarea';
+import { Textarea } from '@/components/ui/forms';
 import { getElectronAPI } from '@/lib/electron';
 import { getAuthenticatedImageUrl } from '@/lib/api-fetch';
 import { LazyImage } from '@/components/ui/lazy-image';
@@ -50,6 +50,7 @@ interface DescriptionImageDropZoneProps {
   autoFocus?: boolean;
   error?: boolean; // Show error state with red border
   onAltEnter?: () => void; // Callback for Alt+Enter keyboard shortcut
+  hideHint?: boolean; // Hide the hint text below the textarea
 }
 
 export function DescriptionImageDropZone({
@@ -69,6 +70,7 @@ export function DescriptionImageDropZone({
   autoFocus = false,
   error = false,
   onAltEnter,
+  hideHint = false,
 }: DescriptionImageDropZoneProps) {
   const [isDragOver, setIsDragOver] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -455,31 +457,33 @@ export function DescriptionImageDropZone({
       </div>
 
       {/* Hint text */}
-      <div className="flex items-center justify-between mt-1">
-        <p className="text-xs text-muted-foreground">
-          Paste, drag and drop files, or{' '}
-          <button
-            type="button"
-            onClick={handleBrowseClick}
-            className="text-primary hover:text-primary/80 underline"
-            disabled={disabled || isProcessing}
-            data-testid="description-browse-button"
-          >
-            browse
-          </button>{' '}
-          to attach context (images, .txt, .md)
-        </p>
-        {onAltEnter && (
-          <div className="flex items-center gap-1 text-xs text-muted-foreground">
-            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-muted/50 border border-border/30">
-              <span className="font-medium">Alt</span>
-              <span>+</span>
-              <span className="font-medium">↵</span>
-            </span>
-            <span className="hidden sm:inline">to submit</span>
-          </div>
-        )}
-      </div>
+      {!hideHint && (
+        <div className="flex items-center justify-between mt-1">
+          <p className="text-xs text-muted-foreground">
+            Paste, drag and drop files, or{' '}
+            <button
+              type="button"
+              onClick={handleBrowseClick}
+              className="text-primary hover:text-primary/80 underline"
+              disabled={disabled || isProcessing}
+              data-testid="description-browse-button"
+            >
+              browse
+            </button>{' '}
+            to attach context (images, .txt, .md)
+          </p>
+          {onAltEnter && (
+            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-muted/50 border border-border/30">
+                <span className="font-medium">Alt</span>
+                <span>+</span>
+                <span className="font-medium">↵</span>
+              </span>
+              <span className="hidden sm:inline">to submit</span>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Processing indicator */}
       {isProcessing && (

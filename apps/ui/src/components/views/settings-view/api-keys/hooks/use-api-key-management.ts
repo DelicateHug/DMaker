@@ -5,7 +5,7 @@ import { useAppStore } from '@/store/app-store';
 
 const logger = createLogger('ApiKeyManagement');
 import { getElectronAPI } from '@/lib/electron';
-import type { ProviderConfigParams } from '@/config/api-providers';
+import type { ProviderConfigParams } from '@/config';
 
 interface TestResult {
   success: boolean;

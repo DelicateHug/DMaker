@@ -17,12 +17,11 @@ export default defineConfig({
         'src/index.ts',
         'src/routes/**', // Routes are better tested with integration tests
         'src/types/**', // Type re-exports don't need coverage
-        'src/middleware/**', // Middleware needs integration tests
-        'src/lib/enhancement-prompts.ts', // Prompt templates don't need unit tests
+        'src/middleware.ts', // Middleware needs integration tests
         'src/services/claude-usage-service.ts', // TODO: Add tests for usage tracking
         'src/services/mcp-test-service.ts', // Needs MCP SDK integration tests
         'src/providers/index.ts', // Just exports
-        'src/providers/types.ts', // Type definitions
+        // providers/types.ts was removed (types consolidated to @dmaker/types)
         'src/providers/cli-provider.ts', // CLI integration - needs integration tests
         'src/providers/cursor-provider.ts', // Cursor CLI integration - needs integration tests
         '**/libs/**', // Exclude aliased shared packages from server coverage

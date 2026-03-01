@@ -38,6 +38,13 @@ interface UseBoardColumnFeaturesProps {
    * @default false
    */
   showAllProjects?: boolean;
+  /**
+   * Optional: Whether GitHub mode is active.
+   * When true, worktree-based filtering is skipped for features with a githubIssue link,
+   * since GitHub issues are repo-scoped, not worktree-specific.
+   * @default false
+   */
+  isGithubMode?: boolean;
 }
 
 export function useBoardColumnFeatures({
@@ -52,6 +59,7 @@ export function useBoardColumnFeatures({
   activeStatusTabs,
   singleColumnMode = false,
   showAllProjects = false,
+  isGithubMode = false,
 }: UseBoardColumnFeaturesProps) {
   // Memoize column features to prevent unnecessary re-renders
   const columnFeaturesMap = useMemo(() => {
@@ -61,6 +69,7 @@ export function useBoardColumnFeatures({
       backlog: [],
       planning: [],
       in_progress: [],
+      building: [],
       waiting_approval: [],
       completed: [],
     };
@@ -116,6 +125,9 @@ export function useBoardColumnFeatures({
       let matchesWorktree: boolean;
       if (showAllProjects) {
         // In multi-project mode, show all features regardless of worktree
+        matchesWorktree = true;
+      } else if (isGithubMode && f.githubIssue) {
+        // GitHub-linked features are repo-scoped, not worktree-specific
         matchesWorktree = true;
       } else if (!featureBranch) {
         // No branch assigned - show only on primary worktree
@@ -247,6 +259,7 @@ export function useBoardColumnFeatures({
     currentWorktreeBranch,
     projectPath,
     showAllProjects,
+    isGithubMode,
   ]);
 
   const getColumnFeatures = useCallback(

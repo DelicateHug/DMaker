@@ -1,6 +1,6 @@
 import { ChevronDown, ChevronRight, Code, Pencil, Trash2, PlayCircle, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Switch } from '@/components/ui/switch';
+import { Switch } from '@/components/ui/forms';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
 import type { MCPServerConfig } from '@dmaker/types';

@@ -356,7 +356,6 @@ export async function setupProjectWithPath(page: Page, projectPath: string): Pro
         chatSessions: [],
         chatHistoryOpen: false,
         maxConcurrency: 3,
-        useWorktrees: true, // Enable worktree feature for tests
         currentWorktreeByProject: {
           [pathArg]: { path: null, branch: 'main' }, // Initialize to main branch
         },
@@ -411,7 +410,6 @@ export async function setupProjectWithPathNoWorktrees(
         chatSessions: [],
         chatHistoryOpen: false,
         maxConcurrency: 3,
-        useWorktrees: false, // Worktree feature DISABLED
         currentWorktreeByProject: {},
         worktreesByProject: {},
       },
@@ -465,7 +463,6 @@ export async function setupProjectWithStaleWorktree(
         chatSessions: [],
         chatHistoryOpen: false,
         maxConcurrency: 3,
-        useWorktrees: true, // Enable worktree feature for tests
         currentWorktreeByProject: {
           // This is STALE data - pointing to a worktree path that doesn't exist
           [pathArg]: { path: '/non/existent/worktree/path', branch: 'feature/deleted-branch' },

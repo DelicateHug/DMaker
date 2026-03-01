@@ -683,3 +683,232 @@ Mistakes and edge cases to avoid. These are lessons learned from past issues.
     console.log(`[MemoryLoader] Initialized memory folder at ${memoryDir}`);
   }
 }
+
+// =============================================================================
+// Tiered Memory System
+// =============================================================================
+
+/** Memory tier level */
+export type MemoryTier = 'small' | 'medium' | 'high';
+
+/** Metadata about generated memory tiers */
+export interface MemoryTierMeta {
+  lastConsolidatedAt: string;
+  lastSummarizedAt: string;
+  masterHash: string;
+  tiers: Record<
+    MemoryTier,
+    {
+      generatedAt: string;
+      approxTokens: number;
+      model: string;
+    }
+  >;
+  categoryFilesIncluded: string[];
+  sourceCategories: number;
+}
+
+/** File names for tier system (all _-prefixed to exclude from legacy scoring) */
+const TIER_FILES: Record<MemoryTier, string> = {
+  small: '_memory-small.md',
+  medium: '_memory-medium.md',
+  high: '_memory-high.md',
+};
+const MASTER_FILE = '_master-memory.md';
+const TIER_META_FILE = '_memory-meta.json';
+
+/**
+ * Simple string hash for change detection.
+ * Not cryptographic — just for comparing content.
+ */
+function simpleHash(str: string): string {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = ((hash << 5) - hash + char) | 0;
+  }
+  return hash.toString(36);
+}
+
+/**
+ * Approximate token count using ~4 characters per token heuristic
+ */
+function approxTokenCount(text: string): number {
+  return Math.ceil(text.length / 4);
+}
+
+/**
+ * Consolidate all category memory files into _master-memory.md
+ *
+ * Reads all non-`_`-prefixed .md files, concatenates them with category headers.
+ * The master file is the source material for tier summarization.
+ */
+export async function consolidateMemoryToMaster(
+  projectPath: string,
+  fsModule: MemoryFsModule
+): Promise<{ content: string; categoryCount: number; categoryFiles: string[] }> {
+  const memoryDir = getMemoryDir(projectPath);
+  const allFiles = await fsModule.readdir(memoryDir);
+
+  // Filter to category files only (not _-prefixed, .md only)
+  const categoryFiles = allFiles.filter((f) => f.endsWith('.md') && !f.startsWith('_')).sort();
+
+  const sections: string[] = [];
+  for (const fileName of categoryFiles) {
+    const filePath = path.join(memoryDir, fileName);
+    try {
+      const content = (await fsModule.readFile(filePath, 'utf-8')) as string;
+      const { body } = parseFrontmatter(content);
+
+      if (body.trim()) {
+        const categoryName = fileName.replace('.md', '').toUpperCase();
+        sections.push(`## ${categoryName}\n\n${body.trim()}`);
+      }
+    } catch {
+      // Skip unreadable files
+    }
+  }
+
+  const masterContent = `# Project Memory (Full)\n\nConsolidated: ${new Date().toISOString()}\nCategories: ${categoryFiles.length}\n\n---\n\n${sections.join('\n\n---\n\n')}`;
+
+  const masterPath = path.join(memoryDir, MASTER_FILE);
+  await fsModule.writeFile(masterPath, masterContent);
+
+  console.log(
+    `[MemoryLoader] Consolidated ${categoryFiles.length} category files into ${MASTER_FILE}`
+  );
+
+  return { content: masterContent, categoryCount: categoryFiles.length, categoryFiles };
+}
+
+/**
+ * Check if memory tiers need regeneration by comparing master content hash
+ */
+export async function memoryTiersNeedRegeneration(
+  projectPath: string,
+  masterContent: string,
+  fsModule: MemoryFsModule
+): Promise<boolean> {
+  const memoryDir = getMemoryDir(projectPath);
+  const metaPath = path.join(memoryDir, TIER_META_FILE);
+  const currentHash = simpleHash(masterContent);
+
+  try {
+    const metaContent = (await fsModule.readFile(metaPath, 'utf-8')) as string;
+    const meta: MemoryTierMeta = JSON.parse(metaContent);
+    return meta.masterHash !== currentHash;
+  } catch {
+    // Meta file doesn't exist or is invalid — regeneration needed
+    return true;
+  }
+}
+
+/**
+ * Write the tier files and update _memory-meta.json
+ */
+export async function writeMemoryTiers(
+  projectPath: string,
+  tiers: {
+    small: string;
+    medium: string;
+    high: string;
+    masterContent: string;
+    categoryCount: number;
+    categoryFiles: string[];
+    model: string;
+  },
+  fsModule: MemoryFsModule
+): Promise<void> {
+  const memoryDir = getMemoryDir(projectPath);
+  const now = new Date().toISOString();
+
+  // Write tier files
+  await fsModule.writeFile(path.join(memoryDir, TIER_FILES.small), tiers.small);
+  await fsModule.writeFile(path.join(memoryDir, TIER_FILES.medium), tiers.medium);
+  await fsModule.writeFile(path.join(memoryDir, TIER_FILES.high), tiers.high);
+
+  // Write metadata
+  const meta: MemoryTierMeta = {
+    lastConsolidatedAt: now,
+    lastSummarizedAt: now,
+    masterHash: simpleHash(tiers.masterContent),
+    tiers: {
+      small: {
+        generatedAt: now,
+        approxTokens: approxTokenCount(tiers.small),
+        model: tiers.model,
+      },
+      medium: {
+        generatedAt: now,
+        approxTokens: approxTokenCount(tiers.medium),
+        model: tiers.model,
+      },
+      high: {
+        generatedAt: now,
+        approxTokens: approxTokenCount(tiers.high),
+        model: tiers.model,
+      },
+    },
+    categoryFilesIncluded: tiers.categoryFiles,
+    sourceCategories: tiers.categoryCount,
+  };
+
+  await fsModule.writeFile(path.join(memoryDir, TIER_META_FILE), JSON.stringify(meta, null, 2));
+
+  console.log(
+    `[MemoryLoader] Wrote memory tiers: small(~${meta.tiers.small.approxTokens}t), medium(~${meta.tiers.medium.approxTokens}t), high(~${meta.tiers.high.approxTokens}t)`
+  );
+}
+
+/**
+ * Determine which memory tier is appropriate for a model based on context window size.
+ *
+ * - 'high' for opus-class models (>=500k context)
+ * - 'medium' for sonnet/haiku-class (>=128k context)
+ * - 'small' for unknown/small models
+ */
+export function getMemoryTierForModel(model: string): MemoryTier {
+  const lower = model.toLowerCase();
+
+  // Large context window models -> high tier
+  if (
+    lower.includes('opus') ||
+    lower.includes('gemini-1.5-pro') ||
+    lower.includes('gemini-2') ||
+    lower.includes('gpt-5')
+  ) {
+    return 'high';
+  }
+
+  // Medium context window models -> medium tier
+  if (
+    lower.includes('sonnet') ||
+    lower.includes('haiku') ||
+    lower.includes('gemini') ||
+    lower.includes('gpt-4') ||
+    lower.includes('codex')
+  ) {
+    return 'medium';
+  }
+
+  // Small/unknown -> small tier (safe default)
+  return 'small';
+}
+
+/**
+ * Get the tier file name for a given tier level
+ */
+export function getTierFileName(tier: MemoryTier): string {
+  return TIER_FILES[tier];
+}
+
+/**
+ * Check if a filename is a tier system file (should be excluded from legacy scoring)
+ */
+export function isTierSystemFile(fileName: string): boolean {
+  return (
+    fileName === MASTER_FILE ||
+    fileName === TIER_META_FILE ||
+    Object.values(TIER_FILES).includes(fileName)
+  );
+}

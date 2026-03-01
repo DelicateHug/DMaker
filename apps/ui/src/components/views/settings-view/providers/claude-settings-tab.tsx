@@ -5,10 +5,8 @@ import { useCliStatus } from '../hooks/use-cli-status';
 import { ClaudeCliStatus } from '../cli-status/claude-cli-status';
 import { ClaudeMdSettings } from '../claude/claude-md-settings';
 import { ClaudeUsageSection } from '../api-keys/claude-usage-section';
-import { SkillsSection } from './claude-settings-tab/skills-section';
-import { SubagentsSection } from './claude-settings-tab/subagents-section';
 import { ProviderToggle } from './provider-toggle';
-import { Info } from 'lucide-react';
+import { Info, Bot, ArrowRight } from 'lucide-react';
 
 export function ClaudeSettingsTab() {
   const { apiKeys, autoLoadClaudeMd, setAutoLoadClaudeMd } = useAppStore();
@@ -50,11 +48,24 @@ export function ClaudeSettingsTab() {
         onAutoLoadClaudeMdChange={setAutoLoadClaudeMd}
       />
 
-      {/* Skills Configuration */}
-      <SkillsSection />
-
-      {/* Custom Subagents */}
-      <SubagentsSection />
+      {/* Agents & Skills Link Card */}
+      <div className="rounded-2xl border border-border/50 bg-linear-to-br from-card/90 via-card/70 to-card/80 backdrop-blur-xl shadow-sm shadow-black/5 p-5">
+        <div className="flex items-center gap-4">
+          <div className="w-10 h-10 rounded-xl bg-violet-500/20 flex items-center justify-center shrink-0">
+            <Bot className="w-5 h-5 text-violet-500" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <h3 className="font-semibold text-sm">Agents & Skills</h3>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Manage custom agents, generate with AI, and configure skills in the dedicated settings
+              section
+            </p>
+          </div>
+          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+            <ArrowRight className="w-4 h-4" />
+          </div>
+        </div>
+      </div>
 
       {showUsageTracking && <ClaudeUsageSection />}
     </div>

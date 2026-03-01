@@ -9,9 +9,7 @@
 import express from 'express';
 import cors from 'cors';
 import morgan from 'morgan';
-import cookieParser from 'cookie-parser';
 import compression from 'compression';
-import cookie from 'cookie';
 import { WebSocketServer, WebSocket } from 'ws';
 import { createServer } from 'http';
 import dotenv from 'dotenv';
@@ -31,57 +29,59 @@ const LOG_LEVEL_MAP: Record<string, LogLevel> = {
   info: LogLevel.INFO,
   debug: LogLevel.DEBUG,
 };
-import { authMiddleware, validateWsConnectionToken, checkRawAuthentication } from './lib/auth.js';
-import { requireJsonContentType } from './middleware/require-json-content-type.js';
-import { createAuthRoutes } from './routes/auth/index.js';
-import { createFsRoutes } from './routes/fs/index.js';
-import { createHealthRoutes, createDetailedHandler } from './routes/health/index.js';
-import { createAgentRoutes } from './routes/agent/index.js';
-import { createSessionsRoutes } from './routes/sessions/index.js';
-import { createFeaturesRoutes } from './routes/features/index.js';
-import { createAutoModeRoutes } from './routes/auto-mode/index.js';
-import { createEnhancePromptRoutes } from './routes/enhance-prompt/index.js';
-import { createWorktreeRoutes } from './routes/worktree/index.js';
-import { createGitRoutes } from './routes/git/index.js';
-import { createSetupRoutes } from './routes/setup/index.js';
-import { createSuggestionsRoutes } from './routes/suggestions/index.js';
-import { createModelsRoutes } from './routes/models/index.js';
-import { createRunningAgentsRoutes } from './routes/running-agents/index.js';
-import { createWorkspaceRoutes } from './routes/workspace/index.js';
-import { createTemplatesRoutes } from './routes/templates/index.js';
+import { requireJsonContentType } from './middleware.js';
+import { createFsRoutes } from './routes/fs.js';
+import { createHealthRoutes, createDetailedHandler } from './routes/health.js';
+import { createAgentRoutes } from './routes/agent.js';
+import { createSessionsRoutes } from './routes/sessions.js';
+import { createFeaturesRoutes } from './routes/features.js';
+import { createAutoModeRoutes } from './routes/auto-mode.js';
+import { createEnhancePromptRoutes } from './routes/enhance-prompt.js';
+import { createWorktreeRoutes } from './routes/worktree.js';
+import { createGitRoutes } from './routes/git.js';
+import { createSetupRoutes } from './routes/setup.js';
+import { createSuggestionsRoutes } from './routes/suggestions.js';
+import { createModelsRoutes } from './routes/models.js';
+import { createRunningAgentsRoutes } from './routes/running-agents.js';
+import { createWorkspaceRoutes } from './routes/workspace.js';
+import { createTemplatesRoutes } from './routes/templates.js';
 import {
   createTerminalRoutes,
   validateTerminalToken,
   isTerminalEnabled,
   isTerminalPasswordRequired,
-} from './routes/terminal/index.js';
-import { createSettingsRoutes } from './routes/settings/index.js';
+} from './routes/terminal.js';
+import { createSettingsRoutes } from './routes/settings.js';
+import { createAgentCrudRoutes } from './routes/agents.js';
 import { AgentService } from './services/agent-service.js';
 import { FeatureLoader } from './services/feature-loader.js';
 import { AutoModeService } from './services/auto-mode-service.js';
 import { getTerminalService } from './services/terminal-service.js';
 import { SettingsService } from './services/settings-service.js';
-import { createSpecRegenerationRoutes } from './routes/app-spec/index.js';
-import { createClaudeRoutes } from './routes/claude/index.js';
+import { createSpecRegenerationRoutes } from './routes/app-spec.js';
+import { createClaudeRoutes } from './routes/claude.js';
 import { ClaudeUsageService } from './services/claude-usage-service.js';
-import { createCodexRoutes } from './routes/codex/index.js';
-import { CodexUsageService } from './services/codex-usage-service.js';
-import { CodexAppServerService } from './services/codex-app-server-service.js';
-import { CodexModelCacheService } from './services/codex-model-cache-service.js';
-import { createGitHubRoutes } from './routes/github/index.js';
-import { createContextRoutes } from './routes/context/index.js';
-import { createBacklogPlanRoutes } from './routes/backlog-plan/index.js';
-import { cleanupStaleValidations } from './routes/github/routes/validation-common.js';
-import { createMCPRoutes } from './routes/mcp/index.js';
+import { createCodexRoutes } from './routes/codex.js';
+import {
+  CodexUsageService,
+  CodexAppServerService,
+  CodexModelCacheService,
+} from './services/codex-services.js';
+import { createGitHubRoutes } from './routes/github.js';
+import { createContextRoutes } from './routes/context.js';
+import { createMemoryRoutes } from './routes/memory.js';
+import { createBacklogPlanRoutes } from './routes/backlog-plan.js';
+import { cleanupStaleValidations } from './routes/github.js';
+import { createMCPRoutes } from './routes/mcp.js';
 import { MCPTestService } from './services/mcp-test-service.js';
-import { createPipelineRoutes } from './routes/pipeline/index.js';
+import { createPipelineRoutes } from './routes/pipeline.js';
 import { pipelineService } from './services/pipeline-service.js';
-import { createIdeationRoutes } from './routes/ideation/index.js';
+import { createIdeationRoutes } from './routes/ideation.js';
 import { IdeationService } from './services/ideation-service.js';
 import { getDevServerService } from './services/dev-server-service.js';
-import { createNotificationsRoutes } from './routes/notifications/index.js';
+import { createNotificationsRoutes } from './routes/notifications.js';
 import { getNotificationService } from './services/notification-service.js';
-import { createDeployRoutes } from './routes/deploy/index.js';
+import { createDeployRoutes } from './routes/deploy.js';
 import { deployScriptRunner } from './services/deploy-service.js';
 // Load environment variables
 dotenv.config();
@@ -191,7 +191,6 @@ app.use(
   })
 );
 app.use(express.json({ limit: '50mb' }));
-app.use(cookieParser());
 app.use(
   compression({
     // Skip compression for SSE (text/event-stream) responses.
@@ -276,15 +275,11 @@ setInterval(() => {
 // This helps prevent CSRF and content-type confusion attacks
 app.use('/api', requireJsonContentType);
 
-// Mount API routes - health, auth, and setup are unauthenticated
+// Mount API routes
 app.use('/api/health', createHealthRoutes());
-app.use('/api/auth', createAuthRoutes());
 app.use('/api/setup', createSetupRoutes());
 
-// Apply authentication to all other routes
-app.use('/api', authMiddleware);
-
-// Protected health endpoint with detailed info
+// Detailed health endpoint
 app.get('/api/health/detailed', createDetailedHandler());
 
 app.use('/api/fs', createFsRoutes(events));
@@ -316,6 +311,8 @@ app.use('/api/pipeline', createPipelineRoutes(pipelineService));
 app.use('/api/ideation', createIdeationRoutes(events, ideationService, featureLoader));
 app.use('/api/notifications', createNotificationsRoutes(notificationService));
 app.use('/api/deploy', createDeployRoutes(deployScriptRunner, events));
+app.use('/api/agents', createAgentCrudRoutes());
+app.use('/api/memory', createMemoryRoutes(settingsService));
 // Create HTTP server
 const server = createServer(app);
 
@@ -330,54 +327,9 @@ const wss = new WebSocketServer({
 const terminalWss = new WebSocketServer({ noServer: true });
 const terminalService = getTerminalService();
 
-/**
- * Authenticate WebSocket upgrade requests
- * Checks for API key in header/query, session token in header/query, OR valid session cookie
- */
-function authenticateWebSocket(request: import('http').IncomingMessage): boolean {
-  const url = new URL(request.url || '', `http://${request.headers.host}`);
-
-  // Convert URL search params to query object
-  const query: Record<string, string | undefined> = {};
-  url.searchParams.forEach((value, key) => {
-    query[key] = value;
-  });
-
-  // Parse cookies from header
-  const cookieHeader = request.headers.cookie;
-  const cookies = cookieHeader ? cookie.parse(cookieHeader) : {};
-
-  // Use shared authentication logic for standard auth methods
-  if (
-    checkRawAuthentication(
-      request.headers as Record<string, string | string[] | undefined>,
-      query,
-      cookies
-    )
-  ) {
-    return true;
-  }
-
-  // Additionally check for short-lived WebSocket connection token (WebSocket-specific)
-  const wsToken = url.searchParams.get('wsToken');
-  if (wsToken && validateWsConnectionToken(wsToken)) {
-    return true;
-  }
-
-  return false;
-}
-
 // Handle HTTP upgrade requests manually to route to correct WebSocket server
 server.on('upgrade', (request, socket, head) => {
   const { pathname } = new URL(request.url || '', `http://${request.headers.host}`);
-
-  // Authenticate all WebSocket connections
-  if (!authenticateWebSocket(request)) {
-    logger.info('Authentication failed, rejecting connection');
-    socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
-    socket.destroy();
-    return;
-  }
 
   if (pathname === '/api/events') {
     wss.handleUpgrade(request, socket, head, (ws) => {

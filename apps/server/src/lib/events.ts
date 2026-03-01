@@ -71,6 +71,7 @@ const NEVER_THROTTLE: Set<string> = new Set([
   'auto_mode_task_complete',
   'auto_mode_phase',
   'auto_mode_stopped',
+  'auto_mode_metrics_update',
 ]);
 
 /**

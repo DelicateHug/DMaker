@@ -21,8 +21,8 @@ import {
   logRecoveryWarning,
   DEFAULT_BACKUP_COUNT,
 } from '@dmaker/utils';
-import * as secureFs from '../lib/secure-fs.js';
 import {
+  secureFs,
   getFeaturesDir,
   getFeatureDir,
   getFeatureStatusDir,
@@ -764,6 +764,7 @@ export class FeatureLoader {
       branchName: feature.branchName,
       error: feature.error,
       startedAt: feature.startedAt,
+      updatedAt: feature.updatedAt,
       imagePathsCount: feature.imagePaths?.length ?? 0,
       githubIssue: feature.githubIssue,
       claimedBy: feature.claimedBy,
@@ -861,6 +862,7 @@ export class FeatureLoader {
           branchName: feature.branchName,
           error: feature.error,
           startedAt: feature.startedAt,
+          updatedAt: feature.updatedAt,
           imagePathsCount: feature.imagePaths?.length ?? 0,
           githubIssue: feature.githubIssue,
           claimedBy: feature.claimedBy,
@@ -1086,6 +1088,7 @@ export class FeatureLoader {
     }
 
     // Ensure feature has required fields
+    const now = new Date().toISOString();
     const feature: Feature = {
       category: featureData.category || 'Uncategorized',
       description: featureData.description || '',
@@ -1093,6 +1096,7 @@ export class FeatureLoader {
       id: featureId,
       imagePaths: migratedImagePaths,
       descriptionHistory: initialHistory,
+      updatedAt: now,
     };
 
     // Write feature.json atomically with backup support
@@ -1178,6 +1182,7 @@ export class FeatureLoader {
       ...updates,
       ...(updatedImagePaths !== undefined ? { imagePaths: updatedImagePaths } : {}),
       descriptionHistory: updatedHistory,
+      updatedAt: new Date().toISOString(),
     };
 
     // Write back to file atomically with backup support

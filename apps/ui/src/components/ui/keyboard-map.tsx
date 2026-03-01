@@ -7,12 +7,12 @@ import {
 } from '@/store/app-store';
 import type { KeyboardShortcuts } from '@/store/app-store';
 import { cn } from '@/lib/utils';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Input } from '@/components/ui/input';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/overlays';
+import { Input } from '@/components/ui/forms';
 import { Button } from '@/components/ui/button';
 import { CheckCircle2, X, RotateCcw, Edit2 } from 'lucide-react';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/forms';
+import { Label } from '@/components/ui/forms';
 
 // Detect if running on Mac
 const isMac =

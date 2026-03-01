@@ -6,10 +6,10 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
+} from '@/components/ui/overlays';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/forms';
+import { Label } from '@/components/ui/forms';
 import { Loader2, Trash2, AlertTriangle, FileWarning } from 'lucide-react';
 import { getElectronAPI } from '@/lib/electron';
 import { toast } from 'sonner';

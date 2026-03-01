@@ -4,13 +4,13 @@
 
 import { useState, useMemo } from 'react';
 import { ArrowLeft, Lightbulb, Loader2, CheckCircle2 } from 'lucide-react';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/layout';
 import { useGuidedPrompts } from '@/hooks/use-guided-prompts';
 import { useIdeationStore } from '@/store/ideation-store';
 import { useAppStore } from '@/store/app-store';
 import { getElectronAPI } from '@/lib/electron';
 import { toast } from 'sonner';
-import { useNavigate } from '@tanstack/react-router';
+import { useLayerStore } from '@/store/layer-store';
 import type { IdeaCategory, IdeationPrompt } from '@dmaker/types';
 
 interface PromptListProps {
@@ -26,7 +26,6 @@ export function PromptList({ category, onBack }: PromptListProps) {
   const updateJobStatus = useIdeationStore((s) => s.updateJobStatus);
   const [loadingPromptId, setLoadingPromptId] = useState<string | null>(null);
   const [startedPrompts, setStartedPrompts] = useState<Set<string>>(new Set());
-  const navigate = useNavigate();
   const {
     getPromptsByCategory,
     isLoading: isLoadingPrompts,
@@ -84,7 +83,7 @@ export function PromptList({ category, onBack }: PromptListProps) {
             label: 'View Ideas',
             onClick: () => {
               setMode('dashboard');
-              navigate({ to: '/ideation' });
+              useLayerStore.getState().openLayer('ideation');
             },
           },
         });

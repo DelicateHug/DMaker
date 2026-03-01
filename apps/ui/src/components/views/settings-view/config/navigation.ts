@@ -16,7 +16,13 @@ import {
   Code2,
   Folder,
 } from 'lucide-react';
-import { AnthropicIcon, CursorIcon, OpenAIIcon, OpenCodeIcon } from '@/components/ui/provider-icon';
+import {
+  AnthropicIcon,
+  CursorIcon,
+  OpenAIIcon,
+  OpenCodeIcon,
+  GcpIcon,
+} from '@/components/ui/provider-icon';
 import type { SettingsViewId } from '../hooks/use-settings-view';
 
 export interface NavigationItem {
@@ -54,9 +60,11 @@ export const GLOBAL_NAV_GROUPS: NavigationGroup[] = [
           { id: 'cursor-provider', label: 'Cursor', icon: CursorIcon },
           { id: 'codex-provider', label: 'Codex', icon: OpenAIIcon },
           { id: 'opencode-provider', label: 'OpenCode', icon: OpenCodeIcon },
+          { id: 'gcp-provider', label: 'GCP / Vertex AI', icon: GcpIcon },
         ],
       },
       { id: 'mcp-servers', label: 'MCP Servers', icon: Plug },
+      { id: 'agents-skills', label: 'Agents & Skills', icon: Bot },
     ],
   },
   {

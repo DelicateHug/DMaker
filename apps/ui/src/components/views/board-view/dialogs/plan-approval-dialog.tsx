@@ -8,11 +8,11 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
+} from '@/components/ui/overlays';
 import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
+import { Textarea } from '@/components/ui/forms';
 import { Markdown } from '@/components/ui/markdown';
-import { Label } from '@/components/ui/label';
+import { Label } from '@/components/ui/forms';
 import { Feature } from '@/store/app-store';
 import { Check, RefreshCw, Edit2, Eye, Loader2 } from 'lucide-react';
 

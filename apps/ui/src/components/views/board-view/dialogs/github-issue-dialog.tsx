@@ -23,9 +23,9 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
-} from '@/components/ui/dialog';
+} from '@/components/ui/overlays';
 import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
+import { Textarea } from '@/components/ui/forms';
 import { Markdown } from '@/components/ui/markdown';
 import { cn } from '@/lib/utils';
 import { getElectronAPI } from '@/lib/electron';

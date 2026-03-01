@@ -11,7 +11,7 @@ import * as os from 'os';
 import * as path from 'path';
 // secureFs is used for user-controllable paths (working directory validation)
 // to enforce ALLOWED_ROOT_DIRECTORY security boundary
-import * as secureFs from '../lib/secure-fs.js';
+import { secureFs } from '@dmaker/platform';
 import { createLogger } from '@dmaker/utils';
 
 const logger = createLogger('Terminal');

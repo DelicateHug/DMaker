@@ -1,5 +1,5 @@
-import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/forms';
+import { Switch } from '@/components/ui/forms';
 import { Code2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAppStore, type ServerLogLevel } from '@/store/app-store';

@@ -24,7 +24,7 @@ export function useWorktrees({
   const currentWorktree = useAppStore((s) => s.getCurrentWorktree(projectPath));
   const setCurrentWorktree = useAppStore((s) => s.setCurrentWorktree);
   const setWorktreesInStore = useAppStore((s) => s.setWorktrees);
-  const useWorktreesEnabled = useAppStore((s) => s.useWorktrees);
+  const useWorktreesEnabled = true; // Worktrees are always enabled
 
   const fetchWorktrees = useCallback(
     async (options?: { silent?: boolean }) => {

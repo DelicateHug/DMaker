@@ -11,9 +11,11 @@ vi.mock('child_process', () => ({
   execFile: vi.fn(),
 }));
 
-// Mock secure-fs
-vi.mock('@/lib/secure-fs.js', () => ({
-  access: vi.fn(),
+// Mock @dmaker/platform with secureFs
+vi.mock('@dmaker/platform', () => ({
+  secureFs: {
+    access: vi.fn(),
+  },
 }));
 
 // Mock net
@@ -25,7 +27,7 @@ vi.mock('net', () => ({
 }));
 
 import { spawn, execSync } from 'child_process';
-import * as secureFs from '@/lib/secure-fs.js';
+import { secureFs } from '@dmaker/platform';
 import net from 'net';
 
 describe('dev-server-service.ts', () => {

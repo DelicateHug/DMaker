@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Label } from '@/components/ui/label';
-import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/forms';
+import { Checkbox } from '@/components/ui/forms';
 import { Palette, Moon, Sun, Type } from 'lucide-react';
-import { darkThemes, lightThemes, type Theme } from '@/config/theme-options';
+import { darkThemes, lightThemes, type Theme } from '@/config';
 import {
   UI_SANS_FONT_OPTIONS,
   UI_MONO_FONT_OPTIONS,

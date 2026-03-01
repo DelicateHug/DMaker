@@ -7,13 +7,13 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
+} from '@/components/ui/overlays';
 import { Button } from '@/components/ui/button';
-import { HotkeyButton } from '@/components/ui/hotkey-button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Badge } from '@/components/ui/badge';
+import { HotkeyButton } from '@/components/ui/feedback';
+import { Input } from '@/components/ui/forms';
+import { Label } from '@/components/ui/forms';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/layout';
+import { Badge } from '@/components/ui/layout';
 import {
   FolderPlus,
   FolderOpen,

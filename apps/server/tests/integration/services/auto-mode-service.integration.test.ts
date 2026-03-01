@@ -87,11 +87,10 @@ describe('auto-mode-service.ts (integration)', () => {
 
       vi.mocked(ProviderFactory.getProviderForModel).mockReturnValue(mockProvider as any);
 
-      // Execute feature with worktrees enabled
+      // Execute feature
       await service.executeFeature(
         testRepo.path,
         'test-feature-1',
-        true, // useWorktrees
         false // isAutoMode
       );
 
@@ -161,12 +160,11 @@ describe('auto-mode-service.ts (integration)', () => {
 
       vi.mocked(ProviderFactory.getProviderForModel).mockReturnValue(mockProvider as any);
 
-      // Execute without worktrees
+      // Execute feature
       await service.executeFeature(
         testRepo.path,
         'test-no-worktree',
-        false, // useWorktrees = false
-        false
+        false // isAutoMode
       );
 
       // Feature should be updated successfully

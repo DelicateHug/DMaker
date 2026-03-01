@@ -351,7 +351,6 @@ describe('settings-service.ts', () => {
       const customSettings: ProjectSettings = {
         ...DEFAULT_PROJECT_SETTINGS,
         theme: 'light',
-        useWorktrees: true,
       };
       const dmakerDir = path.join(testProjectDir, '.dmaker');
       await fs.mkdir(dmakerDir, { recursive: true });
@@ -360,7 +359,6 @@ describe('settings-service.ts', () => {
 
       const settings = await settingsService.getProjectSettings(testProjectDir);
       expect(settings.theme).toBe('light');
-      expect(settings.useWorktrees).toBe(true);
     });
 
     it('should merge with defaults for missing properties', async () => {
@@ -383,13 +381,11 @@ describe('settings-service.ts', () => {
     it('should create project settings file with updates', async () => {
       const updates: Partial<ProjectSettings> = {
         theme: 'light',
-        useWorktrees: true,
       };
 
       const updated = await settingsService.updateProjectSettings(testProjectDir, updates);
 
       expect(updated.theme).toBe('light');
-      expect(updated.useWorktrees).toBe(true);
       expect(updated.version).toBe(PROJECT_SETTINGS_VERSION);
 
       const dmakerDir = path.join(testProjectDir, '.dmaker');
@@ -397,14 +393,12 @@ describe('settings-service.ts', () => {
       const fileContent = await fs.readFile(settingsPath, 'utf-8');
       const saved = JSON.parse(fileContent);
       expect(saved.theme).toBe('light');
-      expect(saved.useWorktrees).toBe(true);
     });
 
     it('should merge updates with existing project settings', async () => {
       const initial: ProjectSettings = {
         ...DEFAULT_PROJECT_SETTINGS,
         theme: 'dark',
-        useWorktrees: false,
       };
       const dmakerDir = path.join(testProjectDir, '.dmaker');
       await fs.mkdir(dmakerDir, { recursive: true });
@@ -418,7 +412,6 @@ describe('settings-service.ts', () => {
       const updated = await settingsService.updateProjectSettings(testProjectDir, updates);
 
       expect(updated.theme).toBe('light');
-      expect(updated.useWorktrees).toBe(false); // Preserved
     });
 
     it('should deep merge board background', async () => {

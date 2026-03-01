@@ -3,8 +3,8 @@ export { useBoardBackgroundSettings } from './use-board-background-settings';
 export { useElectronAgent } from './use-electron-agent';
 export { useGuidedPrompts } from './use-guided-prompts';
 export { useKeyboardShortcuts } from './use-keyboard-shortcuts';
-export { useMessageQueue } from './use-message-queue';
-export { useOSDetection, type OperatingSystem, type OSDetectionResult } from './use-os-detection';
+export { useMessageQueue } from './utilities';
+export { useOSDetection, type OperatingSystem, type OSDetectionResult } from './utilities';
 export {
   useRemoteSync,
   getSyncStatusMessage,
@@ -13,7 +13,7 @@ export {
   type RemoteSyncState,
 } from './use-remote-sync';
 export { useResponsiveKanban } from './use-responsive-kanban';
-export { useScrollTracking } from './use-scroll-tracking';
+export { useScrollTracking } from './utilities';
 export { useSettingsMigration } from './use-settings-migration';
 export {
   useClaudeUsageTracking,
@@ -25,7 +25,7 @@ export {
   type ClaudeUsage,
   type CodexUsage,
 } from './use-usage-tracking';
-export { useWindowState } from './use-window-state';
+export { useWindowState } from './utilities';
 export {
   useProjectSwitchForSessions,
   type UseProjectSwitchForSessionsOptions,

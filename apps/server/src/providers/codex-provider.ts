@@ -2,9 +2,11 @@
  * Codex Provider - Executes queries using Codex CLI
  *
  * Spawns the Codex CLI and converts JSONL output into ProviderMessage format.
+ * Includes inlined helpers: CodexConfigManager, CODEX_MODELS, executeCodexSdkQuery.
  */
 
 import path from 'path';
+import { Codex } from '@openai/codex-sdk';
 import { BaseProvider } from './base-provider.js';
 import {
   spawnJSONLProcess,
@@ -15,7 +17,7 @@ import {
   getDataDirectory,
   getCodexConfigDir,
 } from '@dmaker/platform';
-import { checkCodexAuthentication } from '../lib/codex-auth.js';
+import { checkCodexAuthentication, createTempEnvOverride } from '../lib/security.js';
 import {
   formatHistoryAsText,
   extractTextFromContent,
@@ -28,7 +30,8 @@ import type {
   ProviderMessage,
   InstallationStatus,
   ModelDefinition,
-} from './types.js';
+  McpServerConfig,
+} from '@dmaker/types';
 import {
   CODEX_MODEL_MAP,
   supportsReasoningEffort,
@@ -39,17 +42,349 @@ import {
   type CodexSandboxMode,
   type CodexAuthStatus,
 } from '@dmaker/types';
-import { CodexConfigManager } from './codex-config-manager.js';
-import { executeCodexSdkQuery } from './codex-sdk-client.js';
 import {
   resolveCodexToolCall,
   extractCodexTodoItems,
   getCodexTodoToolName,
 } from './codex-tool-mapping.js';
 import { SettingsService } from '../services/settings-service.js';
-import { createTempEnvOverride } from '../lib/auth-utils.js';
 import { checkSandboxCompatibility } from '../lib/sdk-options.js';
-import { CODEX_MODELS } from './codex-models.js';
+
+// ============================================================================
+// Codex Config Manager (from codex-config-manager.ts)
+// ============================================================================
+
+const CODEX_CONFIG_DIR = '.codex';
+const CODEX_CONFIG_FILENAME = 'config.toml';
+const CODEX_MCP_SECTION = 'mcp_servers';
+
+function formatTomlString(value: string): string {
+  return JSON.stringify(value);
+}
+
+function formatTomlArray(values: string[]): string {
+  const formatted = values.map((value) => formatTomlString(value)).join(', ');
+  return `[${formatted}]`;
+}
+
+function formatTomlInlineTable(values: Record<string, string>): string {
+  const entries = Object.entries(values).map(
+    ([key, value]) => `${key} = ${formatTomlString(value)}`
+  );
+  return `{ ${entries.join(', ')} }`;
+}
+
+function formatTomlKey(key: string): string {
+  return `"${key.replace(/"/g, '\\"')}"`;
+}
+
+function buildServerBlock(name: string, server: McpServerConfig): string[] {
+  const lines: string[] = [];
+  const section = `${CODEX_MCP_SECTION}.${formatTomlKey(name)}`;
+  lines.push(`[${section}]`);
+
+  if (server.type) {
+    lines.push(`type = ${formatTomlString(server.type)}`);
+  }
+
+  if ('command' in server && server.command) {
+    lines.push(`command = ${formatTomlString(server.command)}`);
+  }
+
+  if ('args' in server && server.args && server.args.length > 0) {
+    lines.push(`args = ${formatTomlArray(server.args)}`);
+  }
+
+  if ('env' in server && server.env && Object.keys(server.env).length > 0) {
+    lines.push(`env = ${formatTomlInlineTable(server.env)}`);
+  }
+
+  if ('url' in server && server.url) {
+    lines.push(`url = ${formatTomlString(server.url)}`);
+  }
+
+  if ('headers' in server && server.headers && Object.keys(server.headers).length > 0) {
+    lines.push(`headers = ${formatTomlInlineTable(server.headers)}`);
+  }
+
+  return lines;
+}
+
+class CodexConfigManager {
+  async configureMcpServers(
+    cwd: string,
+    mcpServers: Record<string, McpServerConfig>
+  ): Promise<void> {
+    const configDir = path.join(cwd, CODEX_CONFIG_DIR);
+    const configPath = path.join(configDir, CODEX_CONFIG_FILENAME);
+
+    await secureFs.mkdir(configDir, { recursive: true });
+
+    const blocks: string[] = [];
+    for (const [name, server] of Object.entries(mcpServers)) {
+      blocks.push(...buildServerBlock(name, server), '');
+    }
+
+    const content = blocks.join('\n').trim();
+    if (content) {
+      await secureFs.writeFile(configPath, content + '\n', 'utf-8');
+    }
+  }
+}
+
+// ============================================================================
+// Codex Model Definitions (from codex-models.ts)
+// ============================================================================
+
+const CONTEXT_WINDOW_256K = 256000;
+const CONTEXT_WINDOW_128K = 128000;
+const MAX_OUTPUT_32K = 32000;
+const MAX_OUTPUT_16K = 16000;
+
+const CODEX_MODELS: ModelDefinition[] = [
+  // ========== Recommended Codex Models ==========
+  {
+    id: CODEX_MODEL_MAP.gpt52Codex,
+    name: 'GPT-5.2-Codex',
+    modelString: CODEX_MODEL_MAP.gpt52Codex,
+    provider: 'openai',
+    description:
+      'Most advanced agentic coding model for complex software engineering (default for ChatGPT users).',
+    contextWindow: CONTEXT_WINDOW_256K,
+    maxOutputTokens: MAX_OUTPUT_32K,
+    supportsVision: true,
+    supportsTools: true,
+    tier: 'premium' as const,
+    default: true,
+    hasReasoning: true,
+  },
+  {
+    id: CODEX_MODEL_MAP.gpt51CodexMax,
+    name: 'GPT-5.1-Codex-Max',
+    modelString: CODEX_MODEL_MAP.gpt51CodexMax,
+    provider: 'openai',
+    description: 'Optimized for long-horizon, agentic coding tasks in Codex.',
+    contextWindow: CONTEXT_WINDOW_256K,
+    maxOutputTokens: MAX_OUTPUT_32K,
+    supportsVision: true,
+    supportsTools: true,
+    tier: 'premium' as const,
+    hasReasoning: true,
+  },
+  {
+    id: CODEX_MODEL_MAP.gpt51CodexMini,
+    name: 'GPT-5.1-Codex-Mini',
+    modelString: CODEX_MODEL_MAP.gpt51CodexMini,
+    provider: 'openai',
+    description: 'Smaller, more cost-effective version for faster workflows.',
+    contextWindow: CONTEXT_WINDOW_128K,
+    maxOutputTokens: MAX_OUTPUT_16K,
+    supportsVision: true,
+    supportsTools: true,
+    tier: 'basic' as const,
+    hasReasoning: false,
+  },
+
+  // ========== General-Purpose GPT Models ==========
+  {
+    id: CODEX_MODEL_MAP.gpt52,
+    name: 'GPT-5.2',
+    modelString: CODEX_MODEL_MAP.gpt52,
+    provider: 'openai',
+    description: 'Best general agentic model for tasks across industries and domains.',
+    contextWindow: CONTEXT_WINDOW_256K,
+    maxOutputTokens: MAX_OUTPUT_32K,
+    supportsVision: true,
+    supportsTools: true,
+    tier: 'standard' as const,
+    hasReasoning: true,
+  },
+  {
+    id: CODEX_MODEL_MAP.gpt51,
+    name: 'GPT-5.1',
+    modelString: CODEX_MODEL_MAP.gpt51,
+    provider: 'openai',
+    description: 'Great for coding and agentic tasks across domains.',
+    contextWindow: CONTEXT_WINDOW_256K,
+    maxOutputTokens: MAX_OUTPUT_32K,
+    supportsVision: true,
+    supportsTools: true,
+    tier: 'standard' as const,
+    hasReasoning: true,
+  },
+];
+
+function getCodexModelById(modelId: string): ModelDefinition | undefined {
+  return CODEX_MODELS.find((m) => m.id === modelId || m.modelString === modelId);
+}
+
+function getReasoningModels(): ModelDefinition[] {
+  return CODEX_MODELS.filter((m) => m.hasReasoning);
+}
+
+function getModelsByTier(tier: 'premium' | 'standard' | 'basic'): ModelDefinition[] {
+  return CODEX_MODELS.filter((m) => m.tier === tier);
+}
+
+// ============================================================================
+// Codex SDK Client (from codex-sdk-client.ts)
+// ============================================================================
+
+const SDK_HISTORY_HEADER = 'Current request:\n';
+const DEFAULT_RESPONSE_TEXT = '';
+const SDK_ERROR_DETAILS_LABEL = 'Details:';
+
+type PromptBlock = {
+  type: string;
+  text?: string;
+  source?: {
+    type?: string;
+    media_type?: string;
+    data?: string;
+  };
+};
+
+function resolveSdkApiKey(): string {
+  const apiKey = process.env['OPENAI_API_KEY'];
+  if (!apiKey) {
+    throw new Error('OPENAI_API_KEY is not set.');
+  }
+  return apiKey;
+}
+
+function normalizePromptBlocks(prompt: ExecuteOptions['prompt']): PromptBlock[] {
+  if (Array.isArray(prompt)) {
+    return prompt as PromptBlock[];
+  }
+  return [{ type: 'text', text: prompt }];
+}
+
+function buildSdkPromptText(options: ExecuteOptions, systemPrompt: string | null): string {
+  const historyText =
+    options.conversationHistory && options.conversationHistory.length > 0
+      ? formatHistoryAsText(options.conversationHistory)
+      : '';
+
+  const promptBlocks = normalizePromptBlocks(options.prompt);
+  const promptTexts: string[] = [];
+
+  for (const block of promptBlocks) {
+    if (block.type === 'text' && typeof block.text === 'string' && block.text.trim()) {
+      promptTexts.push(block.text);
+    }
+  }
+
+  const promptContent = promptTexts.join('\n\n');
+  if (!promptContent.trim()) {
+    throw new Error('Codex SDK prompt is empty.');
+  }
+
+  const parts: string[] = [];
+  if (systemPrompt) {
+    parts.push(`System: ${systemPrompt}`);
+  }
+  if (historyText) {
+    parts.push(historyText);
+  }
+  parts.push(`${SDK_HISTORY_HEADER}${promptContent}`);
+
+  return parts.join('\n\n');
+}
+
+function buildSdkErrorMessage(rawMessage: string, userMessage: string): string {
+  if (!rawMessage) {
+    return userMessage;
+  }
+  if (!userMessage || rawMessage === userMessage) {
+    return rawMessage;
+  }
+  return `${userMessage}\n\n${SDK_ERROR_DETAILS_LABEL} ${rawMessage}`;
+}
+
+async function* executeCodexSdkQuery(
+  options: ExecuteOptions,
+  systemPrompt: string | null
+): AsyncGenerator<ProviderMessage> {
+  try {
+    const apiKey = resolveSdkApiKey();
+    const codex = new Codex({ apiKey });
+
+    // Resume existing thread or start new one
+    let thread;
+    if (options.sdkSessionId) {
+      try {
+        thread = codex.resumeThread(options.sdkSessionId);
+      } catch {
+        // If resume fails, start a new thread
+        thread = codex.startThread();
+      }
+    } else {
+      thread = codex.startThread();
+    }
+
+    const promptText = buildSdkPromptText(options, systemPrompt);
+
+    // Build run options with reasoning effort if supported
+    const runOptions: {
+      signal?: AbortSignal;
+      reasoning?: { effort: string };
+    } = {
+      signal: options.abortController?.signal,
+    };
+
+    // Add reasoning effort if model supports it and reasoningEffort is specified
+    if (
+      options.reasoningEffort &&
+      supportsReasoningEffort(options.model) &&
+      options.reasoningEffort !== 'none'
+    ) {
+      runOptions.reasoning = { effort: options.reasoningEffort };
+    }
+
+    // Run the query
+    const result = await thread.run(promptText, runOptions);
+
+    // Extract response text (from finalResponse property)
+    const outputText = result.finalResponse ?? DEFAULT_RESPONSE_TEXT;
+
+    // Get thread ID (may be null if not populated yet)
+    const threadId = thread.id ?? undefined;
+
+    // Yield assistant message
+    yield {
+      type: 'assistant',
+      session_id: threadId,
+      message: {
+        role: 'assistant',
+        content: [{ type: 'text', text: outputText }],
+      },
+    };
+
+    // Yield result
+    yield {
+      type: 'result',
+      subtype: 'success',
+      session_id: threadId,
+      result: outputText,
+    };
+  } catch (error) {
+    const errorInfo = classifyError(error);
+    const userMessage = getUserFriendlyErrorMessage(error);
+    const combinedMessage = buildSdkErrorMessage(errorInfo.message, userMessage);
+    console.error('[CodexSDK] executeQuery() error during execution:', {
+      type: errorInfo.type,
+      message: errorInfo.message,
+      isRateLimit: errorInfo.isRateLimit,
+      retryAfter: errorInfo.retryAfter,
+      stack: error instanceof Error ? error.stack : undefined,
+    });
+    yield { type: 'error', error: combinedMessage };
+  }
+}
+
+// ============================================================================
+// Codex Provider
+// ============================================================================
 
 const CODEX_COMMAND = 'codex';
 const CODEX_EXEC_SUBCOMMAND = 'exec';
@@ -101,9 +436,6 @@ const TEXT_ENCODING = 'utf-8';
  * @see calculateReasoningTimeout from @dmaker/types
  */
 const CODEX_CLI_TIMEOUT_MS = DEFAULT_TIMEOUT_MS;
-const CONTEXT_WINDOW_256K = 256000;
-const MAX_OUTPUT_32K = 32000;
-const MAX_OUTPUT_16K = 16000;
 const SYSTEM_PROMPT_SEPARATOR = '\n\n';
 const CODEX_INSTRUCTIONS_DIR = '.codex';
 const CODEX_INSTRUCTIONS_SECTION = 'Codex Project Instructions';

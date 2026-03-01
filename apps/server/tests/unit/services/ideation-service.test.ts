@@ -3,8 +3,9 @@ import { IdeationService } from '@/services/ideation-service.js';
 import type { EventEmitter } from '@/lib/events.js';
 import type { SettingsService } from '@/services/settings-service.js';
 import type { FeatureLoader } from '@/services/feature-loader.js';
-import * as secureFs from '@/lib/secure-fs.js';
 import * as platform from '@dmaker/platform';
+
+const secureFs = platform.secureFs;
 import * as utils from '@dmaker/utils';
 import type {
   CreateIdeaInput,
@@ -24,7 +25,6 @@ const mockLogger = vi.hoisted(() => ({
 }));
 
 // Mock dependencies
-vi.mock('@/lib/secure-fs.js');
 vi.mock('@dmaker/platform');
 vi.mock('@dmaker/utils', async () => {
   const actual = await vi.importActual<typeof import('@dmaker/utils')>('@dmaker/utils');

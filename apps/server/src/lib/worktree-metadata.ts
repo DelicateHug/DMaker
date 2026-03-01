@@ -3,7 +3,7 @@
  * Stores worktree-specific data in .dmaker/worktrees/:branch/worktree.json
  */
 
-import * as secureFs from './secure-fs.js';
+import { secureFs } from '@dmaker/platform';
 import * as path from 'path';
 
 /** Maximum length for sanitized branch names in filesystem paths */

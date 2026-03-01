@@ -9,7 +9,7 @@ import type {
   InstallationStatus,
   ValidationResult,
   ModelDefinition,
-} from './types.js';
+} from '@dmaker/types';
 
 /**
  * Base provider class that all provider implementations must extend

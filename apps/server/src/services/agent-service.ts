@@ -4,7 +4,7 @@
  */
 
 import path from 'path';
-import * as secureFs from '../lib/secure-fs.js';
+import { secureFs, PathNotAllowedError } from '@dmaker/platform';
 import type { EventEmitter } from '../lib/events.js';
 import type { ExecuteOptions, ThinkingLevel, ReasoningEffort } from '@dmaker/types';
 import { stripProviderPrefix } from '@dmaker/types';
@@ -19,7 +19,6 @@ import {
 } from '@dmaker/utils';
 import { ProviderFactory } from '../providers/provider-factory.js';
 import { createChatOptions, validateWorkingDirectory } from '../lib/sdk-options.js';
-import { PathNotAllowedError } from '@dmaker/platform';
 import type { SettingsService } from './settings-service.js';
 import {
   getAutoLoadClaudeMdSetting,

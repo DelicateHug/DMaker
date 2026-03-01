@@ -8,7 +8,7 @@
 import { secureFs } from '@dmaker/platform';
 import path from 'path';
 import { createLogger } from './logger.js';
-import { mkdirSafe } from './fs-utils.js';
+import { mkdirSafe } from './file-utils.js';
 
 const logger = createLogger('AtomicWriter');
 

@@ -12,10 +12,10 @@ export {
 export { useBoardKeyboardShortcuts } from './use-board-keyboard-shortcuts';
 export { useBoardColumnFeatures } from './use-board-column-features';
 export { useBoardEffects } from './use-board-effects';
-export { useBoardBackground } from './use-board-background';
+export { useBoardBackground } from '../board-hooks';
 export { useBoardPersistence } from './use-board-persistence';
-export { useFollowUpState } from './use-follow-up-state';
-export { useSelectionMode, type SelectionTarget } from './use-selection-mode';
+export { useFollowUpState } from '../board-hooks';
+export { useSelectionMode, type SelectionTarget } from '../board-hooks';
 export { useListViewState } from './use-list-view-state';
 export {
   useBoardStatusTabs,

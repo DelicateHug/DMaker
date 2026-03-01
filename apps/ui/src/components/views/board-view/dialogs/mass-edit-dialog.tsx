@@ -6,15 +6,14 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
+} from '@/components/ui/overlays';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/forms';
+import { Label } from '@/components/ui/forms';
 import { AlertCircle } from 'lucide-react';
 import { modelSupportsThinking } from '@/lib/utils';
 import { Feature, ModelAlias, ThinkingLevel } from '@/store/app-store';
-import { TestingTabContent, PrioritySelect, WorkModeSelector, PhaseModelSelector } from '../shared';
-import type { WorkMode } from '../shared';
+import { TestingTabContent, PrioritySelect, PhaseModelSelector } from '../shared';
 import { isCursorModel, type PhaseModelEntry } from '@dmaker/types';
 import { cn } from '@/lib/utils';
 
@@ -22,10 +21,7 @@ interface MassEditDialogProps {
   open: boolean;
   onClose: () => void;
   selectedFeatures: Feature[];
-  onApply: (updates: Partial<Feature>, workMode: WorkMode) => Promise<void>;
-  branchSuggestions: string[];
-  branchCardCounts?: Record<string, number>;
-  currentBranch?: string;
+  onApply: (updates: Partial<Feature>) => Promise<void>;
 }
 
 interface ApplyState {
@@ -33,7 +29,6 @@ interface ApplyState {
   thinkingLevel: boolean;
   priority: boolean;
   skipTests: boolean;
-  branchName: boolean;
 }
 
 function getMixedValues(features: Feature[]): Record<string, boolean> {
@@ -44,7 +39,6 @@ function getMixedValues(features: Feature[]): Record<string, boolean> {
     thinkingLevel: !features.every((f) => f.thinkingLevel === first.thinkingLevel),
     priority: !features.every((f) => f.priority === first.priority),
     skipTests: !features.every((f) => f.skipTests === first.skipTests),
-    branchName: !features.every((f) => f.branchName === first.branchName),
   };
 }
 
@@ -95,15 +89,7 @@ function FieldWrapper({ label, isMixed, willApply, onApplyChange, children }: Fi
   );
 }
 
-export function MassEditDialog({
-  open,
-  onClose,
-  selectedFeatures,
-  onApply,
-  branchSuggestions,
-  branchCardCounts,
-  currentBranch,
-}: MassEditDialogProps) {
+export function MassEditDialog({ open, onClose, selectedFeatures, onApply }: MassEditDialogProps) {
   const [isApplying, setIsApplying] = useState(false);
 
   // Track which fields to apply
@@ -112,7 +98,6 @@ export function MassEditDialog({
     thinkingLevel: false,
     priority: false,
     skipTests: false,
-    branchName: false,
   });
 
   // Field values
@@ -120,18 +105,6 @@ export function MassEditDialog({
   const [thinkingLevel, setThinkingLevel] = useState<ThinkingLevel>('none');
   const [priority, setPriority] = useState(2);
   const [skipTests, setSkipTests] = useState(false);
-
-  // Work mode and branch name state
-  const [workMode, setWorkMode] = useState<WorkMode>(() => {
-    // Derive initial work mode from first selected feature's branchName
-    if (selectedFeatures.length > 0 && selectedFeatures[0].branchName) {
-      return 'custom';
-    }
-    return 'current';
-  });
-  const [branchName, setBranchName] = useState(() => {
-    return getInitialValue(selectedFeatures, 'branchName', '') as string;
-  });
 
   // Calculate mixed values
   const mixedValues = useMemo(() => getMixedValues(selectedFeatures), [selectedFeatures]);
@@ -144,16 +117,11 @@ export function MassEditDialog({
         thinkingLevel: false,
         priority: false,
         skipTests: false,
-        branchName: false,
       });
       setModel(getInitialValue(selectedFeatures, 'model', 'sonnet') as ModelAlias);
       setThinkingLevel(getInitialValue(selectedFeatures, 'thinkingLevel', 'none') as ThinkingLevel);
       setPriority(getInitialValue(selectedFeatures, 'priority', 2));
       setSkipTests(getInitialValue(selectedFeatures, 'skipTests', false));
-      // Reset work mode and branch name
-      const initialBranchName = getInitialValue(selectedFeatures, 'branchName', '') as string;
-      setBranchName(initialBranchName);
-      setWorkMode(initialBranchName ? 'custom' : 'current');
     }
   }, [open, selectedFeatures]);
 
@@ -164,12 +132,6 @@ export function MassEditDialog({
     if (applyState.thinkingLevel) updates.thinkingLevel = thinkingLevel;
     if (applyState.priority) updates.priority = priority;
     if (applyState.skipTests) updates.skipTests = skipTests;
-    if (applyState.branchName) {
-      // For 'current' mode, use empty string (work on current branch)
-      // For 'auto' mode, use empty string (will be auto-generated)
-      // For 'custom' mode, use the specified branch name
-      updates.branchName = workMode === 'custom' ? branchName : '';
-    }
 
     if (Object.keys(updates).length === 0) {
       onClose();
@@ -178,7 +140,7 @@ export function MassEditDialog({
 
     setIsApplying(true);
     try {
-      await onApply(updates, workMode);
+      await onApply(updates);
       onClose();
     } finally {
       setIsApplying(false);
@@ -249,25 +211,6 @@ export function MassEditDialog({
               skipTests={skipTests}
               onSkipTestsChange={setSkipTests}
               testIdPrefix="mass-edit"
-            />
-          </FieldWrapper>
-
-          {/* Branch / Work Mode */}
-          <FieldWrapper
-            label="Branch / Work Mode"
-            isMixed={mixedValues.branchName}
-            willApply={applyState.branchName}
-            onApplyChange={(apply) => setApplyState((prev) => ({ ...prev, branchName: apply }))}
-          >
-            <WorkModeSelector
-              workMode={workMode}
-              onWorkModeChange={setWorkMode}
-              branchName={branchName}
-              onBranchNameChange={setBranchName}
-              branchSuggestions={branchSuggestions}
-              branchCardCounts={branchCardCounts}
-              currentBranch={currentBranch}
-              testIdPrefix="mass-edit-work-mode"
             />
           </FieldWrapper>
         </div>

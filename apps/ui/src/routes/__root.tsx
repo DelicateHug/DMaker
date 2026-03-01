@@ -1,5 +1,5 @@
 import { createRootRoute, Outlet, useLocation, useNavigate } from '@tanstack/react-router';
-import { lazy, Suspense, useEffect, useState, useCallback, useDeferredValue, useRef } from 'react';
+import { lazy, Suspense, useEffect, useState, useCallback, useDeferredValue } from 'react';
 import { createLogger } from '@dmaker/utils/logger';
 import { loadFontByFamily } from '@/lib/font-loader';
 import { loadTheme } from '@/lib/theme-loader';
@@ -17,12 +17,10 @@ import { getElectronAPI, isElectron } from '@/lib/electron';
 import { isMac } from '@/lib/utils';
 import { initializeProject } from '@/lib/project-init';
 import {
-  initApiKey,
-  verifySession,
-  checkSandboxEnvironment,
   getServerUrlSync,
   getHttpApiClient,
   handleServerOffline,
+  initServerUrl,
 } from '@/lib/http-api-client';
 import {
   hydrateStoreFromSettings,
@@ -30,26 +28,22 @@ import {
   performSettingsMigration,
 } from '@/hooks/use-settings-migration';
 import { Toaster } from 'sonner';
-import { ThemeOption, themeOptions } from '@/config/theme-options';
+import { ThemeOption, themeOptions } from '@/config';
 import { LoadingState } from '@/components/ui/loading-state';
-import { PersistentViewContainer } from '@/components/ui/persistent-view-container';
+import { LayerStack } from '@/components/ui/layer-stack';
+import { RouteErrorBoundary } from '@/components/ui/route-error-boundary';
 import { useProjectSettingsLoader } from '@/hooks/use-project-settings-loader';
+import { useLayerStore, type LayerId } from '@/store/layer-store';
 import type { Project } from '@/lib/electron';
 
-// Eagerly preload the board view chunk so it's ready when auth gates clear.
+// Lazy-load the board view (also eagerly preloaded below)
+const LazyBoardView = lazy(() =>
+  import('@/components/views/board-view').then((m) => ({ default: m.BoardView }))
+);
+
+// Eagerly preload the board view chunk so it's ready when gates clear.
 // This runs at module evaluation time (before any component renders).
 void import('@/components/views/board-view');
-
-// Lazy-load heavy, conditionally-rendered components to reduce initial bundle size.
-// Sandbox dialogs are only shown on first run or when not containerized.
-const SandboxRiskDialog = lazy(() =>
-  import('@/components/dialogs/sandbox-risk-dialog').then((m) => ({ default: m.SandboxRiskDialog }))
-);
-const SandboxRejectionScreen = lazy(() =>
-  import('@/components/dialogs/sandbox-rejection-screen').then((m) => ({
-    default: m.SandboxRejectionScreen,
-  }))
-);
 
 const logger = createLogger('RootLayout');
 const SERVER_READY_MAX_ATTEMPTS = 4;
@@ -60,55 +54,6 @@ const NO_STORE_CACHE_MODE: RequestCache = 'no-store';
 const AUTO_OPEN_HISTORY_INDEX = 0;
 const SINGLE_PROJECT_COUNT = 1;
 const DEFAULT_LAST_OPENED_TIME_MS = 0;
-
-// --- Optimistic Auth Cache ---
-// Caches successful auth+settings state so subsequent app loads can skip
-// the "Loading..." screens and render the app immediately while verifying
-// in the background. The cache is invalidated on logout or auth failure.
-const AUTH_CACHE_KEY = 'dmaker:auth-cached';
-const SETUP_COMPLETE_CACHE_KEY = 'dmaker:setup-complete-cached';
-
-function getCachedAuthState(): boolean {
-  try {
-    return localStorage.getItem(AUTH_CACHE_KEY) === 'true';
-  } catch {
-    return false;
-  }
-}
-
-function getCachedSetupComplete(): boolean {
-  try {
-    return localStorage.getItem(SETUP_COMPLETE_CACHE_KEY) === 'true';
-  } catch {
-    return false;
-  }
-}
-
-function setCachedAuthState(authenticated: boolean, setupComplete: boolean): void {
-  try {
-    if (authenticated) {
-      localStorage.setItem(AUTH_CACHE_KEY, 'true');
-    } else {
-      localStorage.removeItem(AUTH_CACHE_KEY);
-    }
-    if (setupComplete) {
-      localStorage.setItem(SETUP_COMPLETE_CACHE_KEY, 'true');
-    } else {
-      localStorage.removeItem(SETUP_COMPLETE_CACHE_KEY);
-    }
-  } catch {
-    // localStorage unavailable — ignore
-  }
-}
-
-function clearCachedAuthState(): void {
-  try {
-    localStorage.removeItem(AUTH_CACHE_KEY);
-    localStorage.removeItem(SETUP_COMPLETE_CACHE_KEY);
-  } catch {
-    // ignore
-  }
-}
 
 // --- Settings Cache ---
 // Caches the last successfully loaded settings so subsequent app loads can
@@ -151,7 +96,7 @@ const AUTO_OPEN_STATUS = {
 type AutoOpenStatus = (typeof AUTO_OPEN_STATUS)[keyof typeof AUTO_OPEN_STATUS];
 
 // Apply stored theme immediately on page load (before React hydration)
-// This prevents flash of default theme on login/setup pages
+// This prevents flash of default theme on setup pages
 function applyStoredTheme(): void {
   const storedTheme = getStoredTheme();
   if (storedTheme) {
@@ -262,8 +207,6 @@ function RootLayoutContent() {
     theme,
     fontFamilySans,
     fontFamilyMono,
-    skipSandboxWarning,
-    setSkipSandboxWarning,
     fetchCodexModels,
   } = useAppStore(
     useShallow((state) => ({
@@ -278,8 +221,6 @@ function RootLayoutContent() {
       theme: state.theme,
       fontFamilySans: state.fontFamilySans,
       fontFamilyMono: state.fontFamilyMono,
-      skipSandboxWarning: state.skipSandboxWarning,
-      setSkipSandboxWarning: state.setSkipSandboxWarning,
       fetchCodexModels: state.fetchCodexModels,
     }))
   );
@@ -287,40 +228,20 @@ function RootLayoutContent() {
   const navigate = useNavigate();
   const [isMounted, setIsMounted] = useState(false);
   const [streamerPanelOpen, setStreamerPanelOpen] = useState(false);
-  const authChecked = useAuthStore((s) => s.authChecked);
-  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
-  const settingsLoaded = useAuthStore((s) => s.settingsLoaded);
+  const [appReady, setAppReady] = useState(false);
+  const [settingsReady, setSettingsReady] = useState(false);
   const { openFileBrowser } = useFileBrowser();
 
   // Load project settings when switching projects
   useProjectSettingsLoader();
 
   const isSetupRoute = location.pathname === '/setup';
-  const isLoginRoute = location.pathname === '/login';
-  const isLoggedOutRoute = location.pathname === '/logged-out';
   const isDashboardRoute = location.pathname === '/dashboard';
-  const isBoardRoute = location.pathname === '/board';
   const isRootRoute = location.pathname === '/';
   const [autoOpenStatus, setAutoOpenStatus] = useState<AutoOpenStatus>(AUTO_OPEN_STATUS.idle);
   const autoOpenCandidate = selectAutoOpenProject(currentProject, projects, projectHistory);
-  const canAutoOpen =
-    authChecked &&
-    isAuthenticated &&
-    settingsLoaded &&
-    setupComplete &&
-    !isLoginRoute &&
-    !isLoggedOutRoute &&
-    !isSetupRoute &&
-    !!autoOpenCandidate;
+  const canAutoOpen = settingsReady && setupComplete && !isSetupRoute && !!autoOpenCandidate;
   const shouldAutoOpen = canAutoOpen && autoOpenStatus !== AUTO_OPEN_STATUS.done;
-  const shouldBlockForSettings =
-    authChecked && isAuthenticated && !settingsLoaded && !isLoginRoute && !isLoggedOutRoute;
-
-  // Sandbox environment check state
-  type SandboxStatus = 'pending' | 'containerized' | 'needs-confirmation' | 'denied' | 'confirmed';
-  // Always start from pending on a fresh page load so the user sees the prompt
-  // each time the app is launched/refreshed (unless running in a container).
-  const [sandboxStatus, setSandboxStatus] = useState<SandboxStatus>('pending');
 
   // Hidden streamer panel - opens with "\" key
   const handleStreamerPanelShortcut = useCallback((event: KeyboardEvent) => {
@@ -379,409 +300,138 @@ function RootLayoutContent() {
     setIsMounted(true);
   }, []);
 
-  // Check sandbox environment only after user is authenticated, setup is complete, and settings are loaded
+  // Global listener for server offline/connection errors.
+  // Logs the event since there is no login page to redirect to.
   useEffect(() => {
-    // Skip if already decided
-    if (sandboxStatus !== 'pending') {
-      return;
-    }
-
-    // Don't check sandbox until user is authenticated, has completed setup, and settings are loaded
-    // CRITICAL: settingsLoaded must be true to ensure skipSandboxWarning has been hydrated from server
-    if (!authChecked || !isAuthenticated || !setupComplete || !settingsLoaded) {
-      return;
-    }
-
-    const checkSandbox = async () => {
-      try {
-        const result = await checkSandboxEnvironment();
-
-        if (result.isContainerized) {
-          // Running in a container, no warning needed
-          setSandboxStatus('containerized');
-        } else if (result.skipSandboxWarning || skipSandboxWarning) {
-          // Skip if env var is set OR if user preference is set
-          setSandboxStatus('confirmed');
-        } else {
-          // Not containerized, show warning dialog
-          setSandboxStatus('needs-confirmation');
-        }
-      } catch (error) {
-        logger.error('Failed to check environment:', error);
-        // On error, assume not containerized and show warning
-        if (skipSandboxWarning) {
-          setSandboxStatus('confirmed');
-        } else {
-          setSandboxStatus('needs-confirmation');
-        }
-      }
+    const handleOffline = () => {
+      logger.warn('dmaker:server-offline event received — server appears to be offline');
+      clearCachedSettings();
     };
 
-    checkSandbox();
-  }, [
-    sandboxStatus,
-    skipSandboxWarning,
-    authChecked,
-    isAuthenticated,
-    setupComplete,
-    settingsLoaded,
-  ]);
-
-  // Handle sandbox risk confirmation
-  const handleSandboxConfirm = useCallback(
-    (skipInFuture: boolean) => {
-      if (skipInFuture) {
-        setSkipSandboxWarning(true);
-      }
-      setSandboxStatus('confirmed');
-    },
-    [setSkipSandboxWarning]
-  );
-
-  // Handle sandbox risk denial
-  const handleSandboxDeny = useCallback(async () => {
-    if (isElectron()) {
-      // In Electron mode, quit the application
-      // Use window.electronAPI directly since getElectronAPI() returns the HTTP client
-      try {
-        const electronAPI = window.electronAPI;
-        if (electronAPI?.quit) {
-          await electronAPI.quit();
-        } else {
-          logger.error('quit() not available on electronAPI');
-        }
-      } catch (error) {
-        logger.error('Failed to quit app:', error);
-      }
-    } else {
-      // In web mode, show rejection screen
-      setSandboxStatus('denied');
-    }
+    window.addEventListener('dmaker:server-offline', handleOffline);
+    return () => {
+      window.removeEventListener('dmaker:server-offline', handleOffline);
+    };
   }, []);
 
-  // Ref to prevent concurrent auth checks from running
-  const authCheckRunning = useRef(false);
-
-  // Global listener for 401/403 responses during normal app usage.
-  // This is triggered by the HTTP client whenever an authenticated request returns 401/403.
-  // Works for ALL modes (unified flow)
+  // Initialize: wait for server, load settings, render app.
+  // No authentication required.
   useEffect(() => {
-    const handleLoggedOut = () => {
-      logger.warn('dmaker:logged-out event received!');
-      clearCachedAuthState();
-      clearCachedSettings();
-      useAuthStore.getState().setAuthState({ isAuthenticated: false, authChecked: true });
+    const initialize = async () => {
+      // Populate the server URL from Electron IPC before any fetch calls
+      await initServerUrl();
 
-      // Navigate directly to /login instead of /logged-out
-      // This removes the unnecessary intermediate screen
-      if (location.pathname !== '/login' && location.pathname !== '/logged-out') {
-        logger.warn('Navigating to /login due to logged-out event');
-        navigate({ to: '/login' });
-      }
-    };
-
-    window.addEventListener('dmaker:logged-out', handleLoggedOut);
-    return () => {
-      window.removeEventListener('dmaker:logged-out', handleLoggedOut);
-    };
-  }, [location.pathname, navigate]);
-
-  // Global listener for server offline/connection errors.
-  // This is triggered when a connection error is detected (e.g., server stopped).
-  // Redirects to login page which will detect server is offline and show error UI.
-  useEffect(() => {
-    const handleServerOffline = () => {
-      logger.warn('dmaker:server-offline event received!');
-      clearCachedAuthState();
-      clearCachedSettings();
-      useAuthStore.getState().setAuthState({ isAuthenticated: false, authChecked: true });
-
-      // Navigate to login - the login page will detect server is offline and show appropriate UI
-      if (location.pathname !== '/login' && location.pathname !== '/logged-out') {
-        navigate({ to: '/login' });
-      }
-    };
-
-    window.addEventListener('dmaker:server-offline', handleServerOffline);
-    return () => {
-      window.removeEventListener('dmaker:server-offline', handleServerOffline);
-    };
-  }, [location.pathname, navigate]);
-
-  // Initialize authentication
-  // - Electron mode: Uses API key from IPC (header-based auth)
-  // - Web mode: Uses HTTP-only session cookie
-  //
-  // OPTIMIZATION: If we have a cached auth state from a previous successful session,
-  // we optimistically mark auth as checked so the app renders immediately.
-  // The actual verification still runs in the background and will redirect
-  // to login if the session has expired.
-  useEffect(() => {
-    // Prevent concurrent auth checks
-    if (authCheckRunning.current) {
-      return;
-    }
-
-    const initAuth = async () => {
-      authCheckRunning.current = true;
-
-      // --- Optimistic fast path ---
-      // If we previously completed auth+settings successfully, use cached state
-      // to immediately render the full app (including board) while we verify
-      // in the background. Both auth AND settings are restored from cache,
-      // eliminating the "Loading..." and "Loading settings..." blocking gates.
-      const hasCachedAuth = getCachedAuthState();
-      const hasCachedSetup = getCachedSetupComplete();
+      // Use cached settings for instant render if available
       const cachedSettings = getCachedSettings();
-
-      if (hasCachedAuth && hasCachedSetup && cachedSettings) {
-        logger.info('Using cached auth + settings for instant render');
-        // Hydrate store from cached settings so the UI has real data immediately
+      if (cachedSettings) {
         hydrateStoreFromSettings(cachedSettings);
         signalMigrationComplete();
-        // Mark ALL gates as passed — the app renders the board instantly
-        useAuthStore.getState().setAuthState({
-          authChecked: true,
-          isAuthenticated: true,
-          settingsLoaded: true,
-        });
-      } else if (hasCachedAuth && hasCachedSetup) {
-        logger.info('Using cached auth state for instant render (no settings cache)');
-        // Mark authChecked + isAuthenticated so the router doesn't show "Loading..."
-        // settingsLoaded stays false — the settings will be hydrated below.
-        useAuthStore.getState().setAuthState({
-          authChecked: true,
-          isAuthenticated: true,
-        });
+        setSettingsReady(true);
       }
 
       try {
-        // Initialize API key for Electron mode
-        await initApiKey();
-
         const serverReady = await waitForServerReady();
         if (!serverReady) {
-          clearCachedAuthState();
-          clearCachedSettings();
           handleServerOffline();
           return;
         }
 
-        // 1. Verify session (Single Request, ALL modes)
-        let isValid = false;
-        try {
-          isValid = await verifySession();
-        } catch (error) {
-          logger.warn('Session verification failed (likely network/server issue):', error);
-          isValid = false;
-        }
+        // Load settings from server
+        const api = getHttpApiClient();
+        const maxAttempts = 4;
+        const baseDelayMs = 250;
+        let lastError: unknown = null;
 
-        if (isValid) {
-          // 2. Load settings (and hydrate stores) before marking auth as checked.
-          // This prevents useSettingsSync from pushing default/empty state to the server
-          // when the backend is still starting up or temporarily unavailable.
-          const api = getHttpApiClient();
+        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
           try {
-            const maxAttempts = 4;
-            const baseDelayMs = 250;
-            let lastError: unknown = null;
+            const settingsResult = await api.settings.getGlobal();
+            if (settingsResult.success && settingsResult.settings) {
+              const { settings: finalSettings, migrated } = await performSettingsMigration(
+                settingsResult.settings as unknown as Parameters<typeof performSettingsMigration>[0]
+              );
 
-            for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-              try {
-                const settingsResult = await api.settings.getGlobal();
-                if (settingsResult.success && settingsResult.settings) {
-                  const { settings: finalSettings, migrated } = await performSettingsMigration(
-                    settingsResult.settings as unknown as Parameters<
-                      typeof performSettingsMigration
-                    >[0]
-                  );
-
-                  if (migrated) {
-                    logger.info('Settings migration from localStorage completed');
-                  }
-
-                  // Hydrate store with the final settings (merged if migration occurred)
-                  hydrateStoreFromSettings(finalSettings);
-
-                  // Cache settings for instant startup on next load
-                  setCachedSettings(finalSettings);
-
-                  // CRITICAL: Wait for React to render the hydrated state before
-                  // signaling completion. Zustand updates are synchronous, but React
-                  // hasn't necessarily re-rendered yet. This prevents race conditions
-                  // where useSettingsSync reads state before the UI has updated.
-                  await new Promise((resolve) => setTimeout(resolve, 0));
-
-                  // Signal that settings hydration is complete FIRST.
-                  // This ensures useSettingsSync's waitForMigrationComplete() will resolve
-                  // immediately when it starts after auth state change, preventing it from
-                  // syncing default empty state to the server.
-                  signalMigrationComplete();
-
-                  // Now mark auth as checked AND settings as loaded.
-                  // The settingsLoaded flag ensures useSettingsSync won't start syncing
-                  // until settings have been properly hydrated, even if authChecked was
-                  // set earlier by login-view.
-                  useAuthStore.getState().setAuthState({
-                    isAuthenticated: true,
-                    authChecked: true,
-                    settingsLoaded: true,
-                  });
-
-                  // Cache successful auth state for next startup
-                  setCachedAuthState(true, true);
-
-                  return;
-                }
-
-                lastError = settingsResult;
-              } catch (error) {
-                lastError = error;
+              if (migrated) {
+                logger.info('Settings migration from localStorage completed');
               }
 
-              const delayMs = Math.min(1500, baseDelayMs * attempt);
-              logger.warn(
-                `Settings not ready (attempt ${attempt}/${maxAttempts}); retrying in ${delayMs}ms...`,
-                lastError
-              );
-              await new Promise((resolve) => setTimeout(resolve, delayMs));
-            }
+              hydrateStoreFromSettings(finalSettings);
+              setCachedSettings(finalSettings);
+              await new Promise((resolve) => setTimeout(resolve, 0));
+              signalMigrationComplete();
 
-            throw lastError ?? new Error('Failed to load settings');
+              // Set auth store state for compatibility with use-settings-sync.ts
+              useAuthStore.getState().setAuthState({
+                authChecked: true,
+                isAuthenticated: true,
+                settingsLoaded: true,
+              });
+
+              setSettingsReady(true);
+              setAppReady(true);
+              return;
+            }
+            lastError = settingsResult;
           } catch (error) {
-            logger.error('Failed to fetch settings after valid session:', error);
-            // If we can't load settings, we must NOT start syncing defaults to the server.
-            // Treat as not authenticated for now (backend likely unavailable) and unblock sync hook.
-            clearCachedAuthState();
-            clearCachedSettings();
-            useAuthStore.getState().setAuthState({ isAuthenticated: false, authChecked: true });
-            signalMigrationComplete();
-            if (location.pathname !== '/login') {
-              navigate({ to: '/login' });
-            }
-            return;
+            lastError = error;
           }
-        } else {
-          // Session is invalid or expired - treat as not authenticated
-          clearCachedAuthState();
-          useAuthStore.getState().setAuthState({ isAuthenticated: false, authChecked: true });
-          // Signal migration complete so sync hook doesn't hang (nothing to sync when not authenticated)
-          signalMigrationComplete();
 
-          // Redirect to login
-          if (location.pathname !== '/login') {
-            navigate({ to: '/login' });
-          }
+          const delayMs = Math.min(1500, baseDelayMs * attempt);
+          logger.warn(
+            `Settings not ready (attempt ${attempt}/${maxAttempts}); retrying in ${delayMs}ms...`,
+            lastError
+          );
+          await new Promise((resolve) => setTimeout(resolve, delayMs));
         }
-      } catch (error) {
-        logger.error('Failed to initialize auth:', error);
-        // On error, treat as not authenticated
-        clearCachedAuthState();
-        useAuthStore.getState().setAuthState({ isAuthenticated: false, authChecked: true });
-        // Signal migration complete so sync hook doesn't hang
+
+        // Failed to load settings but server is up - still allow access
+        logger.error('Failed to load settings after all attempts');
         signalMigrationComplete();
-        if (location.pathname !== '/login') {
-          navigate({ to: '/login' });
-        }
-      } finally {
-        authCheckRunning.current = false;
+        setAppReady(true);
+      } catch (error) {
+        logger.error('Failed to initialize:', error);
+        signalMigrationComplete();
+        setAppReady(true);
       }
     };
 
-    initAuth();
-  }, []); // Runs once per load; auth state drives routing rules
+    initialize();
+  }, []);
 
-  // Note: Settings are now loaded in __root.tsx after successful session verification
-  // This ensures a unified flow across all modes (Electron, web, external server)
+  // Map of old routes to layer IDs for redirect handling
+  const routeToLayerMap: Record<string, string> = {
+    '/settings': 'settings',
+    '/terminal': 'terminal',
+    '/ideation': 'ideation',
+    '/spec': 'spec',
+    '/memory': 'memory',
+    '/github-issues': 'github-issues',
+    '/github-prs': 'github-prs',
+    '/project-settings': 'project-settings',
+    '/interview': 'interview',
+  };
 
-  // Routing rules (ALL modes - unified flow):
-  // - If not authenticated: force /logged-out (even /setup is protected)
-  // - If authenticated but setup incomplete: force /setup
-  // - If authenticated and setup complete: allow access to app
+  // Simplified routing: no auth gates, just setup check
+  // Also redirects old view routes to board + layer
   useEffect(() => {
-    logger.debug('Routing effect triggered:', {
-      authChecked,
-      isAuthenticated,
-      settingsLoaded,
-      setupComplete,
-      pathname: location.pathname,
-    });
+    if (!appReady || !settingsReady) return;
 
-    // Wait for auth check to complete before enforcing any redirects
-    if (!authChecked) {
-      logger.debug('Auth not checked yet, skipping routing');
-      return;
-    }
-
-    // Unauthenticated -> force /login
-    if (!isAuthenticated) {
-      logger.warn('Not authenticated, redirecting to /login. Auth state:', {
-        authChecked,
-        isAuthenticated,
-        settingsLoaded,
-        currentPath: location.pathname,
-      });
-      if (location.pathname !== '/login') {
-        navigate({ to: '/login' });
-      }
-      return;
-    }
-
-    // Wait for settings to be loaded before making setupComplete-based routing decisions
-    // This prevents redirecting to /setup before we know the actual setupComplete value
-    if (!settingsLoaded) return;
-
-    // Authenticated -> determine whether setup is required
     if (!setupComplete && location.pathname !== '/setup') {
       navigate({ to: '/setup' });
       return;
     }
 
-    // Setup complete but user is still on /setup -> go to dashboard
     if (setupComplete && location.pathname === '/setup') {
       navigate({ to: '/dashboard' });
-    }
-  }, [authChecked, isAuthenticated, settingsLoaded, setupComplete, location.pathname, navigate]);
-
-  // Fallback: If auth is checked and authenticated but settings not loaded,
-  // it means login-view or another component set auth state before __root.tsx's
-  // auth flow completed. Load settings now to prevent sync with empty state.
-  useEffect(() => {
-    // Only trigger if auth is valid but settings aren't loaded yet
-    // This handles the case where login-view sets authChecked=true before we finish our auth flow
-    if (!authChecked || !isAuthenticated || settingsLoaded) {
-      logger.debug('Fallback skipped:', { authChecked, isAuthenticated, settingsLoaded });
       return;
     }
 
-    logger.info('Auth valid but settings not loaded - triggering fallback load');
-
-    const loadSettings = async () => {
-      const api = getHttpApiClient();
-      try {
-        logger.debug('Fetching settings in fallback...');
-        const settingsResult = await api.settings.getGlobal();
-        logger.debug('Settings fetched:', settingsResult.success ? 'success' : 'failed');
-        if (settingsResult.success && settingsResult.settings) {
-          const { settings: finalSettings } = await performSettingsMigration(
-            settingsResult.settings as unknown as Parameters<typeof performSettingsMigration>[0]
-          );
-          logger.debug('Settings migrated, hydrating stores...');
-          hydrateStoreFromSettings(finalSettings);
-          setCachedSettings(finalSettings);
-          await new Promise((resolve) => setTimeout(resolve, 0));
-          signalMigrationComplete();
-          logger.debug('Setting settingsLoaded=true');
-          useAuthStore.getState().setAuthState({ settingsLoaded: true });
-          logger.info('Fallback settings load completed successfully');
-        }
-      } catch (error) {
-        logger.error('Failed to load settings in fallback:', error);
-      }
-    };
-
-    loadSettings();
-  }, [authChecked, isAuthenticated, settingsLoaded]);
+    // Redirect old routes to board + open their layer
+    const layerId = routeToLayerMap[location.pathname];
+    if (layerId) {
+      useLayerStore.getState().openLayer(layerId as LayerId);
+      navigate({ to: '/board' });
+    }
+  }, [appReady, settingsReady, setupComplete, location.pathname, navigate]);
 
   useEffect(() => {
     setGlobalFileBrowser(openFileBrowser);
@@ -816,7 +466,7 @@ function RootLayoutContent() {
   // Redirect from welcome page based on project state
   useEffect(() => {
     if (isMounted && isRootRoute) {
-      if (!settingsLoaded || shouldAutoOpen) {
+      if (!settingsReady || shouldAutoOpen) {
         return;
       }
       if (currentProject) {
@@ -827,7 +477,7 @@ function RootLayoutContent() {
         navigate({ to: '/dashboard' });
       }
     }
-  }, [isMounted, currentProject, isRootRoute, navigate, shouldAutoOpen, settingsLoaded]);
+  }, [isMounted, currentProject, isRootRoute, navigate, shouldAutoOpen, settingsReady]);
 
   // Auto-open the most recent project on startup
   useEffect(() => {
@@ -881,10 +531,9 @@ function RootLayoutContent() {
     isRootRoute,
   ]);
 
-  // Bootstrap Codex models on app startup (after auth completes)
+  // Bootstrap Codex models on app startup (after settings are ready)
   useEffect(() => {
-    // Only fetch if authenticated and Codex CLI is available
-    if (!authChecked || !isAuthenticated) return;
+    if (!settingsReady) return;
 
     const isCodexAvailable = codexCliStatus?.installed && codexCliStatus?.hasApiKey;
     if (!isCodexAvailable) return;
@@ -893,7 +542,7 @@ function RootLayoutContent() {
     fetchCodexModels().catch((error) => {
       logger.warn('Failed to bootstrap Codex models:', error);
     });
-  }, [authChecked, isAuthenticated, codexCliStatus, fetchCodexModels]);
+  }, [settingsReady, codexCliStatus, fetchCodexModels]);
 
   // Apply theme class to document - use deferred value to avoid blocking UI
   // Dynamically loads the theme CSS on demand before applying the class.
@@ -970,31 +619,8 @@ function RootLayoutContent() {
     });
   }, [effectiveFontSans, effectiveFontMono]);
 
-  // Show sandbox rejection screen if user denied the risk warning
-  if (sandboxStatus === 'denied') {
-    return (
-      <Suspense fallback={null}>
-        <SandboxRejectionScreen />
-      </Suspense>
-    );
-  }
-
-  // Show sandbox risk dialog if not containerized and user hasn't confirmed
-  // The dialog is rendered as an overlay while the main content is blocked
-  const showSandboxDialog = sandboxStatus === 'needs-confirmation';
-
-  // Show login page (full screen, no sidebar)
-  // Note: No sandbox dialog here - it only shows after login and setup complete
-  if (isLoginRoute || isLoggedOutRoute) {
-    return (
-      <main className="h-screen overflow-hidden" data-testid="app-container">
-        <Outlet />
-      </main>
-    );
-  }
-
-  // Wait for auth check before rendering protected routes (ALL modes - unified flow)
-  if (!authChecked) {
+  // Single loading gate: wait for app to be ready
+  if (!appReady) {
     return (
       <main className="flex h-screen items-center justify-center" data-testid="app-container">
         <LoadingState message="Loading..." />
@@ -1002,29 +628,7 @@ function RootLayoutContent() {
     );
   }
 
-  // Redirect to logged-out if not authenticated (ALL modes - unified flow)
-  // Show loading state while navigation is in progress
-  if (!isAuthenticated) {
-    return (
-      <main className="flex h-screen items-center justify-center" data-testid="app-container">
-        <LoadingState message="Redirecting..." />
-      </main>
-    );
-  }
-
-  if (shouldBlockForSettings) {
-    return (
-      <main className="flex h-screen items-center justify-center" data-testid="app-container">
-        <LoadingState message="Loading settings..." />
-      </main>
-    );
-  }
-
-  // Auto-open runs in the background — no longer blocks the UI.
-  // The board will render with whatever data is available while the
-  // project is being initialized in the background.
-
-  // Show setup page (full screen, no sidebar) - authenticated only
+  // Show setup page (full screen, no sidebar)
   if (isSetupRoute) {
     return (
       <main className="h-screen overflow-hidden" data-testid="app-container">
@@ -1033,24 +637,13 @@ function RootLayoutContent() {
     );
   }
 
-  // Show dashboard page (full screen, no sidebar) - authenticated only
+  // Show dashboard page (full screen, no sidebar)
   if (isDashboardRoute) {
     return (
-      <>
-        <main className="h-screen overflow-hidden" data-testid="app-container">
-          <Outlet />
-          <Toaster richColors position="bottom-right" />
-        </main>
-        {showSandboxDialog && (
-          <Suspense fallback={null}>
-            <SandboxRiskDialog
-              open={showSandboxDialog}
-              onConfirm={handleSandboxConfirm}
-              onDeny={handleSandboxDeny}
-            />
-          </Suspense>
-        )}
-      </>
+      <main className="h-screen overflow-hidden" data-testid="app-container">
+        <Outlet />
+        <Toaster richColors position="bottom-right" />
+      </main>
     );
   }
 
@@ -1064,16 +657,24 @@ function RootLayoutContent() {
             aria-hidden="true"
           />
         )}
-        {/* Top Navigation Bar - replaces sidebar, relative for mobile dropdown positioning */}
+        {/* Top Navigation Bar - simplified single row */}
         <div className="relative z-50 shrink-0">
           <TopNavigationBar />
         </div>
+        {/* Board View - always mounted as the base layer */}
         <div
           className="flex-1 flex flex-col overflow-hidden transition-all duration-300"
           style={{ marginRight: streamerPanelOpen ? '250px' : '0' }}
         >
-          <PersistentViewContainer />
+          <RouteErrorBoundary>
+            <Suspense fallback={<LoadingState message="Loading board..." />}>
+              <LazyBoardView />
+            </Suspense>
+          </RouteErrorBoundary>
         </div>
+
+        {/* Layer stack - renders tool/settings overlays on top of the board */}
+        <LayerStack />
 
         {/* Hidden streamer panel - opens with "\" key, pushes content */}
         <div
@@ -1083,15 +684,6 @@ function RootLayoutContent() {
         />
         <Toaster richColors position="bottom-right" />
       </main>
-      {showSandboxDialog && (
-        <Suspense fallback={null}>
-          <SandboxRiskDialog
-            open={showSandboxDialog}
-            onConfirm={handleSandboxConfirm}
-            onDeny={handleSandboxDeny}
-          />
-        </Suspense>
-      )}
     </>
   );
 }

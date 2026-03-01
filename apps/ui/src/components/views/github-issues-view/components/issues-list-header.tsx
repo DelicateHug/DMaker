@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { CircleDot, Pencil, RefreshCw, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Input } from '@/components/ui/forms';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/overlays';
 import { cn } from '@/lib/utils';
 import type { IssuesStateFilter } from '../types';
 import { IssuesFilterControls } from './issues-filter-controls';

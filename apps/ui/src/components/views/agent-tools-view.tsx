@@ -1,10 +1,10 @@
 import { useState, useCallback } from 'react';
 import { createLogger } from '@dmaker/utils/logger';
 import { useAppStore } from '@/store/app-store';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/layout';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/forms';
+import { Label } from '@/components/ui/forms';
 import {
   FileText,
   FolderOpen,

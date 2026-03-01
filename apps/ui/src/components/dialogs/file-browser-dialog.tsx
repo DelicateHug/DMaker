@@ -16,10 +16,10 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
+} from '@/components/ui/overlays';
 import { Button } from '@/components/ui/button';
-import { PathInput } from '@/components/ui/path-input';
-import { Kbd, KbdGroup } from '@/components/ui/kbd';
+import { PathInput } from '@/components/ui/forms';
+import { Kbd, KbdGroup } from '@/components/ui/layout';
 import { getDefaultWorkspaceDirectory, saveLastProjectDirectory } from '@/lib/workspace-config';
 import { useOSDetection } from '@/hooks';
 import { apiPost } from '@/lib/api-fetch';

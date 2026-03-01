@@ -287,6 +287,7 @@ export interface GitHubIssue {
   state: string;
   author: GitHubAuthor;
   createdAt: string;
+  closedAt?: string;
   labels: GitHubLabel[];
   url: string;
   body: string;
@@ -469,6 +470,16 @@ export interface GitHubAPI {
     projectPath: string,
     issueNumber: number
   ) => Promise<{ success: boolean; error?: string }>;
+  /** Reopen a closed GitHub issue */
+  reopenIssue: (
+    projectPath: string,
+    issueNumber: number
+  ) => Promise<{ success: boolean; error?: string }>;
+  /** Close an open GitHub issue */
+  closeIssue: (
+    projectPath: string,
+    issueNumber: number
+  ) => Promise<{ success: boolean; error?: string }>;
 }
 
 // Feature Suggestions types
@@ -634,7 +645,6 @@ export interface AutoModeAPI {
   runFeature: (
     projectPath: string,
     featureId: string,
-    useWorktrees?: boolean,
     forceRun?: boolean,
     forceRunClaimed?: boolean
   ) => Promise<{
@@ -644,6 +654,7 @@ export interface AutoModeAPI {
     warning?: 'unsatisfied_dependencies' | 'claimed_by_other';
     message?: string;
     claimedBy?: string;
+    alreadyRunning?: boolean;
     blockingDependencies?: Array<{
       id: string;
       title?: string;
@@ -657,8 +668,7 @@ export interface AutoModeAPI {
   ) => Promise<{ success: boolean; passes?: boolean; error?: string }>;
   resumeFeature: (
     projectPath: string,
-    featureId: string,
-    useWorktrees?: boolean
+    featureId: string
   ) => Promise<{ success: boolean; passes?: boolean; error?: string }>;
   contextExists: (
     projectPath: string,
@@ -671,8 +681,7 @@ export interface AutoModeAPI {
     projectPath: string,
     featureId: string,
     prompt: string,
-    imagePaths?: string[],
-    useWorktrees?: boolean
+    imagePaths?: string[]
   ) => Promise<{ success: boolean; passes?: boolean; error?: string }>;
   commitFeature: (
     projectPath: string,
@@ -1021,7 +1030,8 @@ export interface ElectronAPI {
     }>;
     discoverAgents: (
       projectPath?: string,
-      sources?: Array<'user' | 'project'>
+      sources?: Array<'user' | 'project'>,
+      projects?: Array<{ name: string; path: string }>
     ) => Promise<{
       success: boolean;
       agents?: Array<{
@@ -1034,7 +1044,52 @@ export interface ElectronAPI {
         };
         source: 'user' | 'project';
         filePath: string;
+        folder?: string;
+        projectName?: string;
       }>;
+      error?: string;
+    }>;
+  };
+  agents?: {
+    save: (data: {
+      name: string;
+      description: string;
+      prompt: string;
+      tools?: string[];
+      model?: string;
+      scope: 'user' | 'project';
+      projectPath?: string;
+      originalFilePath?: string;
+    }) => Promise<{ success: boolean; filePath?: string; name?: string; error?: string }>;
+    delete: (filePath: string) => Promise<{ success: boolean; error?: string }>;
+    generate: (data: { description: string; projectPath?: string; model?: string }) => Promise<{
+      success: boolean;
+      agent?: {
+        name: string;
+        description: string;
+        prompt: string;
+        tools?: string[];
+        model?: string;
+      };
+      error?: string;
+    }>;
+    evaluate: (data: {
+      name: string;
+      description: string;
+      prompt: string;
+      tools?: string[];
+      model?: string;
+      projectPath?: string;
+      evaluationModel?: string;
+    }) => Promise<{
+      success: boolean;
+      evaluation?: {
+        score: number;
+        strengths: string[];
+        weaknesses: string[];
+        suggestions: string[];
+        improvedPrompt: string;
+      };
       error?: string;
     }>;
   };
@@ -2183,7 +2238,6 @@ function createMockAutoModeAPI(): AutoModeAPI {
     runFeature: async (
       projectPath: string,
       featureId: string,
-      useWorktrees?: boolean,
       forceRun?: boolean,
       forceRunClaimed?: boolean
     ) => {
@@ -2195,7 +2249,7 @@ function createMockAutoModeAPI(): AutoModeAPI {
       }
 
       console.log(
-        `[Mock] Running feature ${featureId} with useWorktrees: ${useWorktrees}, forceRun: ${forceRun}, forceRunClaimed: ${forceRunClaimed}`
+        `[Mock] Running feature ${featureId} with forceRun: ${forceRun}, forceRunClaimed: ${forceRunClaimed}`
       );
       mockRunningFeatures.add(featureId);
       simulateAutoModeLoop(projectPath, featureId);
@@ -2217,7 +2271,7 @@ function createMockAutoModeAPI(): AutoModeAPI {
       return { success: true, passes: true };
     },
 
-    resumeFeature: async (projectPath: string, featureId: string, useWorktrees?: boolean) => {
+    resumeFeature: async (projectPath: string, featureId: string) => {
       if (mockRunningFeatures.has(featureId)) {
         return {
           success: false,
@@ -2353,8 +2407,7 @@ function createMockAutoModeAPI(): AutoModeAPI {
       projectPath: string,
       featureId: string,
       prompt: string,
-      imagePaths?: string[],
-      useWorktrees?: boolean
+      imagePaths?: string[]
     ) => {
       if (mockRunningFeatures.has(featureId)) {
         return {
@@ -3536,6 +3589,14 @@ function createMockGitHubAPI(): GitHubAPI {
     },
     deleteIssue: async (projectPath: string, issueNumber: number) => {
       console.log('[Mock] Deleting issue:', { projectPath, issueNumber });
+      return { success: false, error: 'Not available in mock mode' };
+    },
+    reopenIssue: async (projectPath: string, issueNumber: number) => {
+      console.log('[Mock] Reopening issue:', { projectPath, issueNumber });
+      return { success: false, error: 'Not available in mock mode' };
+    },
+    closeIssue: async (projectPath: string, issueNumber: number) => {
+      console.log('[Mock] Closing issue:', { projectPath, issueNumber });
       return { success: false, error: 'Not available in mock mode' };
     },
   };

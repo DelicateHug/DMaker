@@ -1,9 +1,6 @@
 import { Button } from '@/components/ui/button';
-import { Slider } from '@/components/ui/slider';
-import {
-  HeaderActionsPanel,
-  HeaderActionsPanelTrigger,
-} from '@/components/ui/header-actions-panel';
+import { Slider } from '@/components/ui/forms';
+import { HeaderActionsPanel, HeaderActionsPanelTrigger } from '@/components/ui/feedback';
 import { Bot, Wand2, Zap, CheckCircle2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { MobileUsageBar } from './mobile-usage-bar';

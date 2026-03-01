@@ -5,14 +5,14 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
+} from '@/components/ui/overlays';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
+} from '@/components/ui/forms';
 import {
   Loader2,
   List,
@@ -23,6 +23,7 @@ import {
   ChevronDown,
   ChevronUp,
   History,
+  Activity,
 } from 'lucide-react';
 import { getElectronAPI } from '@/lib/electron';
 import { LogViewer } from '@/components/ui/log-viewer';
@@ -32,7 +33,8 @@ import { Markdown } from '@/components/ui/markdown';
 import { useAppStore } from '@/store/app-store';
 import { extractSummary, extractAllSummaries, type SummaryEntry } from '@/lib/log-parser';
 import type { AutoModeEvent } from '@/types/electron';
-import type { SummaryHistoryEntry } from '@dmaker/types';
+import type { SummaryHistoryEntry, ExecutionMetrics } from '@dmaker/types';
+import { MetricsPanel } from '@/components/ui/metrics-panel';
 
 /** Generates a timestamp marker in the format recognized by the log-parser: [timestamp:ISO8601] */
 function formatTimestamp(): string {
@@ -183,7 +185,7 @@ interface AgentOutputModalProps {
   };
 }
 
-type ViewMode = 'summary' | 'plan' | 'parsed' | 'raw' | 'changes';
+type ViewMode = 'summary' | 'plan' | 'parsed' | 'raw' | 'changes' | 'metrics';
 
 /** Character limit for truncated description */
 const DESCRIPTION_TRUNCATE_LENGTH = 200;
@@ -206,6 +208,9 @@ export function AgentOutputModal({
   const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
   const [selectedSummaryIndex, setSelectedSummaryIndex] = useState<number>(-1); // -1 means most recent
   const [apiSummaries, setApiSummaries] = useState<SummaryHistoryEntry[]>([]);
+  const [metrics, setMetrics] = useState<ExecutionMetrics | null>(
+    ((featureProp as Record<string, unknown>)?.executionMetrics as ExecutionMetrics | null) ?? null
+  );
 
   // Extract inline summaries from output (backward compatibility)
   const inlineSummaries = useMemo(() => extractAllSummaries(output), [output]);
@@ -256,7 +261,6 @@ export function AgentOutputModal({
   const isLoadingRef = useRef(false);
   /** Buffers streaming events that arrive while loadOutput() is fetching historical output */
   const streamBufferRef = useRef<string>('');
-  const useWorktrees = useAppStore((state) => state.useWorktrees);
 
   // Auto-scroll to bottom when output changes
   useEffect(() => {
@@ -496,12 +500,23 @@ export function AgentOutputModal({
           const emoji = event.passes ? '✅' : '⚠️';
           newContent = `\n${formatTimestamp()}${emoji} Task completed: ${event.message}\n`;
 
+          // Update metrics if included in completion event
+          if ('metrics' in event && event.metrics) {
+            setMetrics(event.metrics as ExecutionMetrics);
+          }
+
           // Close the modal when the feature is verified (passes = true)
           if (event.passes) {
             // Small delay to show the completion message before closing
             setTimeout(() => {
               onClose();
             }, 1500);
+          }
+          break;
+        }
+        case 'auto_mode_metrics_update': {
+          if ('metrics' in event) {
+            setMetrics(event.metrics as ExecutionMetrics);
           }
           break;
         }
@@ -704,6 +719,18 @@ export function AgentOutputModal({
                 <FileText className="w-3.5 h-3.5" />
                 Raw
               </button>
+              <button
+                onClick={() => setViewMode('metrics')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-200 whitespace-nowrap border ${
+                  effectiveViewMode === 'metrics'
+                    ? 'bg-primary text-primary-foreground shadow-md border-primary/50'
+                    : 'text-foreground/70 hover:text-foreground hover:bg-accent border-transparent'
+                } focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1`}
+                data-testid="view-mode-metrics"
+              >
+                <Activity className="w-3.5 h-3.5" />
+                Metrics
+              </button>
             </div>
           </div>
           <DialogDescription
@@ -766,7 +793,7 @@ export function AgentOutputModal({
                 projectPath={projectPath}
                 featureId={featureId}
                 compact={false}
-                useWorktrees={useWorktrees}
+                useWorktrees={true}
                 className="border-0 rounded-lg"
               />
             ) : (
@@ -785,6 +812,13 @@ export function AgentOutputModal({
                 No summary available yet.
               </div>
             )}
+          </div>
+        ) : effectiveViewMode === 'metrics' ? (
+          <div className="flex-1 min-h-[200px] sm:max-h-[60vh] overflow-y-auto bg-card border border-border/50 rounded-lg scrollbar-visible">
+            <MetricsPanel
+              metrics={metrics}
+              isRunning={featureStatus === 'in_progress' || featureStatus === 'planning'}
+            />
           </div>
         ) : (
           <>

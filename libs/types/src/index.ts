@@ -29,7 +29,7 @@ export {
   calculateReasoningTimeout,
 } from './provider.js';
 
-// Codex CLI types
+// Codex types (consolidated from codex.ts + codex-models.ts + codex-app-server.ts)
 export type {
   CodexSandboxMode,
   CodexApprovalPolicy,
@@ -38,11 +38,7 @@ export type {
   CodexEvent,
   CodexCliConfig,
   CodexAuthStatus,
-} from './codex.js';
-export * from './codex-models.js';
-
-// Codex App-Server JSON-RPC types
-export type {
+  CodexModelConfig,
   AppServerModelResponse,
   AppServerModel,
   AppServerReasoningEffort,
@@ -53,15 +49,25 @@ export type {
   AppServerRateLimitWindow,
   JsonRpcRequest,
   JsonRpcResponse,
-} from './codex-app-server.js';
+} from './codex-types.js';
+export {
+  CODEX_MODEL_CONFIG_MAP,
+  codexModelHasThinking,
+  getCodexModelLabel,
+  getAllCodexModelIds as getAllCodexModelConfigIds,
+  codexModelSupportsVision,
+} from './codex-types.js';
 
 // Feature types
 export type {
+  ExecutionMetrics,
   Feature,
   FeatureOwner,
   FeatureImagePath,
   FeatureTextFilePath,
   FeatureStatus,
+  ComplexityLevel,
+  PlanningMode,
   DescriptionHistoryEntry,
   SummaryHistoryEntry,
   // Summary file API types
@@ -77,50 +83,29 @@ export type {
   ListFeatureSummariesResponse,
 } from './feature.js';
 
-// Session types
+// Core types (consolidated from multiple small files)
 export type {
+  // Error types
+  ErrorType,
+  ErrorInfo,
+  // Image types
+  ImageData,
+  ImageContentBlock,
+  // Enhancement types
+  EnhancementMode,
+  EnhancementExample,
+  // Session types
   AgentSession,
   SessionListItem,
   CreateSessionParams,
   UpdateSessionParams,
-} from './session.js';
-
-// Error types
-export type { ErrorType, ErrorInfo } from './error.js';
-
-// Image types
-export type { ImageData, ImageContentBlock } from './image.js';
-
-// Model types and constants
-export {
-  CLAUDE_MODEL_MAP,
-  CODEX_MODEL_MAP,
-  CODEX_MODEL_IDS,
-  REASONING_CAPABLE_MODELS,
-  supportsReasoningEffort,
-  getAllCodexModelIds,
-  DEFAULT_MODELS,
-  type ModelAlias,
-  type CodexModelId,
-  type AgentModel,
-  type ModelId,
-  type DynamicModelId,
-  type PrefixedCursorModelId,
-  type PrefixedOpencodeModelId,
-} from './model.js';
-
-// Event types
-export type { EventType, EventCallback } from './event.js';
-
-// Spec types
-export type { SpecOutput } from './spec.js';
-export { specOutputSchema } from './spec.js';
-
-// Enhancement types
-export type { EnhancementMode, EnhancementExample } from './enhancement.js';
-
-// Prompt customization types
-export type {
+  // Spec types
+  SpecOutput,
+  // Notification types
+  NotificationType,
+  Notification,
+  NotificationsFile,
+  // Prompt customization types
   CustomPrompt,
   AutoModePrompts,
   AgentPrompts,
@@ -147,8 +132,65 @@ export type {
   ResolvedContextDescriptionPrompts,
   ResolvedSuggestionsPrompts,
   ResolvedTaskExecutionPrompts,
-} from './prompts.js';
-export { DEFAULT_PROMPT_CUSTOMIZATION } from './prompts.js';
+  // Backlog plan types
+  BacklogChange,
+  DependencyUpdate,
+  BacklogPlanResult,
+  BacklogPlanEvent,
+  BacklogPlanRequest,
+  BacklogPlanApplyResult,
+  // Issue validation types
+  IssueValidationVerdict,
+  IssueValidationConfidence,
+  IssueComplexity,
+  PRRecommendation,
+  PRAnalysis,
+  LinkedPRInfo,
+  IssueValidationInput,
+  IssueValidationRequest,
+  IssueValidationResult,
+  IssueValidationResponse,
+  IssueValidationErrorResponse,
+  IssueValidationEvent,
+  StoredValidation,
+  GitHubCommentAuthor,
+  GitHubComment,
+  IssueCommentsResult,
+} from './core-types.js';
+export {
+  // Port configuration
+  STATIC_PORT,
+  SERVER_PORT,
+  RESERVED_PORTS,
+  // Spec schema
+  specOutputSchema,
+  // Notification constants
+  NOTIFICATIONS_VERSION,
+  DEFAULT_NOTIFICATIONS_FILE,
+  // Prompt defaults
+  DEFAULT_PROMPT_CUSTOMIZATION,
+} from './core-types.js';
+
+// Model types and constants
+export {
+  CLAUDE_MODEL_MAP,
+  CODEX_MODEL_MAP,
+  CODEX_MODEL_IDS,
+  REASONING_CAPABLE_MODELS,
+  supportsReasoningEffort,
+  getAllCodexModelIds,
+  DEFAULT_MODELS,
+  type ModelAlias,
+  type CodexModelId,
+  type AgentModel,
+  type ModelId,
+  type DynamicModelId,
+  type PrefixedCursorModelId,
+  type PrefixedOpencodeModelId,
+} from './model.js';
+
+// Event types
+export type { EventType, EventCallback } from './event.js';
 
 // Settings types and constants
 export type {
@@ -179,10 +221,13 @@ export type {
   DeployFolderScript,
   DeployRunStatus,
   DeployRun,
+  // Build verification types
+  BuildCommand,
 } from './settings.js';
 export {
   DEFAULT_KEYBOARD_SHORTCUTS,
   DEFAULT_PHASE_MODELS,
+  DEFAULT_BUILD_COMMANDS,
   DEFAULT_GLOBAL_SETTINGS,
   DEFAULT_CREDENTIALS,
   DEFAULT_PROJECT_SETTINGS,
@@ -206,39 +251,9 @@ export {
   getModelDisplayName,
 } from './model-display.js';
 
-// Issue validation types
-export type {
-  IssueValidationVerdict,
-  IssueValidationConfidence,
-  IssueComplexity,
-  PRRecommendation,
-  PRAnalysis,
-  LinkedPRInfo,
-  IssueValidationInput,
-  IssueValidationRequest,
-  IssueValidationResult,
-  IssueValidationResponse,
-  IssueValidationErrorResponse,
-  IssueValidationEvent,
-  StoredValidation,
-  GitHubCommentAuthor,
-  GitHubComment,
-  IssueCommentsResult,
-} from './issue-validation.js';
-
-// Backlog plan types
-export type {
-  BacklogChange,
-  DependencyUpdate,
-  BacklogPlanResult,
-  BacklogPlanEvent,
-  BacklogPlanRequest,
-  BacklogPlanApplyResult,
-} from './backlog-plan.js';
-
 // Cursor types
 export * from './cursor-models.js';
-export * from './cursor-cli.js';
+export * from './tool-types.js';
 
 // OpenCode types
 export * from './opencode-models.js';
@@ -267,12 +282,6 @@ export type {
   FeatureStatusWithPipeline,
 } from './pipeline.js';
 
-// Port configuration
-export { STATIC_PORT, SERVER_PORT, RESERVED_PORTS } from './ports.js';
-
-// Editor types
-export type { EditorInfo } from './editor.js';
-
 // Ideation types
 export type {
   IdeaCategory,
@@ -299,10 +308,6 @@ export type {
   IdeationStreamEvent,
   IdeationAnalysisEvent,
 } from './ideation.js';
-
-// Notification types
-export type { NotificationType, Notification, NotificationsFile } from './notification.js';
-export { NOTIFICATIONS_VERSION, DEFAULT_NOTIFICATIONS_FILE } from './notification.js';
 
 // Cache types and constants
 export type { EndpointCategory, CacheOptions } from './cache.js';

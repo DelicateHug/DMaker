@@ -6,7 +6,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
+} from '@/components/ui/overlays';
 import { Button } from '@/components/ui/button';
 import { Folder, Loader2, FolderOpen, AlertCircle } from 'lucide-react';
 import { getHttpApiClient } from '@/lib/http-api-client';

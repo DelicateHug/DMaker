@@ -3,7 +3,7 @@
 // @ts-nocheck
 import { memo, useCallback, useState, useEffect } from 'react';
 import { cn } from '@/lib/utils';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/overlays';
 import {
   AlertCircle,
   Lock,
@@ -14,6 +14,7 @@ import {
   Folder,
   Star,
   User,
+  Clock,
 } from 'lucide-react';
 import type { Feature } from '@/store/app-store';
 import { RowActions, type RowActionHandlers } from './row-actions';
@@ -228,6 +229,46 @@ const ModelBadge = memo(function ModelBadge({ feature }: { feature: Feature }) {
 });
 
 /**
+ * CostBadge displays the execution cost for completed features
+ */
+const CostBadge = memo(function CostBadge({ feature }: { feature: Feature }) {
+  const metrics = feature.executionMetrics;
+  if (!metrics || metrics.totalCostUSD === 0) return null;
+
+  const cost = metrics.totalCostUSD;
+  const costStr = cost < 0.01 ? '<$0.01' : `$${cost.toFixed(2)}`;
+
+  return (
+    <TooltipProvider delayDuration={200}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <div
+            className={cn(
+              'inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px]',
+              'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+              'border border-emerald-500/20'
+            )}
+          >
+            <span className="font-medium">{costStr}</span>
+          </div>
+        </TooltipTrigger>
+        <TooltipContent side="top" className="text-xs">
+          <p>
+            Cost: ${cost.toFixed(4)} | Tokens:{' '}
+            {(metrics.inputTokens + metrics.outputTokens).toLocaleString()} | Turns:{' '}
+            {metrics.numTurns}
+            {metrics.subagentsSpawned > 0 && ` | Subagents: ${metrics.subagentsSpawned}`}
+            {metrics.authMethod &&
+              metrics.authMethod !== 'unknown' &&
+              ` | ${metrics.authMethod === 'api_key' ? 'API Key' : 'Subscription'}`}
+          </p>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+});
+
+/**
  * ProjectBadge displays the project name similar to the model badge
  */
 const ProjectBadge = memo(function ProjectBadge({
@@ -343,6 +384,53 @@ const AssigneeBadges = memo(function AssigneeBadges({ feature }: { feature: Feat
         </TooltipProvider>
       ))}
     </>
+  );
+});
+
+/**
+ * LastUpdatedBadge displays a relative timestamp showing when the feature was last updated
+ */
+const LastUpdatedBadge = memo(function LastUpdatedBadge({ feature }: { feature: Feature }) {
+  const updatedAt = feature.updatedAt as string | undefined;
+  if (!updatedAt) return null;
+
+  const date = new Date(updatedAt);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+
+  let relativeTime: string;
+  if (diffMins < 1) relativeTime = 'just now';
+  else if (diffMins < 60) relativeTime = `${diffMins}m ago`;
+  else if (diffHours < 24) relativeTime = `${diffHours}h ago`;
+  else if (diffDays < 30) relativeTime = `${diffDays}d ago`;
+  else relativeTime = date.toLocaleDateString();
+
+  const fullDate = date.toLocaleString();
+
+  return (
+    <TooltipProvider delayDuration={200}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <div
+            className={cn(
+              'inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px]',
+              'bg-muted/50 text-muted-foreground/70',
+              'border border-border/30'
+            )}
+            data-testid={`list-row-updated-${feature.id}`}
+          >
+            <Clock className="w-3 h-3" />
+            <span className="font-medium">{relativeTime}</span>
+          </div>
+        </TooltipTrigger>
+        <TooltipContent side="top" className="text-xs">
+          <p>Last updated: {fullDate}</p>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 });
 
@@ -528,6 +616,7 @@ export const ListRow = memo(function ListRow({
           isCurrentAutoTask={isCurrentAutoTask}
         />
         <ModelBadge feature={feature} />
+        <CostBadge feature={feature} />
         <ProjectBadge feature={feature} showAllProjects={showAllProjects} />
         <TaskProgress feature={feature} />
         <BranchBadge
@@ -536,12 +625,20 @@ export const ListRow = memo(function ListRow({
           projectDefaultBranch={projectDefaultBranch}
         />
         <AssigneeBadges feature={feature} />
+        <LastUpdatedBadge feature={feature} />
       </div>
     </div>
   );
 
-  // Wrap with animated border for currently running auto task
-  if (isCurrentAutoTask) {
+  // Wrap with animated border for currently running auto task.
+  // Only show animation for active statuses — never for terminal/idle statuses
+  // like waiting_approval, completed, or backlog where stale runningTasks state
+  // could otherwise cause a stuck blinking border.
+  const isActiveStatus =
+    feature.status === 'planning' ||
+    feature.status === 'in_progress' ||
+    (typeof feature.status === 'string' && feature.status.startsWith('pipeline_'));
+  if (isCurrentAutoTask && isActiveStatus) {
     return <div className="animated-border-wrapper-row">{rowContent}</div>;
   }
 

@@ -9,11 +9,11 @@ import {
   SheetDescription,
   SheetHeader,
   SheetTitle,
-} from '@/components/ui/sheet';
+} from '@/components/ui/overlays';
 import { Button } from '@/components/ui/button';
-import { Slider } from '@/components/ui/slider';
-import { Label } from '@/components/ui/label';
-import { Checkbox } from '@/components/ui/checkbox';
+import { Slider } from '@/components/ui/forms';
+import { Label } from '@/components/ui/forms';
+import { Checkbox } from '@/components/ui/forms';
 import { cn } from '@/lib/utils';
 import { useAppStore, defaultBackgroundSettings } from '@/store/app-store';
 import { getHttpApiClient } from '@/lib/http-api-client';

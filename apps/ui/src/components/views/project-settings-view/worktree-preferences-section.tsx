@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Label } from '@/components/ui/label';
-import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/forms';
+import { Checkbox } from '@/components/ui/forms';
 import { Button } from '@/components/ui/button';
 import { ShellSyntaxEditor } from '@/components/ui/shell-syntax-editor';
 import {
@@ -33,19 +33,12 @@ interface InitScriptResponse {
 }
 
 export function WorktreePreferencesSection({ project }: WorktreePreferencesSectionProps) {
-  const globalUseWorktrees = useAppStore((s) => s.useWorktrees);
-  const getProjectUseWorktrees = useAppStore((s) => s.getProjectUseWorktrees);
-  const setProjectUseWorktrees = useAppStore((s) => s.setProjectUseWorktrees);
   const getShowInitScriptIndicator = useAppStore((s) => s.getShowInitScriptIndicator);
   const setShowInitScriptIndicator = useAppStore((s) => s.setShowInitScriptIndicator);
   const getDefaultDeleteBranch = useAppStore((s) => s.getDefaultDeleteBranch);
   const setDefaultDeleteBranch = useAppStore((s) => s.setDefaultDeleteBranch);
   const getAutoDismissInitScriptIndicator = useAppStore((s) => s.getAutoDismissInitScriptIndicator);
   const setAutoDismissInitScriptIndicator = useAppStore((s) => s.setAutoDismissInitScriptIndicator);
-
-  // Get effective worktrees setting (project override or global fallback)
-  const projectUseWorktrees = getProjectUseWorktrees(project.path);
-  const effectiveUseWorktrees = projectUseWorktrees ?? globalUseWorktrees;
 
   const [scriptContent, setScriptContent] = useState('');
   const [originalContent, setOriginalContent] = useState('');
@@ -62,7 +55,7 @@ export function WorktreePreferencesSection({ project }: WorktreePreferencesSecti
   // Check if there are unsaved changes
   const hasChanges = scriptContent !== originalContent;
 
-  // Load project settings (including useWorktrees) when project changes
+  // Load project settings when project changes
   useEffect(() => {
     let isCancelled = false;
     const currentPath = project.path;
@@ -76,11 +69,6 @@ export function WorktreePreferencesSection({ project }: WorktreePreferencesSecti
         if (isCancelled) return;
 
         if (response.success && response.settings) {
-          // Sync useWorktrees to store if it has a value
-          if (response.settings.useWorktrees !== undefined) {
-            setProjectUseWorktrees(currentPath, response.settings.useWorktrees);
-          }
-          // Also sync other settings to store
           if (response.settings.showInitScriptIndicator !== undefined) {
             setShowInitScriptIndicator(currentPath, response.settings.showInitScriptIndicator);
           }
@@ -108,7 +96,6 @@ export function WorktreePreferencesSection({ project }: WorktreePreferencesSecti
     };
   }, [
     project.path,
-    setProjectUseWorktrees,
     setShowInitScriptIndicator,
     setDefaultDeleteBranch,
     setAutoDismissInitScriptIndicator,
@@ -243,37 +230,16 @@ export function WorktreePreferencesSection({ project }: WorktreePreferencesSecti
         </p>
       </div>
       <div className="p-6 space-y-5">
-        {/* Enable Git Worktree Isolation Toggle */}
-        <div className="group flex items-start space-x-3 p-3 rounded-xl hover:bg-accent/30 transition-colors duration-200 -mx-3">
-          <Checkbox
-            id="project-use-worktrees"
-            checked={effectiveUseWorktrees}
-            onCheckedChange={async (checked) => {
-              const value = checked === true;
-              setProjectUseWorktrees(project.path, value);
-              try {
-                const httpClient = getHttpApiClient();
-                await httpClient.settings.updateProject(project.path, {
-                  useWorktrees: value,
-                });
-              } catch (error) {
-                console.error('Failed to persist useWorktrees:', error);
-              }
-            }}
-            className="mt-1"
-            data-testid="project-use-worktrees-checkbox"
-          />
+        {/* Info: Worktree isolation is always enabled */}
+        <div className="group flex items-start space-x-3 p-3 rounded-xl bg-accent/20 -mx-3">
           <div className="space-y-1.5">
-            <Label
-              htmlFor="project-use-worktrees"
-              className="text-foreground cursor-pointer font-medium flex items-center gap-2"
-            >
+            <div className="text-foreground font-medium flex items-center gap-2">
               <GitBranch className="w-4 h-4 text-brand-500" />
-              Enable Git Worktree Isolation
-            </Label>
+              Git Worktree Isolation
+            </div>
             <p className="text-xs text-muted-foreground/80 leading-relaxed">
-              Creates isolated git branches for each feature in this project. When disabled, agents
-              work directly in the main project directory.
+              All features run in isolated git worktrees. Changes are automatically merged into the
+              default branch when a feature is completed.
             </p>
           </div>
         </div>

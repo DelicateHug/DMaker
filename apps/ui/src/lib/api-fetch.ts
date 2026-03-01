@@ -1,15 +1,14 @@
 /**
- * Authenticated fetch utility
+ * Fetch utility for API calls
  *
  * Provides a wrapper around fetch that automatically includes:
- * - X-API-Key header (for Electron mode)
- * - X-Session-Token header (for web mode with explicit token)
- * - credentials: 'include' (fallback for web mode session cookies)
+ * - Content-Type header
+ * - credentials: 'include'
  *
- * Use this instead of raw fetch() for all authenticated API calls.
+ * Use this instead of raw fetch() for all API calls.
  */
 
-import { getApiKey, getSessionToken, getServerUrlSync } from './http-api-client';
+import { getServerUrlSync } from './http-api-client';
 
 // Server URL - uses shared cached URL from http-api-client
 const getServerUrl = (): string => getServerUrlSync();
@@ -18,7 +17,7 @@ const DEFAULT_CACHE_MODE: RequestCache = 'no-store';
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
 
 export interface ApiFetchOptions extends Omit<RequestInit, 'method' | 'headers' | 'body'> {
-  /** Additional headers to include (merged with auth headers) */
+  /** Additional headers to include */
   headers?: Record<string, string>;
   /** Request body - will be JSON stringified if object */
   body?: unknown;
@@ -27,32 +26,17 @@ export interface ApiFetchOptions extends Omit<RequestInit, 'method' | 'headers' 
 }
 
 /**
- * Build headers for an authenticated request
+ * Build headers for a request
  */
 export function getAuthHeaders(additionalHeaders?: Record<string, string>): Record<string, string> {
-  const headers: Record<string, string> = {
+  return {
     'Content-Type': 'application/json',
     ...additionalHeaders,
   };
-
-  // Electron mode: use API key
-  const apiKey = getApiKey();
-  if (apiKey) {
-    headers['X-API-Key'] = apiKey;
-    return headers;
-  }
-
-  // Web mode: use session token if available
-  const sessionToken = getSessionToken();
-  if (sessionToken) {
-    headers['X-Session-Token'] = sessionToken;
-  }
-
-  return headers;
 }
 
 /**
- * Make an authenticated fetch request to the API
+ * Make a fetch request to the API
  *
  * @param endpoint - API endpoint (e.g., '/api/fs/browse')
  * @param method - HTTP method
@@ -83,9 +67,7 @@ export async function apiFetch(
 ): Promise<Response> {
   const { headers: additionalHeaders, body, skipAuth, cache, ...restOptions } = options;
 
-  const headers = skipAuth
-    ? { 'Content-Type': 'application/json', ...additionalHeaders }
-    : getAuthHeaders(additionalHeaders);
+  const headers = getAuthHeaders(additionalHeaders);
 
   const fetchOptions: RequestInit = {
     method,
@@ -104,7 +86,7 @@ export async function apiFetch(
 }
 
 /**
- * Make an authenticated GET request
+ * Make a GET request
  */
 export async function apiGet<T>(
   endpoint: string,
@@ -115,7 +97,7 @@ export async function apiGet<T>(
 }
 
 /**
- * Make an authenticated POST request
+ * Make a POST request
  */
 export async function apiPost<T>(
   endpoint: string,
@@ -127,7 +109,7 @@ export async function apiPost<T>(
 }
 
 /**
- * Make an authenticated PUT request
+ * Make a PUT request
  */
 export async function apiPut<T>(
   endpoint: string,
@@ -139,7 +121,7 @@ export async function apiPut<T>(
 }
 
 /**
- * Make an authenticated DELETE request
+ * Make a DELETE request
  */
 export async function apiDelete<T>(endpoint: string, options: ApiFetchOptions = {}): Promise<T> {
   const response = await apiFetch(endpoint, 'DELETE', options);
@@ -147,7 +129,7 @@ export async function apiDelete<T>(endpoint: string, options: ApiFetchOptions = 
 }
 
 /**
- * Make an authenticated DELETE request (returns raw response for status checking)
+ * Make a DELETE request (returns raw response for status checking)
  */
 export async function apiDeleteRaw(
   endpoint: string,
@@ -157,13 +139,12 @@ export async function apiDeleteRaw(
 }
 
 /**
- * Build an authenticated image URL for use in <img> tags or CSS background-image
- * Adds authentication via query parameter since headers can't be set for image loads
+ * Build an image URL for use in <img> tags or CSS background-image
  *
  * @param path - Image path
  * @param projectPath - Project path
  * @param version - Optional cache-busting version
- * @returns Full URL with auth credentials
+ * @returns Full URL
  */
 export function getAuthenticatedImageUrl(
   path: string,
@@ -179,13 +160,6 @@ export function getAuthenticatedImageUrl(
   if (version !== undefined) {
     params.set('v', String(version));
   }
-
-  // Add auth credential as query param (needed for image loads that can't set headers)
-  const apiKey = getApiKey();
-  if (apiKey) {
-    params.set('apiKey', apiKey);
-  }
-  // Note: Session token auth relies on cookies which are sent automatically by the browser
 
   return `${serverUrl}/api/fs/image?${params.toString()}`;
 }

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Label } from '@/components/ui/label';
+import { Label } from '@/components/ui/forms';
 import {
   Select,
   SelectContent,
@@ -8,9 +8,9 @@ import {
   SelectLabel,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
+} from '@/components/ui/forms';
 import { Palette, Moon, Sun, Type, Code2 } from 'lucide-react';
-import { darkThemes, lightThemes } from '@/config/theme-options';
+import { darkThemes, lightThemes } from '@/config';
 import {
   UI_SANS_FONT_OPTIONS,
   UI_MONO_FONT_OPTIONS,

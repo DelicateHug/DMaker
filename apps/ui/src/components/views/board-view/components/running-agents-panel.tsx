@@ -18,7 +18,7 @@ import { useAppStore } from '@/store/app-store';
 import { useRunningAgents, type RunningAgentFeature } from '@/hooks/use-running-agents';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { ScrollArea } from '@/components/ui/scroll-area';
+import { ScrollArea } from '@/components/ui/layout';
 import { AgentOutputModal } from '../dialogs/agent-output-modal';
 
 const logger = createLogger('RunningAgentsPanel');

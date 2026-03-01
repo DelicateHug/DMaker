@@ -1,4 +1,4 @@
-import { Label } from '@/components/ui/label';
+import { Label } from '@/components/ui/forms';
 import { Brain } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { ReasoningEffort } from '@dmaker/types';

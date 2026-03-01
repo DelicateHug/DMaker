@@ -33,7 +33,7 @@ import {
   UX_REVIEWER_SYSTEM_PROMPT,
   UX_REVIEWER_EXAMPLES,
   UX_REVIEWER_DESCRIPTION,
-} from './enhancement-modes/index.js';
+} from './enhancement-modes.js';
 
 // Re-export system prompts and examples for backward compatibility
 export {
@@ -47,7 +47,7 @@ export {
   ACCEPTANCE_EXAMPLES,
   UX_REVIEWER_SYSTEM_PROMPT,
   UX_REVIEWER_EXAMPLES,
-} from './enhancement-modes/index.js';
+} from './enhancement-modes.js';
 
 /**
  * Map of enhancement modes to their system prompts

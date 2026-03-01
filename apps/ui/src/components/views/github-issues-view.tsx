@@ -5,7 +5,7 @@ import { CircleDot, RefreshCw, SearchX } from 'lucide-react';
 import { getElectronAPI, GitHubIssue, IssueValidationResult } from '@/lib/electron';
 import { useAppStore } from '@/store/app-store';
 import { Button } from '@/components/ui/button';
-import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { ConfirmDialog } from '@/components/ui/overlays';
 import { LoadingState } from '@/components/ui/loading-state';
 import { ErrorState } from '@/components/ui/error-state';
 import { cn, pathsEqual, generateUUID } from '@/lib/utils';

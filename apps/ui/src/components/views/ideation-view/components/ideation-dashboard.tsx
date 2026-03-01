@@ -5,10 +5,10 @@
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { Loader2, AlertCircle, Plus, X, Sparkles, Lightbulb, Trash2 } from 'lucide-react';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/layout';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { Badge } from '@/components/ui/layout';
+import { ConfirmDialog } from '@/components/ui/overlays';
 import { useIdeationStore, type GenerationJob } from '@/store/ideation-store';
 import { useAppStore } from '@/store/app-store';
 import { getElectronAPI } from '@/lib/electron';

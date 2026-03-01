@@ -8,6 +8,7 @@ export type SettingsViewId =
   | 'cursor-provider'
   | 'codex-provider'
   | 'opencode-provider'
+  | 'gcp-provider'
   | 'mcp-servers'
   | 'prompts'
   | 'model-defaults'
@@ -20,7 +21,8 @@ export type SettingsViewId =
   | 'security'
   | 'developer'
   | 'danger'
-  | 'projects';
+  | 'projects'
+  | 'agents-skills';
 
 interface UseSettingsViewOptions {
   initialView?: SettingsViewId;

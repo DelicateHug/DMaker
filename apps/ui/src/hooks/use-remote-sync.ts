@@ -320,7 +320,18 @@ export function useRemoteSync(options: UseRemoteSyncOptions = {}) {
               thinkingLevel: f.thinkingLevel || 'none',
             };
           });
-          setFeatures(featuresWithIds);
+          // Merge with existing features instead of replacing to avoid
+          // dropping local-only features during concurrent operations.
+          const existingFeatures = useAppStore.getState().features;
+          const incomingById = new Map(featuresWithIds.map((f: any) => [f.id, f]));
+          const merged = existingFeatures.map((f) => incomingById.get(f.id) ?? f);
+          const existingIds = new Set(existingFeatures.map((f) => f.id));
+          for (const f of featuresWithIds) {
+            if (!existingIds.has(f.id)) {
+              merged.push(f);
+            }
+          }
+          setFeatures(merged);
           onFeaturesUpdated?.();
         }
       }

@@ -6,7 +6,7 @@ import { initializeProject } from '@/lib/project-init';
 import { getHttpApiClient } from '@/lib/http-api-client';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { Input } from '@/components/ui/forms';
 import { cn } from '@/lib/utils';
 import {
   Folder,

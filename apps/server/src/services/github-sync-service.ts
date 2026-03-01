@@ -297,6 +297,50 @@ export class GitHubSyncService {
   }
 
   /**
+   * Close a GitHub issue.
+   */
+  async closeIssue(
+    projectPath: string,
+    issueNumber: number
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      await execFileAsync('gh', ['issue', 'close', String(issueNumber)], {
+        cwd: projectPath,
+        env: execEnv,
+        timeout: 15000,
+      });
+      logger.info(`Closed issue #${issueNumber}`);
+      return { success: true };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.error(`Failed to close issue #${issueNumber}:`, err);
+      return { success: false, error: msg };
+    }
+  }
+
+  /**
+   * Reopen a closed GitHub issue.
+   */
+  async reopenIssue(
+    projectPath: string,
+    issueNumber: number
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      await execFileAsync('gh', ['issue', 'reopen', String(issueNumber)], {
+        cwd: projectPath,
+        env: execEnv,
+        timeout: 15000,
+      });
+      logger.info(`Reopened issue #${issueNumber}`);
+      return { success: true };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.error(`Failed to reopen issue #${issueNumber}:`, err);
+      return { success: false, error: msg };
+    }
+  }
+
+  /**
    * Unlock a GitHub issue conversation.
    */
   async unlockIssue(

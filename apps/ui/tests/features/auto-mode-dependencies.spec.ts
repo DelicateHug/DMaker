@@ -422,7 +422,6 @@ test.describe('Auto Mode Dependency Blocking', () => {
       data: {
         projectPath,
         featureId: testUnblockedFeatureId,
-        useWorktrees: false,
       },
       headers: { 'Content-Type': 'application/json' },
     });
@@ -499,7 +498,6 @@ test.describe('Auto Mode Dependency Blocking', () => {
       data: {
         projectPath,
         featureId: testBlockedFeatureId,
-        useWorktrees: false,
       },
       headers: { 'Content-Type': 'application/json' },
     });
@@ -577,7 +575,6 @@ test.describe('Auto Mode Dependency Blocking', () => {
       data: {
         projectPath,
         featureId: testBlockedFeatureId,
-        useWorktrees: false,
         forceRun: true, // Bypass dependency warning
       },
       headers: { 'Content-Type': 'application/json' },

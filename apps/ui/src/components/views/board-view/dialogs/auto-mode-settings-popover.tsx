@@ -1,7 +1,7 @@
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
-import { Slider } from '@/components/ui/slider';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/overlays';
+import { Label } from '@/components/ui/forms';
+import { Switch } from '@/components/ui/forms';
+import { Slider } from '@/components/ui/forms';
 import { FastForward, Bot, Settings2 } from 'lucide-react';
 import { useAppStore } from '@/store/app-store';
 

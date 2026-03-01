@@ -15,7 +15,7 @@ import {
   BarChart3,
   Loader2,
 } from 'lucide-react';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/layout';
 import { useGuidedPrompts } from '@/hooks/use-guided-prompts';
 import type { IdeaCategory } from '@dmaker/types';
 

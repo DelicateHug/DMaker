@@ -22,19 +22,28 @@ const POLL_INTERVAL_ACTIVE_MS = 10_000;
 const POLL_INTERVAL_BACKGROUND_MS = 30_000;
 
 /**
- * Merge server features with the current local store, preserving local state
- * for any features that have in-flight persist operations.  This prevents a
- * background `loadFeatures()` reload from overwriting optimistic status changes
- * (e.g. user clicked "Verify" but the persist hasn't round-tripped yet).
+ * Merge server features with the current local store.
+ *
+ * - Preserves optimistic local state for features with in-flight persists.
+ * - Preserves local-only features that are missing from the server response
+ *   (e.g. files being moved between status directories during a "Make" action).
+ * - Guards against empty/partial server responses that would blank the board.
  */
 function mergeServerFeatures(serverFeatures: Feature[], localFeatures: Feature[]): Feature[] {
-  if (pendingPersistIds.size === 0) {
-    // Fast path — no pending persists, full replacement is safe.
-    return serverFeatures;
+  // Safety: if server returned nothing but we have local data, keep local data.
+  // This prevents a blank board from a failed/partial server response.
+  if (serverFeatures.length === 0 && localFeatures.length > 0) {
+    logger.warn(
+      `mergeServerFeatures: server returned 0 features but ${localFeatures.length} exist locally — keeping local features`
+    );
+    return localFeatures;
   }
 
+  const serverById = new Map(serverFeatures.map((f) => [f.id, f]));
   const localById = new Map(localFeatures.map((f) => [f.id, f]));
-  return serverFeatures.map((sf) => {
+
+  // Start with server features, preserving optimistic local state where needed
+  const merged: Feature[] = serverFeatures.map((sf) => {
     if (pendingPersistIds.has(sf.id)) {
       const local = localById.get(sf.id);
       if (local) {
@@ -51,6 +60,17 @@ function mergeServerFeatures(serverFeatures: Feature[], localFeatures: Feature[]
     }
     return sf;
   });
+
+  // Preserve local-only features not returned by the server.
+  // These may be in transit (file being moved on disk during status change),
+  // recently created, or virtual GitHub features not yet in the server cache.
+  for (const [id, localFeature] of localById) {
+    if (!serverById.has(id)) {
+      merged.push(localFeature);
+    }
+  }
+
+  return merged;
 }
 
 // Feature with project path for multi-project support
@@ -421,7 +441,15 @@ export function useBoardFeatures({
 
           const allSummaryArrays = await Promise.all(allSummaryPromises);
           const allSummaryFeatures = allSummaryArrays.flat();
-          setFeatures(allSummaryFeatures);
+
+          // On project/mode switch, full replacement is correct (new project data).
+          // Otherwise, merge to avoid dropping features that exist locally but
+          // weren't returned by the server (e.g. files in transit during a "Make").
+          if (isSwitchingProjectRef.current) {
+            setFeatures(allSummaryFeatures);
+          } else {
+            setFeatures(mergeServerFeatures(allSummaryFeatures, useAppStore.getState().features));
+          }
 
           logger.info(
             `Phase 1: Loaded ${allSummaryFeatures.length} summaries from ${allProjects.length} projects`
@@ -469,7 +497,15 @@ export function useBoardFeatures({
           const summaryFeatures = summaryResult.features.map((s) =>
             summaryToFeature(s, effectiveProject.path, (effectiveProject as { name?: string }).name)
           );
-          setFeatures(summaryFeatures);
+
+          // On project switch, full replacement is correct (new project data).
+          // Otherwise, merge to avoid dropping features that exist locally but
+          // weren't returned by the server (e.g. files in transit during a "Make").
+          if (isSwitchingProjectRef.current) {
+            setFeatures(summaryFeatures);
+          } else {
+            setFeatures(mergeServerFeatures(summaryFeatures, useAppStore.getState().features));
+          }
           setFeaturesLastLoadedProject(effectiveProject.path);
 
           logger.info(`Phase 1: Loaded ${summaryFeatures.length} feature summaries`);
@@ -620,13 +656,13 @@ export function useBoardFeatures({
      * Update a single feature's status in-place without a full re-fetch.
      * This moves the card to the correct column immediately.
      * A debounced background reload follows to sync full data.
+     *
+     * Uses the store's surgical updateFeature() instead of replacing the
+     * entire features array, avoiding races with concurrent loadFullFeatures().
      */
     const updateFeatureStatus = (featureId: string, status: string) => {
-      const { features } = useAppStore.getState();
-      const updated = features.map((f) =>
-        f.id === featureId ? { ...f, status: status as Feature['status'] } : f
-      );
-      setFeatures(updated);
+      const { updateFeature } = useAppStore.getState();
+      updateFeature(featureId, { status: status as Feature['status'] });
       // Protect this optimistic update from being overwritten by stale server
       // cache data during subsequent background polls or debounced reloads.
       protectOptimisticUpdate(featureId);
@@ -642,6 +678,11 @@ export function useBoardFeatures({
         if (event.featureId) {
           logger.info('Feature completed, updating status in-place...');
           updateFeatureStatus(event.featureId, 'waiting_approval');
+          // Also clear the running task here to ensure the blinking animation stops
+          // atomically with the status change. The use-auto-mode hook also removes
+          // running tasks on completion, but that listener can miss events during
+          // useEffect re-subscription windows.
+          removeRunningTask(eventProjectId, event.featureId);
         }
         // Schedule a background reload to get full updated data
         debouncedFullReload();
@@ -695,9 +736,9 @@ export function useBoardFeatures({
           });
         }
       } else if (event.type === 'auto_mode_feature_start') {
-        // Optimistically update status so the card moves to in_progress column immediately
+        // Optimistically update status so the card moves to planning column immediately
         if (event.featureId) {
-          updateFeatureStatus(event.featureId, 'in_progress');
+          updateFeatureStatus(event.featureId, 'planning');
         }
         debouncedReloadForTaskProgress();
       } else if (
@@ -720,7 +761,7 @@ export function useBoardFeatures({
         clearTimeout(fullReloadTimer);
       }
     };
-  }, [loadFeatures, effectiveProject, setFeatures]);
+  }, [loadFeatures, effectiveProject]);
 
   useEffect(() => {
     loadFeatures();

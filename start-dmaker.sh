@@ -1,6 +1,6 @@
 #!/bin/bash
 # DMaker TUI Launcher - Interactive menu for launching DMaker in different modes
-# Supports: Web Browser, Desktop (Electron), Docker Dev, Electron + Docker API
+# Supports: Web Browser, Desktop (Electron)
 # Platforms: Linux, macOS, Windows (Git Bash, WSL, MSYS2, Cygwin)
 # Features: Terminal responsiveness, history, pre-flight checks, port management
 
@@ -20,7 +20,7 @@ MENU_INNER_WIDTH=64
 LOGO_WIDTH=52
 INPUT_TIMEOUT=30
 SELECTED_OPTION=1
-MAX_OPTIONS=4
+MAX_OPTIONS=2
 
 # Platform detection (set early for cross-platform compatibility)
 IS_WINDOWS=false
@@ -85,8 +85,6 @@ USAGE:
 MODES:
   web              Launch in web browser (localhost:3007)
   electron         Launch as desktop app (Electron)
-  docker           Launch in Docker container (dev with live reload)
-  docker-electron  Launch Electron with Docker API backend
 
 OPTIONS:
   --help           Show this help message
@@ -102,13 +100,12 @@ EXAMPLES:
   start-dmaker.sh web          # Launch web mode directly (dev)
   start-dmaker.sh web --production  # Launch web mode (production)
   start-dmaker.sh electron     # Launch desktop app directly
-  start-dmaker.sh docker       # Launch Docker dev container
   start-dmaker.sh --version    # Show version
 
 KEYBOARD SHORTCUTS (in menu):
   Up/Down arrows   Navigate between options
   Enter            Select highlighted option
-  1-4              Jump to and select mode
+  1-2              Jump to and select mode
   Q                Exit
 
 HISTORY:
@@ -152,7 +149,7 @@ parse_args() {
             --production)
                 PRODUCTION_MODE=true
                 ;;
-            web|electron|docker|docker-electron)
+            web|electron)
                 MODE="$1"
                 ;;
             *)
@@ -203,34 +200,6 @@ check_required_commands() {
         done
         exit 1
     fi
-}
-
-DOCKER_CMD="docker"
-
-check_docker() {
-    if ! command -v docker &> /dev/null; then
-        echo "${C_RED}Error:${RESET} Docker is not installed or not in PATH"
-        echo "Please install Docker from https://docs.docker.com/get-docker/"
-        return 1
-    fi
-
-    if ! docker info &> /dev/null 2>&1; then
-        if sg docker -c "docker info" &> /dev/null 2>&1; then
-            DOCKER_CMD="sg docker -c"
-        else
-            echo "${C_RED}Error:${RESET} Docker daemon is not running or not accessible"
-            echo ""
-            echo "To fix, run:"
-            echo "  sudo usermod -aG docker \$USER"
-            echo ""
-            echo "Then either log out and back in, or run:"
-            echo "  newgrp docker"
-            return 1
-        fi
-    fi
-
-    export DOCKER_CMD
-    return 0
 }
 
 check_running_electron() {
@@ -301,88 +270,6 @@ check_running_electron() {
     fi
 
     return 0
-}
-
-check_running_containers() {
-    local compose_file="$1"
-    local running_containers=""
-
-    # Get list of running dmaker containers
-    if [ "$DOCKER_CMD" = "sg docker -c" ]; then
-        running_containers=$(sg docker -c "docker ps --filter 'name=dmaker-dev' --format '{{{{Names}}}}'" 2>/dev/null | tr '\n' ' ' || true)
-    else
-        running_containers=$($DOCKER_CMD ps --filter "name=dmaker-dev" --format "{{.Names}}" 2>/dev/null | tr '\n' ' ' || true)
-    fi
-
-    if [ -n "$running_containers" ] && [ "$running_containers" != " " ]; then
-        get_term_size
-        echo ""
-        center_print "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" "$C_GRAY"
-        center_print "Existing Containers Detected" "$C_YELLOW"
-        center_print "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" "$C_GRAY"
-        echo ""
-        center_print "Running containers: $running_containers" "$C_MUTE"
-        echo ""
-        center_print "What would you like to do?" "$C_WHITE"
-        echo ""
-        center_print "[S] Stop containers and start fresh" "$C_GREEN"
-        center_print "[R] Restart containers (rebuild)" "$C_MUTE"
-        center_print "[A] Attach to existing containers" "$C_MUTE"
-        center_print "[C] Cancel" "$C_RED"
-        echo ""
-
-        while true; do
-            local choice_pad=$(( (TERM_COLS - 20) / 2 ))
-            printf "%${choice_pad}s" ""
-            read -r -p "Choice: " choice
-
-            case "$choice" in
-                [sS]|[sS][tT][oO][pP])
-                    echo ""
-                    center_print "Stopping existing containers..." "$C_YELLOW"
-                    if [ "$DOCKER_CMD" = "sg docker -c" ]; then
-                        sg docker -c "docker compose -f '$compose_file' down" 2>/dev/null || true
-                        sg docker -c "docker ps --filter 'name=dmaker-dev' -q" 2>/dev/null | xargs -r sg docker -c "docker stop" 2>/dev/null || true
-                    else
-                        $DOCKER_CMD compose -f "$compose_file" down 2>/dev/null || true
-                        $DOCKER_CMD ps --filter "name=dmaker-dev" -q 2>/dev/null | xargs -r $DOCKER_CMD stop 2>/dev/null || true
-                    fi
-                    center_print "✓ Containers stopped" "$C_GREEN"
-                    echo ""
-                    return 0  # Continue with fresh start
-                    ;;
-                [rR]|[rR][eE][sS][tT][aA][rR][tT])
-                    echo ""
-                    center_print "Stopping and rebuilding containers..." "$C_YELLOW"
-                    if [ "$DOCKER_CMD" = "sg docker -c" ]; then
-                        sg docker -c "docker compose -f '$compose_file' down" 2>/dev/null || true
-                    else
-                        $DOCKER_CMD compose -f "$compose_file" down 2>/dev/null || true
-                    fi
-                    center_print "✓ Ready to rebuild" "$C_GREEN"
-                    echo ""
-                    return 0  # Continue with rebuild
-                    ;;
-                [aA]|[aA][tT][tT][aA][cC][hH])
-                    echo ""
-                    center_print "Attaching to existing containers..." "$C_GREEN"
-                    echo ""
-                    return 2  # Special code for attach
-                    ;;
-                [cC]|[cC][aA][nN][cC][eE][lL])
-                    echo ""
-                    center_print "Cancelled." "$C_MUTE"
-                    echo ""
-                    exit 0
-                    ;;
-                *)
-                    center_print "Invalid choice. Please enter S, R, A, or C." "$C_RED"
-                    ;;
-            esac
-        done
-    fi
-
-    return 0  # No containers running, continue normally
 }
 
 check_dependencies() {
@@ -652,26 +539,20 @@ show_menu() {
     printf "╮${RESET}\n"
 
     # Menu items with selection indicator
-    local sel1="" sel2="" sel3="" sel4=""
-    local txt1="${C_MUTE}" txt2="${C_MUTE}" txt3="${C_MUTE}" txt4="${C_MUTE}"
+    local sel1="" sel2=""
+    local txt1="${C_MUTE}" txt2="${C_MUTE}"
 
     case $SELECTED_OPTION in
         1) sel1="${C_ACC}▸${RESET} ${C_PRI}"; txt1="${C_WHITE}" ;;
         2) sel2="${C_ACC}▸${RESET} ${C_PRI}"; txt2="${C_WHITE}" ;;
-        3) sel3="${C_ACC}▸${RESET} ${C_PRI}"; txt3="${C_WHITE}" ;;
-        4) sel4="${C_ACC}▸${RESET} ${C_PRI}"; txt4="${C_WHITE}" ;;
     esac
 
     # Default non-selected prefix
     [[ -z "$sel1" ]] && sel1="  ${C_MUTE}"
     [[ -z "$sel2" ]] && sel2="  ${C_MUTE}"
-    [[ -z "$sel3" ]] && sel3="  ${C_MUTE}"
-    [[ -z "$sel4" ]] && sel4="  ${C_MUTE}"
 
     printf "%s${border}${sel1}[1]${RESET} 🌐  ${txt1}Web App${RESET}           ${C_MUTE}Server + Browser (localhost:$WEB_PORT)${RESET}   ${border}\n" "$pad"
     printf "%s${border}${sel2}[2]${RESET} 🖥   ${txt2}Electron${RESET}          ${DIM}Desktop App (embedded server)${RESET}       ${border}\n" "$pad"
-    printf "%s${border}${sel3}[3]${RESET} 🐳  ${txt3}Docker${RESET}            ${DIM}Full Stack (live reload)${RESET}            ${border}\n" "$pad"
-    printf "%s${border}${sel4}[4]${RESET} 🔗  ${txt4}Electron & Docker${RESET} ${DIM}Desktop + Docker Server${RESET}             ${border}\n" "$pad"
 
     printf "%s${C_GRAY}├" "$pad"
     draw_line "─" "$C_GRAY" "$MENU_INNER_WIDTH"
@@ -684,7 +565,7 @@ show_menu() {
     printf "╯${RESET}\n"
 
     echo ""
-    local footer_text="[↑↓] Navigate  [Enter] Select  [1-4] Quick Select  [Q] Exit"
+    local footer_text="[↑↓] Navigate  [Enter] Select  [1-2] Quick Select  [Q] Exit"
     local f_pad=$(( (TERM_COLS - ${#footer_text}) / 2 ))
     printf "%${f_pad}s" ""
     echo -e "${DIM}${footer_text}${RESET}"
@@ -860,13 +741,6 @@ launch_sequence() {
             echo ""
             printf "%${upad}s${DIM}Opening ${C_SEC}%s${RESET}\n" "" "$url"
             ;;
-        docker|docker-electron)
-            echo ""
-            local ui_msg="UI: http://localhost:$DEFAULT_WEB_PORT"
-            local api_msg="API: http://localhost:$DEFAULT_SERVER_PORT"
-            center_text "${DIM}${ui_msg}${RESET}"
-            center_text "${DIM}${api_msg}${RESET}"
-            ;;
     esac
     echo ""
 }
@@ -1010,15 +884,11 @@ if [ -z "$MODE" ]; then
                 ;;
             1) SELECTED_OPTION=1; MODE="web"; break ;;
             2) SELECTED_OPTION=2; MODE="electron"; break ;;
-            3) SELECTED_OPTION=3; MODE="docker"; break ;;
-            4) SELECTED_OPTION=4; MODE="docker-electron"; break ;;
             ""|$'\n'|$'\r')
                 # Enter key - select current option
                 case $SELECTED_OPTION in
                     1) MODE="web" ;;
                     2) MODE="electron" ;;
-                    3) MODE="docker" ;;
-                    4) MODE="docker-electron" ;;
                 esac
                 break
                 ;;
@@ -1039,25 +909,12 @@ fi
 case $MODE in
     web) MODE_NAME="Web Browser" ;;
     electron) MODE_NAME="Desktop App" ;;
-    docker) MODE_NAME="Docker Dev" ;;
-    docker-electron) MODE_NAME="Electron + Docker" ;;
     *)
         echo "${C_RED}Error:${RESET} Invalid mode '$MODE'"
-        echo "Valid modes: web, electron, docker, docker-electron"
+        echo "Valid modes: web, electron"
         exit 1
         ;;
 esac
-
-# Check Docker for Docker modes
-if [[ "$MODE" == "docker" || "$MODE" == "docker-electron" ]]; then
-    show_cursor
-    stty echo icanon 2>/dev/null || true
-    if ! check_docker; then
-        exit 1
-    fi
-    hide_cursor
-    stty -echo -icanon 2>/dev/null || true
-fi
 
 # Save to history
 save_mode_to_history "$MODE"
@@ -1185,168 +1042,5 @@ case $MODE in
         center_print "(Electron will start its own backend server)" "$C_MUTE"
         echo ""
         npm run dev:electron
-        ;;
-    docker)
-        # Check for running Electron (user might be switching from option 4)
-        check_running_electron
-
-        # Check for running containers
-        check_running_containers "docker-compose.dev.yml"
-        container_check=$?
-
-        if [ $container_check -eq 2 ]; then
-            # Attach to existing containers
-            center_print "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" "$C_GRAY"
-            center_print "Attaching to Docker Dev Containers" "$C_PRI"
-            center_print "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" "$C_GRAY"
-            echo ""
-            center_print "UI:  http://localhost:$DEFAULT_WEB_PORT" "$C_GREEN"
-            center_print "API: http://localhost:$DEFAULT_SERVER_PORT" "$C_GREEN"
-            center_print "Press Ctrl+C to detach" "$C_MUTE"
-            echo ""
-            if [ "$DOCKER_CMD" = "sg docker -c" ]; then
-                if [ -f "docker-compose.override.yml" ]; then
-                    sg docker -c "docker compose -f 'docker-compose.dev.yml' -f 'docker-compose.override.yml' logs -f"
-                else
-                    sg docker -c "docker compose -f 'docker-compose.dev.yml' logs -f"
-                fi
-            else
-                if [ -f "docker-compose.override.yml" ]; then
-                    $DOCKER_CMD compose -f docker-compose.dev.yml -f docker-compose.override.yml logs -f
-                else
-                    $DOCKER_CMD compose -f docker-compose.dev.yml logs -f
-                fi
-            fi
-        else
-            echo ""
-            center_print "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" "$C_GRAY"
-            center_print "Docker Development Mode" "$C_PRI"
-            center_print "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" "$C_GRAY"
-            echo ""
-            center_print "Starting UI + Server containers..." "$C_MUTE"
-            center_print "Source code is volume mounted for live reload" "$C_MUTE"
-            echo ""
-            center_print "UI:  http://localhost:$DEFAULT_WEB_PORT" "$C_GREEN"
-            center_print "API: http://localhost:$DEFAULT_SERVER_PORT" "$C_GREEN"
-            echo ""
-            center_print "First run may take several minutes (building image + npm install)" "$C_YELLOW"
-            center_print "Press Ctrl+C to stop" "$C_MUTE"
-            echo ""
-            center_print "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" "$C_GRAY"
-            echo ""
-            if [ "$DOCKER_CMD" = "sg docker -c" ]; then
-                if [ -f "docker-compose.override.yml" ]; then
-                    sg docker -c "docker compose -f 'docker-compose.dev.yml' -f 'docker-compose.override.yml' up --build"
-                else
-                    sg docker -c "docker compose -f 'docker-compose.dev.yml' up --build"
-                fi
-            else
-                if [ -f "docker-compose.override.yml" ]; then
-                    $DOCKER_CMD compose -f docker-compose.dev.yml -f docker-compose.override.yml up --build
-                else
-                    $DOCKER_CMD compose -f docker-compose.dev.yml up --build
-                fi
-            fi
-        fi
-        ;;
-    docker-electron)
-        # Check for running Electron (user might be switching from option 2)
-        check_running_electron
-
-        # Check for running containers
-        check_running_containers "docker-compose.dev-server.yml"
-        container_check=$?
-
-        echo ""
-        center_print "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" "$C_GRAY"
-        center_print "Electron + Docker API Mode" "$C_PRI"
-        center_print "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" "$C_GRAY"
-        echo ""
-        center_print "Server runs in Docker container" "$C_MUTE"
-        center_print "Electron runs locally on your machine" "$C_MUTE"
-        echo ""
-        center_print "API: http://localhost:$DEFAULT_SERVER_PORT (Docker)" "$C_GREEN"
-        echo ""
-
-        # If attaching to existing, skip the build
-        if [ $container_check -eq 2 ]; then
-            center_print "Using existing server container..." "$C_MUTE"
-        else
-            center_print "First run may take several minutes (building image + npm install)" "$C_YELLOW"
-        fi
-        echo ""
-        center_print "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" "$C_GRAY"
-        echo ""
-
-        # Start docker in background (or skip if attaching)
-        if [ $container_check -eq 2 ]; then
-            center_print "Checking if server is healthy..." "$C_MUTE"
-            DOCKER_PID=""
-        else
-            center_print "Starting Docker server container..." "$C_MUTE"
-            echo ""
-            if [ "$DOCKER_CMD" = "sg docker -c" ]; then
-                if [ -f "docker-compose.override.yml" ]; then
-                    sg docker -c "docker compose -f 'docker-compose.dev-server.yml' -f 'docker-compose.override.yml' up --build" &
-                else
-                    sg docker -c "docker compose -f 'docker-compose.dev-server.yml' up --build" &
-                fi
-            else
-                if [ -f "docker-compose.override.yml" ]; then
-                    $DOCKER_CMD compose -f docker-compose.dev-server.yml -f docker-compose.override.yml up --build &
-                else
-                    $DOCKER_CMD compose -f docker-compose.dev-server.yml up --build &
-                fi
-            fi
-            DOCKER_PID=$!
-        fi
-
-        # Wait for server to be healthy
-        echo ""
-        center_print "Waiting for server to become healthy..." "$C_YELLOW"
-        center_print "(This may take a while on first run)" "$C_MUTE"
-        echo ""
-        max_retries=180
-        server_ready=false
-        dots=""
-        for ((i=0; i<max_retries; i++)); do
-            if curl -s "http://localhost:$DEFAULT_SERVER_PORT/api/health" > /dev/null 2>&1; then
-                server_ready=true
-                break
-            fi
-            sleep 1
-            if (( i > 0 && i % 10 == 0 )); then
-                dots="${dots}."
-                center_print "Still waiting${dots}" "$C_MUTE"
-            fi
-        done
-        echo ""
-
-        if [ "$server_ready" = false ]; then
-            center_print "✗ Server container failed to become healthy" "$C_RED"
-            center_print "Check Docker logs above for errors" "$C_MUTE"
-            [ -n "$DOCKER_PID" ] && kill $DOCKER_PID 2>/dev/null || true
-            exit 1
-        fi
-
-        center_print "✓ Server is healthy!" "$C_GREEN"
-        echo ""
-        center_print "Building packages and launching Electron..." "$C_MUTE"
-        echo ""
-
-        # Build packages and launch Electron
-        npm run build:packages
-        SKIP_EMBEDDED_SERVER=true PORT=$DEFAULT_SERVER_PORT VITE_SERVER_URL="http://localhost:$DEFAULT_SERVER_PORT" VITE_APP_MODE="4" npm run _dev:electron
-
-        # Cleanup docker when electron exits
-        echo ""
-        center_print "Shutting down Docker container..." "$C_MUTE"
-        [ -n "$DOCKER_PID" ] && kill $DOCKER_PID 2>/dev/null || true
-        if [ "$DOCKER_CMD" = "sg docker -c" ]; then
-            sg docker -c "docker compose -f 'docker-compose.dev-server.yml' down" 2>/dev/null || true
-        else
-            $DOCKER_CMD compose -f docker-compose.dev-server.yml down 2>/dev/null || true
-        fi
-        center_print "Done!" "$C_GREEN"
         ;;
 esac

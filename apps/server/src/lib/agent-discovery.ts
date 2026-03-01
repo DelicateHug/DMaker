@@ -21,6 +21,8 @@ export interface FilesystemAgent {
   definition: AgentDefinition;
   source: 'user' | 'project';
   filePath: string; // Full path to AGENT.md
+  folder: string; // Relative folder from agents root ("", "testing", "testing/backend")
+  projectName?: string; // Project name for project-scoped agents
 }
 
 /**
@@ -34,21 +36,34 @@ export interface FilesystemAgent {
  * ---
  * System prompt content here...
  */
-function parseAgentContent(content: string, filePath: string): AgentDefinition | null {
-  // Extract frontmatter
+function parseAgentContent(content: string, filePath: string): AgentDefinition {
+  // Extract frontmatter (optional — agents are always discovered even without it)
   const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
   if (!frontmatterMatch) {
-    logger.warn(`Invalid agent file format (missing frontmatter): ${filePath}`);
-    return null;
+    // No frontmatter — treat entire content as the prompt with placeholder metadata
+    const agentName = path
+      .basename(filePath, '.md')
+      .replace(/^AGENT$/, path.basename(path.dirname(filePath)));
+    logger.debug(`Agent file has no frontmatter, using placeholder metadata: ${filePath}`);
+    return {
+      description: `Custom agent: ${agentName}`,
+      prompt: content.trim(),
+    };
   }
 
   const [, frontmatter, prompt] = frontmatterMatch;
 
-  // Parse description (required)
+  // Parse description (optional — use placeholder if missing)
   const description = frontmatter.match(/description:\s*(.+)/)?.[1]?.trim();
   if (!description) {
-    logger.warn(`Missing description in agent file: ${filePath}`);
-    return null;
+    const agentName = path
+      .basename(filePath, '.md')
+      .replace(/^AGENT$/, path.basename(path.dirname(filePath)));
+    logger.debug(`Missing description in agent file, using placeholder: ${filePath}`);
+    return {
+      description: `Custom agent: ${agentName}`,
+      prompt: prompt.trim(),
+    };
   }
 
   // Parse tools (optional) - supports both comma-separated and space-separated
@@ -155,18 +170,90 @@ async function parseAgentFileWithAdapter(
 ): Promise<AgentDefinition | null> {
   try {
     const content = await fsAdapter.readFile(filePath);
+    if (!content || !content.trim()) {
+      // Empty file — still discover it with placeholder metadata
+      const agentName = path
+        .basename(filePath, '.md')
+        .replace(/^AGENT$/, path.basename(path.dirname(filePath)));
+      return {
+        description: `Custom agent: ${agentName}`,
+        prompt: '',
+      };
+    }
     return parseAgentContent(content, filePath);
   } catch (error) {
-    logger.error(`Failed to parse agent file: ${filePath}`, error);
+    logger.error(`Failed to read agent file: ${filePath}`, error);
     return null;
   }
 }
 
 /**
- * Scan a directory for agent .md files
+ * Recursively scan a directory for agent .md files
  * Agents can be in two formats:
- * 1. Flat: agent-name.md (file directly in agents/)
+ * 1. Flat: agent-name.md (file directly in a directory)
  * 2. Subdirectory: agent-name/AGENT.md (folder + file, similar to Skills)
+ *
+ * Directories without AGENT.md are treated as category folders and recursed into.
+ */
+async function scanAgentsDirectoryRecursive(
+  baseDir: string,
+  currentDir: string,
+  source: 'user' | 'project',
+  fsAdapter: FsAdapter,
+  agents: FilesystemAgent[]
+): Promise<void> {
+  const folder = path.relative(baseDir, currentDir).replace(/\\/g, '/') || '';
+
+  let entries: DirEntry[];
+  try {
+    entries = await fsAdapter.readdir(currentDir);
+  } catch {
+    return;
+  }
+
+  for (const entry of entries) {
+    // Check for flat .md file format (agent-name.md)
+    if (entry.isFile && entry.name.endsWith('.md')) {
+      const agentName = entry.name.slice(0, -3); // Remove .md extension
+      const agentFilePath = path.join(currentDir, entry.name);
+      const definition = await parseAgentFileWithAdapter(agentFilePath, fsAdapter);
+      if (definition) {
+        agents.push({ name: agentName, definition, source, filePath: agentFilePath, folder });
+        logger.debug(
+          `Discovered ${source} agent (flat): ${agentName}${folder ? ` in ${folder}` : ''}`
+        );
+      }
+    }
+    // Check for subdirectory format (agent-name/AGENT.md) or category folder
+    else if (entry.isDirectory) {
+      const agentFilePath = path.join(currentDir, entry.name, 'AGENT.md');
+      const agentFileExists = await fsAdapter.exists(agentFilePath);
+
+      if (agentFileExists) {
+        // It's an agent directory (has AGENT.md)
+        const definition = await parseAgentFileWithAdapter(agentFilePath, fsAdapter);
+        if (definition) {
+          agents.push({ name: entry.name, definition, source, filePath: agentFilePath, folder });
+          logger.debug(
+            `Discovered ${source} agent (subdirectory): ${entry.name}${folder ? ` in ${folder}` : ''}`
+          );
+        }
+      } else {
+        // It's a category folder — recurse into it
+        await scanAgentsDirectoryRecursive(
+          baseDir,
+          path.join(currentDir, entry.name),
+          source,
+          fsAdapter,
+          agents
+        );
+      }
+    }
+  }
+}
+
+/**
+ * Scan a directory for agent .md files (entry point)
  */
 async function scanAgentsDirectory(
   baseDir: string,
@@ -176,51 +263,13 @@ async function scanAgentsDirectory(
   const fsAdapter = source === 'user' ? createSystemPathAdapter() : createSecureFsAdapter();
 
   try {
-    // Check if directory exists
     const exists = await fsAdapter.exists(baseDir);
     if (!exists) {
       logger.debug(`Directory does not exist: ${baseDir}`);
       return agents;
     }
 
-    // Read all entries in the directory
-    const entries = await fsAdapter.readdir(baseDir);
-
-    for (const entry of entries) {
-      // Check for flat .md file format (agent-name.md)
-      if (entry.isFile && entry.name.endsWith('.md')) {
-        const agentName = entry.name.slice(0, -3); // Remove .md extension
-        const agentFilePath = path.join(baseDir, entry.name);
-        const definition = await parseAgentFileWithAdapter(agentFilePath, fsAdapter);
-        if (definition) {
-          agents.push({
-            name: agentName,
-            definition,
-            source,
-            filePath: agentFilePath,
-          });
-          logger.debug(`Discovered ${source} agent (flat): ${agentName}`);
-        }
-      }
-      // Check for subdirectory format (agent-name/AGENT.md)
-      else if (entry.isDirectory) {
-        const agentFilePath = path.join(baseDir, entry.name, 'AGENT.md');
-        const agentFileExists = await fsAdapter.exists(agentFilePath);
-
-        if (agentFileExists) {
-          const definition = await parseAgentFileWithAdapter(agentFilePath, fsAdapter);
-          if (definition) {
-            agents.push({
-              name: entry.name,
-              definition,
-              source,
-              filePath: agentFilePath,
-            });
-            logger.debug(`Discovered ${source} agent (subdirectory): ${entry.name}`);
-          }
-        }
-      }
-    }
+    await scanAgentsDirectoryRecursive(baseDir, baseDir, source, fsAdapter, agents);
   } catch (error) {
     logger.error(`Failed to scan agents directory: ${baseDir}`, error);
   }
@@ -233,7 +282,8 @@ async function scanAgentsDirectory(
  */
 export async function discoverFilesystemAgents(
   projectPath?: string,
-  sources: Array<'user' | 'project'> = ['user', 'project']
+  sources: Array<'user' | 'project'> = ['user', 'project'],
+  projects?: Array<{ name: string; path: string }>
 ): Promise<FilesystemAgent[]> {
   const agents: FilesystemAgent[] = [];
 
@@ -245,13 +295,157 @@ export async function discoverFilesystemAgents(
     logger.info(`Discovered ${userAgents.length} user-level agents from ${userAgentsDir}`);
   }
 
-  // Discover project-level agents from .claude/agents/
-  if (sources.includes('project') && projectPath) {
-    const projectAgentsDir = path.join(projectPath, '.claude', 'agents');
-    const projectAgents = await scanAgentsDirectory(projectAgentsDir, 'project');
-    agents.push(...projectAgents);
-    logger.info(`Discovered ${projectAgents.length} project-level agents from ${projectAgentsDir}`);
+  // Discover project-level agents from all projects
+  if (sources.includes('project')) {
+    const projectPaths = new Set<string>();
+
+    if (projects?.length) {
+      // Scan all provided projects
+      for (const project of projects) {
+        if (projectPaths.has(project.path)) continue;
+        projectPaths.add(project.path);
+        const projectAgentsDir = path.join(project.path, '.claude', 'agents');
+        const projectAgents = await scanAgentsDirectory(projectAgentsDir, 'project');
+        // Tag each agent with the project name
+        for (const agent of projectAgents) {
+          agent.projectName = project.name;
+        }
+        agents.push(...projectAgents);
+        if (projectAgents.length > 0) {
+          logger.info(
+            `Discovered ${projectAgents.length} project-level agents from ${project.name}`
+          );
+        }
+      }
+    } else if (projectPath) {
+      // Fallback: single project path (backwards compat)
+      const projectAgentsDir = path.join(projectPath, '.claude', 'agents');
+      const projectAgents = await scanAgentsDirectory(projectAgentsDir, 'project');
+      agents.push(...projectAgents);
+      logger.info(
+        `Discovered ${projectAgents.length} project-level agents from ${projectAgentsDir}`
+      );
+    }
   }
 
   return agents;
+}
+
+/**
+ * Resolve agent dependencies by scanning prompts for references to other agents.
+ * Dynamically loads agents that are referenced by already-selected agents.
+ *
+ * Resolution strategy (applied per agent prompt):
+ * 1. Exact name match: check if any discovered agent's full name appears in the prompt
+ * 2. Grep fallback: extract words adjacent to "agent" keyword, then search by
+ *    partial agent name match or agent description match
+ *
+ * Transitive: if agent A references B and B references C, all three are loaded.
+ */
+export function resolveAgentDependencies(
+  selectedAgents: Record<string, AgentDefinition>,
+  allDiscoveredAgents: Record<string, AgentDefinition>
+): { resolved: Record<string, AgentDefinition>; dynamicallyLoaded: string[] } {
+  const resolved = { ...selectedAgents };
+  const dynamicallyLoaded: string[] = [];
+  const checked = new Set<string>();
+  const MAX_DEPTH = 10;
+  let depth = 0;
+
+  let agentsToCheck = Object.keys(selectedAgents);
+
+  while (agentsToCheck.length > 0 && depth < MAX_DEPTH) {
+    depth++;
+    const newlyFound: string[] = [];
+
+    for (const agentName of agentsToCheck) {
+      if (checked.has(agentName)) continue;
+      checked.add(agentName);
+
+      const agent = resolved[agentName];
+      const prompt = (agent?.prompt || '').toLowerCase();
+      if (!prompt) continue;
+
+      // Strategy 1: Exact name match against all discovered agents
+      for (const [candidateName, candidateDef] of Object.entries(allDiscoveredAgents)) {
+        if (candidateName in resolved) continue;
+        if (prompt.includes(candidateName.toLowerCase())) {
+          resolved[candidateName] = candidateDef;
+          dynamicallyLoaded.push(candidateName);
+          newlyFound.push(candidateName);
+          logger.info(
+            `[AgentDeps] Dynamically loaded "${candidateName}" (exact name match in "${agentName}")`
+          );
+        }
+      }
+
+      // Strategy 2: Grep fallback — extract references near "agent" keyword
+      // and search by partial name or description match
+      const SKIP_WORDS = new Set([
+        'the',
+        'an',
+        'a',
+        'this',
+        'that',
+        'my',
+        'your',
+        'our',
+        'each',
+        'every',
+        'custom',
+        'other',
+        'another',
+        'new',
+        'all',
+        'any',
+        'no',
+        'one',
+        'some',
+        'per',
+        'sub',
+        'main',
+      ]);
+      const agentRefPattern = /(\b[\w-]+)\s+agent\b|\bagent\s+([\w-]+)\b/gi;
+      let match;
+      while ((match = agentRefPattern.exec(prompt)) !== null) {
+        const ref = (match[1] || match[2]).toLowerCase();
+        if (SKIP_WORDS.has(ref)) continue;
+
+        // Partial name match (either direction)
+        for (const [candidateName, candidateDef] of Object.entries(allDiscoveredAgents)) {
+          if (candidateName in resolved) continue;
+          const candidateLower = candidateName.toLowerCase();
+          if (candidateLower.includes(ref) || ref.includes(candidateLower)) {
+            resolved[candidateName] = candidateDef;
+            dynamicallyLoaded.push(candidateName);
+            newlyFound.push(candidateName);
+            logger.info(
+              `[AgentDeps] Dynamically loaded "${candidateName}" (grep name: "${ref}" in "${agentName}")`
+            );
+          }
+        }
+
+        // Description match
+        for (const [candidateName, candidateDef] of Object.entries(allDiscoveredAgents)) {
+          if (candidateName in resolved) continue;
+          if (candidateDef.description?.toLowerCase().includes(ref)) {
+            resolved[candidateName] = candidateDef;
+            dynamicallyLoaded.push(candidateName);
+            newlyFound.push(candidateName);
+            logger.info(
+              `[AgentDeps] Dynamically loaded "${candidateName}" (grep description: "${ref}" in "${agentName}")`
+            );
+          }
+        }
+      }
+    }
+
+    agentsToCheck = newlyFound;
+  }
+
+  if (depth >= MAX_DEPTH) {
+    logger.warn(`[AgentDeps] Hit max depth (${MAX_DEPTH}) resolving agent dependencies`);
+  }
+
+  return { resolved, dynamicallyLoaded };
 }

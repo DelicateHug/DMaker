@@ -6,10 +6,10 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
+} from '@/components/ui/overlays';
 import { Button } from '@/components/ui/button';
-import { HotkeyButton } from '@/components/ui/hotkey-button';
-import { Checkbox } from '@/components/ui/checkbox';
+import { HotkeyButton } from '@/components/ui/feedback';
+import { Checkbox } from '@/components/ui/forms';
 import { cn } from '@/lib/utils';
 import { FEATURE_COUNT_OPTIONS } from '../constants';
 import type { CreateSpecDialogProps, FeatureCount } from '../types';

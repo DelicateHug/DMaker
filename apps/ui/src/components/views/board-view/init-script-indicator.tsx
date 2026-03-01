@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { Terminal, Check, X, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAppStore, type InitScriptState } from '@/store/app-store';
-import { AnsiOutput } from '@/components/ui/ansi-output';
+import { AnsiOutput } from '@/components/ui/feedback';
 
 interface InitScriptIndicatorProps {
   projectPath: string;

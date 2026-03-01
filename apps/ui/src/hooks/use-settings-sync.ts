@@ -14,7 +14,7 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { createLogger } from '@dmaker/utils/logger';
-import { getHttpApiClient, waitForApiKeyInit } from '@/lib/http-api-client';
+import { getHttpApiClient } from '@/lib/http-api-client';
 import { setItem } from '@/lib/storage';
 import {
   useAppStore,
@@ -54,9 +54,11 @@ const SETTINGS_FIELDS_TO_SYNC = [
   'maxConcurrency', // Deprecated - kept for backwards compatibility
   'agentMultiplier', // Global agent multiplier for all projects
   'defaultSkipTests',
+  'defaultBuildRequired',
+  'maxBuildRetries',
+  'buildCommands',
   'enableDependencyBlocking',
   'skipVerificationInAutoMode',
-  'useWorktrees',
   'defaultFeatureModel',
   'muteDoneSound',
   'serverLogLevel',
@@ -283,9 +285,6 @@ export function useSettingsSync(): SettingsSyncState {
 
     async function initializeSync() {
       try {
-        // Wait for API key to be ready
-        await waitForApiKeyInit();
-
         // CRITICAL: Wait for migration/hydration to complete before we start syncing
         // This is a backup to the settingsLoaded flag for extra safety
         logger.info('Waiting for migration to complete before starting sync...');
@@ -506,9 +505,16 @@ export async function refreshSettingsFromServer(): Promise<boolean> {
       chatHistoryOpen: serverSettings.chatHistoryOpen,
       maxConcurrency: serverSettings.maxConcurrency,
       defaultSkipTests: serverSettings.defaultSkipTests,
+      defaultBuildRequired: serverSettings.defaultBuildRequired ?? false,
+      maxBuildRetries: serverSettings.maxBuildRetries ?? 10,
+      buildCommands: serverSettings.buildCommands ?? [
+        { cmd: 'npm run lint', name: 'Lint', enabled: true },
+        { cmd: 'npm run typecheck', name: 'Type Check', enabled: true },
+        { cmd: 'npm test', name: 'Tests', enabled: true },
+        { cmd: 'npm run build', name: 'Build', enabled: true },
+      ],
       enableDependencyBlocking: serverSettings.enableDependencyBlocking,
       skipVerificationInAutoMode: serverSettings.skipVerificationInAutoMode,
-      useWorktrees: serverSettings.useWorktrees,
       defaultFeatureModel: serverSettings.defaultFeatureModel ?? { model: 'opus' },
       muteDoneSound: serverSettings.muteDoneSound,
       serverLogLevel: serverSettings.serverLogLevel ?? 'info',

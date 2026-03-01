@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { Message, StreamEvent } from '@/types/electron';
-import { useMessageQueue } from './use-message-queue';
+import { useMessageQueue } from './utilities';
 import type { ImageAttachment, TextFileAttachment } from '@/store/app-store';
 import { getElectronAPI } from '@/lib/electron';
 import { sanitizeFilename } from '@/lib/image-utils';

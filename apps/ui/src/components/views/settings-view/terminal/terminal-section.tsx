@@ -1,14 +1,14 @@
-import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
-import { Slider } from '@/components/ui/slider';
-import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/forms';
+import { Switch } from '@/components/ui/forms';
+import { Slider } from '@/components/ui/forms';
+import { Input } from '@/components/ui/forms';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
+} from '@/components/ui/forms';
 import { SquareTerminal } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/store/app-store';

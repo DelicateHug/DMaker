@@ -1,10 +1,5 @@
 /**
- * Base theme imports loaded synchronously to prevent flash of unstyled content.
- * All other themes are loaded on demand via lib/theme-loader.ts.
+ * All theme CSS loaded synchronously to prevent flash of unstyled content.
+ * Themes are merged into a single file — no dynamic loading needed.
  */
-
-// Base dark theme (default) - always needed synchronously
-import './themes/dark.css';
-
-// Light theme overrides (scrollbar styles) - always needed synchronously
-import './themes/light.css';
+import './themes.css';

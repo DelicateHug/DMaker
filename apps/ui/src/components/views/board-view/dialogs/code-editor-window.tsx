@@ -4,11 +4,13 @@ import { StreamLanguage } from '@codemirror/language';
 import { javascript } from '@codemirror/legacy-modes/mode/javascript';
 import { python } from '@codemirror/legacy-modes/mode/python';
 import { shell } from '@codemirror/legacy-modes/mode/shell';
+import { powerShell } from '@codemirror/legacy-modes/mode/powershell';
 import { yaml } from '@codemirror/legacy-modes/mode/yaml';
 import { css } from '@codemirror/legacy-modes/mode/css';
 import { go } from '@codemirror/legacy-modes/mode/go';
 import { rust } from '@codemirror/legacy-modes/mode/rust';
 import { xml } from '@codemirror/lang-xml';
+import { markdown } from '@codemirror/lang-markdown';
 import { EditorView } from '@codemirror/view';
 import { Extension } from '@codemirror/state';
 import { getSyntaxTheme } from '@/config/syntax-themes';
@@ -27,7 +29,7 @@ import {
   noctisLilac,
   quietlight,
 } from '@uiw/codemirror-themes-all';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/overlays';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -51,9 +53,12 @@ import {
   Circle,
   Palette,
   ChevronDown,
+  Eye,
+  Code,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAppStore, type SyntaxTheme } from '@/store/app-store';
+import { Markdown } from '@/components/ui/markdown';
 
 interface OpenFile {
   path: string;
@@ -91,21 +96,24 @@ function getLanguageExtension(fileName: string): Extension | null {
     case 'pyi':
       return StreamLanguage.define(python);
 
-    // PowerShell / Shell
+    // PowerShell
     case 'ps1':
     case 'psm1':
     case 'psd1':
+      return StreamLanguage.define(powerShell);
+
+    // Shell
     case 'sh':
     case 'bash':
     case 'zsh':
     case 'fish':
       return StreamLanguage.define(shell);
 
-    // Markdown - use JavaScript mode for basic highlighting
+    // Markdown
     case 'md':
     case 'mdx':
     case 'markdown':
-      return null; // Plain text for markdown - rendering is handled elsewhere
+      return markdown();
 
     // YAML
     case 'yaml':
@@ -161,6 +169,13 @@ function getLanguageExtension(fileName: string): Extension | null {
     case 'conf':
       return StreamLanguage.define(javascript); // Basic highlighting
 
+    // Dotfiles (e.g. .gitignore, .dockerignore, .env)
+    case 'gitignore':
+    case 'dockerignore':
+    case 'env':
+    case 'editorconfig':
+      return StreamLanguage.define(shell); // # comments and simple patterns
+
     default:
       return null;
   }
@@ -195,6 +210,10 @@ function getLanguageName(fileName: string): string {
     cs: 'C#',
     java: 'Java',
     toml: 'TOML',
+    gitignore: 'Git Ignore',
+    dockerignore: 'Docker Ignore',
+    env: 'Environment',
+    editorconfig: 'EditorConfig',
   };
 
   return languageNames[ext || ''] || 'Plain Text';
@@ -257,6 +276,12 @@ function getFileIcon(fileName: string) {
     return FileText;
   }
   return File;
+}
+
+// Check if a file is a markdown file
+function isMarkdownFile(fileName: string): boolean {
+  const ext = fileName.split('.').pop()?.toLowerCase();
+  return ext === 'md' || ext === 'mdx' || ext === 'markdown';
 }
 
 // ---------------------------------------------------------------------------
@@ -368,6 +393,7 @@ export function CodeEditorWindow({
   const [activeFileIndex, setActiveFileIndex] = useState<number>(0);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [mdViewMode, setMdViewMode] = useState<'preview' | 'source'>('preview');
   const pendingFileRef = useRef<string | null>(null);
 
   // Syntax theme from global app settings
@@ -545,6 +571,8 @@ export function CodeEditorWindow({
   }, [open, saveFile, closeFile, openFiles.length, activeFileIndex]);
 
   const activeFile = openFiles[activeFileIndex];
+  const activeIsMarkdown = activeFile ? isMarkdownFile(activeFile.name) : false;
+  const showMarkdownPreview = activeIsMarkdown && mdViewMode === 'preview';
   const languageExtension = activeFile ? getLanguageExtension(activeFile.name) : null;
 
   // Resolve the active CodeMirror theme extension from the syntax theme setting
@@ -581,6 +609,26 @@ export function CodeEditorWindow({
             <div className="flex items-center gap-2">
               {activeFile && (
                 <>
+                  {activeIsMarkdown && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setMdViewMode(mdViewMode === 'preview' ? 'source' : 'preview')}
+                      className="h-7 px-2 text-xs"
+                    >
+                      {mdViewMode === 'preview' ? (
+                        <>
+                          <Code className="h-3.5 w-3.5 mr-1" />
+                          Source
+                        </>
+                      ) : (
+                        <>
+                          <Eye className="h-3.5 w-3.5 mr-1" />
+                          Preview
+                        </>
+                      )}
+                    </Button>
+                  )}
                   <Button
                     variant="ghost"
                     size="sm"
@@ -655,6 +703,10 @@ export function CodeEditorWindow({
                 <p className="text-sm">No files open</p>
                 <p className="text-xs mt-1">Click a file in the explorer to open it</p>
               </div>
+            </div>
+          ) : activeFile && showMarkdownPreview ? (
+            <div className="h-full overflow-y-auto px-8 py-6">
+              <Markdown>{activeFile.content}</Markdown>
             </div>
           ) : activeFile ? (
             <CodeMirror

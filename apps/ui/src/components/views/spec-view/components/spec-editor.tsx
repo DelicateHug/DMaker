@@ -1,4 +1,4 @@
-import { Card } from '@/components/ui/card';
+import { Card } from '@/components/ui/layout';
 import { XmlSyntaxEditor } from '@/components/ui/xml-syntax-editor';
 
 interface SpecEditorProps {

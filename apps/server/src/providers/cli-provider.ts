@@ -42,7 +42,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { BaseProvider } from './base-provider.js';
-import type { ExecuteOptions, ProviderConfig, ProviderMessage } from './types.js';
+import type { ExecuteOptions, ProviderConfig, ProviderMessage } from '@dmaker/types';
 
 /**
  * Spawn strategy for CLI tools on Windows

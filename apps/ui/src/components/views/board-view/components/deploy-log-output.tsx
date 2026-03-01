@@ -1,6 +1,6 @@
 import { useEffect, useRef, useCallback, useState, memo } from 'react';
 import { cn } from '@/lib/utils';
-import { AnsiOutput } from '@/components/ui/ansi-output';
+import { AnsiOutput } from '@/components/ui/feedback';
 import { ArrowDown } from 'lucide-react';
 
 // ============================================================================

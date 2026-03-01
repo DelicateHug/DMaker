@@ -24,7 +24,7 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { createLogger } from '@dmaker/utils/logger';
-import { getHttpApiClient, waitForApiKeyInit } from '@/lib/http-api-client';
+import { getHttpApiClient } from '@/lib/http-api-client';
 import { getItem, setItem } from '@/lib/storage';
 import { useAppStore, THEME_STORAGE_KEY } from '@/store/app-store';
 import { useSetupStore } from '@/store/setup-store';
@@ -141,7 +141,6 @@ export function parseLocalStorageSettings(): Partial<GlobalSettings> | null {
       defaultSkipTests: state.defaultSkipTests as boolean,
       enableDependencyBlocking: state.enableDependencyBlocking as boolean,
       skipVerificationInAutoMode: state.skipVerificationInAutoMode as boolean,
-      useWorktrees: state.useWorktrees as boolean,
       muteDoneSound: state.muteDoneSound as boolean,
       enhancementModel: state.enhancementModel as GlobalSettings['enhancementModel'],
       validationModel: state.validationModel as GlobalSettings['validationModel'],
@@ -366,9 +365,6 @@ export function useSettingsMigration(): MigrationState {
 
     async function checkAndMigrate() {
       try {
-        // Wait for API key to be initialized before making any API calls
-        await waitForApiKeyInit();
-
         const api = getHttpApiClient();
 
         // Always try to get localStorage data first (in case we need to merge/migrate)
@@ -558,7 +554,6 @@ export function hydrateStoreFromSettings(settings: GlobalSettings): void {
     defaultSkipTests: settings.defaultSkipTests ?? true,
     enableDependencyBlocking: settings.enableDependencyBlocking ?? true,
     skipVerificationInAutoMode: settings.skipVerificationInAutoMode ?? false,
-    useWorktrees: settings.useWorktrees ?? true,
     defaultFeatureModel: settings.defaultFeatureModel ?? { model: 'opus' },
     muteDoneSound: settings.muteDoneSound ?? false,
     serverLogLevel: settings.serverLogLevel ?? 'info',
@@ -573,7 +568,6 @@ export function hydrateStoreFromSettings(settings: GlobalSettings): void {
     enabledDynamicModelIds: sanitizedDynamicModelIds,
     disabledProviders: settings.disabledProviders ?? [],
     autoLoadClaudeMd: settings.autoLoadClaudeMd ?? false,
-    skipSandboxWarning: settings.skipSandboxWarning ?? false,
     keyboardShortcuts: {
       ...current.keyboardShortcuts,
       ...(settings.keyboardShortcuts as unknown as Partial<typeof current.keyboardShortcuts>),
@@ -625,7 +619,6 @@ function buildSettingsUpdateFromStore(): Record<string, unknown> {
     defaultSkipTests: state.defaultSkipTests,
     enableDependencyBlocking: state.enableDependencyBlocking,
     skipVerificationInAutoMode: state.skipVerificationInAutoMode,
-    useWorktrees: state.useWorktrees,
     muteDoneSound: state.muteDoneSound,
     serverLogLevel: state.serverLogLevel,
     enableRequestLogging: state.enableRequestLogging,
@@ -635,7 +628,6 @@ function buildSettingsUpdateFromStore(): Record<string, unknown> {
     enabledDynamicModelIds: state.enabledDynamicModelIds,
     disabledProviders: state.disabledProviders,
     autoLoadClaudeMd: state.autoLoadClaudeMd,
-    skipSandboxWarning: state.skipSandboxWarning,
     keyboardShortcuts: state.keyboardShortcuts,
     mcpServers: state.mcpServers,
     promptCustomization: state.promptCustomization,
@@ -704,7 +696,6 @@ export async function syncProjectSettingsToServer(
   projectPath: string,
   updates: {
     theme?: string;
-    useWorktrees?: boolean;
     boardBackground?: Record<string, unknown>;
     currentWorktree?: { path: string | null; branch: string };
     worktrees?: Array<{

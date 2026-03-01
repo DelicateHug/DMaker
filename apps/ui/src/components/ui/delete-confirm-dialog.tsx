@@ -6,9 +6,9 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
+} from '@/components/ui/overlays';
 import { Button } from '@/components/ui/button';
-import { HotkeyButton } from '@/components/ui/hotkey-button';
+import { HotkeyButton } from '@/components/ui/feedback';
 import type { ReactNode } from 'react';
 
 interface DeleteConfirmDialogProps {

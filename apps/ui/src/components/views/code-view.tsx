@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { createLogger } from '@dmaker/utils/logger';
 import { useAppStore } from '@/store/app-store';
 import { getElectronAPI } from '@/lib/electron';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/layout';
 import { Button } from '@/components/ui/button';
 import { File, Folder, FolderOpen, ChevronRight, ChevronDown, RefreshCw, Code } from 'lucide-react';
 import { cn } from '@/lib/utils';

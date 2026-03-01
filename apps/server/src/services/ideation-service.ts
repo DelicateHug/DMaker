@@ -4,7 +4,6 @@
  */
 
 import path from 'path';
-import * as secureFs from '../lib/secure-fs.js';
 import type { EventEmitter } from '../lib/events.js';
 import type { Feature, ExecuteOptions } from '@dmaker/types';
 import type {
@@ -25,6 +24,7 @@ import type {
   IdeationPrompt,
 } from '@dmaker/types';
 import {
+  secureFs,
   getIdeationDir,
   getIdeasDir,
   getIdeaDir,

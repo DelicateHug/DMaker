@@ -1,6 +1,6 @@
 // Shared TypeScript types for settings view components
 // Theme type is now imported from the central theme-options config
-export { type Theme } from '@/config/theme-options';
+export { type Theme } from '@/config';
 
 export interface CliStatus {
   success: boolean;

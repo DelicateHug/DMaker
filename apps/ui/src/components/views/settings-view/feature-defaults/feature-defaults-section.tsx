@@ -1,6 +1,6 @@
-import { Label } from '@/components/ui/label';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Slider } from '@/components/ui/slider';
+import { Label } from '@/components/ui/forms';
+import { Checkbox } from '@/components/ui/forms';
+import { Slider } from '@/components/ui/forms';
 import {
   FlaskConical,
   TestTube,
@@ -10,6 +10,9 @@ import {
   Cpu,
   Rocket,
   Bot,
+  Hammer,
+  Plus,
+  Trash2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
@@ -18,12 +21,17 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
-import type { PhaseModelEntry, DeployEnvironment } from '@dmaker/types';
+} from '@/components/ui/forms';
+import type { PhaseModelEntry, DeployEnvironment, BuildCommand } from '@dmaker/types';
+import { Input } from '@/components/ui/forms';
+import { Button } from '@/components/ui/button';
 import { PhaseModelSelector } from '../model-defaults/phase-model-selector';
 
 interface FeatureDefaultsSectionProps {
   defaultSkipTests: boolean;
+  defaultBuildRequired: boolean;
+  maxBuildRetries: number;
+  buildCommands: BuildCommand[];
   enableDependencyBlocking: boolean;
   skipVerificationInAutoMode: boolean;
   enableAiCommitMessages: boolean;
@@ -32,6 +40,9 @@ interface FeatureDefaultsSectionProps {
   defaultDeployEnvironment: DeployEnvironment;
   agentMultiplier: number;
   onDefaultSkipTestsChange: (value: boolean) => void;
+  onDefaultBuildRequiredChange: (value: boolean) => void;
+  onMaxBuildRetriesChange: (value: number) => void;
+  onBuildCommandsChange: (commands: BuildCommand[]) => void;
   onEnableDependencyBlockingChange: (value: boolean) => void;
   onSkipVerificationInAutoModeChange: (value: boolean) => void;
   onEnableAiCommitMessagesChange: (value: boolean) => void;
@@ -43,6 +54,9 @@ interface FeatureDefaultsSectionProps {
 
 export function FeatureDefaultsSection({
   defaultSkipTests,
+  defaultBuildRequired,
+  maxBuildRetries,
+  buildCommands,
   enableDependencyBlocking,
   skipVerificationInAutoMode,
   enableAiCommitMessages,
@@ -51,6 +65,9 @@ export function FeatureDefaultsSection({
   defaultDeployEnvironment,
   agentMultiplier,
   onDefaultSkipTestsChange,
+  onDefaultBuildRequiredChange,
+  onMaxBuildRetriesChange,
+  onBuildCommandsChange,
   onEnableDependencyBlockingChange,
   onSkipVerificationInAutoModeChange,
   onEnableAiCommitMessagesChange,
@@ -157,6 +174,114 @@ export function FeatureDefaultsSection({
               When enabled, new features will use TDD with automated tests. When disabled, features
               will require manual verification.
             </p>
+          </div>
+        </div>
+
+        {/* Separator */}
+        <div className="border-t border-border/30" />
+
+        {/* Build Verification Setting */}
+        <div className="group flex items-start space-x-3 p-3 rounded-xl hover:bg-accent/30 transition-colors duration-200 -mx-3">
+          <Checkbox
+            id="default-build-required"
+            checked={defaultBuildRequired}
+            onCheckedChange={(checked) => onDefaultBuildRequiredChange(checked === true)}
+            className="mt-1"
+            data-testid="default-build-required-checkbox"
+          />
+          <div className="flex-1 space-y-1.5">
+            <Label
+              htmlFor="default-build-required"
+              className="text-foreground cursor-pointer font-medium flex items-center gap-2"
+            >
+              <Hammer className="w-4 h-4 text-brand-500" />
+              Enable build verification by default
+            </Label>
+            <p className="text-xs text-muted-foreground/80 leading-relaxed">
+              When enabled, new features will run build commands after the agent finishes. If the
+              build fails, the agent retries automatically.
+            </p>
+            {defaultBuildRequired && (
+              <div className="mt-3 space-y-4 pl-1">
+                {/* Max Retries */}
+                <div className="flex items-center gap-3">
+                  <Label className="text-xs text-muted-foreground shrink-0">Max retries:</Label>
+                  <Slider
+                    value={[maxBuildRetries]}
+                    onValueChange={(value) => onMaxBuildRetriesChange(value[0])}
+                    min={1}
+                    max={20}
+                    step={1}
+                    className="flex-1 max-w-[200px]"
+                    data-testid="max-build-retries-slider"
+                  />
+                  <span className="text-xs font-medium min-w-[2ch] text-right">
+                    {maxBuildRetries}
+                  </span>
+                </div>
+                {/* Build Commands */}
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground">Build commands:</Label>
+                  {buildCommands.map((cmd, index) => (
+                    <div key={index} className="flex items-center gap-2">
+                      <Checkbox
+                        checked={cmd.enabled}
+                        onCheckedChange={(checked) => {
+                          const updated = [...buildCommands];
+                          updated[index] = { ...cmd, enabled: checked === true };
+                          onBuildCommandsChange(updated);
+                        }}
+                        className="shrink-0"
+                      />
+                      <Input
+                        value={cmd.name}
+                        onChange={(e) => {
+                          const updated = [...buildCommands];
+                          updated[index] = { ...cmd, name: e.target.value };
+                          onBuildCommandsChange(updated);
+                        }}
+                        className="h-7 text-xs w-[100px]"
+                        placeholder="Name"
+                      />
+                      <Input
+                        value={cmd.cmd}
+                        onChange={(e) => {
+                          const updated = [...buildCommands];
+                          updated[index] = { ...cmd, cmd: e.target.value };
+                          onBuildCommandsChange(updated);
+                        }}
+                        className="h-7 text-xs flex-1 font-mono"
+                        placeholder="Command"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const updated = buildCommands.filter((_, i) => i !== index);
+                          onBuildCommandsChange(updated);
+                        }}
+                        className="p-1 text-muted-foreground hover:text-destructive transition-colors"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      onBuildCommandsChange([
+                        ...buildCommands,
+                        { cmd: '', name: '', enabled: true },
+                      ]);
+                    }}
+                    className="h-7 text-xs"
+                  >
+                    <Plus className="w-3 h-3 mr-1" />
+                    Add command
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 

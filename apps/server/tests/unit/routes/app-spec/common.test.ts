@@ -1,9 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import {
-  setRunningState,
-  getErrorMessage,
-  getSpecRegenerationStatus,
-} from '@/routes/app-spec/common.js';
+import { setRunningState, getErrorMessage, getSpecRegenerationStatus } from '@/routes/app-spec.js';
 
 const TEST_PROJECT_PATH = '/tmp/dmaker-test-project';
 

@@ -3,7 +3,8 @@ import { createLogger } from '@dmaker/utils/logger';
 import { useNavigate } from '@tanstack/react-router';
 import { useShallow } from 'zustand/react/shallow';
 import { useAppStore, type ThemeMode } from '@/store/app-store';
-import { useOSDetection } from '@/hooks/use-os-detection';
+import { useLayerStore } from '@/store/layer-store';
+import { useOSDetection } from '@/hooks/utilities';
 import { getElectronAPI, isElectron } from '@/lib/electron';
 import { initializeProject } from '@/lib/project-init';
 import { getHttpApiClient } from '@/lib/http-api-client';
@@ -27,7 +28,7 @@ import {
   X,
 } from 'lucide-react';
 import { getProjectIcon } from '@/lib/icon-registry';
-import { Input } from '@/components/ui/input';
+import { Input } from '@/components/ui/forms';
 import { getAuthenticatedImageUrl } from '@/lib/api-fetch';
 import { LazyImage } from '@/components/ui/lazy-image';
 import {
@@ -43,7 +44,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
+} from '@/components/ui/overlays';
 
 const logger = createLogger('DashboardView');
 
@@ -235,7 +236,8 @@ export function DashboardView() {
   };
 
   const handleInteractiveMode = () => {
-    navigate({ to: '/interview' });
+    useLayerStore.getState().openLayer('interview');
+    navigate({ to: '/board' });
   };
 
   const handleCreateBlankProject = async (projectName: string, parentDir: string) => {

@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
+import { Checkbox } from '@/components/ui/forms';
 import { Markdown } from '@/components/ui/markdown';
 import { LazyImage } from '@/components/ui/lazy-image';
 import { cn } from '@/lib/utils';

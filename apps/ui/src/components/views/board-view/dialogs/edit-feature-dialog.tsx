@@ -8,14 +8,14 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
+} from '@/components/ui/overlays';
 import { Button } from '@/components/ui/button';
-import { HotkeyButton } from '@/components/ui/hotkey-button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Checkbox } from '@/components/ui/checkbox';
-import { CategoryAutocomplete } from '@/components/ui/category-autocomplete';
-import { DependencySelector } from '@/components/ui/dependency-selector';
+import { HotkeyButton } from '@/components/ui/feedback';
+import { Input } from '@/components/ui/forms';
+import { Label } from '@/components/ui/forms';
+import { Checkbox } from '@/components/ui/forms';
+import { CategoryAutocomplete } from '@/components/ui/forms';
+import { DependencySelector } from '@/components/ui/feedback';
 import {
   DescriptionImageDropZone,
   FeatureImagePath as DescriptionImagePath,
@@ -23,22 +23,22 @@ import {
   ImagePreviewMap,
 } from '@/components/ui/description-image-dropzone';
 import { GitBranch, Settings2 } from 'lucide-react';
-import { useNavigate } from '@tanstack/react-router';
+import { AgentSelector } from '@/components/ui/agent-selector';
+import { ContextFileSelector } from '@/components/ui/context-file-selector';
 import { toast } from 'sonner';
+import { useLayerStore } from '@/store/layer-store';
 import { modelSupportsThinking } from '@/lib/utils';
 import { Feature, ModelAlias, ThinkingLevel, useAppStore } from '@/store/app-store';
 import type { ReasoningEffort, PhaseModelEntry, DescriptionHistoryEntry } from '@dmaker/types';
 import {
   TestingTabContent,
   PrioritySelector,
-  WorkModeSelector,
   EnhanceWithAI,
   EnhancementHistoryButton,
   PhaseModelSelector,
   type EnhancementMode,
 } from '../shared';
-import type { WorkMode } from '../shared';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/overlays';
 import { DependencyTreeDialog } from './dependency-tree-dialog';
 import { supportsReasoningEffort } from '@dmaker/types';
 
@@ -54,26 +54,28 @@ interface EditFeatureDialogProps {
       category: string;
       description: string;
       skipTests: boolean;
+      buildRequired: boolean;
       model: ModelAlias;
       thinkingLevel: ThinkingLevel;
       reasoningEffort: ReasoningEffort;
       imagePaths: DescriptionImagePath[];
       textFilePaths: DescriptionTextFilePath[];
-      branchName: string; // Can be empty string to use current branch
       priority: number;
       autoDeploy: boolean;
+      requireApproval: boolean;
       dependencies?: string[];
       childDependencies?: string[]; // Feature IDs that should depend on this feature
       waitForDependencies?: boolean; // If true, this feature won't start until all dependencies are completed/verified
+      enableSkills?: boolean;
+      enableSubagents?: boolean;
+      selectedAgents?: string[];
+      selectedContextFiles?: string[];
     },
     descriptionHistorySource?: 'enhance' | 'edit',
     enhancementMode?: EnhancementMode,
     preEnhancementDescription?: string
   ) => void;
   categorySuggestions: string[];
-  branchSuggestions: string[];
-  branchCardCounts?: Record<string, number>; // Map of branch name to active card count
-  currentBranch?: string;
   isMaximized: boolean;
   allFeatures: Feature[];
 }
@@ -83,25 +85,22 @@ export function EditFeatureDialog({
   onClose,
   onUpdate,
   categorySuggestions,
-  branchSuggestions,
-  branchCardCounts,
-  currentBranch,
   isMaximized,
   allFeatures,
 }: EditFeatureDialogProps) {
-  const navigate = useNavigate();
+  const currentProject = useAppStore((state) => state.currentProject);
   const [editingFeature, setEditingFeature] = useState<Feature | null>(feature);
-  // Derive initial workMode from feature's branchName
-  const [workMode, setWorkMode] = useState<WorkMode>(() => {
-    // If feature has a branchName, it's using 'custom' mode
-    // Otherwise, it's on 'current' branch (no worktree isolation)
-    return feature?.branchName ? 'custom' : 'current';
-  });
   const [editFeaturePreviewMap, setEditFeaturePreviewMap] = useState<ImagePreviewMap>(
     () => new Map()
   );
   const [showDependencyTree, setShowDependencyTree] = useState(false);
   const [autoDeploy, setAutoDeploy] = useState(feature?.autoDeploy ?? false);
+  const [buildRequired, setBuildRequired] = useState(feature?.buildRequired ?? false);
+  const [requireApproval, setRequireApproval] = useState(feature?.requireApproval ?? false);
+  const [selectedAgents, setSelectedAgents] = useState<string[]>(feature?.selectedAgents ?? []);
+  const [selectedContextFiles, setSelectedContextFiles] = useState<string[]>(
+    feature?.selectedContextFiles ?? []
+  );
   const [waitForDependencies, setWaitForDependencies] = useState(
     feature?.waitForDependencies ?? false
   );
@@ -145,8 +144,10 @@ export function EditFeatureDialog({
     setEditingFeature(feature);
     if (feature) {
       setAutoDeploy(feature.autoDeploy ?? false);
-      // Derive workMode from feature's branchName
-      setWorkMode(feature.branchName ? 'custom' : 'current');
+      setBuildRequired(feature.buildRequired ?? false);
+      setRequireApproval(feature.requireApproval ?? false);
+      setSelectedAgents(feature.selectedAgents ?? []);
+      setSelectedContextFiles(feature.selectedContextFiles ?? []);
       // Reset history tracking state
       setOriginalDescription(feature.description ?? '');
       setDescriptionChangeSource(null);
@@ -176,6 +177,8 @@ export function EditFeatureDialog({
       setOriginalChildDependencies([]);
       setWaitForDependencies(false);
       setAutoDeploy(false);
+      setRequireApproval(false);
+      setSelectedAgents([]);
     }
   }, [feature, allFeatures]);
 
@@ -186,13 +189,6 @@ export function EditFeatureDialog({
   const handleUpdate = () => {
     if (!editingFeature) return;
 
-    // Validate branch selection for custom mode
-    const isBranchSelectorEnabled = editingFeature.status === 'backlog';
-    if (isBranchSelectorEnabled && workMode === 'custom' && !editingFeature.branchName?.trim()) {
-      toast.error('Please select a branch name');
-      return;
-    }
-
     const selectedModel = modelEntry.model;
     const normalizedThinking: ThinkingLevel = modelSupportsThinking(selectedModel)
       ? (modelEntry.thinkingLevel ?? 'none')
@@ -200,11 +196,6 @@ export function EditFeatureDialog({
     const normalizedReasoning: ReasoningEffort = supportsReasoningEffort(selectedModel)
       ? (modelEntry.reasoningEffort ?? 'none')
       : 'none';
-
-    // For 'current' mode, use empty string (work on current branch)
-    // For 'auto' mode, use empty string (will be auto-generated in use-board-actions)
-    // For 'custom' mode, use the specified branch name
-    const finalBranchName = workMode === 'custom' ? editingFeature.branchName || '' : '';
 
     // Check if child dependencies changed
     const childDepsChanged =
@@ -217,18 +208,22 @@ export function EditFeatureDialog({
       category: editingFeature.category,
       description: editingFeature.description,
       skipTests: editingFeature.skipTests ?? false,
+      buildRequired,
       model: selectedModel,
       thinkingLevel: normalizedThinking,
       reasoningEffort: normalizedReasoning,
       imagePaths: editingFeature.imagePaths ?? [],
       textFilePaths: editingFeature.textFilePaths ?? [],
-      branchName: finalBranchName,
       priority: editingFeature.priority ?? 2,
       autoDeploy,
-      workMode,
+      requireApproval,
       dependencies: parentDependencies,
       childDependencies: childDepsChanged ? childDependencies : undefined,
       waitForDependencies,
+      enableSkills: editingFeature.enableSkills,
+      enableSubagents: selectedAgents.length > 0 ? true : editingFeature.enableSubagents,
+      selectedAgents: selectedAgents.length > 0 ? selectedAgents : undefined,
+      selectedContextFiles: selectedContextFiles.length > 0 ? selectedContextFiles : undefined,
     };
 
     // Determine if description changed and what source to use
@@ -411,7 +406,7 @@ export function EditFeatureDialog({
                       type="button"
                       onClick={() => {
                         onClose();
-                        navigate({ to: '/settings', search: { view: 'defaults' } });
+                        useLayerStore.getState().openLayer('settings');
                       }}
                       className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
                     >
@@ -457,6 +452,20 @@ export function EditFeatureDialog({
                 </div>
                 <div className="flex items-center gap-2">
                   <Checkbox
+                    id="edit-feature-build-required"
+                    checked={buildRequired}
+                    onCheckedChange={(checked) => setBuildRequired(!!checked)}
+                    data-testid="edit-feature-build-required-checkbox"
+                  />
+                  <Label
+                    htmlFor="edit-feature-build-required"
+                    className="text-xs font-normal cursor-pointer"
+                  >
+                    Verify build
+                  </Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Checkbox
                     id="edit-feature-auto-deploy"
                     checked={autoDeploy}
                     onCheckedChange={(checked) => setAutoDeploy(!!checked)}
@@ -469,7 +478,54 @@ export function EditFeatureDialog({
                     Auto-deploy
                   </Label>
                 </div>
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="edit-feature-require-approval"
+                    checked={requireApproval}
+                    onCheckedChange={(checked) => setRequireApproval(!!checked)}
+                    data-testid="edit-feature-require-approval-checkbox"
+                  />
+                  <Label
+                    htmlFor="edit-feature-require-approval"
+                    className="text-xs font-normal cursor-pointer"
+                  >
+                    Require plan approval
+                  </Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="edit-feature-enable-skills"
+                    checked={editingFeature.enableSkills ?? true}
+                    onCheckedChange={(checked) =>
+                      setEditingFeature({ ...editingFeature, enableSkills: !!checked })
+                    }
+                  />
+                  <Label
+                    htmlFor="edit-feature-enable-skills"
+                    className="text-xs font-normal cursor-pointer"
+                  >
+                    Enable Skills
+                  </Label>
+                </div>
               </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Agents</Label>
+              <AgentSelector
+                value={selectedAgents}
+                onChange={setSelectedAgents}
+                placeholder="Select agents..."
+                projectName={currentProject?.name}
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Context Files</Label>
+              <ContextFileSelector
+                value={selectedContextFiles}
+                onChange={setSelectedContextFiles}
+              />
             </div>
 
             <div className="grid grid-cols-2 gap-3">
@@ -503,25 +559,15 @@ export function EditFeatureDialog({
               </div>
             </div>
 
-            {/* Work Mode Selector */}
-            <div className="pt-2">
-              <WorkModeSelector
-                workMode={workMode}
-                onWorkModeChange={setWorkMode}
-                branchName={editingFeature.branchName ?? ''}
-                onBranchNameChange={(value) =>
-                  setEditingFeature({
-                    ...editingFeature,
-                    branchName: value,
-                  })
-                }
-                branchSuggestions={branchSuggestions}
-                branchCardCounts={branchCardCounts}
-                currentBranch={currentBranch}
-                disabled={editingFeature.status !== 'backlog'}
-                testIdPrefix="edit-feature-work-mode"
-              />
-            </div>
+            {/* Branch info (read-only, auto-assigned) */}
+            {editingFeature.branchName && (
+              <div className="pt-2">
+                <Label className="text-xs text-muted-foreground">Branch</Label>
+                <p className="text-sm font-mono text-muted-foreground mt-1">
+                  {editingFeature.branchName}
+                </p>
+              </div>
+            )}
 
             {/* Dependencies */}
             {allFeatures.length > 1 && (
@@ -595,11 +641,6 @@ export function EditFeatureDialog({
               hotkey={{ key: 'Enter', cmdCtrl: true }}
               hotkeyActive={!!editingFeature}
               data-testid="confirm-edit-feature"
-              disabled={
-                editingFeature.status === 'backlog' &&
-                workMode === 'custom' &&
-                !editingFeature.branchName?.trim()
-              }
             >
               Save Changes
             </HotkeyButton>

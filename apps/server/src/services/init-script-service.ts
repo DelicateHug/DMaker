@@ -8,11 +8,10 @@
 import { spawn } from 'child_process';
 import path from 'path';
 import { createLogger } from '@dmaker/utils';
-import { systemPathExists, getShellPaths, findGitBashPath } from '@dmaker/platform';
+import { systemPathExists, getShellPaths, findGitBashPath, secureFs } from '@dmaker/platform';
 import { findCommand } from '../lib/cli-detection.js';
 import type { EventEmitter } from '../lib/events.js';
 import { readWorktreeMetadata, writeWorktreeMetadata } from '../lib/worktree-metadata.js';
-import * as secureFs from '../lib/secure-fs.js';
 
 const logger = createLogger('InitScript');
 

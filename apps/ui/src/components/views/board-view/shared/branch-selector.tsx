@@ -1,8 +1,8 @@
 'use client';
 
-import { Label } from '@/components/ui/label';
+import { Label } from '@/components/ui/forms';
 import { BranchAutocomplete } from '@/components/ui/branch-autocomplete';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/forms';
 
 interface BranchSelectorProps {
   useCurrentBranch: boolean;

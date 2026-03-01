@@ -3,8 +3,8 @@ import { createLogger } from '@dmaker/utils/logger';
 
 const logger = createLogger('SessionManager');
 import { Button } from '@/components/ui/button';
-import { HotkeyButton } from '@/components/ui/hotkey-button';
-import { Input } from '@/components/ui/input';
+import { HotkeyButton } from '@/components/ui/feedback';
+import { Input } from '@/components/ui/forms';
 import {
   Plus,
   MessageSquare,

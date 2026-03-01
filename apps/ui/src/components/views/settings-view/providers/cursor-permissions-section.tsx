@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
+import { Label } from '@/components/ui/forms';
+import { Badge } from '@/components/ui/layout';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Shield, ShieldCheck, ShieldAlert, ChevronDown, Copy, Check } from 'lucide-react';

@@ -3,7 +3,7 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import { ChevronDown, ChevronRight, Plus, Tag, FolderOpen } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/overlays';
 import { getBlockingDependencies } from '@dmaker/dependency-resolver';
 import { useAppStore, formatShortcut } from '@/store/app-store';
 import type { Feature } from '@/store/app-store';
@@ -47,6 +47,7 @@ export interface ListViewActionHandlers {
   onSpawnTask?: (feature: Feature) => void;
   onToggleFavorite?: (feature: Feature) => void;
   onConvertToIssue?: (feature: Feature) => void;
+  onChat?: (feature: Feature) => void;
 }
 
 export interface ListViewProps {
@@ -794,6 +795,12 @@ export const ListView = memo(function ListView({
           ? (id) => {
               const f = allFeatures.find((f) => f.id === id);
               if (f) actionHandlers.onToggleFavorite?.(f);
+            }
+          : undefined,
+        chat: actionHandlers.onChat
+          ? (id) => {
+              const f = allFeatures.find((f) => f.id === id);
+              if (f) actionHandlers.onChat?.(f);
             }
           : undefined,
         isFavorite: feature.isFavorite,

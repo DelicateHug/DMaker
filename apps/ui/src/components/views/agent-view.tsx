@@ -17,7 +17,7 @@ import {
 
 // Extracted components
 import { NoProjectState, AgentHeader, ChatArea } from './agent-view/components';
-import { AgentInputArea } from './agent-view/input-area';
+import { AgentInputArea } from './agent-view/agent-input';
 
 export function AgentView() {
   const { currentProject, bumpSessionListVersion } = useAppStore(

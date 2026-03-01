@@ -3,7 +3,7 @@ import { toast } from 'sonner';
 import { ProviderToggle } from './provider-toggle';
 import { GcpIcon } from '@/components/ui/provider-icon';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { Badge } from '@/components/ui/layout';
 import { CheckCircle2, AlertCircle, RefreshCw, Cloud } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getElectronAPI } from '@/lib/electron';

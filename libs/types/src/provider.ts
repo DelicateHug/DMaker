@@ -3,7 +3,7 @@
  */
 
 import type { ThinkingLevel } from './settings.js';
-import type { CodexSandboxMode, CodexApprovalPolicy } from './codex.js';
+import type { CodexSandboxMode, CodexApprovalPolicy } from './codex-types.js';
 
 /**
  * Reasoning effort levels for Codex/OpenAI models

@@ -6,7 +6,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
+} from '@/components/ui/overlays';
 import { Button } from '@/components/ui/button';
 import { Plus, Trash2, ChevronUp, ChevronDown, Pencil } from 'lucide-react';
 import { toast } from 'sonner';

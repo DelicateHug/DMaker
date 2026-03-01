@@ -49,6 +49,11 @@ export const EMPTY_STATE_CONFIGS: Record<string, EmptyStateConfig> = {
     description: 'Drag a feature from the backlog here or click implement to start working on it.',
     icon: 'play',
   },
+  building: {
+    title: 'No Active Builds',
+    description: 'Features will appear here while build verification commands are running.',
+    icon: 'sparkles',
+  },
   waiting_approval: {
     title: 'No Items Awaiting Approval',
     description: 'Features will appear here after implementation is complete and need your review.',
@@ -89,6 +94,11 @@ const BASE_COLUMNS: Column[] = [
     id: 'in_progress',
     title: 'In Progress',
     colorClass: 'bg-[var(--status-in-progress)]',
+  },
+  {
+    id: 'building',
+    title: 'Building',
+    colorClass: 'bg-[var(--status-building)]',
   },
 ];
 
@@ -222,18 +232,25 @@ export const STATUS_TAB_CONFIGS: StatusTabConfig[] = [
     shortcutKey: 'Shift+4',
   },
   {
+    id: 'building',
+    label: 'Building',
+    colorClass: 'bg-[var(--status-building)]',
+    description: 'Features undergoing build verification',
+    shortcutKey: 'Shift+5',
+  },
+  {
     id: 'waiting_approval',
     label: 'Waiting Approval',
     colorClass: 'bg-[var(--status-waiting)]',
     description: 'Features awaiting review and approval',
-    shortcutKey: 'Shift+5',
+    shortcutKey: 'Shift+6',
   },
   {
     id: 'all',
     label: 'All Statuses',
     colorClass: 'bg-[var(--status-all)]',
     description: 'View all features across all statuses',
-    shortcutKey: 'Shift+0',
+    shortcutKey: 'Shift+7',
   },
 ];
 
@@ -275,13 +292,15 @@ const SPECIAL_VIEW_TABS: StatusTabConfig[] = [
  * Appends 'all' special view tab after the column-derived tabs.
  */
 export function getStatusTabsFromColumns(columns: Column[]): StatusTabConfig[] {
-  const columnTabs = columns.map((col, index) => ({
-    id: col.id as StatusTabId,
-    label: col.title,
-    colorClass: col.colorClass,
-    description: col.isPipelineStep ? `Pipeline step: ${col.title}` : undefined,
-    shortcutKey: index < 9 ? `Shift+${index + 1}` : undefined,
-  }));
+  const columnTabs = columns
+    .filter((col) => col.id !== 'completed')
+    .map((col, index) => ({
+      id: col.id as StatusTabId,
+      label: col.title,
+      colorClass: col.colorClass,
+      description: col.isPipelineStep ? `Pipeline step: ${col.title}` : undefined,
+      shortcutKey: index < 9 ? `Shift+${index + 1}` : undefined,
+    }));
 
   // Append special view tabs with correct shortcut keys
   const specialTabs = SPECIAL_VIEW_TABS.map((tab, i) => ({

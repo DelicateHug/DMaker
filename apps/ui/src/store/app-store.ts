@@ -622,6 +622,8 @@ export interface AppState {
   // Agent Session state (per-project, keyed by project path)
   lastSelectedSessionByProject: Record<string, string>; // projectPath -> sessionId
   sessionListVersion: number; // Bumped on session mutations to notify independent session lists
+  pendingChatSessionId: string | null; // Session ID for pending chat from feature card
+  pendingChatInput: string | null; // Pre-filled input for pending chat
 
   // Theme
   theme: ThemeMode;
@@ -666,14 +668,14 @@ export interface AppState {
 
   // Feature Default Settings
   defaultSkipTests: boolean; // Default value for skip tests when creating new features
+  defaultBuildRequired: boolean; // Default value for build verification when creating new features
+  maxBuildRetries: number; // Maximum build retry attempts before moving to backlog
+  buildCommands: import('@dmaker/types').BuildCommand[]; // Build commands to run during build verification
   enableDependencyBlocking: boolean; // When true, show blocked badges and warnings for features with incomplete dependencies (default: true)
   skipVerificationInAutoMode: boolean; // When true, auto-mode grabs features even if dependencies are not verified (only checks they're not running)
   enableAiCommitMessages: boolean; // When true, auto-generate commit messages using AI when opening commit dialog
   planUseSelectedWorktreeBranch: boolean; // When true, Plan dialog creates features on the currently selected worktree branch
   addFeatureUseSelectedWorktreeBranch: boolean; // When true, Add Feature dialog defaults to custom mode with selected worktree branch
-  // Worktree Settings
-  useWorktrees: boolean; // Whether to use git worktree isolation for features (default: true)
-
   // User-managed Worktrees (per-project)
   // projectPath -> { path: worktreePath or null for main, branch: branch name }
   currentWorktreeByProject: Record<string, { path: string | null; branch: string }>;
@@ -745,7 +747,6 @@ export interface AppState {
 
   // Claude Agent SDK Settings
   autoLoadClaudeMd: boolean; // Auto-load CLAUDE.md files using SDK's settingSources option
-  skipSandboxWarning: boolean; // Skip the sandbox environment warning dialog on startup
 
   // MCP Servers
   mcpServers: MCPServerConfig[]; // List of configured MCP servers for agent use
@@ -760,6 +761,7 @@ export interface AppState {
   // Subagents Configuration
   enableSubagents: boolean; // Enable Custom Subagents functionality (loads from .claude/agents/ directories)
   subagentsSources: Array<'user' | 'project'>; // Which directories to load Subagents from
+  defaultAgents: string[]; // Agent names that are pre-selected by default on new features
 
   // Prompt Customization
   promptCustomization: PromptCustomization; // Custom prompts for Auto Mode, Agent, Backlog Plan, Enhancement
@@ -866,10 +868,6 @@ export interface AppState {
   // Auto-dismiss Init Script Indicator (per-project, keyed by project path)
   // Whether to auto-dismiss the indicator after completion (default: true)
   autoDismissInitScriptIndicatorByProject: Record<string, boolean>;
-
-  // Use Worktrees Override (per-project, keyed by project path)
-  // undefined = use global setting, true/false = project-specific override
-  useWorktreesByProject: Record<string, boolean | undefined>;
 
   // UI State (previously in localStorage, now synced via API)
   /** Whether worktree panel is collapsed in board view */
@@ -1177,13 +1175,16 @@ export interface AppActions {
 
   // Feature Default Settings actions
   setDefaultSkipTests: (skip: boolean) => void;
+  setDefaultBuildRequired: (required: boolean) => void;
+  setMaxBuildRetries: (retries: number) => void;
+  setBuildCommands: (commands: import('@dmaker/types').BuildCommand[]) => void;
+  setDefaultAgents: (agents: string[]) => void;
   setEnableDependencyBlocking: (enabled: boolean) => void;
   setSkipVerificationInAutoMode: (enabled: boolean) => Promise<void>;
   setEnableAiCommitMessages: (enabled: boolean) => Promise<void>;
   setPlanUseSelectedWorktreeBranch: (enabled: boolean) => Promise<void>;
   setAddFeatureUseSelectedWorktreeBranch: (enabled: boolean) => Promise<void>;
   // Worktree Settings actions
-  setUseWorktrees: (enabled: boolean) => void;
   setCurrentWorktree: (projectPath: string, worktreePath: string | null, branch: string) => void;
   setWorktrees: (
     projectPath: string,
@@ -1267,7 +1268,6 @@ export interface AppActions {
 
   // Claude Agent SDK Settings actions
   setAutoLoadClaudeMd: (enabled: boolean) => Promise<void>;
-  setSkipSandboxWarning: (skip: boolean) => Promise<void>;
 
   // Editor Configuration actions
   setDefaultEditorCommand: (command: string | null) => void;
@@ -1295,6 +1295,8 @@ export interface AppActions {
   setLastSelectedSession: (projectPath: string, sessionId: string | null) => void;
   getLastSelectedSession: (projectPath: string) => string | null;
   bumpSessionListVersion: () => void;
+  setPendingChat: (sessionId: string, input: string) => void;
+  clearPendingChat: () => void;
 
   // Board Background actions
   setBoardBackground: (projectPath: string, imagePath: string | null) => void;
@@ -1421,11 +1423,6 @@ export interface AppActions {
   setAutoDismissInitScriptIndicator: (projectPath: string, autoDismiss: boolean) => void;
   getAutoDismissInitScriptIndicator: (projectPath: string) => boolean;
 
-  // Use Worktrees Override actions (per-project)
-  setProjectUseWorktrees: (projectPath: string, useWorktrees: boolean | null) => void; // null = use global
-  getProjectUseWorktrees: (projectPath: string) => boolean | undefined; // undefined = using global
-  getEffectiveUseWorktrees: (projectPath: string) => boolean; // Returns actual value (project or global fallback)
-
   // UI State actions (previously in localStorage, now synced via API)
   setWorktreePanelCollapsed: (collapsed: boolean) => void;
   setLastProjectDir: (dir: string) => void;
@@ -1547,6 +1544,8 @@ const initialState: AppState = {
   mobileSidebarHidden: false, // Sidebar visible by default on mobile
   lastSelectedSessionByProject: {},
   sessionListVersion: 0,
+  pendingChatSessionId: null,
+  pendingChatInput: null,
   theme: getStoredTheme() || 'dark', // Use localStorage theme as initial value, fallback to 'dark'
   syntaxTheme: getStoredSyntaxTheme() || 'auto', // Use localStorage syntax theme as initial value, fallback to 'auto'
   fontFamilySans: getStoredFontSans(), // Use localStorage font as initial value (null = use default Geist Sans)
@@ -1571,12 +1570,19 @@ const initialState: AppState = {
   agentMultiplier: 5, // Default global max concurrent agents
   autoModeConfigByProject: {}, // Per-project auto mode configuration
   defaultSkipTests: true, // Default to manual verification (tests disabled)
+  defaultBuildRequired: false, // Default to disabled (no build verification)
+  maxBuildRetries: 10, // Default max build retry attempts
+  buildCommands: [
+    { cmd: 'npm run lint', name: 'Lint', enabled: true },
+    { cmd: 'npm run typecheck', name: 'Type Check', enabled: true },
+    { cmd: 'npm test', name: 'Tests', enabled: true },
+    { cmd: 'npm run build', name: 'Build', enabled: true },
+  ],
   enableDependencyBlocking: true, // Default to enabled (show dependency blocking UI)
   skipVerificationInAutoMode: false, // Default to disabled (require dependencies to be verified)
   enableAiCommitMessages: true, // Default to enabled (auto-generate commit messages)
   planUseSelectedWorktreeBranch: true, // Default to enabled (Plan creates features on selected worktree branch)
   addFeatureUseSelectedWorktreeBranch: false, // Default to disabled (Add Feature uses normal defaults)
-  useWorktrees: true, // Default to enabled (git worktree isolation)
   currentWorktreeByProject: {},
   worktreesByProject: {},
   keyboardShortcuts: DEFAULT_KEYBOARD_SHORTCUTS, // Default keyboard shortcuts
@@ -1607,13 +1613,13 @@ const initialState: AppState = {
   opencodeModelsLastFailedAt: null,
   disabledProviders: [], // No providers disabled by default
   autoLoadClaudeMd: false, // Default to disabled (user must opt-in)
-  skipSandboxWarning: false, // Default to disabled (show sandbox warning dialog)
   mcpServers: [], // No MCP servers configured by default
   defaultEditorCommand: null, // Auto-detect: Cursor > VS Code > first available
   enableSkills: true, // Skills enabled by default
   skillsSources: ['user', 'project'] as Array<'user' | 'project'>, // Load from both sources by default
   enableSubagents: true, // Subagents enabled by default
   subagentsSources: ['user', 'project'] as Array<'user' | 'project'>, // Load from both sources by default
+  defaultAgents: [] as string[], // No default agents pre-selected
   promptCustomization: {}, // Empty by default - all prompts use built-in defaults
   claudeAccounts: [], // No known Claude accounts by default
   projectAnalysis: null,
@@ -1656,7 +1662,6 @@ const initialState: AppState = {
   showInitScriptIndicatorByProject: {},
   defaultDeleteBranchByProject: {},
   autoDismissInitScriptIndicatorByProject: {},
-  useWorktreesByProject: {},
   // UI State (previously in localStorage, now synced via API)
   worktreePanelCollapsed: false,
   lastProjectDir: '',
@@ -2423,6 +2428,10 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
 
   // Feature Default Settings actions
   setDefaultSkipTests: (skip) => set({ defaultSkipTests: skip }),
+  setDefaultBuildRequired: (required) => set({ defaultBuildRequired: required }),
+  setMaxBuildRetries: (retries) => set({ maxBuildRetries: retries }),
+  setBuildCommands: (commands) => set({ buildCommands: commands }),
+  setDefaultAgents: (agents) => set({ defaultAgents: agents }),
   setEnableDependencyBlocking: (enabled) => set({ enableDependencyBlocking: enabled }),
   setSkipVerificationInAutoMode: async (enabled) => {
     set({ skipVerificationInAutoMode: enabled });
@@ -2466,8 +2475,6 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
     }
   },
   // Worktree Settings actions
-  setUseWorktrees: (enabled) => set({ useWorktrees: enabled }),
-
   setCurrentWorktree: (projectPath, worktreePath, branch) => {
     const current = get().currentWorktreeByProject;
     set({
@@ -2687,18 +2694,6 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
       set({ autoLoadClaudeMd: previous });
     }
   },
-  setSkipSandboxWarning: async (skip) => {
-    const previous = get().skipSandboxWarning;
-    set({ skipSandboxWarning: skip });
-    // Sync to server settings file
-    const { syncSettingsToServer } = await import('@/hooks/use-settings-migration');
-    const ok = await syncSettingsToServer();
-    if (!ok) {
-      logger.error('Failed to sync skipSandboxWarning setting to server - reverting');
-      set({ skipSandboxWarning: previous });
-    }
-  },
-
   // Editor Configuration actions
   setDefaultEditorCommand: (command) => set({ defaultEditorCommand: command }),
   // Prompt Customization actions
@@ -2782,6 +2777,14 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
 
   bumpSessionListVersion: () => {
     set({ sessionListVersion: get().sessionListVersion + 1 });
+  },
+
+  setPendingChat: (sessionId: string, input: string) => {
+    set({ pendingChatSessionId: sessionId, pendingChatInput: input });
+  },
+
+  clearPendingChat: () => {
+    set({ pendingChatSessionId: null, pendingChatInput: null });
   },
 
   // Board Background actions
@@ -4060,31 +4063,6 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
   getAutoDismissInitScriptIndicator: (projectPath) => {
     // Default to true (auto-dismiss enabled) if not set
     return get().autoDismissInitScriptIndicatorByProject[projectPath] ?? true;
-  },
-
-  // Use Worktrees Override actions (per-project)
-  setProjectUseWorktrees: (projectPath, useWorktrees) => {
-    const newValue = useWorktrees === null ? undefined : useWorktrees;
-    set({
-      useWorktreesByProject: {
-        ...get().useWorktreesByProject,
-        [projectPath]: newValue,
-      },
-    });
-  },
-
-  getProjectUseWorktrees: (projectPath) => {
-    // Returns undefined if using global setting, true/false if project-specific
-    return get().useWorktreesByProject[projectPath];
-  },
-
-  getEffectiveUseWorktrees: (projectPath) => {
-    // Returns the actual value to use (project override or global fallback)
-    const projectSetting = get().useWorktreesByProject[projectPath];
-    if (projectSetting !== undefined) {
-      return projectSetting;
-    }
-    return get().useWorktrees;
   },
 
   // UI State actions (previously in localStorage, now synced via API)

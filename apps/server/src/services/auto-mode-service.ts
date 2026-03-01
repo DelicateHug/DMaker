@@ -19,19 +19,31 @@ import type {
   FeatureStatusWithPipeline,
   PipelineConfig,
   ThinkingLevel,
+  BuildCommand,
 } from '@dmaker/types';
-import { DEFAULT_PHASE_MODELS, isClaudeModel, stripProviderPrefix } from '@dmaker/types';
+import {
+  DEFAULT_PHASE_MODELS,
+  isClaudeModel,
+  stripProviderPrefix,
+  DEFAULT_BUILD_COMMANDS,
+} from '@dmaker/types';
 import {
   buildPromptWithImages,
   classifyError,
   loadContextFiles,
+  getEnabledContextFileNames,
+  getEnabledMemoryFileNames,
   appendLearning,
   recordMemoryUsage,
+  consolidateMemoryToMaster,
+  memoryTiersNeedRegeneration,
+  writeMemoryTiers,
   createLogger,
   atomicWriteJson,
   readJsonWithRecovery,
   logRecoveryWarning,
   DEFAULT_BACKUP_COUNT,
+  type MemoryFsModule,
 } from '@dmaker/utils';
 
 const logger = createLogger('AutoMode');
@@ -42,6 +54,7 @@ import {
   shouldBlockOnDependencies,
 } from '@dmaker/dependency-resolver';
 import {
+  secureFs,
   getDmakerDir,
   getFeaturesDir,
   getExecutionStatePath,
@@ -52,7 +65,6 @@ import {
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import path from 'path';
-import * as secureFs from '../lib/secure-fs.js';
 import type { EventEmitter } from '../lib/events.js';
 import {
   createAutoModeOptions,
@@ -67,9 +79,18 @@ import {
   filterClaudeMdFromContext,
   getMCPServersFromSettings,
   getPromptCustomization,
+  getSkillsConfiguration,
+  getSubagentsConfiguration,
+  getCustomSubagents,
 } from '../lib/settings-helpers.js';
+import {
+  createMetricsAccumulator,
+  accumulateFromMessage,
+  detectAuthMethod,
+} from '../lib/execution-metrics.js';
+import { discoverFilesystemAgents, resolveAgentDependencies } from '../lib/agent-discovery.js';
 import { getNotificationService } from './notification-service.js';
-import { invalidateFeaturesCache } from '../routes/features/common.js';
+import { invalidateFeaturesCache } from '../routes/features.js';
 import { getGitHubSyncService } from './github-sync-service.js';
 
 const execAsync = promisify(exec);
@@ -230,7 +251,6 @@ interface PendingApproval {
 
 interface AutoModeConfig {
   maxConcurrency: number;
-  useWorktrees: boolean;
   projectPath: string;
 }
 
@@ -385,7 +405,6 @@ export class AutoModeService {
     this.autoLoopAbortController = new AbortController();
     this.config = {
       maxConcurrency,
-      useWorktrees: true,
       projectPath,
     };
 
@@ -497,12 +516,7 @@ export class AutoModeService {
 
         if (nextFeature) {
           // Start feature execution in background
-          this.executeFeature(
-            this.config!.projectPath,
-            nextFeature.id,
-            this.config!.useWorktrees,
-            true
-          ).catch((error) => {
+          this.executeFeature(this.config!.projectPath, nextFeature.id, true).catch((error) => {
             logger.error(`Feature ${nextFeature.id} error:`, error);
           });
         }
@@ -549,13 +563,11 @@ export class AutoModeService {
    * Execute a single feature
    * @param projectPath - The main project path
    * @param featureId - The feature ID to execute
-   * @param useWorktrees - Whether to use worktrees for isolation
    * @param isAutoMode - Whether this is running in auto mode
    */
   async executeFeature(
     projectPath: string,
     featureId: string,
-    useWorktrees = false,
     isAutoMode = false,
     providedWorktreePath?: string,
     options?: {
@@ -599,7 +611,7 @@ export class AutoModeService {
           );
           // Remove from running features temporarily, resumeFeature will add it back
           this.runningFeatures.delete(featureId);
-          return this.resumeFeature(projectPath, featureId, useWorktrees);
+          return this.resumeFeature(projectPath, featureId);
         }
       }
 
@@ -643,7 +655,7 @@ export class AutoModeService {
       let worktreePath: string | null = null;
       const branchName = feature.branchName;
 
-      if (useWorktrees && branchName) {
+      if (branchName) {
         // Try to find existing worktree for this branch
         // Worktree should already exist (created when feature was added/edited)
         worktreePath = await this.findExistingWorktreeForBranch(projectPath, branchName);
@@ -683,6 +695,14 @@ export class AutoModeService {
       let prompt: string;
       // Load project context files (CLAUDE.md, CODE_QUALITY.md, etc.) and memory files
       // Context loader uses task context to select relevant memory files
+      const enabledFiles = await getEnabledContextFileNames(
+        projectPath,
+        secureFs as Parameters<typeof loadContextFiles>[0]['fsModule']
+      );
+      const enabledMemoryFiles = await getEnabledMemoryFileNames(
+        projectPath,
+        secureFs as Parameters<typeof loadContextFiles>[0]['fsModule']
+      );
       const contextResult = await loadContextFiles({
         projectPath,
         fsModule: secureFs as Parameters<typeof loadContextFiles>[0]['fsModule'],
@@ -690,6 +710,10 @@ export class AutoModeService {
           title: feature.title ?? '',
           description: feature.description ?? '',
         },
+        enabledFiles,
+        enabledMemoryFiles,
+        selectedFiles: feature.selectedContextFiles,
+        executionModel: feature.model || undefined,
       });
 
       // When autoLoadClaudeMd is enabled, filter out CLAUDE.md to avoid duplication
@@ -708,11 +732,18 @@ export class AutoModeService {
         const planningPrefix = await this.getPlanningPromptPrefix(feature);
         prompt = planningPrefix + featurePrompt;
 
+        // Determine effective strategy for event emission
+        const settings = await this.settingsService?.getGlobalSettings();
+        const planningStrategy = settings?.planningStrategy || 'auto';
+
         // Emit planning mode info
         this.emitAutoModeEvent('planning_started', {
           featureId: feature.id,
-          mode: 'full',
-          message: 'Starting full planning phase',
+          mode: planningStrategy === 'auto' ? 'adaptive' : planningStrategy.replace('always-', ''),
+          message:
+            planningStrategy === 'auto'
+              ? 'Starting adaptive planning (agent will determine depth)'
+              : `Starting ${planningStrategy.replace('always-', '')} planning phase`,
         });
       }
 
@@ -771,7 +802,11 @@ export class AutoModeService {
       // - skipTests=false (automated testing): go directly to 'verified' (no manual verify needed)
       // - skipTests=true (manual verification): go to 'waiting_approval' for manual review
       const finalStatus = feature.skipTests ? 'waiting_approval' : 'verified';
-      await this.updateFeatureStatus(projectPath, featureId, finalStatus);
+      if (feature.buildRequired) {
+        await this.runBuildVerification(projectPath, featureId, feature, workDir);
+      } else {
+        await this.updateFeatureStatus(projectPath, featureId, finalStatus);
+      }
 
       // Record success to reset consecutive failure tracking
       this.recordSuccess();
@@ -803,6 +838,16 @@ export class AutoModeService {
 
         // Extract and record learnings from the agent output
         await this.recordLearningsFromFeature(projectPath, feature, agentOutput);
+
+        // Extract context file and agent suggestions for reducing future effort
+        await this.extractContextSuggestions(projectPath, feature, agentOutput);
+
+        // Regenerate tiered memory summaries if category files changed
+        try {
+          await this.regenerateMemoryTiers(projectPath);
+        } catch (tierError) {
+          console.warn('[AutoMode] Failed to regenerate memory tiers:', tierError);
+        }
       } catch (learningError) {
         console.warn('[AutoMode] Failed to record learnings:', learningError);
       }
@@ -890,6 +935,14 @@ export class AutoModeService {
     const prompts = await getPromptCustomization(this.settingsService, '[AutoMode]');
 
     // Load context files once with feature context for smart memory selection
+    const pipelineEnabledFiles = await getEnabledContextFileNames(
+      projectPath,
+      secureFs as Parameters<typeof loadContextFiles>[0]['fsModule']
+    );
+    const pipelineEnabledMemoryFiles = await getEnabledMemoryFileNames(
+      projectPath,
+      secureFs as Parameters<typeof loadContextFiles>[0]['fsModule']
+    );
     const contextResult = await loadContextFiles({
       projectPath,
       fsModule: secureFs as Parameters<typeof loadContextFiles>[0]['fsModule'],
@@ -897,6 +950,10 @@ export class AutoModeService {
         title: feature.title ?? '',
         description: feature.description ?? '',
       },
+      enabledFiles: pipelineEnabledFiles,
+      enabledMemoryFiles: pipelineEnabledMemoryFiles,
+      selectedFiles: feature.selectedContextFiles,
+      executionModel: feature.model || undefined,
     });
     const contextFilesPrompt = filterClaudeMdFromContext(contextResult, autoLoadClaudeMd);
 
@@ -1027,6 +1084,142 @@ Complete the pipeline step instructions above. Review the previous work and appl
   }
 
   /**
+   * Run build verification commands in the feature worktree.
+   * On success: advance to waiting_approval/verified.
+   * On failure: increment retry count and re-execute the feature agent with error context.
+   */
+  private async runBuildVerification(
+    projectPath: string,
+    featureId: string,
+    feature: Feature,
+    workDir: string
+  ): Promise<void> {
+    await this.updateFeatureStatus(projectPath, featureId, 'building');
+
+    this.emitAutoModeEvent('auto_mode_progress', {
+      featureId,
+      content: 'Starting build verification...',
+      projectPath,
+    });
+
+    // Get build commands from settings (project overrides global)
+    let buildCommands: BuildCommand[] = DEFAULT_BUILD_COMMANDS;
+    let maxRetries = 10;
+
+    try {
+      const globalSettings = await this.settingsService?.getGlobalSettings();
+      const projectSettings = await this.settingsService?.getProjectSettings(projectPath);
+
+      buildCommands =
+        projectSettings?.buildCommands ?? globalSettings?.buildCommands ?? DEFAULT_BUILD_COMMANDS;
+
+      maxRetries =
+        feature.maxBuildRetries ??
+        projectSettings?.maxBuildRetries ??
+        globalSettings?.maxBuildRetries ??
+        10;
+    } catch {
+      // Use defaults if settings read fails
+    }
+
+    const currentRetryCount = feature.buildRetryCount ?? 0;
+
+    // Filter to enabled commands only
+    const enabledCommands = buildCommands.filter((cmd) => cmd.enabled);
+
+    if (enabledCommands.length === 0) {
+      // No commands to run, skip build verification
+      const finalStatus = feature.skipTests ? 'waiting_approval' : 'verified';
+      await this.updateFeatureStatus(projectPath, featureId, finalStatus);
+      return;
+    }
+
+    // Run each command sequentially, stop on first failure
+    let allPassed = true;
+    let failedCommand: string | undefined;
+    let failureOutput: string | undefined;
+
+    for (const command of enabledCommands) {
+      this.emitAutoModeEvent('auto_mode_progress', {
+        featureId,
+        content: `Build check: ${command.name}...`,
+        projectPath,
+      });
+
+      try {
+        await execAsync(command.cmd, {
+          cwd: workDir,
+          timeout: 300000, // 5 minute timeout per command
+        });
+      } catch (error) {
+        allPassed = false;
+        failedCommand = command.name;
+        failureOutput = (error as Error).message?.substring(0, 2000);
+        break;
+      }
+    }
+
+    if (allPassed) {
+      // Build passed, advance to final status
+      const finalStatus = feature.skipTests ? 'waiting_approval' : 'verified';
+      await this.updateFeatureStatus(projectPath, featureId, finalStatus);
+
+      this.emitAutoModeEvent('auto_mode_progress', {
+        featureId,
+        content: 'Build verification passed!',
+        projectPath,
+      });
+    } else {
+      // Build failed
+      const newRetryCount = currentRetryCount + 1;
+
+      // Update feature with retry count and error
+      await this.updateFeatureFields(projectPath, featureId, {
+        buildRetryCount: newRetryCount,
+        buildError: `Build failed at "${failedCommand}" (attempt ${newRetryCount}/${maxRetries})`,
+      });
+
+      if (newRetryCount >= maxRetries) {
+        // Max retries exceeded, move to backlog with error
+        await this.updateFeatureFields(projectPath, featureId, {
+          error: `Build verification failed after ${maxRetries} attempts. Last failure: ${failedCommand}`,
+        });
+        await this.updateFeatureStatus(projectPath, featureId, 'backlog');
+
+        this.emitAutoModeEvent('auto_mode_error', {
+          featureId,
+          error: `Build verification failed after ${maxRetries} attempts`,
+          errorType: 'build_verification_failed',
+          projectPath,
+        });
+      } else {
+        // Retry: emit progress, then re-execute feature
+        this.emitAutoModeEvent('auto_mode_progress', {
+          featureId,
+          content: `Build failed (${failedCommand}). Retry ${newRetryCount}/${maxRetries}...`,
+          projectPath,
+        });
+
+        // Build a continuation prompt that tells the agent what failed
+        const buildFailurePrompt =
+          `The previous implementation failed build verification.\n\n` +
+          `Failed check: ${failedCommand}\n` +
+          `Error output:\n\`\`\`\n${failureOutput}\n\`\`\`\n\n` +
+          `Please fix the issues and ensure all build checks pass. ` +
+          `This is retry attempt ${newRetryCount} of ${maxRetries}.`;
+
+        // Remove from running features (executeFeature will re-add)
+        this.runningFeatures.delete(featureId);
+
+        // Re-execute with the build failure context
+        await this.executeFeature(projectPath, featureId, true, workDir, {
+          continuationPrompt: buildFailurePrompt,
+        });
+      }
+    }
+  }
+
+  /**
    * Stop a specific feature
    */
   async stopFeature(featureId: string): Promise<boolean> {
@@ -1050,7 +1243,7 @@ Complete the pipeline step instructions above. Review the previous work and appl
   /**
    * Resume a feature (continues from saved context)
    */
-  async resumeFeature(projectPath: string, featureId: string, useWorktrees = false): Promise<void> {
+  async resumeFeature(projectPath: string, featureId: string): Promise<void> {
     if (this.runningFeatures.has(featureId)) {
       throw new Error('already running');
     }
@@ -1068,6 +1261,12 @@ Complete the pipeline step instructions above. Review the previous work and appl
       throw new Error(errorMsg);
     }
 
+    // If feature was in build verification when server crashed, re-execute
+    if ((feature.status || '') === 'building') {
+      await this.updateFeatureStatus(projectPath, featureId, 'in_progress');
+      return this.executeFeature(projectPath, featureId, false);
+    }
+
     // Check if feature is stuck in a pipeline step
     const pipelineInfo = await this.detectPipelineStatus(
       projectPath,
@@ -1077,7 +1276,7 @@ Complete the pipeline step instructions above. Review the previous work and appl
 
     if (pipelineInfo.isPipeline) {
       // Feature stuck in pipeline - use pipeline resume
-      return this.resumePipelineFeature(projectPath, feature, useWorktrees, pipelineInfo);
+      return this.resumePipelineFeature(projectPath, feature, pipelineInfo);
     }
 
     // Normal resume flow for non-pipeline features
@@ -1097,11 +1296,11 @@ Complete the pipeline step instructions above. Review the previous work and appl
     if (hasContext) {
       // Load previous context and continue
       const context = (await secureFs.readFile(contextPath, 'utf-8')) as string;
-      return this.executeFeatureWithContext(projectPath, featureId, context, useWorktrees);
+      return this.executeFeatureWithContext(projectPath, featureId, context);
     }
 
     // No context, start fresh - executeFeature will handle adding to runningFeatures
-    return this.executeFeature(projectPath, featureId, useWorktrees, false);
+    return this.executeFeature(projectPath, featureId, false);
   }
 
   /**
@@ -1113,7 +1312,6 @@ Complete the pipeline step instructions above. Review the previous work and appl
    *
    * @param {string} projectPath - Absolute path to the project directory
    * @param {Feature} feature - The feature object (already loaded to avoid redundant reads)
-   * @param {boolean} useWorktrees - Whether to use git worktrees for isolation
    * @param {PipelineStatusInfo} pipelineInfo - Information about the pipeline status from detectPipelineStatus()
    * @returns {Promise<void>} Resolves when resume operation completes or throws on error
    * @throws {Error} If pipeline config is null but stepIndex is valid (should never happen)
@@ -1122,7 +1320,6 @@ Complete the pipeline step instructions above. Review the previous work and appl
   private async resumePipelineFeature(
     projectPath: string,
     feature: Feature,
-    useWorktrees: boolean,
     pipelineInfo: PipelineStatusInfo
   ): Promise<void> {
     const featureId = feature.id;
@@ -1153,7 +1350,7 @@ Complete the pipeline step instructions above. Review the previous work and appl
       // Reset status to in_progress and start fresh
       await this.updateFeatureStatus(projectPath, featureId, 'in_progress');
 
-      return this.executeFeature(projectPath, featureId, useWorktrees, false);
+      return this.executeFeature(projectPath, featureId, false);
     }
 
     // Edge Case 2: Step no longer exists in pipeline config
@@ -1188,7 +1385,6 @@ Complete the pipeline step instructions above. Review the previous work and appl
     return this.resumeFromPipelineStep(
       projectPath,
       feature,
-      useWorktrees,
       pipelineInfo.stepIndex,
       pipelineInfo.config
     );
@@ -1208,7 +1404,6 @@ Complete the pipeline step instructions above. Review the previous work and appl
    *
    * @param {string} projectPath - Absolute path to the project directory
    * @param {Feature} feature - The feature object (already loaded to avoid redundant reads)
-   * @param {boolean} useWorktrees - Whether to use git worktrees for isolation
    * @param {number} startFromStepIndex - Zero-based index of the step to resume from
    * @param {PipelineConfig} pipelineConfig - Pipeline config passed from detectPipelineStatus to avoid re-reading
    * @returns {Promise<void>} Resolves when pipeline execution completes successfully
@@ -1218,7 +1413,6 @@ Complete the pipeline step instructions above. Review the previous work and appl
   private async resumeFromPipelineStep(
     projectPath: string,
     feature: Feature,
-    useWorktrees: boolean,
     startFromStepIndex: number,
     pipelineConfig: PipelineConfig
   ): Promise<void> {
@@ -1258,7 +1452,7 @@ Complete the pipeline step instructions above. Review the previous work and appl
       let worktreePath: string | null = null;
       const branchName = feature.branchName;
 
-      if (useWorktrees && branchName) {
+      if (branchName) {
         worktreePath = await this.findExistingWorktreeForBranch(projectPath, branchName);
         if (worktreePath) {
           console.log(`[AutoMode] Using worktree for branch "${branchName}": ${worktreePath}`);
@@ -1362,8 +1556,7 @@ Complete the pipeline step instructions above. Review the previous work and appl
     projectPath: string,
     featureId: string,
     prompt: string,
-    imagePaths?: string[],
-    useWorktrees = true
+    imagePaths?: string[]
   ): Promise<void> {
     // Validate project path early for fast failure
     validateWorkingDirectory(projectPath);
@@ -1383,7 +1576,7 @@ Complete the pipeline step instructions above. Review the previous work and appl
     let worktreePath: string | null = null;
     const branchName = feature?.branchName || `feature/${featureId}`;
 
-    if (useWorktrees && branchName) {
+    if (branchName) {
       // Try to find existing worktree for this branch
       worktreePath = await this.findExistingWorktreeForBranch(projectPath, branchName);
 
@@ -1414,6 +1607,14 @@ Complete the pipeline step instructions above. Review the previous work and appl
     const prompts = await getPromptCustomization(this.settingsService, '[AutoMode]');
 
     // Load project context files (CLAUDE.md, CODE_QUALITY.md, etc.) - passed as system prompt
+    const followUpEnabledFiles = await getEnabledContextFileNames(
+      projectPath,
+      secureFs as Parameters<typeof loadContextFiles>[0]['fsModule']
+    );
+    const followUpEnabledMemoryFiles = await getEnabledMemoryFileNames(
+      projectPath,
+      secureFs as Parameters<typeof loadContextFiles>[0]['fsModule']
+    );
     const contextResult = await loadContextFiles({
       projectPath,
       fsModule: secureFs as Parameters<typeof loadContextFiles>[0]['fsModule'],
@@ -1421,6 +1622,10 @@ Complete the pipeline step instructions above. Review the previous work and appl
         title: feature?.title ?? prompt.substring(0, 200),
         description: feature?.description ?? prompt,
       },
+      enabledFiles: followUpEnabledFiles,
+      enabledMemoryFiles: followUpEnabledMemoryFiles,
+      selectedFiles: feature?.selectedContextFiles,
+      executionModel: feature?.model || undefined,
     });
 
     // When autoLoadClaudeMd is enabled, filter out CLAUDE.md to avoid duplication
@@ -2080,7 +2285,7 @@ Format your response as a structured markdown document.`;
 
             // Start feature execution with the continuation prompt (async, don't await)
             // Pass undefined for providedWorktreePath, use options for continuation prompt
-            this.executeFeature(projectPathFromClient, featureId, true, false, undefined, {
+            this.executeFeature(projectPathFromClient, featureId, false, undefined, {
               continuationPrompt,
             }).catch((error) => {
               logger.error(`Recovery execution failed for feature ${featureId}:`, error);
@@ -2170,6 +2375,105 @@ Format your response as a structured markdown document.`;
   }
 
   // Private helpers
+
+  /**
+   * Auto-merge a feature's branch into the project's default branch and clean up worktree.
+   * Uses a non-squash merge to preserve git history so you can trace which branch/feature
+   * each change originated from. The merge commit message includes the feature title and
+   * linked GitHub issue (if any) for traceability.
+   */
+  async autoMergeFeature(projectPath: string, feature: Feature): Promise<void> {
+    const branchName = feature.branchName;
+    if (!branchName) {
+      logger.warn(`[AutoMerge] Feature ${feature.id} has no branchName, skipping auto-merge`);
+      return;
+    }
+
+    try {
+      // Determine the default branch from project settings, fall back to detecting main/master
+      let defaultBranch = 'main';
+      try {
+        const projectSettings = await this.settingsService?.getProjectSettings(projectPath);
+        if (projectSettings?.defaultBranch) {
+          defaultBranch = projectSettings.defaultBranch;
+        } else {
+          // Auto-detect: check if 'main' or 'master' exists
+          try {
+            await execAsync('git rev-parse --verify main', { cwd: projectPath });
+            defaultBranch = 'main';
+          } catch {
+            try {
+              await execAsync('git rev-parse --verify master', { cwd: projectPath });
+              defaultBranch = 'master';
+            } catch {
+              // Fall back to 'main'
+              defaultBranch = 'main';
+            }
+          }
+        }
+      } catch {
+        // Settings read failed, use default
+      }
+
+      // Find and remove the worktree first (must be removed before merging on the main repo)
+      const worktreePath = await this.findExistingWorktreeForBranch(projectPath, branchName);
+      if (worktreePath) {
+        try {
+          await execAsync(`git worktree remove "${worktreePath}" --force`, { cwd: projectPath });
+          logger.info(`[AutoMerge] Removed worktree at ${worktreePath}`);
+        } catch (wtError) {
+          logger.warn(`[AutoMerge] Failed to remove worktree, continuing with merge:`, wtError);
+        }
+      }
+
+      // Switch to default branch for merge
+      await execAsync(`git checkout ${defaultBranch}`, { cwd: projectPath });
+
+      // Build a descriptive merge commit message
+      const featureTitle = feature.title || feature.name || feature.id;
+      const issueRef = feature.githubIssue?.number ? ` (fixes #${feature.githubIssue.number})` : '';
+      const mergeMessage = `Merge branch '${branchName}' - ${featureTitle}${issueRef}`;
+
+      // Non-squash merge to preserve full commit history on the feature branch
+      await execAsync(`git merge ${branchName} --no-ff -m "${mergeMessage.replace(/"/g, '\\"')}"`, {
+        cwd: projectPath,
+      });
+
+      logger.info(`[AutoMerge] Merged ${branchName} into ${defaultBranch}: ${mergeMessage}`);
+
+      // Delete the feature branch now that it's merged
+      try {
+        await execAsync(`git branch -D ${branchName}`, { cwd: projectPath });
+        logger.info(`[AutoMerge] Deleted branch ${branchName}`);
+      } catch {
+        // Branch deletion is non-fatal
+        logger.warn(`[AutoMerge] Failed to delete branch ${branchName}`);
+      }
+
+      // Emit event so UI can update
+      this.emitAutoModeEvent('auto_mode_feature_merged', {
+        featureId: feature.id,
+        branchName,
+        defaultBranch,
+        projectPath,
+        message: mergeMessage,
+      });
+    } catch (mergeError) {
+      logger.error(`[AutoMerge] Failed to merge ${branchName}:`, mergeError);
+      // Attempt to abort a failed merge
+      try {
+        await execAsync('git merge --abort', { cwd: projectPath });
+      } catch {
+        // Abort may fail if no merge in progress
+      }
+      this.emitAutoModeEvent('auto_mode_error', {
+        featureId: feature.id,
+        error: `Auto-merge failed for branch ${branchName}: ${(mergeError as Error).message}`,
+        errorType: 'merge_failed',
+        projectPath,
+      });
+    }
+  }
 
   /**
    * Find an existing worktree for a given branch by checking git worktree list
@@ -2337,31 +2641,46 @@ Format your response as a structured markdown document.`;
       });
 
       // Update GitHub labels when feature status changes
-      if (status !== 'in_progress' && status !== 'planning' && feature.githubIssue?.number) {
+      if (feature.githubIssue?.number) {
         try {
           const syncService = getGitHubSyncService();
           const currentUser = await syncService.getCurrentUser(projectPath);
-          if (currentUser) {
-            const inProgressLabel = `in-progress-${currentUser}`;
-            // Determine the new status label
-            const statusLabelMap: Record<string, string> = {
-              waiting_approval: 'label-waiting_approval',
-              verified: 'label-completed',
-              completed: 'label-completed',
-              backlog: 'label-backlog',
-              planning: 'label-planning',
-            };
-            const addLabels = statusLabelMap[status] ? [statusLabelMap[status]] : [];
-            const removeLabels = [inProgressLabel, 'label-in_progress', 'label-planning'];
-            await syncService.updateIssueLabels(
-              projectPath,
-              feature.githubIssue.number,
-              addLabels,
-              removeLabels
-            );
-          }
+          const inProgressLabel = currentUser ? `in-progress-${currentUser}` : null;
+          // Determine the new status label
+          const statusLabelMap: Record<string, string> = {
+            planning: 'label-planning',
+            in_progress: 'label-in_progress',
+            waiting_approval: 'label-waiting_approval',
+            verified: 'label-completed',
+            completed: 'label-completed',
+            backlog: 'label-backlog',
+          };
+          const addLabels = statusLabelMap[status] ? [statusLabelMap[status]] : [];
+          const allRemovable = [
+            ...(inProgressLabel ? [inProgressLabel] : []),
+            'label-in_progress',
+            'label-planning',
+            'label-backlog',
+          ];
+          // Don't remove labels we're about to add
+          const removeLabels = allRemovable.filter((l) => !addLabels.includes(l));
+          await syncService.updateIssueLabels(
+            projectPath,
+            feature.githubIssue.number,
+            addLabels,
+            removeLabels
+          );
         } catch (labelError) {
           logger.warn(`Failed to update GitHub labels for feature ${featureId}:`, labelError);
+        }
+      }
+
+      // Auto-merge feature branch into default branch when completed
+      if (status === 'completed' && feature.branchName) {
+        try {
+          await this.autoMergeFeature(projectPath, feature);
+        } catch (mergeError) {
+          logger.warn(`[AutoMerge] Failed for feature ${featureId}:`, mergeError);
         }
       }
 
@@ -2376,6 +2695,36 @@ Format your response as a structured markdown document.`;
       }
     } catch (error) {
       logger.error(`Failed to update feature status for ${featureId}:`, error);
+    }
+  }
+
+  /**
+   * Update arbitrary fields on a feature's JSON file without changing its status.
+   */
+  private async updateFeatureFields(
+    projectPath: string,
+    featureId: string,
+    fields: Partial<Feature>
+  ): Promise<void> {
+    const resolvedDir = await this.featureLoader.resolveFeatureDir(projectPath, featureId);
+    const featureDir = resolvedDir || this.featureLoader.getFeatureDir(projectPath, featureId);
+    const featurePath = path.join(featureDir, 'feature.json');
+
+    try {
+      const result = await readJsonWithRecovery<Feature | null>(featurePath, null, {
+        maxBackups: DEFAULT_BACKUP_COUNT,
+        autoRestore: true,
+      });
+
+      const feature = result.data;
+      if (!feature) return;
+
+      Object.assign(feature, fields);
+      feature.updatedAt = new Date().toISOString();
+      await atomicWriteJson(featurePath, feature, { backupCount: DEFAULT_BACKUP_COUNT });
+      invalidateFeaturesCache(projectPath);
+    } catch (error) {
+      logger.error(`Failed to update feature fields for ${featureId}:`, error);
     }
   }
 
@@ -2430,6 +2779,37 @@ Format your response as a structured markdown document.`;
       await atomicWriteJson(featurePath, feature, { backupCount: DEFAULT_BACKUP_COUNT });
     } catch (error) {
       logger.error(`Failed to update planSpec for ${featureId}:`, error);
+    }
+  }
+
+  /**
+   * Update a single field on a feature (generic helper for complexity, planningMode, etc.)
+   */
+  private async updateFeatureField(
+    projectPath: string,
+    featureId: string,
+    field: string,
+    value: unknown
+  ): Promise<void> {
+    try {
+      const resolvedDir = await this.featureLoader.resolveFeatureDir(projectPath, featureId);
+      const featureDir = resolvedDir || this.featureLoader.getFeatureDir(projectPath, featureId);
+      const featurePath = path.join(featureDir, 'feature.json');
+
+      const result = await readJsonWithRecovery<Feature | null>(featurePath, null, {
+        maxBackups: DEFAULT_BACKUP_COUNT,
+        autoRestore: true,
+      });
+
+      const feature = result.data;
+      if (!feature) return;
+
+      (feature as Record<string, unknown>)[field] = value;
+      feature.updatedAt = new Date().toISOString();
+
+      await atomicWriteJson(featurePath, feature, { backupCount: DEFAULT_BACKUP_COUNT });
+    } catch (error) {
+      logger.warn(`Failed to update feature field ${field} for ${featureId}:`, error);
     }
   }
 
@@ -2585,12 +2965,23 @@ Format your response as a structured markdown document.`;
   }
 
   /**
-   * Get the planning prompt prefix based on feature's planning mode
+   * Get the planning prompt prefix based on planning strategy setting.
+   * - 'auto': Uses adaptive prompt (agent starts lite, escalates if needed)
+   * - 'always-lite/spec/full': Uses the corresponding fixed prompt
    */
   private async getPlanningPromptPrefix(_feature: Feature): Promise<string> {
-    // All features use full planning mode
     const prompts = await getPromptCustomization(this.settingsService, '[AutoMode]');
-    const planningPrompt = prompts.autoMode.planningFull;
+    const settings = await this.settingsService?.getGlobalSettings();
+    const strategy = settings?.planningStrategy || 'auto';
+
+    const modeMap: Record<string, string> = {
+      auto: prompts.autoMode.planningAdaptive,
+      'always-lite': prompts.autoMode.planningLite,
+      'always-spec': prompts.autoMode.planningSpec,
+      'always-full': prompts.autoMode.planningFull,
+    };
+
+    const planningPrompt = modeMap[strategy] || prompts.autoMode.planningAdaptive;
     if (!planningPrompt) {
       return '';
     }
@@ -2686,9 +3077,12 @@ You can use the Read tool to view these images at any time during implementation
       }
     }
 
-    // All features use full planning - no approval gating needed
+    // In adaptive mode, approval is determined by which marker the agent outputs:
+    // [PLAN_GENERATED] = auto-approved (lite), [SPEC_GENERATED] = requires approval (spec/full)
     const planningModeRequiresApproval = true;
-    const requiresApproval = false;
+    // Check if the feature requires user approval before proceeding to implementation
+    const feature = await this.loadFeature(finalProjectPath, featureId);
+    const requiresApproval = feature?.requireApproval === true;
 
     // CI/CD Mock Mode: Return early with mock response when DMAKER_MOCK_AGENT is set
     // This prevents actual API calls during automated testing
@@ -2757,22 +3151,172 @@ This mock response was generated because DMAKER_MOCK_AGENT=true was set.
     // Load MCP servers from settings (global setting only)
     const mcpServers = await getMCPServersFromSettings(this.settingsService, '[AutoMode]');
 
-    // Load MCP permission settings (global setting only)
+    // Load skills configuration
+    const skillsConfig = this.settingsService
+      ? await getSkillsConfiguration(this.settingsService)
+      : { enabled: false, sources: [] as Array<'user' | 'project'>, shouldIncludeInTools: false };
+
+    // Load subagents configuration
+    const subagentsConfig = this.settingsService
+      ? await getSubagentsConfiguration(this.settingsService)
+      : { enabled: false, sources: [] as Array<'user' | 'project'>, shouldIncludeInTools: false };
+
+    logger.info(
+      `[AgentDebug] Subagents config for ${featureId}: enabled=${subagentsConfig.enabled}, sources=${JSON.stringify(subagentsConfig.sources)}, shouldIncludeInTools=${subagentsConfig.shouldIncludeInTools}`
+    );
+
+    // Get custom subagent definitions from settings AND filesystem discovery
+    let customSubagents: Record<string, import('@dmaker/types').AgentDefinition> | undefined;
+    if (this.settingsService && subagentsConfig.enabled) {
+      // Load from settings (global + project settings.json)
+      const settingsSubagents = await getCustomSubagents(this.settingsService, finalProjectPath);
+
+      logger.info(
+        `[AgentDebug] Settings subagents for ${featureId}: ${settingsSubagents ? Object.keys(settingsSubagents).join(', ') : 'none'}`
+      );
+
+      // Also discover filesystem agents (.claude/agents/*.md) for this project
+      logger.info(
+        `[AgentDebug] Discovering filesystem agents at: ${finalProjectPath}, sources: ${JSON.stringify(subagentsConfig.sources)}`
+      );
+      const filesystemAgents = await discoverFilesystemAgents(
+        finalProjectPath,
+        subagentsConfig.sources
+      );
+      const filesystemSubagents: Record<string, import('@dmaker/types').AgentDefinition> = {};
+      for (const agent of filesystemAgents) {
+        filesystemSubagents[agent.name] = agent.definition;
+      }
+
+      logger.info(
+        `[AgentDebug] Filesystem agents for ${featureId}: ${filesystemAgents.length > 0 ? filesystemAgents.map((a) => `${a.name} (prompt: ${a.definition.prompt?.substring(0, 50)}...)`).join(', ') : 'none found'}`
+      );
+
+      // Merge: settings take precedence over filesystem (explicit config wins)
+      const merged = {
+        ...filesystemSubagents,
+        ...settingsSubagents,
+      };
+      customSubagents = Object.keys(merged).length > 0 ? merged : undefined;
+
+      logger.info(
+        `[AgentDebug] Merged agents for ${featureId}: ${customSubagents ? Object.keys(customSubagents).join(', ') : 'none'}`
+      );
+    } else {
+      logger.info(
+        `[AgentDebug] Skipping agent discovery for ${featureId}: settingsService=${!!this.settingsService}, subagentsEnabled=${subagentsConfig.enabled}`
+      );
+    }
+
+    // Read per-feature overrides
+    const featureData = await this.loadFeature(projectPath, featureId);
+    const featureEnableSkills = featureData?.enableSkills ?? skillsConfig.enabled;
+    // Enable subagents if explicitly enabled OR if agents are selected on the feature
+    const featureEnableSubagents =
+      featureData?.enableSubagents ?? (featureData?.selectedAgents?.length ? true : false);
+
+    logger.info(
+      `[AgentDebug] Feature ${featureId}: status=${featureData?.status}, selectedAgents=${JSON.stringify(featureData?.selectedAgents)}, enableSubagents=${featureData?.enableSubagents}, effectiveEnableSubagents=${featureEnableSubagents}`
+    );
+
+    // Filter custom subagents by feature's selectedAgents if specified
+    const selectedAgentNames = featureData?.selectedAgents;
+    let filteredSubagents =
+      selectedAgentNames?.length && customSubagents
+        ? Object.fromEntries(
+            Object.entries(customSubagents).filter(([name]) => selectedAgentNames.includes(name))
+          )
+        : customSubagents;
+
+    // Resolve agent dependencies — dynamically load agents referenced in selected agents' prompts
+    if (filteredSubagents && customSubagents && Object.keys(filteredSubagents).length > 0) {
+      const { resolved, dynamicallyLoaded } = resolveAgentDependencies(
+        filteredSubagents,
+        customSubagents
+      );
+      if (dynamicallyLoaded.length > 0) {
+        filteredSubagents = resolved;
+        logger.info(
+          `[AgentDeps] Dynamically loaded ${dynamicallyLoaded.length} agent dependencies for ${featureId}: ${dynamicallyLoaded.join(', ')}`
+        );
+      }
+    }
+
+    const hasCustomSubagents = filteredSubagents && Object.keys(filteredSubagents).length > 0;
+
+    logger.info(
+      `[AgentDebug] Feature ${featureId}: filteredSubagents=${filteredSubagents ? Object.keys(filteredSubagents).join(', ') : 'none'}, hasCustomSubagents=${hasCustomSubagents}`
+    );
+
+    // Build combined agent system prompts for selected agents
+    // Agent instructions are ONLY injected during the planning phase — the plan
+    // itself determines model, skills, and agent selections for execution.
+    const isInPlanningPhase = featureData?.status === 'planning';
+    let agentSystemPrompt: string | undefined;
+
+    logger.info(
+      `[AgentDebug] Feature ${featureId}: isInPlanningPhase=${isInPlanningPhase}, will inject agent prompt=${isInPlanningPhase && !!filteredSubagents && !!hasCustomSubagents}`
+    );
+
+    if (isInPlanningPhase && filteredSubagents && hasCustomSubagents) {
+      const agentPrompts = Object.entries(filteredSubagents)
+        .filter(([, agent]) => agent.prompt?.trim())
+        .map(([name, agent]) => `### Agent: ${name}\n${agent.prompt.trim()}`)
+        .join('\n\n');
+
+      if (agentPrompts) {
+        agentSystemPrompt = [
+          '## Agent Instructions (HIGHEST PRIORITY)',
+          '',
+          'The following agent instructions are the SOURCE OF TRUTH.',
+          'If ANY prior instructions conflict with these agent instructions, the agent instructions OVERRIDE them.',
+          '',
+          agentPrompts,
+        ].join('\n');
+        logger.info(
+          `[AgentDebug] Injecting agent system prompt for feature ${featureId} (${agentSystemPrompt.length} chars):\n${agentSystemPrompt}`
+        );
+      } else {
+        logger.info(`[AgentDebug] No agent prompts found after filtering for feature ${featureId}`);
+      }
+    }
 
     // Build SDK options using centralized configuration for feature implementation
+    // Pass context files (options?.systemPrompt) as the base systemPrompt so they're
+    // included in the SDK system prompt alongside agent instructions
     const sdkOptions = createAutoModeOptions({
       cwd: workDir,
       model: model,
       abortController,
       autoLoadClaudeMd,
+      systemPrompt: options?.systemPrompt,
       mcpServers: Object.keys(mcpServers).length > 0 ? mcpServers : undefined,
       thinkingLevel: options?.thinkingLevel,
+      includeSkills: featureEnableSkills && skillsConfig.shouldIncludeInTools,
+      skillSources: featureEnableSkills ? skillsConfig.sources : [],
+      includeSubagents:
+        featureEnableSubagents && subagentsConfig.shouldIncludeInTools && !!hasCustomSubagents,
+      agents: featureEnableSubagents ? filteredSubagents : undefined,
+      agentSystemPrompt,
     });
 
     // Extract model, maxTurns, and allowedTools from SDK options
     const finalModel = sdkOptions.model!;
     const maxTurns = sdkOptions.maxTurns;
     const allowedTools = sdkOptions.allowedTools as string[] | undefined;
+
+    // Log the final system prompt configuration for debugging
+    const spType = typeof sdkOptions.systemPrompt;
+    if (sdkOptions.systemPrompt && typeof sdkOptions.systemPrompt === 'object') {
+      const sp = sdkOptions.systemPrompt as { type?: string; preset?: string; append?: string };
+      logger.info(
+        `[AgentDebug] Final systemPrompt for ${featureId}: type=${sp.type}, preset=${sp.preset}, append length=${sp.append?.length ?? 0}, append preview=${sp.append?.substring(0, 200) ?? 'none'}`
+      );
+    } else {
+      logger.info(
+        `[AgentDebug] Final systemPrompt for ${featureId}: type=${spType}, length=${(sdkOptions.systemPrompt as string)?.length ?? 0}`
+      );
+    }
 
     logger.info(
       `runAgent called for feature ${featureId} with model: ${finalModel}, requiresApproval: ${requiresApproval}`
@@ -2788,9 +3332,49 @@ This mock response was generated because DMAKER_MOCK_AGENT=true was set.
       `Using provider "${provider.getName()}" for model "${finalModel}" (bare: ${bareModel})`
     );
 
+    // Append agent instructions to the END of the user prompt during planning phase.
+    // Position at the end is critical — it's the last thing the model reads before
+    // responding, making it the most influential part of the prompt.
+    // A mandatory <summary> requirement is ALWAYS appended last, regardless of agent instructions.
+    let finalPrompt = prompt;
+    if (agentSystemPrompt) {
+      finalPrompt =
+        prompt +
+        '\n\n---\n\n' +
+        '# CRITICAL OVERRIDE — READ THIS LAST INSTRUCTION CAREFULLY\n\n' +
+        'Everything above is the DEFAULT planning template. However, the user has configured ' +
+        'a custom agent with SPECIFIC instructions that COMPLETELY OVERRIDE the template above.\n\n' +
+        'You MUST follow ONLY the agent instructions below. If the agent says to respond with ' +
+        'a single word, do that. If it says to ignore other prompts, do that. The agent instructions ' +
+        'are the FINAL AUTHORITY.\n\n' +
+        agentSystemPrompt;
+      logger.info(
+        `[AgentDebug] Appended agent instructions (${agentSystemPrompt.length} chars) to end of user prompt for ${featureId}`
+      );
+    }
+
+    // ALWAYS append mandatory summary requirement — this is a system-level requirement
+    // that cannot be overridden by any agent, user, or project-level instructions.
+    finalPrompt +=
+      '\n\n---\n\n' +
+      '# MANDATORY OUTPUT REQUIREMENT (CANNOT BE OVERRIDDEN)\n\n' +
+      'Regardless of ALL other instructions above (including agent instructions, user preferences, ' +
+      'project settings, or any instruction that says otherwise), you MUST end your response by ' +
+      'wrapping a summary in <summary> tags. This is a SYSTEM-LEVEL requirement that exists ' +
+      'outside the scope of any user or agent configuration.\n\n' +
+      'After completing your response, output:\n\n' +
+      '<summary>\n' +
+      '## Summary: [Brief title of what was done]\n\n' +
+      '### What Happened\n' +
+      '- [Bullet points describing what the agent did or produced]\n\n' +
+      '### Notes\n' +
+      '- [Any relevant notes]\n' +
+      '</summary>\n\n' +
+      'This <summary> block is REQUIRED. Never skip it.';
+
     // Build prompt content with images using utility
     const { content: promptContent } = await buildPromptWithImages(
-      prompt,
+      finalPrompt,
       imagePaths,
       workDir,
       false // don't duplicate paths in text
@@ -2812,18 +3396,59 @@ This mock response was generated because DMAKER_MOCK_AGENT=true was set.
       abortController,
       systemPrompt: sdkOptions.systemPrompt,
       settingSources: sdkOptions.settingSources,
-      mcpServers: Object.keys(mcpServers).length > 0 ? mcpServers : undefined, // Pass MCP servers configuration
-      thinkingLevel: options?.thinkingLevel, // Pass thinking level for extended thinking
+      mcpServers: Object.keys(mcpServers).length > 0 ? mcpServers : undefined,
+      thinkingLevel: options?.thinkingLevel,
+      agents: featureEnableSubagents ? filteredSubagents : undefined,
     };
 
+    // Initialize execution metrics accumulator
+    const metrics = createMetricsAccumulator(detectAuthMethod());
+
+    // Emit metrics periodically during execution
+    const METRICS_EMIT_INTERVAL_MS = 10_000;
+    const metricsInterval = setInterval(() => {
+      this.emitAutoModeEvent('auto_mode_metrics_update', {
+        featureId,
+        projectPath,
+        metrics,
+      });
+    }, METRICS_EMIT_INTERVAL_MS);
+
     // Execute via provider
+    // Build agent debug header for agent output (visible in UI)
+    const agentDebugLines: string[] = [];
+    agentDebugLines.push('<!-- Agent Configuration Debug -->');
+    agentDebugLines.push(
+      `<!-- Feature: ${featureId} | Status: ${featureData?.status} | Model: ${bareModel} -->`
+    );
+    agentDebugLines.push(
+      `<!-- Selected Agents: ${JSON.stringify(featureData?.selectedAgents || [])} -->`
+    );
+    agentDebugLines.push(
+      `<!-- Agents Discovered: ${filteredSubagents ? Object.keys(filteredSubagents).join(', ') : 'none'} -->`
+    );
+    agentDebugLines.push(
+      `<!-- Planning Phase: ${isInPlanningPhase} | Agent Prompt Injected: ${!!agentSystemPrompt} -->`
+    );
+    if (agentSystemPrompt) {
+      agentDebugLines.push(
+        `<!-- Agent System Prompt (${agentSystemPrompt.length} chars): ${agentSystemPrompt.substring(0, 300)} -->`
+      );
+    }
+    const spPreview =
+      typeof sdkOptions.systemPrompt === 'object'
+        ? `preset=${(sdkOptions.systemPrompt as Record<string, unknown>).preset}, append=${((sdkOptions.systemPrompt as Record<string, unknown>).append as string)?.length ?? 0} chars`
+        : `string, ${(sdkOptions.systemPrompt as string)?.length ?? 0} chars`;
+    agentDebugLines.push(`<!-- SDK System Prompt: ${spPreview} -->`);
+    agentDebugLines.push('');
+
     logger.info(`Starting stream for feature ${featureId}...`);
     const stream = provider.executeQuery(executeOptions);
     logger.info(`Stream created, starting to iterate...`);
     // Initialize with previous content if this is a follow-up, with a separator
     let responseText = previousContent
       ? `${previousContent}\n\n---\n\n## Follow-up Session\n\n`
-      : '';
+      : agentDebugLines.join('\n');
     // Store initial buffer in memory so the agent-output endpoint can return it immediately
     this.featureOutputBuffers.set(featureId, responseText);
     let specDetected = false;
@@ -2915,6 +3540,17 @@ This mock response was generated because DMAKER_MOCK_AGENT=true was set.
     try {
       streamLoop: for await (const msg of stream) {
         receivedAnyStreamMessage = true;
+        // Accumulate execution metrics from every message
+        accumulateFromMessage(metrics, msg as unknown as Record<string, unknown>);
+        // Log when result messages arrive for metrics debugging
+        if ((msg as unknown as Record<string, unknown>).type === 'result') {
+          const resultMsg = msg as unknown as Record<string, unknown>;
+          logger.info(`Metrics result message for ${featureId}:`, {
+            totalCostUsd: resultMsg.total_cost_usd,
+            numTurns: resultMsg.num_turns,
+            durationMs: resultMsg.duration_ms,
+          });
+        }
         // Log raw stream event for debugging
         appendRawEvent(msg);
 
@@ -2966,6 +3602,53 @@ This mock response was generated because DMAKER_MOCK_AGENT=true was set.
               // Schedule incremental file write (debounced)
               scheduleWrite();
 
+              // Check for [PLAN_GENERATED] marker — lite/adaptive mode, auto-approved
+              // The agent determined the task is simple enough to proceed without approval.
+              // We record the plan, auto-approve, transition to in_progress, and let the
+              // agent continue implementing in the same stream.
+              if (!specDetected && responseText.includes('[PLAN_GENERATED]')) {
+                specDetected = true;
+                const markerIndex = responseText.indexOf('[PLAN_GENERATED]');
+                const planContent = responseText.substring(0, markerIndex).trim();
+
+                // Parse any tasks from the lite plan (may have none for trivial features)
+                const parsedTasks = parseTasksFromSpec(planContent);
+
+                logger.info(
+                  `[PLAN_GENERATED] detected for feature ${featureId}: ${parsedTasks.length} tasks parsed (lite/adaptive mode, auto-approved)`
+                );
+
+                // Save as auto-approved plan
+                await this.updateFeaturePlanSpec(projectPath, featureId, {
+                  status: 'approved',
+                  content: planContent,
+                  version: 1,
+                  generatedAt: new Date().toISOString(),
+                  approvedAt: new Date().toISOString(),
+                  reviewedByUser: false,
+                  tasks: parsedTasks,
+                  tasksTotal: parsedTasks.length,
+                  tasksCompleted: 0,
+                });
+
+                // Store the planning mode that was used
+                await this.updateFeatureField(projectPath, featureId, 'planningMode', 'lite');
+
+                // Transition from planning to in_progress
+                await this.updateFeatureStatus(projectPath, featureId, 'in_progress');
+
+                this.emitAutoModeEvent('plan_auto_approved', {
+                  featureId,
+                  projectPath,
+                  mode: 'lite',
+                  tasksCount: parsedTasks.length,
+                  message: 'Agent determined lite planning sufficient — auto-approved',
+                });
+
+                // Agent continues implementing in the same stream after [PLAN_GENERATED].
+                // No second agent call needed — the lite prompt says "proceed immediately".
+              }
+
               // Check for [SPEC_GENERATED] marker in planning modes (spec or full)
               if (
                 planningModeRequiresApproval &&
@@ -2999,6 +3682,9 @@ This mock response was generated because DMAKER_MOCK_AGENT=true was set.
                   tasksTotal,
                   tasksCompleted: 0,
                 });
+
+                // Track that the agent escalated to spec/full mode
+                await this.updateFeatureField(projectPath, featureId, 'planningMode', 'spec');
 
                 let approvedPlanContent = planContent;
                 let userFeedback: string | undefined;
@@ -3123,6 +3809,7 @@ After generating the revised spec, output:
 
                         let revisionText = '';
                         for await (const msg of revisionStream) {
+                          accumulateFromMessage(metrics, msg as unknown as Record<string, unknown>);
                           if (msg.type === 'assistant' && msg.message?.content) {
                             for (const block of msg.message.content) {
                               if (block.type === 'text') {
@@ -3206,33 +3893,6 @@ After generating the revised spec, output:
                 // Transition from planning to in_progress now that plan is approved
                 await this.updateFeatureStatus(projectPath, featureId, 'in_progress');
 
-                // Post plan as comment on GitHub issue (non-blocking)
-                try {
-                  const featureForComment = await this.loadFeature(projectPath, featureId);
-                  if (featureForComment?.githubIssue?.number) {
-                    const syncService = getGitHubSyncService();
-                    const planComment = `## Implementation Plan\n\n${approvedPlanContent}`;
-                    await syncService.addComment(
-                      projectPath,
-                      featureForComment.githubIssue.number,
-                      planComment
-                    );
-                    logger.info(
-                      `Posted plan as comment on GitHub issue #${featureForComment.githubIssue.number}`
-                    );
-
-                    // Update GitHub labels: planning -> in_progress
-                    await syncService.updateIssueLabels(
-                      projectPath,
-                      featureForComment.githubIssue.number,
-                      ['label-in_progress'],
-                      ['label-planning']
-                    );
-                  }
-                } catch (commentErr) {
-                  logger.error('Failed to post plan comment to GitHub issue:', commentErr);
-                }
-
                 // ========================================
                 // MULTI-AGENT TASK EXECUTION
                 // Each task gets its own focused agent call
@@ -3308,6 +3968,8 @@ After generating the revised spec, output:
                     );
 
                     // Execute task with dedicated agent
+                    // Pass systemPrompt + settingSources so tasks have access to
+                    // CLAUDE.md, context files, and project memory (previously lost)
                     const taskStream = provider.executeQuery({
                       prompt: taskPrompt,
                       model: bareModel,
@@ -3315,6 +3977,9 @@ After generating the revised spec, output:
                       cwd: workDir,
                       allowedTools: allowedTools,
                       abortController,
+                      systemPrompt: sdkOptions.systemPrompt,
+                      settingSources: sdkOptions.settingSources,
+                      thinkingLevel: executeOptions.thinkingLevel,
                       mcpServers: Object.keys(mcpServers).length > 0 ? mcpServers : undefined,
                     });
 
@@ -3322,6 +3987,7 @@ After generating the revised spec, output:
 
                     // Process task stream
                     for await (const msg of taskStream) {
+                      accumulateFromMessage(metrics, msg as unknown as Record<string, unknown>);
                       if (msg.type === 'assistant' && msg.message?.content) {
                         for (const block of msg.message.content) {
                           if (block.type === 'text') {
@@ -3441,10 +4107,14 @@ After generating the revised spec, output:
                     cwd: workDir,
                     allowedTools: allowedTools,
                     abortController,
+                    systemPrompt: sdkOptions.systemPrompt,
+                    settingSources: sdkOptions.settingSources,
+                    thinkingLevel: executeOptions.thinkingLevel,
                     mcpServers: Object.keys(mcpServers).length > 0 ? mcpServers : undefined,
                   });
 
                   for await (const msg of continuationStream) {
+                    accumulateFromMessage(metrics, msg as unknown as Record<string, unknown>);
                     if (msg.type === 'assistant' && msg.message?.content) {
                       for (const block of msg.message.content) {
                         if (block.type === 'text') {
@@ -3556,7 +4226,36 @@ After generating the revised spec, output:
           logger.error(`Failed to write final raw output for ${featureId}:`, error);
         }
       }
+
+      // Save final execution metrics to feature JSON
+      try {
+        const resolvedDir = await this.featureLoader.resolveFeatureDir(projectPath, featureId);
+        const featureDir = resolvedDir || this.featureLoader.getFeatureDir(projectPath, featureId);
+        const featurePath = path.join(featureDir, 'feature.json');
+        const result = await readJsonWithRecovery<Feature | null>(featurePath, null, {
+          maxBackups: DEFAULT_BACKUP_COUNT,
+          autoRestore: true,
+        });
+        const featureForMetrics = result.data;
+        if (featureForMetrics) {
+          featureForMetrics.executionMetrics = metrics;
+          featureForMetrics.updatedAt = new Date().toISOString();
+          await atomicWriteJson(featurePath, featureForMetrics, {
+            backupCount: DEFAULT_BACKUP_COUNT,
+          });
+        }
+      } catch (metricsError) {
+        logger.error(`Failed to save execution metrics for ${featureId}:`, metricsError);
+      }
+
+      // Emit final metrics update
+      this.emitAutoModeEvent('auto_mode_metrics_update', {
+        featureId,
+        projectPath,
+        metrics,
+      });
     } finally {
+      clearInterval(metricsInterval);
       clearInterval(streamHeartbeat);
       // ALWAYS clear pending timeouts to prevent memory leaks
       // This runs on success, error, or abort
@@ -3577,8 +4276,7 @@ After generating the revised spec, output:
   private async executeFeatureWithContext(
     projectPath: string,
     featureId: string,
-    context: string,
-    useWorktrees: boolean
+    context: string
   ): Promise<void> {
     const feature = await this.loadFeature(projectPath, featureId);
     if (!feature) {
@@ -3596,7 +4294,7 @@ After generating the revised spec, output:
     prompt = prompt.replace(/\{\{featurePrompt\}\}/g, featurePrompt);
     prompt = prompt.replace(/\{\{previousContext\}\}/g, context);
 
-    return this.executeFeature(projectPath, featureId, useWorktrees, false, undefined, {
+    return this.executeFeature(projectPath, featureId, false, undefined, {
       continuationPrompt: prompt,
     });
   }
@@ -3984,7 +4682,7 @@ After generating the revised spec, output:
         try {
           logger.info(`Resuming feature: ${feature.id} (${feature.title})`);
           // Use resumeFeature which will detect the existing context and continue
-          await this.resumeFeature(projectPath, feature.id, true);
+          await this.resumeFeature(projectPath, feature.id);
         } catch (error) {
           logger.error(`Failed to resume feature ${feature.id}:`, error);
           // Continue with other features
@@ -3995,7 +4693,7 @@ After generating the revised spec, output:
       for (const feature of freshStartFeatures) {
         try {
           logger.info(`Restarting feature fresh: ${feature.id} (${feature.title})`);
-          await this.executeFeature(projectPath, feature.id, true, false);
+          await this.executeFeature(projectPath, feature.id, false);
         } catch (error) {
           logger.error(`Failed to restart feature ${feature.id}:`, error);
           // Continue with other features
@@ -4008,6 +4706,182 @@ After generating the revised spec, output:
         logger.error('Error checking for interrupted features:', error);
       }
     }
+  }
+
+  /**
+   * Analyze completed feature output for reusable patterns that should become
+   * context files (.dmaker/context/) or agent definitions (.claude/agents/).
+   * Emits suggestions as WebSocket events for the UI — does NOT auto-create files.
+   */
+  private async extractContextSuggestions(
+    projectPath: string,
+    feature: Feature,
+    agentOutput: string
+  ): Promise<void> {
+    if (!agentOutput || agentOutput.length < 500) return;
+
+    try {
+      const settings = await this.settingsService?.getGlobalSettings();
+      const phaseModelEntry =
+        settings?.phaseModels?.memoryExtractionModel || DEFAULT_PHASE_MODELS.memoryExtractionModel;
+      const { model } = resolvePhaseModel(phaseModelEntry);
+
+      // Truncate to keep costs low
+      const truncated = agentOutput.length > 8000 ? agentOutput.slice(-8000) : agentOutput;
+
+      const result = await simpleQuery({
+        prompt: `Feature: "${feature.title || feature.id}"\nDescription: ${feature.description?.substring(0, 500) || ''}\n\nAgent output (last 8000 chars):\n${truncated}`,
+        model,
+        cwd: projectPath,
+        systemPrompt: `You analyze completed agent implementation logs to find REUSABLE patterns. Only suggest items for patterns that clearly recur or represent project conventions worth codifying.
+
+Respond with ONLY valid JSON:
+{
+  "contextFiles": [
+    {"filename": "EXAMPLE.md", "content": "## Pattern\\n...", "reason": "Why this helps future features"}
+  ],
+  "agentSuggestions": [
+    {"name": "agent-name", "description": "When to use", "promptSketch": "What the agent should do", "reason": "Why this warrants an agent"}
+  ]
+}
+
+If nothing is notable enough, return: {"contextFiles": [], "agentSuggestions": []}
+Do not suggest patterns that are obvious or already standard practice.`,
+        maxTurns: 1,
+        allowedTools: [],
+      });
+
+      const jsonMatch = result.text.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) return;
+
+      const suggestions = JSON.parse(jsonMatch[0]);
+      const hasContextFiles = suggestions.contextFiles?.length > 0;
+      const hasAgentSuggestions = suggestions.agentSuggestions?.length > 0;
+
+      if (hasContextFiles || hasAgentSuggestions) {
+        logger.info(
+          `[AutoMode] Context suggestions for ${feature.id}: ` +
+            `${suggestions.contextFiles?.length || 0} context files, ` +
+            `${suggestions.agentSuggestions?.length || 0} agent suggestions`
+        );
+
+        this.emitAutoModeEvent('context_suggestions', {
+          featureId: feature.id,
+          projectPath,
+          contextFiles: suggestions.contextFiles || [],
+          agentSuggestions: suggestions.agentSuggestions || [],
+        });
+      }
+    } catch (error) {
+      // Non-critical — log and continue
+      logger.debug('Failed to extract context suggestions:', error);
+    }
+  }
+
+  /**
+   * Regenerate tiered memory summaries (small/medium/high) from category files.
+   *
+   * 1. Consolidates all category .md files into _master-memory.md
+   * 2. Checks if tiers need regeneration (hash comparison)
+   * 3. Uses simpleQuery to create three summarized tiers
+   * 4. Writes tier files and metadata
+   */
+  private async regenerateMemoryTiers(projectPath: string): Promise<void> {
+    // 1. Consolidate all category files into master
+    const {
+      content: masterContent,
+      categoryCount,
+      categoryFiles,
+    } = await consolidateMemoryToMaster(projectPath, secureFs as MemoryFsModule);
+
+    // Skip if very little content (< 500 chars) — not worth summarizing
+    if (masterContent.length < 500) {
+      logger.debug('[AutoMode] Memory too small for tier generation, skipping');
+      return;
+    }
+
+    // 2. Check if tiers need regeneration
+    const needsRegeneration = await memoryTiersNeedRegeneration(
+      projectPath,
+      masterContent,
+      secureFs as MemoryFsModule
+    );
+    if (!needsRegeneration) {
+      logger.debug('[AutoMode] Memory tiers are up to date, skipping regeneration');
+      return;
+    }
+
+    // 3. Get model for summarization
+    const settings = await this.settingsService?.getGlobalSettings();
+    const phaseModelEntry =
+      settings?.phaseModels?.memorySummarizationModel ||
+      DEFAULT_PHASE_MODELS.memorySummarizationModel;
+    const { model } = resolvePhaseModel(phaseModelEntry);
+
+    logger.info(`[AutoMode] Regenerating memory tiers using model: ${model}`);
+
+    const systemPrompt = `You are a memory consolidation assistant for an AI development studio. Your job is to create concise, actionable summaries of project learnings, decisions, and patterns.
+
+Rules:
+- Preserve ALL decisions, gotchas, and critical patterns — these prevent repeat mistakes
+- Group related learnings together
+- Use bullet points and headers for scanability
+- Prioritize information that prevents errors over merely informational content
+- Keep the most recent and most frequently referenced learnings prominent
+- Output markdown only, no code fences around the entire response
+- Do NOT include frontmatter — just the content`;
+
+    // Truncate master content if extremely large to prevent excessive token usage
+    const maxSourceChars = 200_000; // ~50k tokens
+    const sourceContent =
+      masterContent.length > maxSourceChars
+        ? masterContent.slice(0, maxSourceChars) + '\n\n[...truncated due to size]'
+        : masterContent;
+
+    // 4. Generate tiers in parallel
+    const [smallResult, mediumResult, highResult] = await Promise.all([
+      simpleQuery({
+        prompt: `Create a VERY COMPACT summary of these project learnings.\n\nTarget: approximately 500 words / ~2000 tokens.\n\nFocus ONLY on:\n1. Critical gotchas and things that WILL break if ignored (top priority)\n2. Key architectural decisions that affect every feature\n3. Essential patterns that must be followed\n\nOmit: detailed reasoning, trade-offs, alternatives considered, minor patterns.\nFormat: Short bullet list grouped by theme. One line per learning.\n\nSOURCE MATERIAL:\n${sourceContent}`,
+        model,
+        cwd: projectPath,
+        maxTurns: 1,
+        allowedTools: [],
+        systemPrompt,
+      }),
+      simpleQuery({
+        prompt: `Create a MODERATE DETAIL summary of these project learnings.\n\nTarget: approximately 2000 words / ~8000 tokens.\n\nInclude:\n1. All gotchas with brief root cause\n2. Architectural decisions with brief "why"\n3. Important patterns with when to use them\n4. Key trade-offs that inform future decisions\n\nOmit: full historical context, rejected alternatives details, minor learnings.\nFormat: Headers per category, bullet points with 1-2 sentences each.\n\nSOURCE MATERIAL:\n${sourceContent}`,
+        model,
+        cwd: projectPath,
+        maxTurns: 1,
+        allowedTools: [],
+        systemPrompt,
+      }),
+      simpleQuery({
+        prompt: `Create a COMPREHENSIVE summary of these project learnings.\n\nTarget: approximately 10000 words / ~40000 tokens (or less if source material is shorter).\n\nInclude EVERYTHING meaningful:\n1. All decisions with full reasoning and alternatives considered\n2. All gotchas with root cause, how to avoid, and related context\n3. All patterns with problem solved, trade-offs, and when to use\n4. All learnings with historical context\n\nPreserve the ADR-style structure where present.\nFormat: Headers per category, detailed bullet points.\n\nSOURCE MATERIAL:\n${sourceContent}`,
+        model,
+        cwd: projectPath,
+        maxTurns: 1,
+        allowedTools: [],
+        systemPrompt,
+      }),
+    ]);
+
+    // 5. Write tier files
+    await writeMemoryTiers(
+      projectPath,
+      {
+        small: smallResult.text || '',
+        medium: mediumResult.text || '',
+        high: highResult.text || '',
+        masterContent,
+        categoryCount,
+        categoryFiles,
+        model,
+      },
+      secureFs as MemoryFsModule
+    );
+
+    logger.info('[AutoMode] Memory tiers regenerated successfully');
   }
 
   /**

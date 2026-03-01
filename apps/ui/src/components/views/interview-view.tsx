@@ -2,9 +2,9 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { createLogger } from '@dmaker/utils/logger';
 import { useAppStore, Feature } from '@/store/app-store';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/layout';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { Input } from '@/components/ui/forms';
 import { Bot, Send, User, Loader2, Sparkles, FileText, ArrowLeft, CheckCircle } from 'lucide-react';
 import { cn, generateUUID } from '@/lib/utils';
 import { getElectronAPI } from '@/lib/electron';

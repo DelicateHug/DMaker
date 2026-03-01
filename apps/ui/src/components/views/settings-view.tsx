@@ -1,32 +1,33 @@
 import { useState, useEffect } from 'react';
-import { useSearch } from '@tanstack/react-router';
 import { useAppStore } from '@/store/app-store';
 
-import { useSettingsView, type SettingsViewId } from './settings-view/hooks';
+import { useSettingsView, type SettingsViewId } from './settings-view/hooks/use-settings-view';
 import { NAV_ITEMS } from './settings-view/config/navigation';
 import { SettingsHeader } from './settings-view/components/settings-header';
 import { KeyboardMapDialog } from './settings-view/components/keyboard-map-dialog';
 import { SettingsNavigation } from './settings-view/components/settings-navigation';
 import { ApiKeysSection } from './settings-view/api-keys/api-keys-section';
-import { ModelDefaultsSection } from './settings-view/model-defaults';
+import { ModelDefaultsSection } from './settings-view/model-defaults/model-defaults-section';
 import { AppearanceSection } from './settings-view/appearance/appearance-section';
 import { TerminalSection } from './settings-view/terminal/terminal-section';
 import { KeyboardShortcutsSection } from './settings-view/keyboard-shortcuts/keyboard-shortcuts-section';
 import { FeatureDefaultsSection } from './settings-view/feature-defaults/feature-defaults-section';
-import { WorktreesSection } from './settings-view/worktrees';
-import { AccountSection } from './settings-view/account';
-import { SecuritySection } from './settings-view/security';
+import { WorktreesSection } from './settings-view/worktrees/worktrees-section';
+import { AccountSection } from './settings-view/account/account-section';
+import { SecuritySection } from './settings-view/security/security-section';
 import { DeveloperSection } from './settings-view/developer/developer-section';
 import {
   ClaudeSettingsTab,
   CursorSettingsTab,
   CodexSettingsTab,
   OpencodeSettingsTab,
+  GcpSettingsTab,
 } from './settings-view/providers';
-import { MCPServersSection } from './settings-view/mcp-servers';
-import { PromptCustomizationSection } from './settings-view/prompts';
+import { MCPServersSection } from './settings-view/mcp-servers/mcp-servers-section';
+import { PromptCustomizationSection } from './settings-view/prompts/prompt-customization-section';
 import { ImportExportDialog } from './settings-view/components/import-export-dialog';
 import { ProjectsSection } from './settings-view/projects/projects-section';
+import { AgentsSkillsSection } from './settings-view/agents-skills/agents-skills-section';
 import type { Theme } from './settings-view/shared/types';
 
 // Breakpoint constant for mobile (matches Tailwind lg breakpoint)
@@ -41,14 +42,18 @@ export function SettingsView() {
     currentProject,
     defaultSkipTests,
     setDefaultSkipTests,
+    defaultBuildRequired,
+    setDefaultBuildRequired,
+    maxBuildRetries,
+    setMaxBuildRetries,
+    buildCommands,
+    setBuildCommands,
     enableDependencyBlocking,
     setEnableDependencyBlocking,
     skipVerificationInAutoMode,
     setSkipVerificationInAutoMode,
     enableAiCommitMessages,
     setEnableAiCommitMessages,
-    useWorktrees,
-    setUseWorktrees,
     defaultFeatureModel,
     setDefaultFeatureModel,
     autoLoadClaudeMd,
@@ -68,11 +73,9 @@ export function SettingsView() {
   // Use effective theme which considers project-specific overrides
   const effectiveTheme = getEffectiveTheme() as Theme;
 
-  // Get initial view from URL search params
-  const { view: initialView } = useSearch({ from: '/settings' });
-
-  // Use settings view navigation hook
-  const { activeView, navigateTo } = useSettingsView({ initialView });
+  // Use settings view navigation hook (no longer reads from URL search params
+  // since settings is rendered as a layer, not a route)
+  const { activeView, navigateTo } = useSettingsView({});
 
   // Handle navigation - if navigating to 'providers', default to 'claude-provider'
   const handleNavigate = (viewId: SettingsViewId) => {
@@ -124,6 +127,8 @@ export function SettingsView() {
         return <CodexSettingsTab />;
       case 'opencode-provider':
         return <OpencodeSettingsTab />;
+      case 'gcp-provider':
+        return <GcpSettingsTab />;
       case 'providers':
       case 'claude': // Backwards compatibility - redirect to claude-provider
         return <ClaudeSettingsTab />;
@@ -161,6 +166,9 @@ export function SettingsView() {
         return (
           <FeatureDefaultsSection
             defaultSkipTests={defaultSkipTests}
+            defaultBuildRequired={defaultBuildRequired}
+            maxBuildRetries={maxBuildRetries}
+            buildCommands={buildCommands}
             enableDependencyBlocking={enableDependencyBlocking}
             skipVerificationInAutoMode={skipVerificationInAutoMode}
             enableAiCommitMessages={enableAiCommitMessages}
@@ -169,6 +177,9 @@ export function SettingsView() {
             defaultDeployEnvironment={defaultDeployEnvironment}
             agentMultiplier={agentMultiplier}
             onDefaultSkipTestsChange={setDefaultSkipTests}
+            onDefaultBuildRequiredChange={setDefaultBuildRequired}
+            onMaxBuildRetriesChange={setMaxBuildRetries}
+            onBuildCommandsChange={setBuildCommands}
             onEnableDependencyBlockingChange={setEnableDependencyBlocking}
             onSkipVerificationInAutoModeChange={setSkipVerificationInAutoMode}
             onEnableAiCommitMessagesChange={setEnableAiCommitMessages}
@@ -179,9 +190,7 @@ export function SettingsView() {
           />
         );
       case 'worktrees':
-        return (
-          <WorktreesSection useWorktrees={useWorktrees} onUseWorktreesChange={setUseWorktrees} />
-        );
+        return <WorktreesSection />;
       case 'account':
         return <AccountSection />;
       case 'security':
@@ -195,6 +204,8 @@ export function SettingsView() {
         return <DeveloperSection />;
       case 'projects':
         return <ProjectsSection />;
+      case 'agents-skills':
+        return <AgentsSkillsSection />;
       default:
         return <ApiKeysSection />;
     }

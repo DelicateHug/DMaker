@@ -1,11 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { lazyRouteComponent } from '@/components/ui/route-error-boundary';
 
-const LazyProjectSettingsView = lazyRouteComponent(
-  () => import('@/components/views/project-settings-view'),
-  'ProjectSettingsView'
-);
-
+// This route is handled by the layer system.
+// Navigation to this path triggers a redirect to /board with the layer opened (see __root.tsx).
 export const Route = createFileRoute('/project-settings')({
-  component: LazyProjectSettingsView,
+  component: () => null,
 });

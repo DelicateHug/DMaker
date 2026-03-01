@@ -5,7 +5,7 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
+} from '@/components/ui/overlays';
 import { KeyboardMap, ShortcutReferencePanel } from '@/components/ui/keyboard-map';
 
 interface KeyboardMapDialogProps {

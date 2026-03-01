@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react';
 import { createLogger } from '@dmaker/utils/logger';
 import { useAppStore, FileTreeNode, ProjectAnalysis } from '@/store/app-store';
 import { getElectronAPI } from '@/lib/electron';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/layout';
 import { Button } from '@/components/ui/button';
 import {
   Folder,

@@ -279,9 +279,13 @@ function buildClaudeMdOptions(config: CreateSdkOptionsConfig): {
   systemPrompt?: string | SystemPromptConfig;
   settingSources?: Array<'user' | 'project' | 'local'>;
 } {
+  // Combine base system prompt with agent system prompt if provided
+  const combinedPrompt =
+    [config.systemPrompt, config.agentSystemPrompt].filter(Boolean).join('\n\n') || undefined;
+
   if (!config.autoLoadClaudeMd) {
     // Standard mode - just pass through the system prompt as-is
-    return config.systemPrompt ? { systemPrompt: config.systemPrompt } : {};
+    return combinedPrompt ? { systemPrompt: combinedPrompt } : {};
   }
 
   // Auto-load CLAUDE.md mode - use preset with settingSources
@@ -297,9 +301,9 @@ function buildClaudeMdOptions(config: CreateSdkOptionsConfig): {
     settingSources: ['user', 'project'],
   };
 
-  // If there's a custom system prompt, append it to the preset
-  if (config.systemPrompt) {
-    result.systemPrompt.append = config.systemPrompt;
+  // If there's a combined system prompt (context + agent instructions), append it to the preset
+  if (combinedPrompt) {
+    result.systemPrompt.append = combinedPrompt;
   }
 
   return result;
@@ -351,6 +355,21 @@ export interface CreateSdkOptionsConfig {
 
   /** Extended thinking level for Claude models */
   thinkingLevel?: ThinkingLevel;
+
+  /** Include Skill tool in allowedTools */
+  includeSkills?: boolean;
+
+  /** Setting sources for skill discovery */
+  skillSources?: Array<'user' | 'project'>;
+
+  /** Include Task tool in allowedTools (for subagents) */
+  includeSubagents?: boolean;
+
+  /** Custom subagent definitions */
+  agents?: Record<string, import('@dmaker/types').AgentDefinition>;
+
+  /** Agent system prompt to append (highest priority, overrides conflicting instructions) */
+  agentSystemPrompt?: string;
 }
 
 // Re-export MCP types from @dmaker/types for convenience
@@ -522,16 +541,37 @@ export function createAutoModeOptions(config: CreateSdkOptionsConfig): Options {
   // Build thinking options
   const thinkingOptions = buildThinkingOptions(config.thinkingLevel);
 
+  // Build allowed tools with optional Skill and Task tools
+  const allowedTools: string[] = [...TOOL_PRESETS.fullAccess];
+  if (config.includeSkills) {
+    allowedTools.push('Skill');
+  }
+  if (config.includeSubagents) {
+    allowedTools.push('Task');
+  }
+
+  // Merge skill sources into settingSources for SDK skill discovery
+  let settingSources: Array<'user' | 'project'> | undefined;
+  if (config.skillSources && config.skillSources.length > 0) {
+    const existingSources = (claudeMdOptions as Record<string, unknown>).settingSources as
+      | Array<'user' | 'project'>
+      | undefined;
+    const merged = new Set([...(existingSources ?? []), ...config.skillSources]);
+    settingSources = [...merged];
+  }
+
   return {
     ...getBaseOptions(),
     model: getModelForUseCase('auto', config.model),
     maxTurns: MAX_TURNS.maximum,
     cwd: config.cwd,
-    allowedTools: [...TOOL_PRESETS.fullAccess],
+    allowedTools,
     ...claudeMdOptions,
+    ...(settingSources && { settingSources }),
     ...thinkingOptions,
     ...(config.abortController && { abortController: config.abortController }),
     ...mcpOptions.mcpServerOptions,
+    ...(config.agents && { agents: config.agents }),
   };
 }
 

@@ -4,7 +4,7 @@ import { GitBranch, Plus, RefreshCw } from 'lucide-react';
 import { cn, pathsEqual } from '@/lib/utils';
 import { toast } from 'sonner';
 import { getHttpApiClient } from '@/lib/http-api-client';
-import { useIsMobile } from '@/hooks/use-media-query';
+import { useIsMobile } from '@/hooks/utilities';
 import type { WorktreePanelProps, WorktreeInfo } from './types';
 import {
   useWorktrees,
@@ -260,35 +260,31 @@ export function WorktreePanel({
           />
         )}
 
-        {useWorktreesEnabled && (
-          <>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground shrink-0"
-              onClick={onCreateWorktree}
-              title="Create new worktree"
-            >
-              <Plus className="w-4 h-4" />
-            </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground shrink-0"
+          onClick={onCreateWorktree}
+          title="Create new worktree"
+        >
+          <Plus className="w-4 h-4" />
+        </Button>
 
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground shrink-0"
-              onClick={async () => {
-                const removedWorktrees = await fetchWorktrees();
-                if (removedWorktrees && removedWorktrees.length > 0 && onRemovedWorktrees) {
-                  onRemovedWorktrees(removedWorktrees);
-                }
-              }}
-              disabled={isLoading}
-              title="Refresh worktrees"
-            >
-              <RefreshCw className={cn('w-3.5 h-3.5', isLoading && 'animate-spin')} />
-            </Button>
-          </>
-        )}
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground shrink-0"
+          onClick={async () => {
+            const removedWorktrees = await fetchWorktrees();
+            if (removedWorktrees && removedWorktrees.length > 0 && onRemovedWorktrees) {
+              onRemovedWorktrees(removedWorktrees);
+            }
+          }}
+          disabled={isLoading}
+          title="Refresh worktrees"
+        >
+          <RefreshCw className={cn('w-3.5 h-3.5', isLoading && 'animate-spin')} />
+        </Button>
       </div>
     );
   }
@@ -348,92 +344,88 @@ export function WorktreePanel({
         )}
       </div>
 
-      {/* Worktrees section - only show if enabled */}
-      {useWorktreesEnabled && (
-        <>
-          <div className="w-px h-5 bg-border mx-2" />
-          <GitBranch className="w-4 h-4 text-muted-foreground" />
-          <span className="text-sm text-muted-foreground mr-2">Worktrees:</span>
+      {/* Worktrees section */}
+      <div className="w-px h-5 bg-border mx-2" />
+      <GitBranch className="w-4 h-4 text-muted-foreground" />
+      <span className="text-sm text-muted-foreground mr-2">Worktrees:</span>
 
-          <div className="flex items-center gap-2 flex-wrap">
-            {nonMainWorktrees.map((worktree) => {
-              const cardCount = branchCardCounts?.[worktree.branch];
-              return (
-                <WorktreeTab
-                  key={worktree.path}
-                  worktree={worktree}
-                  cardCount={cardCount}
-                  hasChanges={worktree.hasChanges}
-                  changedFilesCount={worktree.changedFilesCount}
-                  isSelected={isWorktreeSelected(worktree)}
-                  isRunning={hasRunningFeatures(worktree)}
-                  isActivating={isActivating}
-                  isDevServerRunning={isDevServerRunning(worktree)}
-                  devServerInfo={getDevServerInfo(worktree)}
-                  branches={branches}
-                  filteredBranches={filteredBranches}
-                  branchFilter={branchFilter}
-                  isLoadingBranches={isLoadingBranches}
-                  isSwitching={isSwitching}
-                  isPulling={isPulling}
-                  isPushing={isPushing}
-                  isStartingDevServer={isStartingDevServer}
-                  aheadCount={aheadCount}
-                  behindCount={behindCount}
-                  gitRepoStatus={gitRepoStatus}
-                  onSelectWorktree={handleSelectWorktree}
-                  onBranchDropdownOpenChange={handleBranchDropdownOpenChange(worktree)}
-                  onActionsDropdownOpenChange={handleActionsDropdownOpenChange(worktree)}
-                  onBranchFilterChange={setBranchFilter}
-                  onSwitchBranch={handleSwitchBranch}
-                  onCreateBranch={onCreateBranch}
-                  onPull={handlePull}
-                  onPush={handlePush}
-                  onOpenInEditor={handleOpenInEditor}
-                  onCommit={onCommit}
-                  onCreatePR={onCreatePR}
-                  onAddressPRComments={onAddressPRComments}
-                  onResolveConflicts={onResolveConflicts}
-                  onMerge={onMerge}
-                  onDeleteWorktree={onDeleteWorktree}
-                  onStartDevServer={handleStartDevServer}
-                  onStopDevServer={handleStopDevServer}
-                  onOpenDevServerUrl={handleOpenDevServerUrl}
-                  onViewDevServerLogs={handleViewDevServerLogs}
-                  onRunInitScript={handleRunInitScript}
-                  hasInitScript={hasInitScript}
-                />
-              );
-            })}
+      <div className="flex items-center gap-2 flex-wrap">
+        {nonMainWorktrees.map((worktree) => {
+          const cardCount = branchCardCounts?.[worktree.branch];
+          return (
+            <WorktreeTab
+              key={worktree.path}
+              worktree={worktree}
+              cardCount={cardCount}
+              hasChanges={worktree.hasChanges}
+              changedFilesCount={worktree.changedFilesCount}
+              isSelected={isWorktreeSelected(worktree)}
+              isRunning={hasRunningFeatures(worktree)}
+              isActivating={isActivating}
+              isDevServerRunning={isDevServerRunning(worktree)}
+              devServerInfo={getDevServerInfo(worktree)}
+              branches={branches}
+              filteredBranches={filteredBranches}
+              branchFilter={branchFilter}
+              isLoadingBranches={isLoadingBranches}
+              isSwitching={isSwitching}
+              isPulling={isPulling}
+              isPushing={isPushing}
+              isStartingDevServer={isStartingDevServer}
+              aheadCount={aheadCount}
+              behindCount={behindCount}
+              gitRepoStatus={gitRepoStatus}
+              onSelectWorktree={handleSelectWorktree}
+              onBranchDropdownOpenChange={handleBranchDropdownOpenChange(worktree)}
+              onActionsDropdownOpenChange={handleActionsDropdownOpenChange(worktree)}
+              onBranchFilterChange={setBranchFilter}
+              onSwitchBranch={handleSwitchBranch}
+              onCreateBranch={onCreateBranch}
+              onPull={handlePull}
+              onPush={handlePush}
+              onOpenInEditor={handleOpenInEditor}
+              onCommit={onCommit}
+              onCreatePR={onCreatePR}
+              onAddressPRComments={onAddressPRComments}
+              onResolveConflicts={onResolveConflicts}
+              onMerge={onMerge}
+              onDeleteWorktree={onDeleteWorktree}
+              onStartDevServer={handleStartDevServer}
+              onStopDevServer={handleStopDevServer}
+              onOpenDevServerUrl={handleOpenDevServerUrl}
+              onViewDevServerLogs={handleViewDevServerLogs}
+              onRunInitScript={handleRunInitScript}
+              hasInitScript={hasInitScript}
+            />
+          );
+        })}
 
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
-              onClick={onCreateWorktree}
-              title="Create new worktree"
-            >
-              <Plus className="w-4 h-4" />
-            </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+          onClick={onCreateWorktree}
+          title="Create new worktree"
+        >
+          <Plus className="w-4 h-4" />
+        </Button>
 
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
-              onClick={async () => {
-                const removedWorktrees = await fetchWorktrees();
-                if (removedWorktrees && removedWorktrees.length > 0 && onRemovedWorktrees) {
-                  onRemovedWorktrees(removedWorktrees);
-                }
-              }}
-              disabled={isLoading}
-              title="Refresh worktrees"
-            >
-              <RefreshCw className={cn('w-3.5 h-3.5', isLoading && 'animate-spin')} />
-            </Button>
-          </div>
-        </>
-      )}
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+          onClick={async () => {
+            const removedWorktrees = await fetchWorktrees();
+            if (removedWorktrees && removedWorktrees.length > 0 && onRemovedWorktrees) {
+              onRemovedWorktrees(removedWorktrees);
+            }
+          }}
+          disabled={isLoading}
+          title="Refresh worktrees"
+        >
+          <RefreshCw className={cn('w-3.5 h-3.5', isLoading && 'animate-spin')} />
+        </Button>
+      </div>
 
       {/* Dev Server Logs Panel */}
       <DevServerLogsPanel

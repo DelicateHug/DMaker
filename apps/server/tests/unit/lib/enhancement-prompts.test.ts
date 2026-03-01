@@ -15,7 +15,7 @@ import {
   SIMPLIFY_EXAMPLES,
   ACCEPTANCE_EXAMPLES,
   type EnhancementMode,
-} from '@/lib/enhancement-prompts.js';
+} from '@dmaker/prompts';
 
 const ENHANCEMENT_MODES: EnhancementMode[] = [
   'improve',
