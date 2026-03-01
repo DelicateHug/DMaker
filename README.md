@@ -1,7 +1,3 @@
-<p align="center">
-  <img src="apps/ui/public/readme_logo.svg" alt="DMaker Logo" height="80" />
-</p>
-
 # DMaker
 
 **Stop typing code. Start directing AI agents.**
