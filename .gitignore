@@ -107,3 +107,23 @@ nul
 # Per-project feature data (user-specific, may contain sensitive output)
 .dmaker/features/
 
+
+# --- secrets & local state (hardened 2026-08-15) ---
+.env
+.env.local
+.env.*.local
+!.env.example
+*.pem
+*.pfx
+*.p12
+*.ovpn
+*.tfstate
+*.tfstate.*
+*.tfplan
+.terraform/
+id_rsa
+id_ed25519
+cred.key
+cred.txt
+# OneDrive sync conflict copies
+*-Admin-PC.*
