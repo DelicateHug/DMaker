@@ -13,6 +13,7 @@ import compression from 'compression';
 import { WebSocketServer, WebSocket } from 'ws';
 import { createServer } from 'http';
 import { fileURLToPath } from 'url';
+import path from 'path';
 import dotenv from 'dotenv';
 
 import { createEventEmitter, createThrottledCallback, type EventEmitter } from './lib/events.js';
@@ -678,6 +679,12 @@ const startServer = (port: number, host: string) => {
         `peer=${RUNTIME.peerUrl} ` +
         `selfUpdate=${RUNTIME.selfUpdateEnabled ? 'enabled' : 'disabled'}`
     );
+
+    // Resolved, not raw: the default `./data` is relative to the working
+    // directory, so the same command run from the repo root and from
+    // apps/server reads two different project lists. Printing the absolute
+    // path makes "where did my projects go" a one-glance answer.
+    logger.info(`Data directory: ${path.resolve(DATA_DIR)}`);
   });
 
   server.on('error', (error: NodeJS.ErrnoException) => {

@@ -222,7 +222,11 @@ Use `resolveModelString()` from `@dmaker/model-resolver` to convert model aliase
 - `HOST` - Host to bind server to (default: 0.0.0.0)
 - `HOSTNAME` - Hostname for user-facing URLs (default: localhost)
 - `PORT` - Server port (default: 3019 from source via `tsx`, 3009 from built `dist`)
-- `DATA_DIR` - Data storage directory (default: ./data)
+- `DATA_DIR` - Data storage directory (default: `./data`, **relative to the
+  working directory**). `npm run dev:full` from the repo root and a server
+  started from `apps/server/` therefore read two different project lists.
+  `start.ps1` always passes an absolute path; the resolved directory is
+  printed in the boot log.
 - `ALLOWED_ROOT_DIRECTORY` - Restrict file operations to specific directory
 - `DMAKER_MOCK_AGENT=true` - Enable mock agent mode for CI testing
 - `VITE_HOSTNAME` - Hostname for frontend API URLs (default: localhost)
