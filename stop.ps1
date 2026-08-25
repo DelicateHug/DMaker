@@ -29,14 +29,50 @@ function Stop-Tree([int]$id) {
     return $true
 }
 
+# The dev server runs under `tsx watch`, a supervisor that restarts its child
+# whenever a source file changes. Killing only the listening child leaves that
+# supervisor alive, and the next build that touches libs/*/dist makes it put a
+# server straight back on the port. taskkill /T cannot reach it once its own
+# parent has exited, because an orphan has no tree to walk.
+#
+# So walk UP from the port owner and kill the highest ancestor whose command
+# line still points at this checkout. The path check is what keeps this precise:
+# we never kill by image name, and never anything belonging to another project.
+function Get-RepoAncestor([int]$id) {
+    $repo = $PSScriptRoot
+    $top = $id
+    $current = $id
+    for ($hop = 0; $hop -lt 6; $hop++) {
+        $info = Get-CimInstance Win32_Process -Filter "ProcessId=$current" -ErrorAction SilentlyContinue
+        if (-not $info) { break }
+        $parentId = [int]$info.ParentProcessId
+        if ($parentId -le 4) { break }
+        $parent = Get-CimInstance Win32_Process -Filter "ProcessId=$parentId" -ErrorAction SilentlyContinue
+        if (-not $parent) { break }
+        # Only climb through processes that are demonstrably part of this repo.
+        if ($parent.CommandLine -and $parent.CommandLine -like "*$repo*") {
+            $top = $parentId
+            $current = $parentId
+        } else {
+            break
+        }
+    }
+    return $top
+}
+
 function Stop-Port([int]$targetPort, [string]$label) {
     $stopped = $false
     $owners = (Get-NetTCPConnection -LocalPort $targetPort -State Listen -ErrorAction SilentlyContinue).OwningProcess |
               Sort-Object -Unique
     foreach ($owner in $owners) {
-        if (Stop-Tree ([int]$owner)) {
+        $target = Get-RepoAncestor ([int]$owner)
+        if (Stop-Tree $target) {
             $stopped = $true
-            Write-Host "Stopped $label (PID tree $owner on port $targetPort)"
+            if ($target -ne [int]$owner) {
+                Write-Host "Stopped $label (PID tree $target, supervisor of $owner on port $targetPort)"
+            } else {
+                Write-Host "Stopped $label (PID tree $target on port $targetPort)"
+            }
         }
     }
     return $stopped

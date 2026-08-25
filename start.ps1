@@ -97,8 +97,15 @@ function Clear-DMakerEnv {
     }
 }
 
+# Start-Process needs a real executable. Bare `npm` on Windows resolves to the
+# extensionless shell script, which CreateProcess rejects with "not a valid
+# Win32 application"; the launchable one is the npm.cmd shim next to it.
+$NpmExe = (Get-Command 'npm.cmd' -ErrorAction SilentlyContinue).Source
+if (-not $NpmExe) { $NpmExe = (Get-Command 'npm' -ErrorAction SilentlyContinue).Source }
+if (-not $NpmExe) { throw 'npm was not found on PATH.' }
+
 function Start-Tracked([string]$Label, [string[]]$ArgumentList) {
-    $proc = Start-Process -FilePath 'npm' -ArgumentList $ArgumentList -PassThru -NoNewWindow
+    $proc = Start-Process -FilePath $NpmExe -ArgumentList $ArgumentList -PassThru -NoNewWindow
     [void]$Started.Add([pscustomobject]@{ Label = $Label; Process = $proc })
     Write-Step "$Label started (PID $($proc.Id))"
     return $proc
@@ -159,23 +166,34 @@ function Test-BuildStale {
     return $false
 }
 
+function Invoke-Npm([string[]]$NpmArgs, [string]$What) {
+    # Windows PowerShell 5.1 wraps a native command's stderr in an ErrorRecord,
+    # which $ErrorActionPreference = 'Stop' then treats as terminating. npm and
+    # vite both write ordinary progress to stderr, so under 'Stop' a perfectly
+    # good build aborts the launcher. Judge these by their exit code instead --
+    # the preference is function-scoped, so the rest of the script keeps 'Stop'.
+    $ErrorActionPreference = 'Continue'
+    & npm @NpmArgs
+    if ($LASTEXITCODE -ne 0) { throw "$What failed (npm exited $LASTEXITCODE)" }
+}
+
 function Invoke-Build {
     Write-Step 'Building shared packages...' 'Yellow'
-    npm run build:packages
-    if ($LASTEXITCODE -ne 0) { throw 'build:packages failed' }
+    Invoke-Npm @('run', 'build:packages') 'build:packages'
 
     Write-Step 'Building server...' 'Yellow'
-    npm run build --workspace=apps/server
-    if ($LASTEXITCODE -ne 0) { throw 'server build failed' }
+    Invoke-Npm @('run', 'build', '--workspace=apps/server') 'server build'
 
     # The UI bakes its backend URL in at build time, so the prod bundle has to be
     # built with the prod server's URL in the environment.
     Write-Step 'Building UI...' 'Yellow'
     $env:VITE_SERVER_URL = "http://localhost:$ProdServerPort"
-    npm run build --workspace=apps/ui
-    $buildExit = $LASTEXITCODE
-    Remove-Item 'env:VITE_SERVER_URL' -ErrorAction SilentlyContinue
-    if ($buildExit -ne 0) { throw 'UI build failed' }
+    try {
+        Invoke-Npm @('run', 'build', '--workspace=apps/ui') 'UI build'
+    }
+    finally {
+        Remove-Item 'env:VITE_SERVER_URL' -ErrorAction SilentlyContinue
+    }
 
     Write-Step 'Build complete' 'Green'
 }
@@ -250,8 +268,7 @@ function Start-DevUi {
 try {
     if (-not (Test-Path (Join-Path $Root 'node_modules'))) {
         Write-Step 'Installing dependencies (first run)...' 'Yellow'
-        npm install
-        if ($LASTEXITCODE -ne 0) { throw 'npm install failed' }
+        Invoke-Npm @('install') 'npm install'
     }
 
     # data-dev/ is dev's own store; create it up front so the first boot doesn't
