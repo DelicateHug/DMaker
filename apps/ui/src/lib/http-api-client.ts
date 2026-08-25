@@ -2088,7 +2088,9 @@ export class HttpApiClient implements ElectronAPI {
       updates: Record<string, unknown>
     ): Promise<{
       success: boolean;
-      settings?: Record<string, unknown>;
+      settings?: Record<string, unknown> & { projectsRevision?: number };
+      /** The registry fields were dropped as stale (or read-only); refetch. */
+      registryRejected?: boolean;
       error?: string;
     }> => this.put('/api/settings/global', updates),
 

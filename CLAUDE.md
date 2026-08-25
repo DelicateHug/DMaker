@@ -172,12 +172,19 @@ dev  UI 3017 -> dev  server 3019 --/   (dev never reaches it — it is read-only
   Because the runner is a separate PID, "Update Prod" can rebuild and restart the
   prod server without stopping work already in flight.
 - **One shared data directory.** Both halves use `data/`, so they show the same
-  repos and the same tasks - two lists was the bug, not the feature. Both UIs
-  PUT their whole in-memory `projects` array, so the read-only half is barred
-  from writing the shared registry (`projects`, `currentProjectId`,
-  `projectHistory`, `projectHistoryIndex`, `recentFolders`, `lastProjectDir`)
-  and reads global settings through its cache rather than from it. Dev keeps its
-  own view state - panel sizes, collapse flags - and nothing else.
+  repos and the same tasks - two lists was the bug, not the feature. Every UI
+  PUTs its whole in-memory `projects` array, so the shared registry
+  (`projects`, `currentProjectId`, `projectHistory`, `projectHistoryIndex`,
+  `recentFolders`, `lastProjectDir`) is protected two ways:
+  - `settings.projectsRevision` is bumped by the server whenever the registry
+    actually changes. A write touching the registry must carry the revision it
+    was built from; an older or absent one has those fields dropped and comes
+    back with `registryRejected: true`, which makes the client refetch. A
+    deliberate deletion from an up-to-date tab still works.
+  - The read-only half is barred from registry writes outright, and reads
+    global settings through its cache rather than from it - that cache is only
+    invalidated by the writing process, so dev's copy could only ever be
+    behind. Dev keeps its own view state (panel sizes, collapse flags).
 - **Update Prod** (`services/self-update-service.ts`) stashes local changes,
   pulls `origin` with a rebase, pops the stash, rebuilds, then exits with code 75
   to ask `start.ps1` for a restart. Any conflict rolls the repo back to exactly

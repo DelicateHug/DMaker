@@ -223,6 +223,11 @@ export function useSettingsSync(): SettingsSyncState {
         updates[field] = setupState[field as keyof typeof setupState];
       }
 
+      // Say which registry this write was built from. The server drops the
+      // registry fields if the revision is behind, so a tab that has been open
+      // across someone else's change cannot delete projects it never saw.
+      updates.projectsRevision = appState.projectsRevision ?? 0;
+
       // Create a hash of the updates to avoid redundant syncs
       const updateHash = JSON.stringify(updates);
       if (updateHash === lastSyncedRef.current) {
@@ -237,6 +242,18 @@ export function useSettingsSync(): SettingsSyncState {
       if (result.success) {
         lastSyncedRef.current = updateHash;
         logger.debug('Settings synced to server');
+
+        if (result.registryRejected) {
+          // This client's view of the registry was behind. Take the server's,
+          // rather than keep retrying a write that will never be accepted.
+          logger.warn('Registry write was rejected as stale - refreshing from server');
+          lastSyncedRef.current = '';
+          void refreshSettingsFromServer();
+        } else if (typeof result.settings?.projectsRevision === 'number') {
+          // The server bumps the revision on every accepted registry change, so
+          // adopt it or this client's next write looks stale to itself.
+          useAppStore.setState({ projectsRevision: result.settings.projectsRevision });
+        }
       } else {
         logger.error('Failed to sync settings:', result.error);
       }
@@ -444,6 +461,9 @@ export async function forceSyncSettingsToServer(): Promise<boolean> {
     for (const field of SETUP_FIELDS_TO_SYNC) {
       updates[field] = setupState[field as keyof typeof setupState];
     }
+    // Same staleness proof as the debounced path - a flush on tab close must
+    // not be a back door for writing a registry this client no longer owns.
+    updates.projectsRevision = appState.projectsRevision ?? 0;
 
     const result = await api.settings.updateGlobal(updates);
     return result.success;

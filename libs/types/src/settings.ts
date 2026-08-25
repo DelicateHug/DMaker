@@ -588,6 +588,16 @@ export interface GlobalSettings {
   projectHistory: string[];
   /** Current position in project history for navigation */
   projectHistoryIndex: number;
+  /**
+   * Bumped by the server whenever the project registry actually changes.
+   *
+   * Every UI syncs its whole in-memory `projects` array, so a tab left open
+   * across a change elsewhere would otherwise write back a list missing the
+   * entries it never saw - which is how a project list disappears. A write
+   * touching the registry must carry the revision it was built from; an older
+   * one has its registry fields dropped and the client refetches.
+   */
+  projectsRevision: number;
 
   // File Browser and UI Preferences
   /** Last directory opened in file picker */
@@ -984,7 +994,7 @@ export const DEFAULT_GLOBAL_SETTINGS: GlobalSettings = {
   setupComplete: false,
   isFirstRun: true,
   skipClaudeSetup: false,
-  theme: 'dark',
+  theme: 'catppuccin',
   syntaxTheme: 'auto',
   sidebarOpen: true,
   chatHistoryOpen: false,
@@ -1016,6 +1026,7 @@ export const DEFAULT_GLOBAL_SETTINGS: GlobalSettings = {
   currentProjectId: null,
   projectHistory: [],
   projectHistoryIndex: -1,
+  projectsRevision: 0,
   lastProjectDir: undefined,
   recentFolders: [],
   worktreePanelCollapsed: false,

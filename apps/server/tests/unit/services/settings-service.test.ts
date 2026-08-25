@@ -801,3 +801,67 @@ describe('settings-service.ts', () => {
     );
   });
 });
+
+/**
+ * The project registry is shared by dev and prod, and every UI writes it back
+ * whole. The revision is what lets the server tell a deliberate deletion from a
+ * tab that simply never saw the addition.
+ */
+describe('settings-service.ts - projectsRevision', () => {
+  let testDataDir: string;
+  let settingsService: SettingsService;
+
+  const project = (id: string) => ({
+    id,
+    name: id,
+    path: path.join(os.tmpdir(), id),
+    features: [],
+  });
+
+  beforeEach(async () => {
+    testDataDir = path.join(os.tmpdir(), `settings-rev-test-${Date.now()}`);
+    await fs.mkdir(testDataDir, { recursive: true });
+    settingsService = new SettingsService(testDataDir);
+  });
+
+  afterEach(async () => {
+    await fs.rm(testDataDir, { recursive: true, force: true }).catch(() => undefined);
+  });
+
+  it('starts at zero', async () => {
+    const settings = await settingsService.getGlobalSettings();
+    expect(settings.projectsRevision).toBe(0);
+  });
+
+  it('bumps when the registry changes', async () => {
+    const first = await settingsService.updateGlobalSettings({ projects: [project('a')] });
+    expect(first.projectsRevision).toBe(1);
+
+    const second = await settingsService.updateGlobalSettings({
+      projects: [project('a'), project('b')],
+    });
+    expect(second.projectsRevision).toBe(2);
+  });
+
+  it('does not bump for writes that leave the registry alone', async () => {
+    await settingsService.updateGlobalSettings({ projects: [project('a')] });
+
+    // The UI syncs on every panel resize; none of that touches the registry.
+    const after = await settingsService.updateGlobalSettings({ sidebarOpen: false });
+    expect(after.projectsRevision).toBe(1);
+  });
+
+  it('does not bump when the same registry is written again', async () => {
+    await settingsService.updateGlobalSettings({ projects: [project('a')] });
+    const resynced = await settingsService.updateGlobalSettings({ projects: [project('a')] });
+    expect(resynced.projectsRevision).toBe(1);
+  });
+
+  it('bumps for the other registry fields too', async () => {
+    const after = await settingsService.updateGlobalSettings({ currentProjectId: 'a' });
+    expect(after.projectsRevision).toBe(1);
+
+    const andAgain = await settingsService.updateGlobalSettings({ projectHistory: ['a'] });
+    expect(andAgain.projectsRevision).toBe(2);
+  });
+});

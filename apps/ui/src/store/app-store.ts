@@ -132,6 +132,9 @@ export const MAX_INIT_OUTPUT_LINES = 500;
  * Get the theme from localStorage as a fallback
  * Used before server settings are loaded (e.g., on login/setup pages)
  */
+/** Theme used when neither localStorage nor server settings have one yet. */
+export const DEFAULT_THEME: ThemeMode = 'catppuccin';
+
 export function getStoredTheme(): ThemeMode | null {
   const stored = getItem(THEME_STORAGE_KEY);
   if (stored) return stored as ThemeMode;
@@ -641,6 +644,13 @@ export interface AppState {
   trashedProjects: TrashedProject[];
   projectHistory: string[]; // Array of project IDs in MRU order (most recent first)
   projectHistoryIndex: number; // Current position in project history for cycling
+  /**
+   * Server-owned revision of the project registry, carried so a write can
+   * prove which list it was built from. A tab open across someone else's
+   * change holds an older one and has its registry write dropped rather
+   * than silently deleting projects it never saw.
+   */
+  projectsRevision: number;
 
   // View state
   currentView: ViewMode;
@@ -1537,6 +1547,7 @@ const initialState: AppState = {
   trashedProjects: [],
   projectHistory: [],
   projectHistoryIndex: -1,
+  projectsRevision: 0,
   currentView: 'welcome',
   showAllProjects: false,
   pendingBoardStatusTab: null,
@@ -1546,7 +1557,7 @@ const initialState: AppState = {
   sessionListVersion: 0,
   pendingChatSessionId: null,
   pendingChatInput: null,
-  theme: getStoredTheme() || 'dark', // Use localStorage theme as initial value, fallback to 'dark'
+  theme: getStoredTheme() || DEFAULT_THEME, // Use localStorage theme as initial value, fallback to the default
   syntaxTheme: getStoredSyntaxTheme() || 'auto', // Use localStorage syntax theme as initial value, fallback to 'auto'
   fontFamilySans: getStoredFontSans(), // Use localStorage font as initial value (null = use default Geist Sans)
   fontFamilyMono: getStoredFontMono(), // Use localStorage font as initial value (null = use default Geist Mono)

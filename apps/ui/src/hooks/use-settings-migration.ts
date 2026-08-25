@@ -579,6 +579,7 @@ export function hydrateStoreFromSettings(settings: GlobalSettings): void {
     trashedProjects: settings.trashedProjects ?? [],
     projectHistory: settings.projectHistory ?? [],
     projectHistoryIndex: settings.projectHistoryIndex ?? -1,
+    projectsRevision: settings.projectsRevision ?? 0,
     lastSelectedSessionByProject: settings.lastSelectedSessionByProject ?? {},
     // UI State
     worktreePanelCollapsed: settings.worktreePanelCollapsed ?? false,

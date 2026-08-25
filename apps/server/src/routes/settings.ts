@@ -19,7 +19,7 @@ import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { createLogger } from '@dmaker/utils';
 import { setLogLevel, LogLevel } from '@dmaker/utils';
-import type { SettingsService } from '../services/settings-service.js';
+import { REGISTRY_FIELDS, type SettingsService } from '../services/settings-service.js';
 import type { GlobalSettings, Credentials, ProjectSettings } from '../types/settings.js';
 import { validatePathParams } from '../middleware.js';
 import { RequestCache } from '../lib/request-cache.js';
@@ -127,25 +127,6 @@ function createGetGlobalHandler(settingsService: SettingsService) {
 
 // --- PUT /global ---
 
-/**
- * Fields that make up the shared project registry.
- *
- * Dev and prod run against one DATA_DIR so they show the same repos and the
- * same tasks - two lists was the bug, not the feature. The cost of sharing is
- * that both UIs PUT their whole in-memory `projects` array, so a tab left open
- * across a change will happily write back a list missing everything it never
- * saw. Only the executing environment is allowed to rewrite the registry; the
- * read-only half keeps its own view state and nothing else.
- */
-const SHARED_REGISTRY_FIELDS = [
-  'projects',
-  'currentProjectId',
-  'projectHistory',
-  'projectHistoryIndex',
-  'recentFolders',
-  'lastProjectDir',
-] as const satisfies readonly (keyof GlobalSettings)[];
-
 function createUpdateGlobalHandler(settingsService: SettingsService) {
   return async (req: Request, res: Response): Promise<void> => {
     try {
@@ -159,20 +140,49 @@ function createUpdateGlobalHandler(settingsService: SettingsService) {
         return;
       }
 
-      // A read-only environment may look at the shared registry but never
-      // rewrite it. Dropping the fields rather than rejecting the request keeps
-      // dev's own view state (panel sizes, collapse flags) persisting normally.
-      if (isReadOnly()) {
-        const dropped = SHARED_REGISTRY_FIELDS.filter((field) => field in updates);
-        for (const field of dropped) {
-          delete updates[field];
-        }
-        if (dropped.length > 0) {
+      // Dev and prod share one settings file, and every UI syncs its whole
+      // in-memory `projects` array - so a client writing a registry it built
+      // before someone else's change silently deletes the entries it never saw.
+      // Two rules keep that from costing a project list, both of them dropping
+      // fields rather than failing the request, so unrelated view state
+      // (panel sizes, collapse flags) still persists normally.
+      const touchedRegistry = REGISTRY_FIELDS.filter((field) => field in updates);
+      let registryRejected = false;
+
+      if (touchedRegistry.length > 0) {
+        // 1. A read-only environment may look at the registry, never rewrite it.
+        if (isReadOnly()) {
+          registryRejected = true;
           logger.debug(
-            `Read-only environment: ignored shared registry fields [${dropped.join(', ')}]`
+            `Read-only environment: ignored registry fields [${touchedRegistry.join(', ')}]`
           );
+        } else {
+          // 2. Anyone else must say which revision they built the write from.
+          //    A missing revision means a client too old to know about this, and
+          //    is treated as stale for the same reason: it cannot prove it saw
+          //    the current list.
+          const current = await settingsService.getGlobalSettings();
+          const serverRevision = current.projectsRevision ?? 0;
+          const clientRevision = (updates as { projectsRevision?: unknown }).projectsRevision;
+
+          if (typeof clientRevision !== 'number' || clientRevision < serverRevision) {
+            registryRejected = true;
+            logger.warn(
+              `Stale registry write ignored: client revision ${String(clientRevision)}, ` +
+                `server at ${serverRevision}. Dropped [${touchedRegistry.join(', ')}]`
+            );
+          }
+        }
+
+        if (registryRejected) {
+          for (const field of touchedRegistry) {
+            delete updates[field];
+          }
         }
       }
+
+      // The revision is the server's to hand out; a client never sets it.
+      delete (updates as { projectsRevision?: unknown }).projectsRevision;
 
       // Minimal debug logging to help diagnose accidental wipes.
       if ('projects' in updates || 'theme' in updates || 'localStorageMigrated' in updates) {
@@ -212,6 +222,9 @@ function createUpdateGlobalHandler(settingsService: SettingsService) {
       res.json({
         success: true,
         settings,
+        // Tells the client its registry write was ignored, so it can refetch
+        // instead of quietly believing the server agreed with it.
+        ...(registryRejected ? { registryRejected: true } : {}),
       });
     } catch (error) {
       logError(error, 'Update global settings failed');

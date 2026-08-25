@@ -89,6 +89,19 @@ async function writeSettingsJson(filePath: string, data: unknown): Promise<void>
  * Missing files are treated as empty and return defaults on read.
  * Updates use deep merge for nested objects like keyboardShortcuts and apiKeys.
  */
+/**
+ * The project registry - the fields dev and prod share and that a stale client
+ * can destroy by writing back a list it built before someone else's change.
+ */
+export const REGISTRY_FIELDS = [
+  'projects',
+  'currentProjectId',
+  'projectHistory',
+  'projectHistoryIndex',
+  'recentFolders',
+  'lastProjectDir',
+] as const satisfies readonly (keyof GlobalSettings)[];
+
 export class SettingsService {
   private dataDir: string;
 
@@ -325,6 +338,15 @@ export class SettingsService {
         ...sanitizedUpdates.phaseModels,
       };
     }
+
+    // The revision belongs to the server, not to whoever is writing. Bump it
+    // whenever the registry actually changes so a client that wrote an earlier
+    // version can be told its view is behind. Comparing serialised values keeps
+    // no-op syncs - which the UI sends constantly - from inflating it.
+    const registryChanged = REGISTRY_FIELDS.some(
+      (field) => JSON.stringify(updated[field]) !== JSON.stringify(current[field])
+    );
+    updated.projectsRevision = (current.projectsRevision ?? 0) + (registryChanged ? 1 : 0);
 
     await writeSettingsJson(settingsPath, updated);
     logger.info('Global settings updated');
@@ -593,7 +615,7 @@ export class SettingsService {
           setupState.skipClaudeSetup !== undefined
             ? (setupState.skipClaudeSetup as boolean)
             : false,
-        theme: (appState.theme as GlobalSettings['theme']) || 'dark',
+        theme: (appState.theme as GlobalSettings['theme']) || 'catppuccin',
         sidebarOpen: appState.sidebarOpen !== undefined ? (appState.sidebarOpen as boolean) : true,
         chatHistoryOpen: (appState.chatHistoryOpen as boolean) || false,
         maxConcurrency: (appState.maxConcurrency as number) || 3,
