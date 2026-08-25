@@ -377,6 +377,30 @@ export interface DevServerLogsResponse {
 
 type EventCallback = (payload: unknown) => void;
 
+/**
+ * The setup gate's verdict, mirrored from `GET /api/setup/readiness`.
+ *
+ * `ready` means everything was detected; `blocking` means the app genuinely
+ * cannot work (no Claude credential). GitHub missing is worth saying out loud
+ * but is not, on its own, a reason to stop.
+ */
+export interface SetupReadinessPart {
+  ok: boolean;
+  installed: boolean;
+  authenticated: boolean;
+  detail: string;
+  fix: string;
+}
+
+export interface SetupReadinessResponse {
+  success: boolean;
+  ready: boolean;
+  blocking: boolean;
+  claude: SetupReadinessPart & { method: string; version: string | null };
+  github: SetupReadinessPart & { user: string | null };
+  error?: string;
+}
+
 interface EnhancePromptResult {
   success: boolean;
   enhancedText?: string;
@@ -1003,6 +1027,13 @@ export class HttpApiClient implements ElectronAPI {
       user: string | null;
       error?: string;
     }> => this.get('/api/setup/gh-status'),
+
+    /**
+     * One verdict for the setup gate. `blocking` is narrower than `ready`:
+     * only a missing Claude credential actually stops the app.
+     */
+    getReadiness: (refresh = false): Promise<SetupReadinessResponse> =>
+      this.get(`/api/setup/readiness${refresh ? '?refresh=true' : ''}`),
 
     // Cursor CLI methods
     getCursorStatus: (): Promise<{

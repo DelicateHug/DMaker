@@ -184,6 +184,26 @@ dev  UI 3017 -> dev  server 3019 --/   (dev never reaches it — it is read-only
 
 Each feature executes in an isolated git worktree, created via `@dmaker/git-utils`. This protects the main branch during AI agent execution.
 
+### Setup Detection, Not a Setup Wizard
+
+There is no first-run gate. On boot the UI asks `GET /api/setup/readiness`,
+which reports one verdict built from the same Claude and `gh` probes the
+settings page uses:
+
+- **Both detected** - `setupComplete` is set silently and nothing is shown.
+  Theme selection is skipped too; the default theme applies and Settings can
+  change it.
+- **Claude missing** - `blocking: true`. `SetupGate` raises a modal naming what
+  is missing with the command to fix it. Without a Claude credential no agent
+  can run, so this one waits.
+- **Only GitHub missing** - reported as optional. Local worktrees work fine
+  without `gh`; only PR and issue features need it.
+- **Already complete, something regressed** - a toast, not a wall.
+
+The wizard itself still lives at `/setup` and can be visited deliberately.
+This matters most for the dev/prod pair: two data directories on one machine
+used to mean two identical wizards for one set of credentials.
+
 ### Context Files
 
 Project-specific rules are stored in `.dmaker/context/` and automatically loaded into agent prompts via `loadContextFiles()` from `@dmaker/utils`.

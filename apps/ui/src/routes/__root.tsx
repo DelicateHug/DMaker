@@ -32,6 +32,7 @@ import { LoadingState } from '@/components/ui/loading-state';
 import { Button } from '@/components/ui/button';
 import { AppSidebar } from '@/components/layout/sidebar/app-sidebar';
 import { EnvironmentBar } from '@/components/layout/environment-bar';
+import { SetupGate } from '@/components/layout/setup-gate';
 import { CommandPalette } from '@/components/layout/command-palette';
 import { CenterTabs } from '@/components/center/center-tabs';
 import { CenterPanes } from '@/components/center/center-panes';
@@ -445,20 +446,12 @@ function RootLayoutContent() {
   // so the old standalone page just lands on the board.
   const RETIRED_ROUTES = ['/github-issues'];
 
-  // Simplified routing: no auth gates, just setup check
-  // Also redirects old view routes to board + layer
+  // Routing has no gates at all now. Setup used to sit in front of the board
+  // for every fresh DATA_DIR; SetupGate detects Claude and gh instead and only
+  // interrupts when something is genuinely missing. /setup still renders if you
+  // navigate to it deliberately, so the wizard remains available.
   useEffect(() => {
     if (!appReady || !settingsReady) return;
-
-    if (!setupComplete && location.pathname !== '/setup') {
-      navigate({ to: '/setup' });
-      return;
-    }
-
-    if (setupComplete && location.pathname === '/setup') {
-      navigate({ to: '/board' });
-      return;
-    }
 
     // The standalone project dashboard is gone — the board is the only home.
     if (location.pathname === '/dashboard') {
@@ -478,7 +471,7 @@ function RootLayoutContent() {
       openLayer(layerId as LayerId);
       navigate({ to: '/board' });
     }
-  }, [appReady, settingsReady, setupComplete, location.pathname, navigate]);
+  }, [appReady, settingsReady, location.pathname, navigate]);
 
   useEffect(() => {
     setGlobalFileBrowser(openFileBrowser);
@@ -753,6 +746,10 @@ function RootLayoutContent() {
             streamerPanelOpen ? 'translate-x-0' : 'translate-x-full'
           }`}
         />
+        {/* Silent when Claude and gh are both detected; a blocking dialog
+            only when something the app actually needs is missing. */}
+        <SetupGate enabled={appReady && settingsReady} />
+
         <Toaster richColors position="bottom-right" />
       </main>
     </>

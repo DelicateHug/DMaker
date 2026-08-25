@@ -126,14 +126,18 @@ export async function navigateToSettings(page: Page): Promise<void> {
 }
 
 /**
- * Navigate to the setup view directly
+ * Navigate to the setup view directly.
+ *
+ * The wizard is no longer a gate - SetupGate detects Claude and gh and only
+ * interrupts when something is missing - so `/` lands on the board and the
+ * wizard has to be asked for by route.
  * Note: This function uses setupFirstRun from project/setup to avoid circular dependency
  */
 export async function navigateToSetup(page: Page): Promise<void> {
   // Dynamic import to avoid circular dependency
   const { setupFirstRun } = await import('../project/setup');
   await setupFirstRun(page);
-  await page.goto('/');
+  await page.goto('/setup');
   await page.waitForLoadState('load');
   await waitForElement(page, 'setup-view', { timeout: 10000 });
 }

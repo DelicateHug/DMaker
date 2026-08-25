@@ -1239,6 +1239,136 @@ function createGhStatusHandler() {
   };
 }
 
+// ============================================================================
+// Readiness (drives the setup gate)
+// ============================================================================
+
+/**
+ * The setup gate asks exactly one question - can this install actually do any
+ * work? - so it gets a verdict back rather than raw status, and the UI never
+ * has to re-derive "is this good enough" from six different status shapes.
+ *
+ * `blocking` is deliberately narrower than `ready`: Claude is what agents run
+ * on, so missing auth there stops everything. GitHub only gates PR and issue
+ * features, and plain local worktrees work fine without it, so it is reported
+ * as missing without holding the app hostage.
+ */
+export interface SetupReadinessPart {
+  ok: boolean;
+  installed: boolean;
+  authenticated: boolean;
+  detail: string;
+  fix: string;
+}
+
+export interface SetupReadiness {
+  ready: boolean;
+  blocking: boolean;
+  claude: SetupReadinessPart & { method: string; version: string | null };
+  github: SetupReadinessPart & { user: string | null };
+}
+
+// Detection shells out (`where claude`, `gh auth status`), which is slow enough
+// to matter when both halves of the dev/prod pair boot at once. A short TTL
+// collapses a burst of callers into one probe; an explicit recheck skips it.
+const READINESS_TTL_MS = 10_000;
+let readinessCache: { at: number; value: SetupReadiness } | null = null;
+
+async function getSetupReadiness(refresh = false): Promise<SetupReadiness> {
+  if (!refresh && readinessCache && Date.now() - readinessCache.at < READINESS_TTL_MS) {
+    return readinessCache.value;
+  }
+
+  // One slow probe should not hide the other's answer, so both run together and
+  // a thrown probe degrades to "not detected" rather than failing the request.
+  const [claudeStatus, ghStatus] = await Promise.all([
+    getClaudeStatus().catch((error: unknown) => {
+      logError(error, 'Readiness: Claude probe failed');
+      return null;
+    }),
+    getGhStatus().catch((error: unknown) => {
+      logError(error, 'Readiness: GitHub probe failed');
+      return null;
+    }),
+  ]);
+
+  const claudeAuthed = claudeStatus?.auth.authenticated ?? false;
+  const claudeInstalled = claudeStatus?.installed ?? false;
+
+  // Auth is the real gate, not the CLI: the Agent SDK ships its own runtime, so
+  // an ANTHROPIC_API_KEY with no `claude` on PATH is a perfectly working setup.
+  const claude = {
+    ok: claudeAuthed,
+    installed: claudeInstalled,
+    authenticated: claudeAuthed,
+    method: claudeStatus?.auth.method ?? 'none',
+    version: claudeStatus?.version || null,
+    detail: claudeAuthed
+      ? describeClaudeMethod(claudeStatus?.auth.method ?? 'none')
+      : claudeInstalled
+        ? 'Claude Code is installed but not signed in.'
+        : 'No Claude credentials found.',
+    fix: claudeInstalled ? 'claude login' : 'npm install -g @anthropic-ai/claude-code',
+  };
+
+  const ghInstalled = ghStatus?.installed ?? false;
+  const ghAuthed = ghStatus?.authenticated ?? false;
+
+  const github = {
+    ok: ghInstalled && ghAuthed,
+    installed: ghInstalled,
+    authenticated: ghAuthed,
+    user: ghStatus?.user ?? null,
+    detail: ghAuthed
+      ? `Signed in as ${ghStatus?.user ?? 'a GitHub account'}.`
+      : ghInstalled
+        ? 'GitHub CLI is installed but not signed in.'
+        : 'GitHub CLI (gh) was not found.',
+    fix: ghInstalled ? 'gh auth login' : 'winget install GitHub.cli',
+  };
+
+  const value: SetupReadiness = {
+    ready: claude.ok && github.ok,
+    blocking: !claude.ok,
+    claude,
+    github,
+  };
+
+  readinessCache = { at: Date.now(), value };
+  return value;
+}
+
+function describeClaudeMethod(method: string): string {
+  switch (method) {
+    case 'oauth_token_env':
+      return 'Signed in via CLAUDE_CODE_OAUTH_TOKEN.';
+    case 'oauth_token':
+      return 'Signed in with a stored OAuth token.';
+    case 'api_key_env':
+      return 'Using ANTHROPIC_API_KEY from the environment.';
+    case 'api_key':
+      return 'Using a stored Anthropic API key.';
+    case 'credentials_file':
+      return 'Signed in via the Claude credentials file.';
+    case 'cli_authenticated':
+      return 'Signed in through the Claude Code CLI.';
+    default:
+      return 'Authenticated.';
+  }
+}
+
+function createReadinessHandler() {
+  return async (req: Request, res: Response): Promise<void> => {
+    try {
+      const readiness = await getSetupReadiness(req.query.refresh === 'true');
+      res.json({ success: true, ...readiness });
+    } catch (error) {
+      logError(error, 'Get setup readiness failed');
+      res.status(500).json({ success: false, error: getErrorMessage(error) });
+    }
+  };
+}
+
 function createCursorStatusHandler() {
   const installCommand = 'curl https://cursor.com/install -fsS | bash';
   const loginCommand = 'cursor-agent login';
@@ -2149,6 +2279,9 @@ export function createSetupRoutes(): Router {
   router.post('/verify-claude-auth', createVerifyClaudeAuthHandler());
   router.post('/verify-codex-auth', createVerifyCodexAuthHandler());
   router.get('/gh-status', createGhStatusHandler());
+
+  // One verdict for the setup gate, so the UI never re-derives readiness.
+  router.get('/readiness', createReadinessHandler());
 
   // Cursor CLI routes
   router.get('/cursor-status', createCursorStatusHandler());
