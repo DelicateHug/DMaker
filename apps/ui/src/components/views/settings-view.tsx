@@ -13,6 +13,7 @@ import { TerminalSection } from './settings-view/terminal/terminal-section';
 import { KeyboardShortcutsSection } from './settings-view/keyboard-shortcuts/keyboard-shortcuts-section';
 import { FeatureDefaultsSection } from './settings-view/feature-defaults/feature-defaults-section';
 import { WorktreesSection } from './settings-view/worktrees/worktrees-section';
+import { GitHubSection } from './settings-view/github/github-section';
 import { AccountSection } from './settings-view/account/account-section';
 import { SecuritySection } from './settings-view/security/security-section';
 import { DeveloperSection } from './settings-view/developer/developer-section';
@@ -191,6 +192,8 @@ export function SettingsView() {
         );
       case 'worktrees':
         return <WorktreesSection />;
+      case 'github':
+        return <GitHubSection />;
       case 'account':
         return <AccountSection />;
       case 'security':

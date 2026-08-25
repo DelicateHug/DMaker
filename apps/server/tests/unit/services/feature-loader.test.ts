@@ -592,6 +592,155 @@ describe('feature-loader.ts', () => {
     });
   });
 
+  describe('archive / unarchive', () => {
+    beforeEach(() => {
+      vi.spyOn(loader, 'resolveFeatureDir').mockResolvedValue(null);
+      vi.spyOn(loader, 'moveFeatureToStatusDir').mockResolvedValue(undefined);
+      vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+    });
+
+    it('should archive a feature, remembering where it came from', async () => {
+      vi.mocked(fs.readFile).mockResolvedValue(
+        JSON.stringify({
+          id: 'feature-123',
+          category: 'ui',
+          description: 'Add dark mode',
+          status: 'in_progress',
+        })
+      );
+
+      const result = await loader.archive(testProjectPath, 'feature-123');
+
+      expect(result?.status).toBe('archived');
+      expect(result?.archivedFrom).toBe('in_progress');
+      expect(result?.archivedAt).toBeTruthy();
+      // Nothing is removed — archiving is a move, not a delete.
+      expect(fs.rm).not.toHaveBeenCalled();
+      expect(loader.moveFeatureToStatusDir).toHaveBeenCalledWith(
+        testProjectPath,
+        'feature-123',
+        'archived'
+      );
+    });
+
+    it('should not overwrite archivedFrom when archiving twice', async () => {
+      vi.mocked(fs.readFile).mockResolvedValue(
+        JSON.stringify({
+          id: 'feature-123',
+          category: 'ui',
+          description: 'Add dark mode',
+          status: 'archived',
+          archivedFrom: 'backlog',
+        })
+      );
+
+      const result = await loader.archive(testProjectPath, 'feature-123');
+
+      expect(result?.archivedFrom).toBe('backlog');
+      expect(fs.writeFile).not.toHaveBeenCalled();
+    });
+
+    it('should return null when the feature is gone', async () => {
+      const error: any = new Error('File not found');
+      error.code = 'ENOENT';
+      vi.mocked(fs.readFile).mockRejectedValue(error);
+
+      const result = await loader.archive(testProjectPath, 'missing');
+
+      expect(result).toBeNull();
+    });
+
+    it('should restore to the remembered status', async () => {
+      vi.mocked(fs.readFile).mockResolvedValue(
+        JSON.stringify({
+          id: 'feature-123',
+          category: 'ui',
+          description: 'Add dark mode',
+          status: 'archived',
+          archivedFrom: 'in_progress',
+          archivedAt: '2026-08-01T00:00:00.000Z',
+        })
+      );
+
+      const result = await loader.unarchive(testProjectPath, 'feature-123');
+
+      expect(result?.status).toBe('in_progress');
+      expect(result?.archivedAt).toBeUndefined();
+      expect(result?.archivedFrom).toBeUndefined();
+    });
+
+    it('should restore to an explicit status when one is given', async () => {
+      vi.mocked(fs.readFile).mockResolvedValue(
+        JSON.stringify({
+          id: 'feature-123',
+          category: 'ui',
+          description: 'Add dark mode',
+          status: 'archived',
+          archivedFrom: 'in_progress',
+        })
+      );
+
+      const result = await loader.unarchive(testProjectPath, 'feature-123', 'backlog');
+
+      expect(result?.status).toBe('backlog');
+    });
+
+    it('should fall back to the backlog when nothing was remembered', async () => {
+      vi.mocked(fs.readFile).mockResolvedValue(
+        JSON.stringify({
+          id: 'feature-123',
+          category: 'ui',
+          description: 'Add dark mode',
+          status: 'archived',
+        })
+      );
+
+      const result = await loader.unarchive(testProjectPath, 'feature-123');
+
+      expect(result?.status).toBe('backlog');
+    });
+  });
+
+  describe('getArchived', () => {
+    it('should return archived features newest first', async () => {
+      vi.spyOn(loader, 'getAll').mockResolvedValue([
+        {
+          id: 'older',
+          category: 'ui',
+          description: 'older',
+          status: 'archived',
+          archivedAt: '2026-08-01T00:00:00.000Z',
+        },
+        {
+          id: 'newer',
+          category: 'ui',
+          description: 'newer',
+          status: 'archived',
+          archivedAt: '2026-08-20T00:00:00.000Z',
+        },
+      ] as any);
+
+      const result = await loader.getArchived(testProjectPath);
+
+      expect(result.map((f) => f.id)).toEqual(['newer', 'older']);
+      expect(loader.getAll).toHaveBeenCalledWith(testProjectPath, {
+        includeStatuses: ['archived'],
+      });
+    });
+
+    it('should drop anything whose status disagrees with the directory', async () => {
+      vi.spyOn(loader, 'getAll').mockResolvedValue([
+        { id: 'archived-one', category: 'ui', description: 'a', status: 'archived' },
+        // A half-finished move can leave a live feature under archived/.
+        { id: 'live-one', category: 'ui', description: 'b', status: 'backlog' },
+      ] as any);
+
+      const result = await loader.getArchived(testProjectPath);
+
+      expect(result.map((f) => f.id)).toEqual(['archived-one']);
+    });
+  });
+
   describe('getAgentOutput', () => {
     it('should return agent output content', async () => {
       vi.mocked(fs.readFile).mockResolvedValue('Agent output content');

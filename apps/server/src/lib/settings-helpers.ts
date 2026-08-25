@@ -14,6 +14,7 @@ import {
   mergeCommitMessagePrompts,
   mergeTitleGenerationPrompts,
   mergeIssueValidationPrompts,
+  mergeIssueDraftPrompts,
   mergeIdeationPrompts,
   mergeAppSpecPrompts,
   mergeContextDescriptionPrompts,
@@ -229,6 +230,7 @@ export async function getPromptCustomization(
   commitMessage: ReturnType<typeof mergeCommitMessagePrompts>;
   titleGeneration: ReturnType<typeof mergeTitleGenerationPrompts>;
   issueValidation: ReturnType<typeof mergeIssueValidationPrompts>;
+  issueDraft: ReturnType<typeof mergeIssueDraftPrompts>;
   ideation: ReturnType<typeof mergeIdeationPrompts>;
   appSpec: ReturnType<typeof mergeAppSpecPrompts>;
   contextDescription: ReturnType<typeof mergeContextDescriptionPrompts>;
@@ -258,6 +260,7 @@ export async function getPromptCustomization(
     commitMessage: mergeCommitMessagePrompts(customization.commitMessage),
     titleGeneration: mergeTitleGenerationPrompts(customization.titleGeneration),
     issueValidation: mergeIssueValidationPrompts(customization.issueValidation),
+    issueDraft: mergeIssueDraftPrompts(customization.issueDraft),
     ideation: mergeIdeationPrompts(customization.ideation),
     appSpec: mergeAppSpecPrompts(customization.appSpec),
     contextDescription: mergeContextDescriptionPrompts(customization.contextDescription),

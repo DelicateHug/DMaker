@@ -33,7 +33,12 @@ fi
 
 # Port configuration
 DEFAULT_WEB_PORT=3007
-DEFAULT_SERVER_PORT=3008
+# Must match the production pair the app itself assumes (apps/ui/src/main.ts,
+# http-api-client.ts) and RESERVED_PORTS in @dmaker/types, which tells feature
+# agents which ports they must never kill. The backend default was 3008, a port
+# nothing else in the app referred to, so a launcher-started server sat outside
+# that protection.
+DEFAULT_SERVER_PORT=3009
 WEB_PORT=$DEFAULT_WEB_PORT
 SERVER_PORT=$DEFAULT_SERVER_PORT
 

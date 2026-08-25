@@ -24,6 +24,7 @@ import {
   ChevronUp,
   History,
   Activity,
+  MessageCircleQuestion,
 } from 'lucide-react';
 import { getElectronAPI } from '@/lib/electron';
 import { LogViewer } from '@/components/ui/log-viewer';
@@ -33,8 +34,15 @@ import { Markdown } from '@/components/ui/markdown';
 import { useAppStore } from '@/store/app-store';
 import { extractSummary, extractAllSummaries, type SummaryEntry } from '@/lib/log-parser';
 import type { AutoModeEvent } from '@/types/electron';
-import type { SummaryHistoryEntry, ExecutionMetrics } from '@dmaker/types';
+import type {
+  AgentQuestion,
+  Feature,
+  GitHubIssueDraft,
+  SummaryHistoryEntry,
+  ExecutionMetrics,
+} from '@dmaker/types';
 import { MetricsPanel } from '@/components/ui/metrics-panel';
+import { AgentQuestionsPanel } from '../components/agent-questions-panel';
 
 /** Generates a timestamp marker in the format recognized by the log-parser: [timestamp:ISO8601] */
 function formatTimestamp(): string {
@@ -169,7 +177,10 @@ interface AgentOutputModalProps {
   onNumberKeyPress?: (key: string) => void;
   /** Project path - if not provided, falls back to window.__currentProject for backward compatibility */
   projectPath?: string;
-  /** Optional feature data from the store to display plan tasks immediately */
+  /**
+   * Optional feature data from the store, so plan tasks and outstanding
+   * questions render before the first fetch lands.
+   */
   feature?: {
     planSpec?: {
       tasks?: Array<{
@@ -182,10 +193,13 @@ interface AgentOutputModalProps {
       tasksCompleted?: number;
       currentTaskId?: string;
     };
+    agentQuestions?: AgentQuestion[];
+    githubIssue?: { number: number };
+    githubIssueDraft?: GitHubIssueDraft;
   };
 }
 
-type ViewMode = 'summary' | 'plan' | 'parsed' | 'raw' | 'changes' | 'metrics';
+type ViewMode = 'summary' | 'plan' | 'parsed' | 'raw' | 'changes' | 'metrics' | 'questions';
 
 /** Character limit for truncated description */
 const DESCRIPTION_TRUNCATE_LENGTH = 200;
@@ -250,8 +264,29 @@ export function AgentOutputModal({
     return { shouldTruncate, truncatedText };
   }, [featureDescription]);
 
-  // Determine the effective view mode - default to summary if available, otherwise parsed (logs)
-  const effectiveViewMode = viewMode ?? (summary ? 'summary' : output ? 'parsed' : 'summary');
+  /**
+   * Questions the agent is still waiting on.
+   *
+   * Read from the feature passed in rather than fetched here — the panel does
+   * its own polling once opened; this is only for the tab badge, and for
+   * opening straight onto the tab when something needs answering.
+   */
+  const outstandingQuestionCount = useMemo(() => {
+    const questions = featureProp?.agentQuestions || [];
+    return questions.filter((q) => !q.answeredAt && !q.skipped).length;
+  }, [featureProp]);
+
+  // Determine the effective view mode. An unanswered question outranks the
+  // summary: the task is blocked on it, so it is what the user came to see.
+  const effectiveViewMode =
+    viewMode ??
+    (outstandingQuestionCount > 0
+      ? 'questions'
+      : summary
+        ? 'summary'
+        : output
+          ? 'parsed'
+          : 'summary');
   const scrollRef = useRef<HTMLDivElement>(null);
   const autoScrollRef = useRef(true);
   /** Reactive mirror of autoScrollRef so the status indicator re-renders on change */
@@ -719,6 +754,25 @@ export function AgentOutputModal({
                 <FileText className="w-3.5 h-3.5" />
                 Raw
               </button>
+              {!isBacklogPlan && (
+                <button
+                  onClick={() => setViewMode('questions')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-200 whitespace-nowrap border ${
+                    effectiveViewMode === 'questions'
+                      ? 'bg-primary text-primary-foreground shadow-md border-primary/50'
+                      : 'text-foreground/70 hover:text-foreground hover:bg-accent border-transparent'
+                  } focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1`}
+                  data-testid="view-mode-questions"
+                >
+                  <MessageCircleQuestion className="w-3.5 h-3.5" />
+                  Questions
+                  {outstandingQuestionCount > 0 && (
+                    <span className="ml-0.5 px-1.5 py-0.5 bg-amber-500 text-white rounded-full text-[10px] leading-none font-bold">
+                      {outstandingQuestionCount}
+                    </span>
+                  )}
+                </button>
+              )}
               <button
                 onClick={() => setViewMode('metrics')}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-200 whitespace-nowrap border ${
@@ -810,6 +864,21 @@ export function AgentOutputModal({
             ) : (
               <div className="flex items-center justify-center min-h-[150px] text-muted-foreground">
                 No summary available yet.
+              </div>
+            )}
+          </div>
+        ) : effectiveViewMode === 'questions' ? (
+          <div className="flex-1 min-h-0 sm:min-h-[200px] sm:max-h-[60vh] overflow-y-auto scrollbar-visible px-1 py-1">
+            {projectPath ? (
+              <AgentQuestionsPanel
+                projectPath={projectPath}
+                featureId={featureId}
+                initialFeature={(featureProp as Feature | undefined) ?? null}
+              />
+            ) : (
+              <div className="flex items-center justify-center h-full text-muted-foreground">
+                <Loader2 className="w-6 h-6 animate-spin mr-2" />
+                Loading...
               </div>
             )}
           </div>

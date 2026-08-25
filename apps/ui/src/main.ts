@@ -14,6 +14,7 @@ import http, { Server } from 'http';
 import net from 'net';
 import { app, BrowserWindow, ipcMain, dialog, shell, screen, Tray, nativeImage } from 'electron';
 import { createLogger } from '@dmaker/utils/logger';
+import { STATIC_PORT, SERVER_PORT, DEV_STATIC_PORT, DEV_SERVER_PORT } from '@dmaker/types';
 import {
   findNodeExecutable,
   buildEnhancedPath,
@@ -76,16 +77,16 @@ let tray: Tray | null = null;
 // Dev mode uses different ports to allow running alongside production:
 // - Production: server 3009, static 3007
 // - Development: server 3019, static 3017
-const DEV_SERVER_PORT = 3019;
-const DEV_STATIC_PORT = 3017;
-const PROD_SERVER_PORT = 3009;
-const PROD_STATIC_PORT = 3007;
+// These four live in @dmaker/types because RESERVED_PORTS is built from them
+// and injected into the feature-agent prompt as "never kill these". Keeping
+// local copies here is how the backend ended up defaulting to a port the UI
+// never called.
 const DEFAULT_SERVER_PORT = parseInt(
-  process.env.PORT || (isDev ? String(DEV_SERVER_PORT) : String(PROD_SERVER_PORT)),
+  process.env.PORT || (isDev ? String(DEV_SERVER_PORT) : String(SERVER_PORT)),
   10
 );
 const DEFAULT_STATIC_PORT = parseInt(
-  process.env.TEST_PORT || (isDev ? String(DEV_STATIC_PORT) : String(PROD_STATIC_PORT)),
+  process.env.TEST_PORT || (isDev ? String(DEV_STATIC_PORT) : String(STATIC_PORT)),
   10
 );
 

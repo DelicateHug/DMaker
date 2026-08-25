@@ -33,16 +33,23 @@ import {
   GitBranch,
   SlidersHorizontal,
   ToggleRight,
+  X,
 } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/overlays';
 import { AgentSelector } from '@/components/ui/agent-selector';
 import { ContextFileSelector } from '@/components/ui/context-file-selector';
 import { toast } from 'sonner';
-import { useLayerStore } from '@/store/layer-store';
-import { cn } from '@/lib/utils';
+import { openLayer } from '@/store/layer-store';
+import { cn, pathsEqual } from '@/lib/utils';
 import { modelSupportsThinking } from '@/lib/utils';
 import { useAppStore, ModelAlias, ThinkingLevel, FeatureImage, Feature } from '@/store/app-store';
-import type { ReasoningEffort, PhaseModelEntry, AgentModel } from '@dmaker/types';
+import type {
+  FeatureStatusWithPipeline,
+  ReasoningEffort,
+  PhaseModelEntry,
+  AgentModel,
+} from '@dmaker/types';
+import type { AddFeatureContext } from '@/store/board-controls-store';
 import { supportsReasoningEffort } from '@dmaker/types';
 import {
   TestingTabContent,
@@ -91,7 +98,18 @@ type FeatureData = {
   waitForDependencies?: boolean; // If true, this feature won't start until all dependencies are completed/verified
   selectedProjectPath?: string; // The project path to add this feature to
   source: 'local' | 'github'; // Where this feature should be created
+  status?: FeatureStatusWithPipeline; // Status column to land in; omitted means 'local'
+  branchName?: string; // Existing branch to reuse instead of minting a new one
 };
+
+/** 'waiting_approval' -> 'Waiting Approval' */
+function formatStatusLabel(status: string): string {
+  return status
+    .split(/[_-]/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
 
 interface AddFeatureDialogProps {
   open: boolean;
@@ -123,6 +141,12 @@ interface AddFeatureDialogProps {
    * for new features (github if github mode is active, local otherwise).
    */
   activeModes?: ('local' | 'github')[];
+  /**
+   * Where the "new feature" gesture came from — a sidebar project, branch or
+   * status group. Pre-fills the matching fields; the user can clear the branch
+   * and status pills to fall back to the defaults.
+   */
+  context?: AddFeatureContext | null;
 }
 
 /**
@@ -146,6 +170,7 @@ export function AddFeatureDialog({
   selectedProject,
   showAllProjectsMode = false,
   activeModes = ['local'],
+  context = null,
 }: AddFeatureDialogProps) {
   const isSpawnMode = !!parentFeature;
 
@@ -198,6 +223,13 @@ export function AddFeatureDialog({
   );
   const [isProjectDropdownOpen, setIsProjectDropdownOpen] = useState(false);
 
+  // Branch / status carried in from the sidebar gesture. Held in state rather
+  // than read straight off `context` so the user can clear either pill.
+  const [contextBranch, setContextBranch] = useState<string | undefined>(undefined);
+  const [contextStatus, setContextStatus] = useState<FeatureStatusWithPipeline | undefined>(
+    undefined
+  );
+
   // Get defaults from store
   const { defaultFeatureModel, defaultAutoDeploy, defaultBuildRequired, defaultAgents } =
     useAppStore();
@@ -236,8 +268,20 @@ export function AddFeatureDialog({
       setChildDependencies([]);
       setWaitForDependencies(false);
 
-      // Sync the selected project from the board when dialog opens
-      setDialogSelectedProject(selectedProject ?? null);
+      // Sync the selected project from the board when dialog opens — unless
+      // the gesture named a project, which wins.
+      const contextProject = context?.projectPath
+        ? projects.find((project) => pathsEqual(project.path, context.projectPath!))
+        : undefined;
+      setDialogSelectedProject(contextProject ?? selectedProject ?? null);
+      setContextBranch(context?.branchName);
+      setContextStatus(context?.status);
+
+      // A gesture that already knows what the task is — the sidebar's "Fix
+      // with AI" on an out-of-sync branch — hands the dialog its text. Without
+      // one, whatever draft was left behind on the last close stays put.
+      if (context?.title !== undefined) setTitle(context.title);
+      if (context?.description !== undefined) setDescription(context.description);
 
       // Default source based on active board modes
       setSource(activeModes.includes('github') ? 'github' : 'local');
@@ -252,6 +296,8 @@ export function AddFeatureDialog({
     allFeatures,
     selectedProject,
     activeModes,
+    context,
+    projects,
   ]);
 
   const handleModelChange = (entry: PhaseModelEntry) => {
@@ -336,6 +382,8 @@ export function AddFeatureDialog({
       // Include selected project path for multi-project support
       selectedProjectPath: dialogSelectedProject?.path,
       source,
+      status: contextStatus,
+      branchName: contextBranch,
     };
   };
 
@@ -362,6 +410,8 @@ export function AddFeatureDialog({
     setShowDependencies(false);
     setShowOptionals(false);
     setSource(activeModes.includes('github') ? 'github' : 'local');
+    setContextBranch(undefined);
+    setContextStatus(undefined);
     onOpenChange(false);
   };
 
@@ -417,6 +467,54 @@ export function AddFeatureDialog({
         </DialogHeader>
 
         <div className="py-4 space-y-4 overflow-y-auto flex-1 min-h-0">
+          {/* Where this came from: the sidebar branch/status group that was
+              clicked. Each pill is removable — clearing the branch mints a
+              fresh worktree, clearing the status drops the feature in Local. */}
+          {(contextBranch || contextStatus) && (
+            <div
+              className="flex flex-wrap items-center gap-2 text-xs"
+              data-testid="add-feature-context"
+            >
+              <span className="text-muted-foreground">Creating in</span>
+              {contextBranch && (
+                <span
+                  className="flex items-center gap-1.5 rounded-md border border-brand-500/40 bg-brand-500/10 px-2 py-1 font-mono text-brand-500"
+                  data-testid="add-feature-context-branch"
+                >
+                  <GitBranch className="size-3 shrink-0" />
+                  <span className="max-w-[180px] truncate">{contextBranch}</span>
+                  <button
+                    type="button"
+                    onClick={() => setContextBranch(undefined)}
+                    className="cursor-pointer opacity-60 transition-opacity hover:opacity-100"
+                    title="Create a new worktree instead"
+                    data-testid="add-feature-context-branch-clear"
+                  >
+                    <X className="size-3" />
+                  </button>
+                </span>
+              )}
+              {contextStatus && (
+                <span
+                  className="flex items-center gap-1.5 rounded-md border border-border bg-background px-2 py-1 font-medium text-muted-foreground"
+                  data-testid="add-feature-context-status"
+                >
+                  <CircleDot className="size-3 shrink-0" />
+                  {formatStatusLabel(contextStatus)}
+                  <button
+                    type="button"
+                    onClick={() => setContextStatus(undefined)}
+                    className="cursor-pointer opacity-60 transition-opacity hover:opacity-100"
+                    title="Create in Local instead"
+                    data-testid="add-feature-context-status-clear"
+                  >
+                    <X className="size-3" />
+                  </button>
+                </span>
+              )}
+            </div>
+          )}
+
           {/* Ancestor Context Section - only in spawn mode */}
           {isSpawnMode && parentFeature && (
             <AncestorContextSection
@@ -568,7 +666,7 @@ export function AddFeatureDialog({
                           type="button"
                           onClick={() => {
                             onOpenChange(false);
-                            useLayerStore.getState().openLayer('settings');
+                            openLayer('settings');
                           }}
                           className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
                         >
@@ -715,6 +813,8 @@ export function AddFeatureDialog({
             <button
               type="button"
               onClick={() => setShowOptionals((v) => !v)}
+              data-testid="add-feature-more-options"
+              aria-expanded={showOptionals}
               className="flex items-center gap-1.5 text-sm font-medium text-foreground hover:text-foreground/80 transition-colors"
             >
               {showOptionals ? (
@@ -753,6 +853,8 @@ export function AddFeatureDialog({
                     <button
                       type="button"
                       onClick={() => setSource('local')}
+                      data-testid="feature-source-local"
+                      aria-pressed={source === 'local'}
                       className={cn(
                         'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors border',
                         source === 'local'
@@ -766,6 +868,8 @@ export function AddFeatureDialog({
                     <button
                       type="button"
                       onClick={() => setSource('github')}
+                      data-testid="feature-source-github"
+                      aria-pressed={source === 'github'}
                       className={cn(
                         'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors border',
                         source === 'github'

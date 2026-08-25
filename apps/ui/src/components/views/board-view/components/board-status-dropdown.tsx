@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { memo, useState, useCallback, useRef, useMemo } from 'react';
 import { cn } from '@/lib/utils';
-import { Check, ChevronDown, Minus, Plus, Trash2 } from 'lucide-react';
+import { Check, ChevronDown, Filter, Minus, Plus, Trash2, User, UserX, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -12,6 +12,14 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import type { StatusTabId, StatusTab } from '../hooks/use-board-status-tabs';
+import {
+  ASSIGNEE_ALL,
+  ASSIGNEE_ME,
+  ASSIGNEE_UNASSIGNED,
+  DEFAULT_ASSIGNEE_FILTER,
+  toggleAssigneeSelection,
+  type AssigneeOption,
+} from '../hooks/use-board-assignees';
 
 /** Base (non-deletable) status IDs */
 const BASE_STATUS_IDS = new Set<string>([
@@ -74,6 +82,21 @@ export interface BoardStatusDropdownProps {
    * Only pipeline statuses (not base statuses) can be deleted.
    */
   onDeleteStatus?: (tabId: StatusTabId) => void;
+  /**
+   * Render the trigger as a bare funnel icon instead of the dot + label +
+   * chevron. Used by the sidebar header, where space is tight.
+   */
+  iconOnly?: boolean;
+  /**
+   * Optional: who tasks can be filtered by. Built from the assignees actually
+   * present on the visible tasks, with "Me" and "Unassigned" leading the list.
+   * When omitted, the assignee section is not rendered at all.
+   */
+  assigneeOptions?: AssigneeOption[];
+  /** Currently committed assignee selection. `[ASSIGNEE_ALL]` means no narrowing. */
+  activeAssignees?: string[];
+  /** Commits a new assignee selection when the dropdown closes. */
+  onAssigneeChange?: (assigneeIds: string[]) => void;
 }
 
 /**
@@ -117,15 +140,12 @@ function InlineCountBadge({ count }: { count: number }) {
 type DiffState = 'unchanged' | 'added' | 'removed';
 
 /**
- * Compute the diff state for a single tab.
+ * Compute the diff state for one entry of a staged selection — a status tab or
+ * an assignee, both of which are plain string ids.
  */
-function getTabDiffState(
-  tabId: StatusTabId,
-  committedTabs: StatusTabId[],
-  stagedTabs: StatusTabId[]
-): DiffState {
-  const isCommitted = committedTabs.includes(tabId);
-  const isStaged = stagedTabs.includes(tabId);
+function getSelectionDiffState(id: string, committed: string[], staged: string[]): DiffState {
+  const isCommitted = committed.includes(id);
+  const isStaged = staged.includes(id);
 
   if (isCommitted && !isStaged) return 'removed';
   if (!isCommitted && isStaged) return 'added';
@@ -252,6 +272,59 @@ function StatusDropdownItem({
 }
 
 /**
+ * One row in the assignee section: checkbox, an icon that distinguishes the
+ * computed options from real people, the label, and how many visible tasks it
+ * matches.
+ */
+function AssigneeDropdownItem({
+  option,
+  isStaged,
+  diffState,
+  showCount = true,
+  onToggle,
+}: {
+  option: AssigneeOption;
+  isStaged: boolean;
+  diffState: DiffState;
+  showCount?: boolean;
+  onToggle: (assigneeId: string) => void;
+}) {
+  const Icon =
+    option.id === ASSIGNEE_ALL ? Users : option.id === ASSIGNEE_UNASSIGNED ? UserX : User;
+
+  return (
+    <DropdownMenuItem
+      onClick={(e) => {
+        e.preventDefault();
+        onToggle(option.id);
+      }}
+      className={cn(
+        'flex items-center gap-2 cursor-pointer min-h-[2.25rem]',
+        isStaged && 'bg-accent',
+        diffState === 'added' && 'bg-emerald-500/5',
+        diffState === 'removed' && 'bg-red-500/5'
+      )}
+      data-testid={`board-status-dropdown-assignee-${option.id}`}
+      role="option"
+      aria-selected={isStaged}
+    >
+      <CheckboxIndicator checked={isStaged} diffState={diffState} />
+      <Icon className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
+      <span
+        className={cn(
+          'flex-1 text-sm truncate',
+          diffState === 'removed' && 'text-muted-foreground line-through'
+        )}
+      >
+        {option.label}
+      </span>
+      {showCount && <InlineCountBadge count={option.count} />}
+      <DiffBadge diffState={diffState} />
+    </DropdownMenuItem>
+  );
+}
+
+/**
  * BoardStatusDropdown – a dropdown-menu variant for switching between board status columns.
  *
  * Maintains internal staged selection state so multiple toggles can be made before
@@ -286,8 +359,19 @@ export const BoardStatusDropdown = memo(function BoardStatusDropdown({
   dropdownLabel = 'Switch Status',
   onCreateStatus,
   onDeleteStatus,
+  iconOnly = false,
+  assigneeOptions,
+  activeAssignees = DEFAULT_ASSIGNEE_FILTER,
+  onAssigneeChange,
 }: BoardStatusDropdownProps) {
   const [open, setOpen] = useState(false);
+
+  // The assignee section only exists when the board offered one.
+  const showAssignees = !!onAssigneeChange && !!assigneeOptions;
+
+  // Staged assignee selection, committed on close alongside the statuses.
+  const [stagedAssignees, setStagedAssignees] = useState<string[]>(activeAssignees);
+  const stagedAssigneeRef = useRef<string[]>(activeAssignees);
 
   // Staged selection state – local copy while dropdown is open
   const [stagedTabs, setStagedTabs] = useState<StatusTabId[]>(activeTabs);
@@ -364,6 +448,8 @@ export const BoardStatusDropdown = memo(function BoardStatusDropdown({
         // Opening: copy current activeTabs to staged state
         setStagedTabs(activeTabs);
         stagedRef.current = activeTabs;
+        setStagedAssignees(activeAssignees);
+        stagedAssigneeRef.current = activeAssignees;
       } else {
         // Closing: commit staged selection to parent
         const staged = stagedRef.current;
@@ -373,13 +459,22 @@ export const BoardStatusDropdown = memo(function BoardStatusDropdown({
         if (changed) {
           onTabChange(staged);
         }
+
+        const stagedPeople = stagedAssigneeRef.current;
+        const assigneesChanged =
+          stagedPeople.length !== activeAssignees.length ||
+          stagedPeople.some((id) => !activeAssignees.includes(id));
+        if (assigneesChanged && onAssigneeChange) {
+          onAssigneeChange(stagedPeople);
+        }
+
         // Reset new-status input
         setShowNewStatusInput(false);
         setNewStatusName('');
       }
       setOpen(nextOpen);
     },
-    [activeTabs, onTabChange]
+    [activeTabs, onTabChange, activeAssignees, onAssigneeChange]
   );
 
   /**
@@ -409,6 +504,18 @@ export const BoardStatusDropdown = memo(function BoardStatusDropdown({
       }
 
       stagedRef.current = next;
+      return next;
+    });
+  }, []);
+
+  /**
+   * Toggle an assignee in the staged selection. Same staged-then-commit
+   * pattern as the statuses, so several people can be picked in one open.
+   */
+  const handleAssigneeToggle = useCallback((assigneeId: string) => {
+    setStagedAssignees((current) => {
+      const next = toggleAssigneeSelection(current, assigneeId);
+      stagedAssigneeRef.current = next;
       return next;
     });
   }, []);
@@ -452,8 +559,23 @@ export const BoardStatusDropdown = memo(function BoardStatusDropdown({
   // Used to indicate pending changes in the dropdown.
   const hasPendingChanges = useMemo(() => {
     if (stagedTabs.length !== activeTabs.length) return true;
-    return stagedTabs.some((id) => !activeTabs.includes(id));
-  }, [stagedTabs, activeTabs]);
+    if (stagedTabs.some((id) => !activeTabs.includes(id))) return true;
+    if (stagedAssignees.length !== activeAssignees.length) return true;
+    return stagedAssignees.some((id) => !activeAssignees.includes(id));
+  }, [stagedTabs, activeTabs, stagedAssignees, activeAssignees]);
+
+  // Trigger tooltip mentions the assignee narrowing, which is otherwise
+  // invisible from the collapsed funnel icon.
+  const assigneeSummary = useMemo(() => {
+    if (!showAssignees || activeAssignees.includes(ASSIGNEE_ALL)) return null;
+    if (activeAssignees.length === 1) {
+      const only = activeAssignees[0];
+      if (only === ASSIGNEE_ME) return 'Me';
+      if (only === ASSIGNEE_UNASSIGNED) return 'Unassigned';
+      return only;
+    }
+    return `${activeAssignees.length} assignees`;
+  }, [showAssignees, activeAssignees]);
 
   return (
     <DropdownMenu open={open} onOpenChange={handleOpenChange}>
@@ -462,21 +584,35 @@ export const BoardStatusDropdown = memo(function BoardStatusDropdown({
           variant="ghost"
           size="sm"
           className={cn(
-            'flex items-center gap-1.5 h-7 px-2',
+            'flex items-center gap-1.5 h-7',
+            iconOnly ? 'w-7 p-0 justify-center' : 'px-2',
             'hover:bg-accent/50 transition-colors duration-150',
             'font-medium text-xs',
             className
           )}
+          title={
+            iconOnly
+              ? `Filter tasks — ${triggerLabel}${assigneeSummary ? ` · ${assigneeSummary}` : ''}`
+              : undefined
+          }
           data-testid="board-status-dropdown-trigger"
         >
-          {/* Active status color dot */}
-          {activeTabConfig && <StatusColorDot colorClass={activeTabConfig.colorClass} size="md" />}
+          {iconOnly ? (
+            <Filter className="w-4 h-4 text-muted-foreground" />
+          ) : (
+            <>
+              {/* Active status color dot */}
+              {activeTabConfig && (
+                <StatusColorDot colorClass={activeTabConfig.colorClass} size="md" />
+              )}
 
-          {/* Active status label (multi-select aware) */}
-          <span className="max-w-[120px] truncate">{triggerLabel}</span>
+              {/* Active status label (multi-select aware) */}
+              <span className="max-w-[120px] truncate">{triggerLabel}</span>
 
-          {/* Chevron */}
-          <ChevronDown className="w-3 h-3 text-muted-foreground" />
+              {/* Chevron */}
+              <ChevronDown className="w-3 h-3 text-muted-foreground" />
+            </>
+          )}
         </Button>
       </DropdownMenuTrigger>
 
@@ -494,7 +630,7 @@ export const BoardStatusDropdown = memo(function BoardStatusDropdown({
         {/* Special tabs (All Statuses, Agents) */}
         {specialTabs.map((tab) => {
           const isStaged = stagedTabs.includes(tab.id);
-          const diffState = getTabDiffState(tab.id, activeTabs, stagedTabs);
+          const diffState = getSelectionDiffState(tab.id, activeTabs, stagedTabs);
           const count = tabCounts?.[tab.id];
           return (
             <StatusDropdownItem
@@ -517,7 +653,7 @@ export const BoardStatusDropdown = memo(function BoardStatusDropdown({
         </DropdownMenuLabel>
         {defaultTabs.map((tab) => {
           const isStaged = stagedTabs.includes(tab.id);
-          const diffState = getTabDiffState(tab.id, activeTabs, stagedTabs);
+          const diffState = getSelectionDiffState(tab.id, activeTabs, stagedTabs);
           const count = tabCounts?.[tab.id];
           return (
             <StatusDropdownItem
@@ -541,7 +677,7 @@ export const BoardStatusDropdown = memo(function BoardStatusDropdown({
             </DropdownMenuLabel>
             {customTabs.map((tab) => {
               const isStaged = stagedTabs.includes(tab.id);
-              const diffState = getTabDiffState(tab.id, activeTabs, stagedTabs);
+              const diffState = getSelectionDiffState(tab.id, activeTabs, stagedTabs);
               const count = tabCounts?.[tab.id];
               return (
                 <StatusDropdownItem
@@ -556,6 +692,40 @@ export const BoardStatusDropdown = memo(function BoardStatusDropdown({
                 />
               );
             })}
+          </>
+        )}
+
+        {/* Assignee section — who the task belongs to on GitHub */}
+        {showAssignees && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel className="text-[10px] font-medium text-muted-foreground/70 uppercase tracking-wider px-2 py-1">
+              Assignee
+            </DropdownMenuLabel>
+
+            <AssigneeDropdownItem
+              option={{ id: ASSIGNEE_ALL, label: 'Anyone', count: 0, isSpecial: true }}
+              isStaged={stagedAssignees.includes(ASSIGNEE_ALL)}
+              diffState={getSelectionDiffState(ASSIGNEE_ALL, activeAssignees, stagedAssignees)}
+              showCount={false}
+              onToggle={handleAssigneeToggle}
+            />
+
+            {assigneeOptions.map((option) => (
+              <AssigneeDropdownItem
+                key={option.id}
+                option={option}
+                isStaged={stagedAssignees.includes(option.id)}
+                diffState={getSelectionDiffState(option.id, activeAssignees, stagedAssignees)}
+                onToggle={handleAssigneeToggle}
+              />
+            ))}
+
+            {assigneeOptions.length === 0 && (
+              <div className="px-2 py-1.5 text-[11px] text-muted-foreground select-none">
+                No assignees on the visible tasks.
+              </div>
+            )}
           </>
         )}
 

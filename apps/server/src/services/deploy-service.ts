@@ -12,9 +12,11 @@
  */
 
 import { spawn, type ChildProcess } from 'child_process';
+import crypto from 'crypto';
 import path from 'path';
 import { getDmakerDir, secureFs } from '@dmaker/platform';
 import { createLogger } from '@dmaker/utils';
+import { ensureFrontmatter, generateScriptId, type ScriptMeta } from './deploy-script-meta.js';
 
 const logger = createLogger('DeployScriptRunner');
 
@@ -33,6 +35,15 @@ export type ScriptType = 'python' | 'powershell' | 'node' | 'shell' | 'batch';
 
 /** Metadata about a deploy script discovered in the deploy folder */
 export interface DeployScript {
+  /**
+   * Stable script id, read from (or stamped into) the script's frontmatter.
+   * Run history binds to this, so renaming a script keeps its runs.
+   */
+  id: string;
+  /** Display name from frontmatter, when the script declares one */
+  title?: string;
+  /** Description from frontmatter, when the script declares one */
+  description?: string;
   /** Script filename (e.g. "deploy-prod.sh") */
   name: string;
   /** Absolute path to the script file */
@@ -49,18 +60,27 @@ export interface DeployScript {
   folder: string;
 }
 
-/** Streaming event emitted during script execution */
+/**
+ * Streaming event emitted during script execution.
+ *
+ * Every event carries the `runId` of the execution that produced it, so a
+ * client watching several concurrent runs can route output to the right one.
+ */
 export type ScriptRunEvent =
-  | { type: 'start'; script: DeployScript }
-  | { type: 'stdout'; data: string }
-  | { type: 'stderr'; data: string }
-  | { type: 'done'; result: ScriptRunResult };
+  | { type: 'start'; runId: string; script: DeployScript }
+  | { type: 'stdout'; runId: string; data: string }
+  | { type: 'stderr'; runId: string; data: string }
+  | { type: 'done'; runId: string; result: ScriptRunResult };
 
 /** Callback for receiving streaming script execution events */
 export type ScriptRunCallback = (event: ScriptRunEvent) => void;
 
 /** Result of a single script execution */
 export interface ScriptRunResult {
+  /** Unique id for this execution */
+  runId: string;
+  /** Id of the script that was run (from its frontmatter) */
+  scriptId: string;
   /** Whether the script exited successfully (exit code 0) */
   success: boolean;
   /** The script that was executed */
@@ -85,10 +105,42 @@ export interface RunScriptOptions {
   projectPath: string;
   /** Script filename to execute (must exist in the deploy folder) */
   scriptName: string;
+  /**
+   * Id for this execution. Callers pass their own so they can correlate
+   * streamed events with the run they started; one is generated otherwise.
+   */
+  runId?: string;
   /** Timeout in milliseconds (defaults to 5 minutes) */
   timeout?: number;
   /** Optional callback for real-time streaming output */
   onEvent?: ScriptRunCallback;
+}
+
+/** A run currently in flight */
+interface ActiveRun {
+  runId: string;
+  scriptId: string;
+  scriptName: string;
+  projectPath: string;
+  startedAt: string;
+  child: ChildProcess;
+}
+
+/** Public view of a run in flight */
+export interface ActiveRunInfo {
+  runId: string;
+  scriptId: string;
+  scriptName: string;
+  projectPath: string;
+  startedAt: string;
+}
+
+/** Filters for querying run history */
+export interface HistoryQuery {
+  /** Maximum number of entries to return */
+  limit?: number;
+  /** Only return runs of this script */
+  scriptId?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -185,8 +237,15 @@ export class DeployScriptRunner {
   /** In-memory run history (most recent first) */
   private history: ScriptRunResult[] = [];
 
-  /** Currently running child process (if any), keyed by projectPath:scriptName */
-  private activeRuns = new Map<string, ChildProcess>();
+  /**
+   * Runs currently in flight, keyed by runId. Keying by run rather than by
+   * script is what lets several scripts — or the same script twice — run at
+   * once, each with its own output stream and stop button.
+   */
+  private activeRuns = new Map<string, ActiveRun>();
+
+  /** Runs the caller asked to stop, so their result can say so */
+  private cancelledRuns = new Set<string>();
 
   // -------------------------------------------------------------------------
   // Script discovery
@@ -277,8 +336,12 @@ export class DeployScriptRunner {
       const scriptName = folder ? `${folder}/${entry.name}` : entry.name;
 
       try {
+        const meta = await this.ensureScriptId(fullPath, ext);
         const stats = await secureFs.stat(fullPath);
         scripts.push({
+          id: meta.id,
+          title: meta.name,
+          description: meta.description,
           name: scriptName,
           path: fullPath,
           type: EXTENSION_TYPE_MAP[ext] || 'node',
@@ -291,6 +354,44 @@ export class DeployScriptRunner {
         logger.warn(`Could not stat script file ${fullPath}:`, statError);
       }
     }
+  }
+
+  // -------------------------------------------------------------------------
+  // Script identity
+  // -------------------------------------------------------------------------
+
+  /**
+   * Read a script's frontmatter, stamping a fresh id into the file when it
+   * has none.
+   *
+   * Discovery is where ids get assigned, so every script the UI ever shows
+   * already has a stable identity for its run history to hang off. A file we
+   * cannot write (permissions, read-only checkout) still gets an id for this
+   * process's lifetime — it just will not persist.
+   *
+   * @param scriptPath - Absolute path to the script file
+   * @param extension - Script extension, which decides the comment prefix
+   * @returns The script's frontmatter
+   */
+  private async ensureScriptId(scriptPath: string, extension: string): Promise<ScriptMeta> {
+    let content: string;
+    try {
+      content = String(await secureFs.readFile(scriptPath, 'utf-8'));
+    } catch (error) {
+      logger.warn(`Could not read script for frontmatter ${scriptPath}:`, error);
+      return { id: generateScriptId() };
+    }
+
+    const { meta, updatedContent } = ensureFrontmatter(content, extension);
+    if (updatedContent === null) return meta;
+
+    try {
+      await secureFs.writeFile(scriptPath, updatedContent, 'utf-8');
+      logger.info(`Stamped script id ${meta.id} into ${scriptPath}`);
+    } catch (error) {
+      logger.warn(`Could not stamp script id into ${scriptPath}:`, error);
+    }
+    return meta;
   }
 
   // -------------------------------------------------------------------------
@@ -309,6 +410,7 @@ export class DeployScriptRunner {
    */
   async runScript(options: RunScriptOptions): Promise<ScriptRunResult> {
     const { projectPath, scriptName, timeout = DEFAULT_TIMEOUT_MS, onEvent } = options;
+    const runId = options.runId || `run_${crypto.randomBytes(8).toString('hex')}`;
 
     const deployFolder = this.getDeployFolderPath(projectPath);
     const scriptPath = path.join(deployFolder, scriptName);
@@ -345,7 +447,12 @@ export class DeployScriptRunner {
     const lastSlash = scriptName.replace(/\\/g, '/').lastIndexOf('/');
     const folder = lastSlash >= 0 ? scriptName.replace(/\\/g, '/').substring(0, lastSlash) : '';
 
+    const meta = await this.ensureScriptId(scriptPath, ext);
+
     const script: DeployScript = {
+      id: meta.id,
+      title: meta.name,
+      description: meta.description,
       name: scriptName,
       path: scriptPath,
       type: EXTENSION_TYPE_MAP[ext] || 'node',
@@ -359,13 +466,13 @@ export class DeployScriptRunner {
     const startedAt = new Date().toISOString();
     const startTime = Date.now();
 
-    onEvent?.({ type: 'start', script });
+    onEvent?.({ type: 'start', runId, script });
 
-    const result = await this.spawnScript(script, projectPath, timeout, onEvent);
+    const result = await this.spawnScript(runId, script, projectPath, startedAt, timeout, onEvent);
     result.startedAt = startedAt;
     result.duration = Date.now() - startTime;
 
-    onEvent?.({ type: 'done', result });
+    onEvent?.({ type: 'done', runId, result });
 
     // Store in history
     this.addToHistory(result);
@@ -377,14 +484,15 @@ export class DeployScriptRunner {
    * Spawn a script process and capture its output.
    */
   private spawnScript(
+    runId: string,
     script: DeployScript,
     projectPath: string,
+    startedAt: string,
     timeout: number,
     onEvent?: ScriptRunCallback
   ): Promise<ScriptRunResult> {
     return new Promise<ScriptRunResult>((resolve) => {
       const { shell, args } = buildSpawnArgs(script.path, script.extension);
-      const runKey = `${projectPath}:${script.name}`;
 
       logger.info(`Running deploy script: ${script.name} (${shell} ${args.join(' ')})`);
 
@@ -400,7 +508,14 @@ export class DeployScriptRunner {
         ...(process.platform === 'win32' ? { windowsHide: true } : {}),
       });
 
-      this.activeRuns.set(runKey, child);
+      this.activeRuns.set(runId, {
+        runId,
+        scriptId: script.id,
+        scriptName: script.name,
+        projectPath,
+        startedAt,
+        child,
+      });
 
       let stdout = '';
       let stderr = '';
@@ -421,19 +536,21 @@ export class DeployScriptRunner {
       child.stdout?.on('data', (data: Buffer) => {
         const text = data.toString();
         stdout += text;
-        onEvent?.({ type: 'stdout', data: text });
+        onEvent?.({ type: 'stdout', runId, data: text });
       });
 
       child.stderr?.on('data', (data: Buffer) => {
         const text = data.toString();
         stderr += text;
-        onEvent?.({ type: 'stderr', data: text });
+        onEvent?.({ type: 'stderr', runId, data: text });
       });
 
       child.on('error', (error) => {
         clearTimeout(timeoutHandle);
-        this.activeRuns.delete(runKey);
+        this.activeRuns.delete(runId);
         resolve({
+          runId,
+          scriptId: script.id,
           success: false,
           script,
           stdout,
@@ -447,16 +564,35 @@ export class DeployScriptRunner {
 
       child.on('close', (code) => {
         clearTimeout(timeoutHandle);
-        this.activeRuns.delete(runKey);
+        const wasCancelled = this.cancelledRuns.delete(runId);
+        this.activeRuns.delete(runId);
 
         if (timedOut) {
           resolve({
+            runId,
+            scriptId: script.id,
             success: false,
             script,
             stdout,
             stderr,
             exitCode: null,
             error: `Script timed out after ${timeout}ms`,
+            duration: 0,
+            startedAt: '',
+          });
+          return;
+        }
+
+        if (wasCancelled) {
+          resolve({
+            runId,
+            scriptId: script.id,
+            success: false,
+            script,
+            stdout,
+            stderr,
+            exitCode: code,
+            error: 'Run cancelled',
             duration: 0,
             startedAt: '',
           });
@@ -484,6 +620,8 @@ export class DeployScriptRunner {
           }
         }
         resolve({
+          runId,
+          scriptId: script.id,
           success,
           script,
           stdout,
@@ -498,27 +636,105 @@ export class DeployScriptRunner {
   }
 
   // -------------------------------------------------------------------------
+  // Run control
+  // -------------------------------------------------------------------------
+
+  /**
+   * Cancel a run in flight.
+   *
+   * Sends SIGTERM, escalating to SIGKILL if the process is still alive five
+   * seconds later. The run still completes normally through `runScript`, but
+   * its result is marked as cancelled.
+   *
+   * @param runId - Id of the run to stop
+   * @returns Whether a matching run was found
+   */
+  cancelRun(runId: string): boolean {
+    const run = this.activeRuns.get(runId);
+    if (!run) return false;
+
+    logger.info(`Cancelling deploy run ${runId} (${run.scriptName})`);
+    this.cancelledRuns.add(runId);
+    run.child.kill('SIGTERM');
+    setTimeout(() => {
+      if (!run.child.killed) {
+        run.child.kill('SIGKILL');
+      }
+    }, 5000);
+    return true;
+  }
+
+  /**
+   * List the runs currently in flight.
+   *
+   * @param scriptId - Optionally narrow to one script
+   */
+  getActiveRuns(scriptId?: string): ActiveRunInfo[] {
+    const runs: ActiveRunInfo[] = [];
+    for (const run of this.activeRuns.values()) {
+      if (scriptId && run.scriptId !== scriptId) continue;
+      runs.push({
+        runId: run.runId,
+        scriptId: run.scriptId,
+        scriptName: run.scriptName,
+        projectPath: run.projectPath,
+        startedAt: run.startedAt,
+      });
+    }
+    return runs;
+  }
+
+  // -------------------------------------------------------------------------
   // Run history
   // -------------------------------------------------------------------------
 
   /**
    * Get the run history, most recent first.
    *
-   * @param limit - Maximum number of entries to return (default: all)
+   * @param query - A plain number is treated as a limit; an object may also
+   *   narrow the results to a single script.
    * @returns Array of past script run results
    */
-  getHistory(limit?: number): ScriptRunResult[] {
+  getHistory(query?: number | HistoryQuery): ScriptRunResult[] {
+    const { limit, scriptId } = typeof query === 'number' ? { limit: query } : (query ?? {});
+
+    const entries = scriptId
+      ? this.history.filter((run) => run.scriptId === scriptId)
+      : this.history;
+
     if (limit !== undefined && limit > 0) {
-      return this.history.slice(0, limit);
+      return entries.slice(0, limit);
     }
-    return [...this.history];
+    return [...entries];
   }
 
   /**
-   * Clear all run history.
+   * Clear run history.
+   *
+   * @param scriptId - Clear only this script's runs; omit to clear all
+   * @returns How many entries were removed
    */
-  clearHistory(): void {
-    this.history = [];
+  clearHistory(scriptId?: string): number {
+    if (!scriptId) {
+      const cleared = this.history.length;
+      this.history = [];
+      return cleared;
+    }
+    const before = this.history.length;
+    this.history = this.history.filter((run) => run.scriptId !== scriptId);
+    return before - this.history.length;
+  }
+
+  /**
+   * Remove a single run from the history.
+   *
+   * @param runId - Id of the run to drop
+   * @returns Whether a matching run was found
+   */
+  deleteRun(runId: string): boolean {
+    const before = this.history.length;
+    this.history = this.history.filter((run) => run.runId !== runId);
+    return this.history.length < before;
   }
 
   /**
@@ -539,11 +755,12 @@ export class DeployScriptRunner {
    * Kill all active script runs and clear history.
    */
   destroy(): void {
-    for (const [key, child] of this.activeRuns) {
-      logger.info(`Killing active deploy script: ${key}`);
-      child.kill('SIGTERM');
+    for (const run of this.activeRuns.values()) {
+      logger.info(`Killing active deploy script: ${run.scriptName} (${run.runId})`);
+      run.child.kill('SIGTERM');
     }
     this.activeRuns.clear();
+    this.cancelledRuns.clear();
     this.history = [];
   }
 }

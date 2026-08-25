@@ -3,8 +3,10 @@ import { Dialog, DialogContent } from '@/components/ui/overlays';
 import { getElectronAPI } from '@/lib/electron';
 import {
   CompletedFeaturesListView,
+  rowKey,
   type ClosedIssueWithProject,
 } from '../completed-features-list-view';
+import type { Feature } from '@dmaker/types';
 import { toast } from 'sonner';
 
 // ---------------------------------------------------------------------------
@@ -22,6 +24,37 @@ const CACHE_TTL_MS = 60_000; // 60 seconds
 
 function getCacheKey(paths: string[]): string {
   return [...paths].sort().join('|');
+}
+
+/**
+ * Present a locally archived task as a row in the closed list.
+ *
+ * Archived tasks and closed issues are two ways of saying "this is off the
+ * board"; showing them in one list is the only way a task that never got an
+ * issue is reachable at all.
+ */
+function archivedFeatureToRow(
+  feature: Feature,
+  projectPath: string,
+  projectName?: string
+): ClosedIssueWithProject {
+  const archivedAt = feature.archivedAt || feature.updatedAt || new Date().toISOString();
+  return {
+    number: feature.githubIssue?.number ?? 0,
+    title: feature.title?.trim() || feature.description?.slice(0, 100) || 'Untitled task',
+    state: 'closed',
+    author: { login: feature.owner?.name || '' },
+    createdAt: feature.startedAt || archivedAt,
+    closedAt: archivedAt,
+    labels: [],
+    url: feature.githubIssue?.url || '',
+    body: feature.description || '',
+    assignees: feature.claimedBy ? [{ login: feature.claimedBy }] : [],
+    projectPath,
+    projectName,
+    archivedFeatureId: feature.id,
+    archivedFrom: feature.archivedFrom,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -81,13 +114,39 @@ export function CompletedFeaturesModal({
       try {
         const results = await Promise.allSettled(
           paths.map(async (projectPath) => {
-            const result = await api.github!.listIssues(projectPath);
-            return { projectPath, result };
+            const [issues, archived] = await Promise.all([
+              api.github!.listIssues(projectPath),
+              // Archived tasks are local state; a project with none, or an
+              // older server without the endpoint, must not fail the fetch.
+              api.features?.listArchived
+                ? api.features.listArchived(projectPath).catch(() => null)
+                : Promise.resolve(null),
+            ]);
+            return { projectPath, result: issues, archived };
           })
         );
 
         const allClosed: ClosedIssueWithProject[] = [];
-        const seenUrls = new Set<string>();
+        const seenKeys = new Set<string>();
+        /** Issue numbers already represented by an archived task, per project. */
+        const claimedIssues = new Set<string>();
+
+        // Archived tasks first: when a task and its closed issue are the same
+        // thing, the archived row is the one that can restore both sides.
+        for (const settled of results) {
+          if (settled.status === 'rejected') continue;
+          const { projectPath, archived } = settled.value;
+          if (!archived?.success || !archived.features) continue;
+          const projectName = availableProjects?.get(projectPath);
+          for (const feature of archived.features) {
+            const row = archivedFeatureToRow(feature, projectPath, projectName);
+            const key = rowKey(row);
+            if (seenKeys.has(key)) continue;
+            seenKeys.add(key);
+            if (row.number > 0) claimedIssues.add(`${projectPath}#${row.number}`);
+            allClosed.push(row);
+          }
+        }
 
         for (const settled of results) {
           if (settled.status === 'rejected') continue;
@@ -95,9 +154,12 @@ export function CompletedFeaturesModal({
           if (result.success && result.closedIssues) {
             const projectName = availableProjects?.get(projectPath);
             for (const issue of result.closedIssues) {
-              if (seenUrls.has(issue.url)) continue;
-              seenUrls.add(issue.url);
-              allClosed.push({ ...issue, projectPath, projectName });
+              if (claimedIssues.has(`${projectPath}#${issue.number}`)) continue;
+              const row: ClosedIssueWithProject = { ...issue, projectPath, projectName };
+              const key = rowKey(row);
+              if (seenKeys.has(key)) continue;
+              seenKeys.add(key);
+              allClosed.push(row);
             }
           }
         }
@@ -110,7 +172,7 @@ export function CompletedFeaturesModal({
         setClosedIssues(allClosed);
         setLastFetchedAt(now);
       } catch {
-        setError('Failed to fetch closed issues');
+        setError('Failed to load archived tasks and closed issues');
       } finally {
         setIsLoading(false);
         fetchingRef.current = false;
@@ -164,14 +226,26 @@ export function CompletedFeaturesModal({
       if (!projectPath) return;
 
       const api = getElectronAPI();
-      if (!api.github?.reopenIssue) return;
+
+      // Restoring an archived task also reopens its issue (server side), so
+      // this is one call, not two.
+      const restore = issue.archivedFeatureId
+        ? () => api.features!.unarchive(projectPath, issue.archivedFeatureId!)
+        : api.github?.reopenIssue
+          ? () => api.github!.reopenIssue!(projectPath, issue.number)
+          : null;
+
+      if (!restore) return;
+
+      const verb = issue.archivedFeatureId ? 'restore' : 'reopen';
 
       try {
-        const result = await api.github.reopenIssue(projectPath, issue.number);
+        const result = await restore();
         if (result.success) {
           // Remove from local state and cache
           setClosedIssues((prev) => {
-            const updated = prev.filter((i) => i.url !== issue.url);
+            const key = rowKey(issue);
+            const updated = prev.filter((i) => rowKey(i) !== key);
             // Update cache too
             const paths = resolvePaths();
             if (paths.length > 0) {
@@ -183,14 +257,14 @@ export function CompletedFeaturesModal({
             }
             return updated;
           });
-          toast.success('Issue reopened', {
-            description: `#${issue.number} ${issue.title}`,
+          toast.success(issue.archivedFeatureId ? 'Task restored' : 'Issue reopened', {
+            description: issue.number > 0 ? `#${issue.number} ${issue.title}` : issue.title,
           });
         } else {
-          toast.error('Failed to reopen issue', { description: result.error });
+          toast.error(`Failed to ${verb}`, { description: result.error });
         }
       } catch {
-        toast.error('Failed to reopen issue');
+        toast.error(`Failed to ${verb}`);
       }
     },
     [currentProjectPath, resolvePaths]

@@ -26,7 +26,7 @@ import { GitBranch, Settings2 } from 'lucide-react';
 import { AgentSelector } from '@/components/ui/agent-selector';
 import { ContextFileSelector } from '@/components/ui/context-file-selector';
 import { toast } from 'sonner';
-import { useLayerStore } from '@/store/layer-store';
+import { openLayer } from '@/store/layer-store';
 import { modelSupportsThinking } from '@/lib/utils';
 import { Feature, ModelAlias, ThinkingLevel, useAppStore } from '@/store/app-store';
 import type { ReasoningEffort, PhaseModelEntry, DescriptionHistoryEntry } from '@dmaker/types';
@@ -406,7 +406,7 @@ export function EditFeatureDialog({
                       type="button"
                       onClick={() => {
                         onClose();
-                        useLayerStore.getState().openLayer('settings');
+                        openLayer('settings');
                       }}
                       className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
                     >

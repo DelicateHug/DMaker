@@ -28,6 +28,12 @@ import { simpleQuery } from '../providers/simple-query-service.js';
 
 const logger = createLogger('Agents');
 
+/**
+ * Folder DMaker writes its own generated assets into, so a project's
+ * .claude tree makes it obvious which definitions came from this app.
+ */
+export const DMAKER_NAMESPACE = 'dmaker';
+
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Unknown error';
 }
@@ -206,11 +212,17 @@ function createSaveAgentHandler(): (req: Request, res: Response) => Promise<void
         return;
       }
 
-      // Determine target directory and file path
-      const baseDir =
+      // Determine target directory and file path.
+      // New agents land in the DMaker namespace so it is obvious who created
+      // them; edits stay wherever the agent already lives.
+      const agentsRoot =
         body.scope === 'user'
           ? path.join(os.homedir(), '.claude', 'agents')
           : path.join(body.projectPath!, '.claude', 'agents');
+
+      const baseDir = body.originalFilePath
+        ? path.dirname(body.originalFilePath)
+        : path.join(agentsRoot, DMAKER_NAMESPACE);
 
       const targetPath = path.join(baseDir, `${safeName}.md`);
 

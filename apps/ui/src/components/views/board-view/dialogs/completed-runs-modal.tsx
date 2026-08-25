@@ -11,16 +11,7 @@ import { Badge } from '@/components/ui/layout';
 import { ScrollArea } from '@/components/ui/layout';
 import { DeployLogOutput } from '../components/deploy-log-output';
 import { cn } from '@/lib/utils';
-import {
-  CheckCircle2,
-  XCircle,
-  Clock,
-  Eye,
-  Trash2,
-  ChevronLeft,
-  CheckCircle2,
-  Terminal,
-} from 'lucide-react';
+import { CheckCircle2, XCircle, Clock, Eye, Trash2, ChevronLeft, Terminal } from 'lucide-react';
 
 // ============================================================================
 // Types

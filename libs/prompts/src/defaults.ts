@@ -18,13 +18,14 @@ import type {
   ResolvedCommitMessagePrompts,
   ResolvedTitleGenerationPrompts,
   ResolvedIssueValidationPrompts,
+  ResolvedIssueDraftPrompts,
   ResolvedIdeationPrompts,
   ResolvedAppSpecPrompts,
   ResolvedContextDescriptionPrompts,
   ResolvedSuggestionsPrompts,
   ResolvedTaskExecutionPrompts,
 } from '@dmaker/types';
-import { STATIC_PORT, SERVER_PORT } from '@dmaker/types';
+import { RESERVED_PORTS } from '@dmaker/types';
 
 /**
  * ========================================================================
@@ -298,7 +299,7 @@ This feature depends on: {{dependencies}}
 {{/if}}
 
 **CRITICAL - Port Protection:**
-NEVER kill or terminate processes running on ports ${STATIC_PORT} or ${SERVER_PORT}. These are reserved for the DMaker application. Killing these ports will crash DMaker and terminate this session.
+NEVER kill or terminate processes running on ports ${RESERVED_PORTS.join(', ')}. These are reserved for the DMaker application (UI and backend, in both dev and production). Killing these ports will crash DMaker and terminate this session.
 `;
 
 export const DEFAULT_AUTO_MODE_FOLLOW_UP_PROMPT_TEMPLATE = `## Follow-up on Feature Implementation
@@ -392,7 +393,7 @@ You have access to several tools:
 5. Guide users toward good software design principles
 
 **CRITICAL - Port Protection:**
-NEVER kill or terminate processes running on ports ${STATIC_PORT} or ${SERVER_PORT}. These are reserved for the DMaker application itself. Killing these ports will crash DMaker and terminate your session.
+NEVER kill or terminate processes running on ports ${RESERVED_PORTS.join(', ')}. These are reserved for the DMaker application itself (UI and backend, in both dev and production). Killing these ports will crash DMaker and terminate your session.
 
 Remember: You're a collaborative partner in the development process. Be helpful, clear, and thorough.`;
 
@@ -572,6 +573,48 @@ Rules:
  */
 export const DEFAULT_TITLE_GENERATION_PROMPTS: ResolvedTitleGenerationPrompts = {
   systemPrompt: DEFAULT_TITLE_GENERATION_SYSTEM_PROMPT,
+};
+
+/**
+ * ========================================================================
+ * GITHUB ISSUE DRAFTING PROMPTS
+ * ========================================================================
+ *
+ * Runs on Haiku the moment a task is added, in the background. The goal is a
+ * short, readable issue — not a spec. If the description is too thin to say
+ * what "done" looks like, the drafter asks the user instead of inventing
+ * requirements.
+ */
+
+export const DEFAULT_ISSUE_DRAFT_SYSTEM_PROMPT = `You write short GitHub issues from a developer's task note.
+
+You will be given a task title and description. Do ONE of two things:
+
+**A. Write the issue** — when the note says clearly enough what needs to change.
+**B. Ask for clarification** — ONLY when the note is so vague that you could not
+tell whether the finished work was right (e.g. "fix the thing", "make it better").
+
+Bias hard towards A. Most notes are good enough. Missing nice-to-have detail is
+not a reason to ask — a note that names what to change and roughly where is
+enough. Ask at most 2 questions, and only about what actually blocks writing
+the issue.
+
+## Issue style
+
+- Title: imperative, under 70 characters, no trailing period, no issue-tracker
+  prefixes like "[FEAT]".
+- Body: 1-3 short paragraphs or a handful of bullets. Plain markdown.
+- State what should change and why. Include acceptance criteria ONLY if the note
+  gave them.
+- Do NOT invent requirements, file paths, designs, effort estimates, or
+  implementation steps that the note did not mention.
+- Do NOT pad with headings like "## Overview" for a two-line issue.
+- Write it so a teammate skimming the issue list understands it in five seconds.
+
+Respond with JSON only, matching the requested schema. No prose outside the JSON.`;
+
+export const DEFAULT_ISSUE_DRAFT_PROMPTS: ResolvedIssueDraftPrompts = {
+  systemPrompt: DEFAULT_ISSUE_DRAFT_SYSTEM_PROMPT,
 };
 
 /**
@@ -1049,6 +1092,7 @@ export const DEFAULT_PROMPTS = {
   commitMessage: DEFAULT_COMMIT_MESSAGE_PROMPTS,
   titleGeneration: DEFAULT_TITLE_GENERATION_PROMPTS,
   issueValidation: DEFAULT_ISSUE_VALIDATION_PROMPTS,
+  issueDraft: DEFAULT_ISSUE_DRAFT_PROMPTS,
   ideation: DEFAULT_IDEATION_PROMPTS,
   appSpec: DEFAULT_APP_SPEC_PROMPTS,
   contextDescription: DEFAULT_CONTEXT_DESCRIPTION_PROMPTS,

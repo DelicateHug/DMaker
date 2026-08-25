@@ -29,7 +29,7 @@ test.describe('Project Creation', () => {
     cleanupTempDir(TEST_TEMP_DIR);
   });
 
-  test('should create a new blank project from welcome view', async ({ page }) => {
+  test('should create a new blank project from the board empty state', async ({ page }) => {
     const projectName = `test-project-${Date.now()}`;
 
     await setupWelcomeView(page, { workspaceDir: TEST_TEMP_DIR });
@@ -49,13 +49,15 @@ test.describe('Project Creation', () => {
 
     await authenticateForTests(page);
 
-    // Navigate directly to dashboard to avoid auto-open logic
-    await page.goto('/dashboard');
+    // The board is the only home now; with no project open it renders the
+    // project picker as its empty state.
+    await page.goto('/board');
     await page.waitForLoadState('load');
     await handleLoginScreenIfPresent(page);
 
-    // Wait for dashboard view
-    await expect(page.locator('[data-testid="dashboard-view"]')).toBeVisible({ timeout: 15000 });
+    await expect(page.locator('[data-testid="board-view-no-project"]')).toBeVisible({
+      timeout: 15000,
+    });
 
     await page.locator('[data-testid="create-new-project"]').click();
     await page.locator('[data-testid="quick-setup-option"]').click();
@@ -69,12 +71,11 @@ test.describe('Project Creation', () => {
 
     await expect(page.locator('[data-testid="board-view"]')).toBeVisible({ timeout: 15000 });
 
-    // Wait for project to be set as current and visible in the top navigation bar
-    // The project name appears in the project dropdown trigger
-    await expect(page.getByTestId('project-dropdown-trigger')).toBeVisible({ timeout: 15000 });
-
-    // Verify the project name is visible in the top bar by checking the dropdown trigger text
-    await expect(page.getByTestId('project-dropdown-trigger')).toContainText(projectName, {
+    // The top nav's project dropdown is gone. The current project names itself
+    // on the project view's centre tab, so open it and read the tab.
+    await page.locator('[data-testid="sidebar-project-view"]').first().click();
+    await expect(page.locator('[data-testid="project-view"]')).toBeVisible({ timeout: 15000 });
+    await expect(page.locator('[data-testid="center-tab-project"]')).toContainText(projectName, {
       timeout: 15000,
     });
 

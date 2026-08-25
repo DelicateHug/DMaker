@@ -7,7 +7,8 @@
  * 1. A feature in waiting_approval column shows the mark as verified button
  * 2. Clicking mark as verified moves the feature to the verified column
  *
- * Note: For waiting_approval features, the button is "mark-as-verified-{id}" not "manual-verify-{id}"
+ * Note: the move is made from the sidebar row's right-click menu — the
+ * per-card "Mark as Verified" button went with the kanban board.
  */
 
 import { test, expect } from '@playwright/test';
@@ -21,6 +22,8 @@ import {
   getKanbanColumn,
   authenticateForTests,
   handleLoginScreenIfPresent,
+  API_BASE_URL,
+  showAllStatuses,
 } from '../utils';
 
 const TEST_TEMP_DIR = createTempDirPath('manual-review-test');
@@ -123,11 +126,15 @@ test.describe('Feature Manual Review Flow', () => {
     await waitForNetworkIdle(page);
     await expect(page.locator('[data-testid="board-view"]')).toBeVisible({ timeout: 10000 });
 
-    // Verify we're on the correct project (project dropdown trigger shows project name)
-    await expect(page.getByTestId('project-dropdown-trigger')).toBeVisible({ timeout: 10000 });
-    await expect(page.getByTestId('project-dropdown-trigger')).toContainText(projectName, {
-      timeout: 10000,
-    });
+    // The funnel starts on a single status, so widen it before looking
+    // for a status group that is not the default one.
+    await showAllStatuses(page);
+
+    // There was a check here that the project dropdown named the right
+    // project. That dropdown went with the top nav, and the sidebar's project
+    // group cannot stand in for it: groups render only once they hold a
+    // feature, and this project has none until the API call below. Finding
+    // that feature in the sidebar afterwards proves the same thing.
 
     // Create the feature via HTTP API (writes to disk)
     const feature = {
@@ -143,7 +150,6 @@ test.describe('Feature Manual Review Flow', () => {
       priority: 2,
     };
 
-    const API_BASE_URL = process.env.VITE_SERVER_URL || 'http://localhost:3008';
     const createResponse = await page.request.post(`${API_BASE_URL}/api/features/create`, {
       data: { projectPath, feature },
       headers: { 'Content-Type': 'application/json' },
@@ -161,8 +167,14 @@ test.describe('Feature Manual Review Flow', () => {
     await waitForNetworkIdle(page);
     await expect(page.locator('[data-testid="board-view"]')).toBeVisible({ timeout: 10000 });
 
+    // The funnel starts on a single status, so widen it before looking
+    // for a status group that is not the default one.
+    await showAllStatuses(page);
+
     // Wait for the feature card to appear (features are loaded asynchronously)
-    const featureCard = page.locator(`[data-testid="kanban-card-${featureId}"]`);
+    const featureCard = page.locator(
+      `[data-testid="sidebar-feature-row"][data-feature-id="${featureId}"]`
+    );
     await expect(featureCard).toBeVisible({ timeout: 20000 });
 
     // Verify the feature appears in the waiting_approval column
@@ -170,27 +182,34 @@ test.describe('Feature Manual Review Flow', () => {
     await expect(waitingApprovalColumn).toBeVisible({ timeout: 5000 });
 
     // Verify the card is in the waiting_approval column
-    const cardInColumn = waitingApprovalColumn.locator(`[data-testid="kanban-card-${featureId}"]`);
+    const cardInColumn = waitingApprovalColumn.locator(
+      `[data-testid="sidebar-feature-row"][data-feature-id="${featureId}"]`
+    );
     await expect(cardInColumn).toBeVisible({ timeout: 5000 });
 
-    // For waiting_approval features, the button is "mark-as-verified-{id}"
-    const markAsVerifiedButton = page.locator(`[data-testid="mark-as-verified-${featureId}"]`);
-    await expect(markAsVerifiedButton).toBeVisible({ timeout: 5000 });
-
-    // Click the mark as verified button
-    await markAsVerifiedButton.click();
+    // Marking a task verified was a button on the kanban card. Cards are gone;
+    // the sidebar row's right-click menu carries the move instead.
+    await cardInColumn.click({ button: 'right' });
+    await page.locator('[data-testid="context-menu-move-status"]').hover();
+    const verifyItem = page.locator('[data-testid="context-menu-move-to-verified"]');
+    await expect(verifyItem).toBeVisible({ timeout: 5000 });
+    await verifyItem.click();
 
     // Wait for the feature to move to verified column
     await expect(async () => {
       const verifiedColumn = await getKanbanColumn(page, 'verified');
-      const cardInVerified = verifiedColumn.locator(`[data-testid="kanban-card-${featureId}"]`);
+      const cardInVerified = verifiedColumn.locator(
+        `[data-testid="sidebar-feature-row"][data-feature-id="${featureId}"]`
+      );
       expect(await cardInVerified.count()).toBe(1);
     }).toPass({ timeout: 15000 });
 
     // Verify the feature is no longer in waiting_approval column
     await expect(async () => {
       const waitingColumn = await getKanbanColumn(page, 'waiting_approval');
-      const cardInWaiting = waitingColumn.locator(`[data-testid="kanban-card-${featureId}"]`);
+      const cardInWaiting = waitingColumn.locator(
+        `[data-testid="sidebar-feature-row"][data-feature-id="${featureId}"]`
+      );
       expect(await cardInWaiting.count()).toBe(0);
     }).toPass({ timeout: 5000 });
   });

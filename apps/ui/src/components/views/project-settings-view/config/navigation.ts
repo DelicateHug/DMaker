@@ -1,5 +1,5 @@
 import type { LucideIcon } from 'lucide-react';
-import { User, GitBranch, Palette, AlertTriangle } from 'lucide-react';
+import { User, Github, GitBranch, Palette, AlertTriangle } from 'lucide-react';
 import type { ProjectSettingsViewId } from '../hooks/use-project-settings-view';
 
 export interface ProjectNavigationItem {
@@ -10,6 +10,7 @@ export interface ProjectNavigationItem {
 
 export const PROJECT_SETTINGS_NAV_ITEMS: ProjectNavigationItem[] = [
   { id: 'identity', label: 'Identity', icon: User },
+  { id: 'github', label: 'GitHub', icon: Github },
   { id: 'worktrees', label: 'Worktrees', icon: GitBranch },
   { id: 'theme', label: 'Theme', icon: Palette },
   { id: 'danger', label: 'Danger Zone', icon: AlertTriangle },

@@ -48,9 +48,17 @@ const STATUS_DIR_NAMES = new Set([
   'backlog',
   'planning',
   'in_progress',
+  // Auto mode parks a feature here while its build step runs. It was missing,
+  // so every building feature was read back as a *feature* called "building"
+  // and vanished from the board until the agent moved it on.
+  'building',
   'waiting_approval',
   'completed',
   'verified',
+  // Archived features. Deleting a task from the board moves it here rather
+  // than removing it from disk, so it can be restored from the Closed Issues
+  // view. Excluded from the board's feature list.
+  'archived',
 ]);
 
 /**

@@ -1,11 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { Request, Response } from 'express';
-import { createGetConfigHandler } from '@/routes/pipeline/routes/get-config.js';
-import { createSaveConfigHandler } from '@/routes/pipeline/routes/save-config.js';
-import { createAddStepHandler } from '@/routes/pipeline/routes/add-step.js';
-import { createUpdateStepHandler } from '@/routes/pipeline/routes/update-step.js';
-import { createDeleteStepHandler } from '@/routes/pipeline/routes/delete-step.js';
-import { createReorderStepsHandler } from '@/routes/pipeline/routes/reorder-steps.js';
+// These handlers used to live in routes/pipeline/routes/*.ts and were
+// consolidated into one flat pipeline.ts; the split paths no longer exist.
+import {
+  createGetConfigHandler,
+  createSaveConfigHandler,
+  createAddStepHandler,
+  createUpdateStepHandler,
+  createDeleteStepHandler,
+  createReorderStepsHandler,
+} from '@/routes/pipeline.js';
 import type { PipelineService } from '@/services/pipeline-service.js';
 import type { PipelineConfig, PipelineStep } from '@dmaker/types';
 import { createMockExpressContext } from '../../utils/mocks.js';

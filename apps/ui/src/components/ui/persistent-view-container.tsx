@@ -12,8 +12,6 @@ const PERSISTENT_ROUTE_IMPORTS: Record<string, () => Promise<{ default: Componen
   '/board': () => import('@/components/views/board-view').then((m) => ({ default: m.BoardView })),
   '/settings': () =>
     import('@/components/views/settings-view').then((m) => ({ default: m.SettingsView })),
-  '/github-issues': () =>
-    import('@/components/views/github-issues-view').then((m) => ({ default: m.GitHubIssuesView })),
   '/github-prs': () =>
     import('@/components/views/github-prs-view').then((m) => ({ default: m.GitHubPRsView })),
   '/terminal': () =>
@@ -52,7 +50,7 @@ function getLazyComponent(route: string): ComponentType {
  *
  * - First visit to a persistent route: lazy-loads the component, mounts it
  * - Subsequent visits: instantly shows it (no loading, no data refetch)
- * - Non-persistent routes (login, setup, dashboard): uses normal <Outlet />
+ * - Non-persistent routes (login, setup): uses normal <Outlet />
  */
 export function PersistentViewContainer() {
   const { pathname } = useLocation();

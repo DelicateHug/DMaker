@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { Request, Response } from 'express';
-import { createIndexHandler } from '@/routes/running-agents/routes/index.js';
+// Consolidated from routes/running-agents/routes/index.ts into one flat file.
+import { createIndexHandler } from '@/routes/running-agents.js';
 import type { AutoModeService } from '@/services/auto-mode-service.js';
 import { createMockExpressContext } from '../../utils/mocks.js';
 

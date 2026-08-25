@@ -10,7 +10,7 @@ import { useIdeationStore } from '@/store/ideation-store';
 import { useAppStore } from '@/store/app-store';
 import { getElectronAPI } from '@/lib/electron';
 import { toast } from 'sonner';
-import { useLayerStore } from '@/store/layer-store';
+import { openLayer } from '@/store/layer-store';
 import type { IdeaCategory, IdeationPrompt } from '@dmaker/types';
 
 interface PromptListProps {
@@ -83,7 +83,7 @@ export function PromptList({ category, onBack }: PromptListProps) {
             label: 'View Ideas',
             onClick: () => {
               setMode('dashboard');
-              useLayerStore.getState().openLayer('ideation');
+              openLayer('ideation');
             },
           },
         });

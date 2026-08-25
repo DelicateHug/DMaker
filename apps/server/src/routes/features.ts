@@ -25,6 +25,8 @@ import { validatePathParams } from '../middleware.js';
 import { RequestCache } from '../lib/request-cache.js';
 import { simpleQuery } from '../providers/simple-query-service.js';
 import { getPromptCustomization } from '../lib/settings-helpers.js';
+import { getIssueDraftService } from '../services/issue-draft-service.js';
+import { getGitHubSyncService } from '../services/github-sync-service.js';
 
 // ---------------------------------------------------------------------------
 // Logger & error helpers (inlined from common.ts)
@@ -144,7 +146,27 @@ function createGetHandler(featureLoader: FeatureLoader) {
 // POST /create - Create a new feature
 // ---------------------------------------------------------------------------
 
-function createCreateHandler(featureLoader: FeatureLoader, events?: EventEmitter) {
+/**
+ * Should this project file an issue for a task that was just added?
+ *
+ * On by default. The draft service still skips projects with no GitHub remote,
+ * so this only exists for users who want the board to stay local.
+ */
+async function shouldAutoCreateIssues(settingsService?: SettingsService): Promise<boolean> {
+  if (!settingsService) return true;
+  try {
+    const settings = await settingsService.getGlobalSettings();
+    return settings.githubAutoCreateIssues !== false;
+  } catch {
+    return true;
+  }
+}
+
+function createCreateHandler(
+  featureLoader: FeatureLoader,
+  events?: EventEmitter,
+  settingsService?: SettingsService
+) {
   return async (req: Request, res: Response): Promise<void> => {
     try {
       const { projectPath, feature } = req.body as {
@@ -185,6 +207,19 @@ function createCreateHandler(featureLoader: FeatureLoader, events?: EventEmitter
           featureName: created.name,
           projectPath,
         });
+      }
+
+      // File the GitHub issue in the background. The task is free to start,
+      // plan and branch while this runs — only its commit waits on the issue.
+      if (events && (await shouldAutoCreateIssues(settingsService))) {
+        try {
+          getIssueDraftService(events, featureLoader, settingsService).start(
+            projectPath,
+            created.id
+          );
+        } catch (err) {
+          logError(err, 'Failed to start background GitHub issue draft');
+        }
       }
 
       res.json({ success: true, feature: created });
@@ -409,7 +444,7 @@ interface BulkDeleteResult {
   error?: string;
 }
 
-function createBulkDeleteHandler(featureLoader: FeatureLoader) {
+function createBulkDeleteHandler(featureLoader: FeatureLoader, events?: EventEmitter) {
   return async (req: Request, res: Response): Promise<void> => {
     try {
       const { projectPath, featureIds } = req.body as BulkDeleteRequest;
@@ -430,15 +465,38 @@ function createBulkDeleteHandler(featureLoader: FeatureLoader) {
         const batch = featureIds.slice(i, i + BATCH_SIZE);
         const batchResults = await Promise.all(
           batch.map(async (featureId) => {
-            const success = await featureLoader.delete(projectPath, featureId);
-            if (success) {
-              return { featureId, success: true };
+            // Bulk "delete" archives, exactly as the per-card action does —
+            // nothing on the board destroys a task any more.
+            const existing = await featureLoader.get(projectPath, featureId);
+            const archived = await featureLoader.archive(projectPath, featureId);
+            if (!archived) {
+              return {
+                featureId,
+                success: false,
+                error: 'Archive failed. Check server logs for details.',
+              };
             }
-            return {
-              featureId,
-              success: false,
-              error: 'Deletion failed. Check server logs for details.',
-            };
+
+            const issueNumber = existing?.githubIssue?.number;
+            if (issueNumber && existing?.githubIssue?.state !== 'closed') {
+              const closed = await getGitHubSyncService(events).closeIssue(
+                projectPath,
+                issueNumber
+              );
+              if (closed.success) {
+                await featureLoader.update(projectPath, featureId, {
+                  githubIssue: {
+                    ...existing.githubIssue!,
+                    state: 'closed',
+                    syncedAt: new Date().toISOString(),
+                  },
+                });
+              } else {
+                logger.warn(`Archived ${featureId} but could not close issue #${issueNumber}`);
+              }
+            }
+
+            return { featureId, success: true };
           })
         );
         results.push(...batchResults);
@@ -493,6 +551,246 @@ function createDeleteHandler(featureLoader: FeatureLoader) {
       res.json({ success });
     } catch (error) {
       logError(error, 'Delete feature failed');
+      res.status(500).json({ success: false, error: getErrorMessage(error) });
+    }
+  };
+}
+
+// ---------------------------------------------------------------------------
+// POST /answer-question  - Answer an agent's outstanding question
+// POST /issue-draft      - Start (or retry) background GitHub issue creation
+// ---------------------------------------------------------------------------
+
+function createAnswerQuestionHandler(
+  featureLoader: FeatureLoader,
+  events?: EventEmitter,
+  settingsService?: SettingsService
+) {
+  return async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { projectPath, featureId, questionId, answer, skipped } = req.body as {
+        projectPath: string;
+        featureId: string;
+        questionId: string;
+        answer?: string;
+        skipped?: boolean;
+      };
+
+      if (!projectPath || !featureId || !questionId) {
+        res.status(400).json({
+          success: false,
+          error: 'projectPath, featureId and questionId are required',
+        });
+        return;
+      }
+
+      // Skipping is how the user says "just write it without that detail", so
+      // it is the one case where an empty answer is legitimate.
+      if (!skipped && !answer?.trim()) {
+        res.status(400).json({ success: false, error: 'answer is required' });
+        return;
+      }
+
+      if (!events) {
+        res.status(503).json({ success: false, error: 'Event system unavailable' });
+        return;
+      }
+
+      const service = getIssueDraftService(events, featureLoader, settingsService);
+      const feature = await service.answerQuestion(
+        projectPath,
+        featureId,
+        questionId,
+        answer?.trim() || '',
+        { skipped: skipped === true }
+      );
+
+      if (!feature) {
+        res.status(404).json({ success: false, error: `Feature ${featureId} not found` });
+        return;
+      }
+
+      invalidateFeaturesCache(projectPath);
+      res.json({ success: true, feature });
+    } catch (error) {
+      logError(error, 'Answer question failed');
+      res.status(500).json({ success: false, error: getErrorMessage(error) });
+    }
+  };
+}
+
+function createIssueDraftHandler(
+  featureLoader: FeatureLoader,
+  events?: EventEmitter,
+  settingsService?: SettingsService
+) {
+  return async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { projectPath, featureId } = req.body as {
+        projectPath: string;
+        featureId: string;
+      };
+
+      if (!projectPath || !featureId) {
+        res.status(400).json({
+          success: false,
+          error: 'projectPath and featureId are required',
+        });
+        return;
+      }
+
+      if (!events) {
+        res.status(503).json({ success: false, error: 'Event system unavailable' });
+        return;
+      }
+
+      getIssueDraftService(events, featureLoader, settingsService).start(projectPath, featureId);
+      res.json({ success: true });
+    } catch (error) {
+      logError(error, 'Start issue draft failed');
+      res.status(500).json({ success: false, error: getErrorMessage(error) });
+    }
+  };
+}
+
+// ---------------------------------------------------------------------------
+// POST /archive    - Archive a feature (the board's "delete")
+// POST /unarchive  - Restore an archived feature
+// POST /archived   - List archived features
+// ---------------------------------------------------------------------------
+
+function createArchiveHandler(featureLoader: FeatureLoader, events?: EventEmitter) {
+  return async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { projectPath, featureId } = req.body as {
+        projectPath: string;
+        featureId: string;
+      };
+
+      if (!projectPath || !featureId) {
+        res.status(400).json({
+          success: false,
+          error: 'projectPath and featureId are required',
+        });
+        return;
+      }
+
+      const existing = await featureLoader.get(projectPath, featureId);
+      const feature = await featureLoader.archive(projectPath, featureId);
+
+      if (!feature) {
+        res.status(404).json({ success: false, error: `Feature ${featureId} not found` });
+        return;
+      }
+
+      // Close the linked issue rather than deleting it — a closed issue is
+      // recoverable and is what the "+ closed issues" view reads.
+      let issueClosed = false;
+      const issueNumber = existing?.githubIssue?.number;
+      if (issueNumber && existing?.githubIssue?.state !== 'closed') {
+        const result = await getGitHubSyncService(events).closeIssue(projectPath, issueNumber);
+        issueClosed = result.success;
+        if (result.success) {
+          await featureLoader.update(projectPath, featureId, {
+            githubIssue: {
+              ...existing.githubIssue!,
+              state: 'closed',
+              syncedAt: new Date().toISOString(),
+            },
+          });
+        } else {
+          logger.warn(`Archived ${featureId} but could not close issue #${issueNumber}`);
+        }
+      }
+
+      invalidateFeaturesCache(projectPath);
+
+      events?.emit('feature:archived', {
+        projectPath,
+        featureId,
+        issueNumber,
+        issueClosed,
+      });
+
+      res.json({ success: true, feature, issueClosed });
+    } catch (error) {
+      logError(error, 'Archive feature failed');
+      res.status(500).json({ success: false, error: getErrorMessage(error) });
+    }
+  };
+}
+
+function createUnarchiveHandler(featureLoader: FeatureLoader, events?: EventEmitter) {
+  return async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { projectPath, featureId, targetStatus } = req.body as {
+        projectPath: string;
+        featureId: string;
+        targetStatus?: string;
+      };
+
+      if (!projectPath || !featureId) {
+        res.status(400).json({
+          success: false,
+          error: 'projectPath and featureId are required',
+        });
+        return;
+      }
+
+      const existing = await featureLoader.get(projectPath, featureId);
+      const feature = await featureLoader.unarchive(projectPath, featureId, targetStatus);
+
+      if (!feature) {
+        res.status(404).json({ success: false, error: `Feature ${featureId} not found` });
+        return;
+      }
+
+      const issueNumber = existing?.githubIssue?.number;
+      if (issueNumber && existing?.githubIssue?.state === 'closed') {
+        const result = await getGitHubSyncService(events).reopenIssue(projectPath, issueNumber);
+        if (result.success) {
+          await featureLoader.update(projectPath, featureId, {
+            githubIssue: {
+              ...existing.githubIssue!,
+              state: 'open',
+              syncedAt: new Date().toISOString(),
+            },
+          });
+        } else {
+          logger.warn(`Restored ${featureId} but could not reopen issue #${issueNumber}`);
+        }
+      }
+
+      invalidateFeaturesCache(projectPath);
+
+      events?.emit('feature:restored', { projectPath, featureId, issueNumber });
+
+      res.json({ success: true, feature });
+    } catch (error) {
+      logError(error, 'Restore feature failed');
+      res.status(500).json({ success: false, error: getErrorMessage(error) });
+    }
+  };
+}
+
+function createListArchivedHandler(featureLoader: FeatureLoader) {
+  return async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { projectPath } = req.body as { projectPath: string };
+
+      if (!projectPath) {
+        res.status(400).json({ success: false, error: 'projectPath is required' });
+        return;
+      }
+
+      const cacheKey = `archived:${projectPath}`;
+      const features = (await featuresCache.getOrSet(cacheKey, () =>
+        featureLoader.getArchived(projectPath)
+      )) as Feature[];
+
+      res.json({ success: true, features });
+    } catch (error) {
+      logError(error, 'List archived features failed');
       res.status(500).json({ success: false, error: getErrorMessage(error) });
     }
   };
@@ -852,7 +1150,7 @@ export function createFeaturesRoutes(
   router.post(
     '/create',
     validatePathParams('projectPath'),
-    createCreateHandler(featureLoader, events)
+    createCreateHandler(featureLoader, events, settingsService)
   );
   router.post(
     '/update',
@@ -867,9 +1165,34 @@ export function createFeaturesRoutes(
   router.post(
     '/bulk-delete',
     validatePathParams('projectPath'),
-    createBulkDeleteHandler(featureLoader)
+    createBulkDeleteHandler(featureLoader, events)
   );
   router.post('/delete', validatePathParams('projectPath'), createDeleteHandler(featureLoader));
+  router.post(
+    '/archive',
+    validatePathParams('projectPath'),
+    createArchiveHandler(featureLoader, events)
+  );
+  router.post(
+    '/answer-question',
+    validatePathParams('projectPath'),
+    createAnswerQuestionHandler(featureLoader, events, settingsService)
+  );
+  router.post(
+    '/issue-draft',
+    validatePathParams('projectPath'),
+    createIssueDraftHandler(featureLoader, events, settingsService)
+  );
+  router.post(
+    '/unarchive',
+    validatePathParams('projectPath'),
+    createUnarchiveHandler(featureLoader, events)
+  );
+  router.post(
+    '/archived',
+    validatePathParams('projectPath'),
+    createListArchivedHandler(featureLoader)
+  );
   router.post('/agent-output', createAgentOutputHandler(featureLoader, autoModeService));
   router.post('/raw-output', createRawOutputHandler(featureLoader));
   router.post(

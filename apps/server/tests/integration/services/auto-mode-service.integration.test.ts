@@ -20,6 +20,23 @@ const execAsync = promisify(exec);
 
 vi.mock('@/providers/provider-factory.js');
 
+// Ownership is settled by shelling out to `gh`, which these tests have no
+// business depending on — they exercise the loop and the worktrees, not who
+// owns what. Stub the service so every task reads as ours; the ownership rules
+// themselves are covered by tests/unit/services/github-sync-service.test.ts.
+vi.mock('@/services/github-sync-service.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/services/github-sync-service.js')>();
+  // Plain functions rather than vi.fn(): this suite runs with mockReset, which
+  // would strip the implementation off a spy before every test.
+  const stub = {
+    resolveOwnership: async () => ({ canWrite: true, owner: 'test-user' }),
+    canExecute: async () => ({ allowed: true }),
+    getCurrentUser: async () => 'test-user',
+    syncIssueData: async () => null,
+  };
+  return { ...actual, getGitHubSyncService: () => stub };
+});
+
 describe('auto-mode-service.ts (integration)', () => {
   let service: AutoModeService;
   let testRepo: TestRepo;
@@ -591,13 +608,24 @@ describe('auto-mode-service.ts (integration)', () => {
       expect(feature?.status).toBe('waiting_approval');
     }, 30000);
 
-    it('should emit planning_started event for spec mode', async () => {
+    /**
+     * Planning depth used to be chosen per feature (feature.planningMode) and
+     * these tests set it there. It is now one global `planningStrategy`
+     * setting, and the emitted mode is derived from that — the feature's own
+     * planningMode is not read at all. Driven through settings instead.
+     */
+    it('emits planning_started carrying the configured strategy', async () => {
+      const settingsService = {
+        getGlobalSettings: vi.fn().mockResolvedValue({ planningStrategy: 'always-spec' }),
+        getProjectSettings: vi.fn().mockResolvedValue({ version: 1 }),
+      };
+      service = new AutoModeService(mockEvents as any, settingsService as any, featureLoader);
+
       await createTestFeature(testRepo.path, 'spec-plan-feature', {
         id: 'spec-plan-feature',
         category: 'test',
         description: 'Feature with spec planning',
         status: 'pending',
-        planningMode: 'spec',
         requirePlanApproval: false,
       });
 
@@ -624,18 +652,27 @@ describe('auto-mode-service.ts (integration)', () => {
 
       await service.executeFeature(testRepo.path, 'spec-plan-feature', false, false);
 
-      // Check planning_started event was emitted
-      const planningEvent = mockEvents.emit.mock.calls.find((call) => call[1]?.mode === 'spec');
-      expect(planningEvent).toBeTruthy();
+      const planningEvent = mockEvents.emit.mock.calls.find(
+        (call) => call[1]?.type === 'planning_started'
+      );
+      expect(planningEvent, 'planning_started should be emitted').toBeTruthy();
+      expect(planningEvent?.[1]?.mode).toBe('spec');
     }, 30000);
 
-    it('should handle feature with full planning mode', async () => {
+    it('reports adaptive planning when no strategy is configured', async () => {
+      // The default. An agent decides its own depth, so the event says
+      // "adaptive" rather than naming a fixed mode.
+      const settingsService = {
+        getGlobalSettings: vi.fn().mockResolvedValue({}),
+        getProjectSettings: vi.fn().mockResolvedValue({ version: 1 }),
+      };
+      service = new AutoModeService(mockEvents as any, settingsService as any, featureLoader);
+
       await createTestFeature(testRepo.path, 'full-plan-feature', {
         id: 'full-plan-feature',
         category: 'test',
         description: 'Feature with full planning',
         status: 'pending',
-        planningMode: 'full',
         requirePlanApproval: false,
       });
 
@@ -663,8 +700,11 @@ describe('auto-mode-service.ts (integration)', () => {
       await service.executeFeature(testRepo.path, 'full-plan-feature', false, false);
 
       // Check planning_started event was emitted with full mode
-      const planningEvent = mockEvents.emit.mock.calls.find((call) => call[1]?.mode === 'full');
-      expect(planningEvent).toBeTruthy();
+      const planningEvent = mockEvents.emit.mock.calls.find(
+        (call) => call[1]?.type === 'planning_started'
+      );
+      expect(planningEvent, 'planning_started should be emitted').toBeTruthy();
+      expect(planningEvent?.[1]?.mode).toBe('adaptive');
     }, 30000);
 
     it('should track pending approval correctly', async () => {

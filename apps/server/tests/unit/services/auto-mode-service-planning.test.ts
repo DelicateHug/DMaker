@@ -18,94 +18,69 @@ describe('auto-mode-service.ts - Planning Mode', () => {
     await service.stopAutoLoop().catch(() => {});
   });
 
+  /**
+   * Planning used to be chosen per feature (feature.planningMode), and these
+   * tests asserted that. It is now a single global `planningStrategy` setting,
+   * with an adaptive prompt as the default that lets the agent escalate on its
+   * own — the feature argument is no longer even read. Rewritten against the
+   * contract that actually exists.
+   */
   describe('getPlanningPromptPrefix', () => {
-    // Access private method through any cast for testing
-    const getPlanningPromptPrefix = (svc: any, feature: any) => {
-      return svc.getPlanningPromptPrefix(feature);
-    };
+    const getPrefix = (svc: any) => svc.getPlanningPromptPrefix({ id: 'test' });
 
-    it('should return empty string for skip mode', async () => {
-      const feature = { id: 'test', planningMode: 'skip' as const };
-      const result = await getPlanningPromptPrefix(service, feature);
-      expect(result).toBe('');
-    });
-
-    it('should return empty string when planningMode is undefined', async () => {
-      const feature = { id: 'test' };
-      const result = await getPlanningPromptPrefix(service, feature);
-      expect(result).toBe('');
-    });
-
-    it('should return lite prompt for lite mode without approval', async () => {
-      const feature = {
-        id: 'test',
-        planningMode: 'lite' as const,
-        requirePlanApproval: false,
+    /** An AutoModeService whose global settings return the given strategy. */
+    function serviceWithStrategy(planningStrategy?: string) {
+      const settingsService = {
+        getGlobalSettings: vi.fn().mockResolvedValue({ planningStrategy }),
+        getProjectSettings: vi.fn().mockResolvedValue({ version: 1 }),
       };
-      const result = await getPlanningPromptPrefix(service, feature);
-      expect(result).toContain('Planning Phase (Lite Mode)');
-      expect(result).toContain('[PLAN_GENERATED]');
-      expect(result).toContain('Feature Request');
-    });
+      return new AutoModeService(mockEvents as any, settingsService as any);
+    }
 
-    it('should return lite_with_approval prompt for lite mode with approval', async () => {
-      const feature = {
-        id: 'test',
-        planningMode: 'lite' as const,
-        requirePlanApproval: true,
-      };
-      const result = await getPlanningPromptPrefix(service, feature);
-      expect(result).toContain('## Planning Phase (Lite Mode)');
-      expect(result).toContain('[SPEC_GENERATED]');
-      expect(result).toContain(
-        'DO NOT proceed with implementation until you receive explicit approval'
-      );
-    });
+    it('uses the adaptive prompt by default', async () => {
+      const result = await getPrefix(serviceWithStrategy(undefined));
 
-    it('should return spec prompt for spec mode', async () => {
-      const feature = {
-        id: 'test',
-        planningMode: 'spec' as const,
-      };
-      const result = await getPlanningPromptPrefix(service, feature);
-      expect(result).toContain('## Specification Phase (Spec Mode)');
-      expect(result).toContain('```tasks');
-      expect(result).toContain('T001');
-      expect(result).toContain('[TASK_START]');
-      expect(result).toContain('[TASK_COMPLETE]');
-    });
-
-    it('should return full prompt for full mode', async () => {
-      const feature = {
-        id: 'test',
-        planningMode: 'full' as const,
-      };
-      const result = await getPlanningPromptPrefix(service, feature);
-      expect(result).toContain('## Full Specification Phase (Full SDD Mode)');
-      expect(result).toContain('Phase 1: Foundation');
-      expect(result).toContain('Phase 2: Core Implementation');
-      expect(result).toContain('Phase 3: Integration & Testing');
-    });
-
-    it('should include the separator and Feature Request header', async () => {
-      const feature = {
-        id: 'test',
-        planningMode: 'spec' as const,
-      };
-      const result = await getPlanningPromptPrefix(service, feature);
-      expect(result).toContain('---');
+      expect(result).toContain('Adaptive Planning');
+      // Every strategy appends the feature request separator, or the agent
+      // gets a planning prompt with nothing to plan against.
       expect(result).toContain('## Feature Request');
     });
 
-    it('should instruct agent to NOT output exploration text', async () => {
-      const modes = ['lite', 'spec', 'full'] as const;
-      for (const mode of modes) {
-        const feature = { id: 'test', planningMode: mode };
-        const result = await getPlanningPromptPrefix(service, feature);
-        // All modes should have the IMPORTANT instruction about not outputting exploration text
+    it.each([
+      ['always-lite', 'Lite Mode'],
+      ['always-spec', 'Spec Mode'],
+      ['always-full', 'Full SDD'],
+    ])('honours the %s strategy', async (strategy, marker) => {
+      const result = await getPrefix(serviceWithStrategy(strategy));
+
+      expect(result).toContain(marker);
+      expect(result).toContain('## Feature Request');
+    });
+
+    it('falls back to adaptive for a strategy it does not recognise', async () => {
+      // A settings file written by a newer version must not silently produce
+      // an empty planning prompt.
+      const result = await getPrefix(serviceWithStrategy('always-telepathy'));
+
+      expect(result).toContain('Adaptive Planning');
+    });
+
+    it.each(['always-lite', 'always-spec', 'always-full'])(
+      '%s tells the agent not to narrate its exploration',
+      async (strategy) => {
+        const result = await getPrefix(serviceWithStrategy(strategy));
         expect(result).toContain('IMPORTANT: Do NOT output exploration text');
-        expect(result).toContain('Silently analyze the codebase first');
       }
+    );
+
+    it('the adaptive prompt deliberately allows exploration instead of forbidding it', async () => {
+      // The fixed strategies suppress exploration because their output format
+      // is fixed up front. Adaptive cannot: its whole mechanism is scanning the
+      // codebase in Step 2 to decide how much planning the feature warrants.
+      const result = await getPrefix(serviceWithStrategy('auto'));
+
+      expect(result).not.toContain('IMPORTANT: Do NOT output exploration text');
+      expect(result).toContain('Codebase Scan');
     });
   });
 
@@ -287,48 +262,34 @@ describe('auto-mode-service.ts - Planning Mode', () => {
     });
   });
 
-  describe('PLANNING_PROMPTS structure', () => {
-    const getPlanningPromptPrefix = (svc: any, feature: any) => {
-      return svc.getPlanningPromptPrefix(feature);
-    };
+  describe('planning prompt content', () => {
+    function serviceWithStrategy(planningStrategy: string) {
+      const settingsService = {
+        getGlobalSettings: vi.fn().mockResolvedValue({ planningStrategy }),
+        getProjectSettings: vi.fn().mockResolvedValue({ version: 1 }),
+      };
+      return new AutoModeService(mockEvents as any, settingsService as any);
+    }
 
-    it('should have all required planning modes', async () => {
-      const modes = ['lite', 'spec', 'full'] as const;
-      for (const mode of modes) {
-        const feature = { id: 'test', planningMode: mode };
-        const result = await getPlanningPromptPrefix(service, feature);
+    it.each(['auto', 'always-lite', 'always-spec', 'always-full'])(
+      '%s produces a substantial prompt',
+      async (strategy) => {
+        const result = await serviceWithStrategy(strategy).getPlanningPromptPrefix({ id: 't' });
         expect(result.length).toBeGreaterThan(100);
+      }
+    );
+
+    it('the lite prompt asks for the sections the UI renders', async () => {
+      const result = await serviceWithStrategy('always-lite').getPlanningPromptPrefix({ id: 't' });
+
+      for (const section of ['Goal', 'Approach', 'Files to Touch', 'Tasks', 'Risks']) {
+        expect(result, section).toContain(section);
       }
     });
 
-    it('lite prompt should include correct structure', async () => {
-      const feature = { id: 'test', planningMode: 'lite' as const };
-      const result = await getPlanningPromptPrefix(service, feature);
-      expect(result).toContain('Goal');
-      expect(result).toContain('Approach');
-      expect(result).toContain('Files to Touch');
-      expect(result).toContain('Tasks');
-      expect(result).toContain('Risks');
-    });
+    it('the full prompt lays out its phases', async () => {
+      const result = await serviceWithStrategy('always-full').getPlanningPromptPrefix({ id: 't' });
 
-    it('spec prompt should include task format instructions', async () => {
-      const feature = { id: 'test', planningMode: 'spec' as const };
-      const result = await getPlanningPromptPrefix(service, feature);
-      expect(result).toContain('Problem');
-      expect(result).toContain('Solution');
-      expect(result).toContain('Acceptance Criteria');
-      expect(result).toContain('GIVEN-WHEN-THEN');
-      expect(result).toContain('Implementation Tasks');
-      expect(result).toContain('Verification');
-    });
-
-    it('full prompt should include phases', async () => {
-      const feature = { id: 'test', planningMode: 'full' as const };
-      const result = await getPlanningPromptPrefix(service, feature);
-      expect(result).toContain('1. **Problem Statement**');
-      expect(result).toContain('2. **User Story**');
-      expect(result).toContain('4. **Technical Context**');
-      expect(result).toContain('5. **Non-Goals**');
       expect(result).toContain('Phase 1');
       expect(result).toContain('Phase 2');
       expect(result).toContain('Phase 3');

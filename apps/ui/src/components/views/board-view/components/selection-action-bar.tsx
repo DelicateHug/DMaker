@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Pencil, X, CheckSquare, Trash2, CheckCircle2 } from 'lucide-react';
+import { Pencil, X, CheckSquare, Archive, CheckCircle2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   Dialog,
@@ -98,11 +98,11 @@ export function SelectionActionBar({
                 size="sm"
                 onClick={handleDeleteClick}
                 disabled={selectedCount === 0}
-                className="h-8 text-destructive hover:text-destructive hover:bg-destructive/10 disabled:opacity-50"
+                className="h-8 disabled:opacity-50"
                 data-testid="selection-delete-button"
               >
-                <Trash2 className="w-4 h-4 mr-1.5" />
-                Delete
+                <Archive className="w-4 h-4 mr-1.5" />
+                Archive
               </Button>
             </>
           )}
@@ -147,19 +147,19 @@ export function SelectionActionBar({
         </div>
       </div>
 
-      {/* Delete Confirmation Dialog */}
+      {/* Archive Confirmation Dialog */}
       <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <DialogContent data-testid="bulk-delete-confirmation-dialog">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-destructive">
-              <Trash2 className="w-5 h-5" />
-              Delete Selected Features?
+            <DialogTitle className="flex items-center gap-2">
+              <Archive className="w-5 h-5" />
+              Archive Selected Features?
             </DialogTitle>
             <DialogDescription>
-              Are you sure you want to permanently delete {selectedCount} feature
-              {selectedCount !== 1 ? 's' : ''}?
-              <span className="block mt-2 text-destructive font-medium">
-                This action cannot be undone.
+              Archive {selectedCount} feature{selectedCount !== 1 ? 's' : ''}?
+              <span className="block mt-2 text-muted-foreground">
+                Nothing is deleted. Any linked GitHub issue is closed, and you can restore
+                {selectedCount !== 1 ? ' them' : ' it'} from Closed Issues.
               </span>
             </DialogDescription>
           </DialogHeader>
@@ -171,13 +171,9 @@ export function SelectionActionBar({
             >
               Cancel
             </Button>
-            <Button
-              variant="destructive"
-              onClick={handleConfirmDelete}
-              data-testid="confirm-bulk-delete-button"
-            >
-              <Trash2 className="w-4 h-4 mr-2" />
-              Delete
+            <Button onClick={handleConfirmDelete} data-testid="confirm-bulk-delete-button">
+              <Archive className="w-4 h-4 mr-2" />
+              Archive
             </Button>
           </DialogFooter>
         </DialogContent>

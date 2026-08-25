@@ -38,6 +38,58 @@ const logger = createLogger('FeatureLoader');
 /** Default status for features that have no status field set */
 const DEFAULT_STATUS = 'backlog';
 
+/** Status/directory that deleted-from-the-board features are parked under. */
+const ARCHIVED_STATUS = 'archived';
+
+/** Does this path exist? Used to tell a feature directory from a status bucket. */
+async function pathExists(target: string): Promise<boolean> {
+  try {
+    await secureFs.access(target);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The `status` recorded in a directory's feature.json, or null when there is
+ * no readable feature.json there. Used to rank duplicate directories.
+ */
+async function readStatusFromDisk(featureDir: string): Promise<string | null> {
+  try {
+    const raw = (await secureFs.readFile(path.join(featureDir, 'feature.json'), 'utf-8')) as string;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return null;
+    return typeof parsed.status === 'string' && parsed.status ? parsed.status : DEFAULT_STATUS;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Feature directories one level below `dirPath`, for a directory that turned
+ * out to be a status bucket rather than a feature.
+ */
+async function collectNestedFeatureDirs(
+  dirPath: string,
+  knownStatus: string
+): Promise<Array<{ featureId: string; featureDir: string; knownStatus: string }>> {
+  try {
+    const entries = (await secureFs.readdir(dirPath, { withFileTypes: true })) as any[];
+    const found: Array<{ featureId: string; featureDir: string; knownStatus: string }> = [];
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      const featureDir = path.join(dirPath, entry.name);
+      if (await pathExists(path.join(featureDir, 'feature.json'))) {
+        found.push({ featureId: entry.name, featureDir, knownStatus });
+      }
+    }
+    return found;
+  } catch {
+    return [];
+  }
+}
+
 // Re-export Feature types for convenience
 export type { Feature, FeatureListSummary };
 
@@ -118,49 +170,119 @@ export class FeatureLoader {
             logger.warn(`Failed to read month directory ${dir.name}:`, err);
           }
         } else {
-          // Legacy flat feature directory
-          result.push({
-            featureId: dir.name,
-            featureDir: path.join(featuresDir, dir.name),
-          });
+          // Neither a known status nor a month. Decide by what is actually in
+          // it rather than by its name: a directory holding feature.json is a
+          // legacy flat feature, one holding feature directories is a status
+          // bucket this build does not know the name of yet.
+          //
+          // Without this, a status added to the product but not to
+          // STATUS_DIR_NAMES silently swallows every feature under it — they
+          // load as one unreadable feature named after the status.
+          const dirPath = path.join(featuresDir, dir.name);
+          if (await pathExists(path.join(dirPath, 'feature.json'))) {
+            result.push({ featureId: dir.name, featureDir: dirPath });
+            return;
+          }
+
+          const nested = await collectNestedFeatureDirs(dirPath, dir.name);
+          if (nested.length > 0) {
+            // Honour the caller's status filter for the inferred status too.
+            if (excludeSet?.has(dir.name)) return;
+            if (includeSet && !includeSet.has(dir.name)) return;
+            logger.warn(
+              `Feature directory "${dir.name}" is not a known status but contains feature directories — treating it as a status bucket. Add it to STATUS_DIR_NAMES.`
+            );
+            result.push(...nested);
+            return;
+          }
+
+          // Empty, or something else entirely — keep the old behaviour so a
+          // genuinely broken feature directory still surfaces as one.
+          result.push({ featureId: dir.name, featureDir: dirPath });
         }
       })
     );
 
-    // Deduplicate by featureId — if a feature exists in multiple directories
-    // (e.g., due to interrupted move during status change), prefer the entry
-    // whose directory matches the feature's actual status. The stale duplicate
-    // directory is cleaned up automatically.
-    const seenIds = new Map<string, number>();
-    const deduplicated: typeof result = [];
-    for (let i = 0; i < result.length; i++) {
-      const entry = result[i];
-      const prevIndex = seenIds.get(entry.featureId);
-      if (prevIndex !== undefined) {
-        const prev = deduplicated[prevIndex];
-        let kept = prev;
-        let stale = entry;
+    // Deduplicate by featureId — a feature can exist in more than one
+    // directory after an interrupted status change, or because a leftover
+    // empty directory shares its name.
+    //
+    // The loser is DELETED, so which one wins matters a great deal. Rank by
+    // what the directories actually hold, not by their names:
+    //
+    //   1. A directory holding feature.json beats one that does not. The old
+    //      order — status-based beats legacy — let an empty `backlog/<id>/`
+    //      shadow the real `waiting_approval/<id>/`, and then delete it: the
+    //      feature disappeared from the board and its file was destroyed.
+    //   2. Among directories that hold one, the one whose parent matches the
+    //      feature's own status wins, which is what this step always claimed
+    //      to do.
+    //   3. Failing both, status-based beats legacy, as before.
+    //
+    // A directory with no feature.json is never allowed to evict one that has
+    // it, whatever its name.
+    //
+    // Ranking reads feature.json, so it runs ONLY for ids that actually appear
+    // twice. Duplicates are rare; charging every list an extra read per
+    // feature to handle them would not be.
+    const indexesById = new Map<string, number[]>();
+    result.forEach((entry, index) => {
+      const existing = indexesById.get(entry.featureId);
+      if (existing) existing.push(index);
+      else indexesById.set(entry.featureId, [index]);
+    });
 
-        // Prefer status-based over legacy
-        if (!prev.knownStatus && entry.knownStatus) {
-          kept = entry;
-          stale = prev;
-          deduplicated[prevIndex] = entry;
-        }
+    const duplicated = [...indexesById.values()].filter((indexes) => indexes.length > 1);
+
+    /** hasFeatureJson / statusMatches per result index, for duplicates only. */
+    const ranking = new Map<number, { hasFeatureJson: boolean; statusMatches: boolean }>();
+    await Promise.all(
+      duplicated.flat().map(async (index) => {
+        const entry = result[index];
+        const status = await readStatusFromDisk(entry.featureDir);
+        ranking.set(index, {
+          hasFeatureJson: status !== null,
+          statusMatches: status !== null && !!entry.knownStatus && status === entry.knownStatus,
+        });
+      })
+    );
+
+    const score = (index: number): number => {
+      const rank = ranking.get(index);
+      return (
+        (rank?.hasFeatureJson ? 4 : 0) +
+        (rank?.statusMatches ? 2 : 0) +
+        (result[index].knownStatus ? 1 : 0)
+      );
+    };
+
+    const discarded = new Set<number>();
+    for (const indexes of duplicated) {
+      const winner = indexes.reduce((best, index) => (score(index) > score(best) ? index : best));
+      for (const index of indexes) {
+        if (index === winner) continue;
+        discarded.add(index);
 
         logger.info(
-          `Duplicate feature directory for ${entry.featureId}: keeping ${kept.knownStatus || 'legacy'}/, removing stale copy from ${stale.knownStatus || 'legacy'}/`
+          `Duplicate feature directory for ${result[index].featureId}: keeping ${
+            result[winner].knownStatus || 'legacy'
+          }/, removing stale copy from ${result[index].knownStatus || 'legacy'}/`
         );
 
-        // Clean up the stale duplicate directory in the background
-        secureFs.rm(stale.featureDir, { recursive: true, force: true }).catch((err) => {
-          logger.warn(`Failed to clean up stale duplicate directory ${stale.featureDir}:`, err);
-        });
-      } else {
-        seenIds.set(entry.featureId, deduplicated.length);
-        deduplicated.push(entry);
+        // Clean up the stale duplicate in the background — but never a
+        // directory that still holds a feature.json the keeper lacks.
+        if (!ranking.get(index)?.hasFeatureJson || ranking.get(winner)?.hasFeatureJson) {
+          secureFs.rm(result[index].featureDir, { recursive: true, force: true }).catch((err) => {
+            logger.warn(
+              `Failed to clean up stale duplicate directory ${result[index].featureDir}:`,
+              err
+            );
+          });
+        }
       }
     }
+
+    const deduplicated = result.filter((_, index) => !discarded.has(index));
 
     // Update the in-memory directory cache
     for (const entry of deduplicated) {
@@ -769,6 +891,9 @@ export class FeatureLoader {
       githubIssue: feature.githubIssue,
       claimedBy: feature.claimedBy,
       claimedAt: feature.claimedAt,
+      pendingQuestionCount: (feature.agentQuestions || []).filter(
+        (q) => !q.answeredAt && !q.skipped
+      ).length,
     }));
   }
 
@@ -867,6 +992,9 @@ export class FeatureLoader {
           githubIssue: feature.githubIssue,
           claimedBy: feature.claimedBy,
           claimedAt: feature.claimedAt,
+          pendingQuestionCount: (feature.agentQuestions || []).filter(
+            (q: { answeredAt?: string; skipped?: boolean }) => !q.answeredAt && !q.skipped
+          ).length,
         };
 
         return summary;
@@ -1197,6 +1325,84 @@ export class FeatureLoader {
 
     logger.info(`Updated feature ${featureId}`);
     return updatedFeature;
+  }
+
+  /**
+   * Archive a feature instead of deleting it.
+   *
+   * Nothing is removed from disk — the feature directory moves to
+   * `features/archived/{featureId}/` and remembers the status it came from so
+   * `unarchive()` can put it back. The board excludes `archived`, and the
+   * Closed Issues view is where archived tasks resurface.
+   *
+   * @returns The archived feature, or null when it no longer exists.
+   */
+  async archive(projectPath: string, featureId: string): Promise<Feature | null> {
+    const feature = await this.get(projectPath, featureId);
+    if (!feature) {
+      logger.warn(`Cannot archive feature ${featureId}: not found`);
+      return null;
+    }
+
+    // Already archived — return as-is rather than clobbering archivedFrom with
+    // 'archived', which would make a later restore a no-op.
+    if (feature.status === ARCHIVED_STATUS) return feature;
+
+    const archived = await this.update(projectPath, featureId, {
+      status: ARCHIVED_STATUS,
+      archivedAt: new Date().toISOString(),
+      archivedFrom: feature.status || DEFAULT_STATUS,
+    });
+
+    logger.info(`Archived feature ${featureId} (was ${feature.status || DEFAULT_STATUS})`);
+    return archived;
+  }
+
+  /**
+   * Restore an archived feature to the status it held before archiving.
+   *
+   * @param targetStatus - Override the remembered status (e.g. restoring
+   *   straight to the backlog).
+   */
+  async unarchive(
+    projectPath: string,
+    featureId: string,
+    targetStatus?: string
+  ): Promise<Feature | null> {
+    const feature = await this.get(projectPath, featureId);
+    if (!feature) {
+      logger.warn(`Cannot restore feature ${featureId}: not found`);
+      return null;
+    }
+
+    const restoredStatus =
+      targetStatus || (feature.archivedFrom as string | undefined) || DEFAULT_STATUS;
+
+    const restored = await this.update(projectPath, featureId, {
+      status: restoredStatus,
+      archivedAt: undefined,
+      archivedFrom: undefined,
+    });
+
+    logger.info(`Restored feature ${featureId} → ${restoredStatus}`);
+    return restored;
+  }
+
+  /**
+   * List archived features, newest first.
+   *
+   * Filters on the loaded status rather than trusting the directory alone, so
+   * a feature left behind by a partial move is not reported as archived.
+   */
+  async getArchived(projectPath: string): Promise<Feature[]> {
+    const features = await this.getAll(projectPath, { includeStatuses: [ARCHIVED_STATUS] });
+    return features
+      .filter((f) => f.status === ARCHIVED_STATUS)
+      .sort((a, b) => {
+        const aTime = Date.parse(a.archivedAt || a.updatedAt || '') || 0;
+        const bTime = Date.parse(b.archivedAt || b.updatedAt || '') || 0;
+        return bTime - aTime;
+      });
   }
 
   /**

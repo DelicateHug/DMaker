@@ -11,8 +11,9 @@ import type { FeatureListSummary } from '@dmaker/types';
 
 const logger = createLogger('BoardFeatures');
 
-// Board excludes completed features — they are accessed via the self-contained Completed view
-const BOARD_STATUS_FILTER = { excludeStatuses: ['completed'] };
+// Board excludes completed and archived features — both are reached through the
+// self-contained Closed Issues view rather than a column.
+const BOARD_STATUS_FILTER = { excludeStatuses: ['completed', 'archived'] };
 
 // Debounce delay for task progress updates (ms)
 const TASK_PROGRESS_DEBOUNCE_MS = 500;
@@ -163,7 +164,8 @@ export function useBoardFeatures({
     useBoardProject();
 
   // Board-scoped "show all projects" toggle (independent of global showAllProjects)
-  const [showAllProjectsInBoard, setShowAllProjectsInBoard] = useState(false);
+  // The sidebar always lists every project, so the board loads them all.
+  const [showAllProjectsInBoard, setShowAllProjectsInBoard] = useState(true);
 
   // Use board-selected project, falling back to prop for backward compatibility
   const effectiveProject = boardSelectedProject ?? currentProjectProp ?? null;

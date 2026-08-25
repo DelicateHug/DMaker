@@ -41,10 +41,12 @@ const eslintConfig = defineConfig([
         Blob: 'readonly',
         atob: 'readonly',
         crypto: 'readonly',
+        AbortController: 'readonly',
         prompt: 'readonly',
         confirm: 'readonly',
         getComputedStyle: 'readonly',
         requestAnimationFrame: 'readonly',
+        cancelAnimationFrame: 'readonly',
         // DOM Element Types
         HTMLElement: 'readonly',
         HTMLInputElement: 'readonly',

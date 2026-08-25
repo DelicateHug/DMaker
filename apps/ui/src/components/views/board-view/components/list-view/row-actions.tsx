@@ -2,7 +2,7 @@ import { memo, useCallback, useState } from 'react';
 import {
   MoreHorizontal,
   Edit,
-  Trash2,
+  Archive,
   PlayCircle,
   RotateCcw,
   StopCircle,
@@ -228,11 +228,11 @@ function getSecondaryActions(
  * - Keyboard accessible (focus, Enter/Space to open)
  *
  * Actions by status:
- * - Backlog: Edit, Delete, Make (implement), View Plan, Spawn Sub-Task
- * - In Progress: View Logs, Resume, Approve Plan, Manual Verify, Edit, Spawn Sub-Task, Delete
- * - Waiting Approval: Refine (inline secondary), Complete, View Logs, View PR, Edit, Spawn Sub-Task, Delete
+ * - Backlog: Edit, Archive, Make (implement), View Plan, Spawn Sub-Task
+ * - In Progress: View Logs, Resume, Approve Plan, Manual Verify, Edit, Spawn Sub-Task, Archive
+ * - Waiting Approval: Refine (inline secondary), Complete, View Logs, View PR, Edit, Spawn Sub-Task, Archive
  * - Running (auto task): View Logs, Approve Plan, Edit, Spawn Sub-Task, Force Stop
- * - Pipeline statuses: View Logs, Edit, Spawn Sub-Task, Delete
+ * - Pipeline statuses: View Logs, Edit, Spawn Sub-Task, Archive
  *
  * @example
  * ```tsx
@@ -240,7 +240,7 @@ function getSecondaryActions(
  *   feature={feature}
  *   handlers={{
  *     onEdit: () => handleEdit(feature.id),
- *     onDelete: () => handleDelete(feature.id),
+ *     onDelete: () => handleArchive(feature.id),
  *     onImplement: () => handleImplement(feature.id),
  *     // ... other handlers
  *   }}
@@ -477,12 +477,7 @@ export const RowActions = memo(function RowActions({
                 <MenuItem icon={MessageCircle} label="Chat" onClick={withClose(handlers.onChat)} />
               )}
               <DropdownMenuSeparator />
-              <MenuItem
-                icon={Trash2}
-                label="Delete"
-                onClick={withClose(handlers.onDelete)}
-                variant="destructive"
-              />
+              <MenuItem icon={Archive} label="Archive" onClick={withClose(handlers.onDelete)} />
             </>
           )}
 
@@ -512,12 +507,7 @@ export const RowActions = memo(function RowActions({
                 <MenuItem icon={MessageCircle} label="Chat" onClick={withClose(handlers.onChat)} />
               )}
               <DropdownMenuSeparator />
-              <MenuItem
-                icon={Trash2}
-                label="Delete"
-                onClick={withClose(handlers.onDelete)}
-                variant="destructive"
-              />
+              <MenuItem icon={Archive} label="Archive" onClick={withClose(handlers.onDelete)} />
             </>
           )}
 
@@ -574,12 +564,7 @@ export const RowActions = memo(function RowActions({
                   variant="destructive"
                 />
               )}
-              <MenuItem
-                icon={Trash2}
-                label="Delete"
-                onClick={withClose(handlers.onDelete)}
-                variant="destructive"
-              />
+              <MenuItem icon={Archive} label="Archive" onClick={withClose(handlers.onDelete)} />
             </>
           )}
 
@@ -624,12 +609,7 @@ export const RowActions = memo(function RowActions({
                 </>
               )}
               <DropdownMenuSeparator />
-              <MenuItem
-                icon={Trash2}
-                label="Delete"
-                onClick={withClose(handlers.onDelete)}
-                variant="destructive"
-              />
+              <MenuItem icon={Archive} label="Archive" onClick={withClose(handlers.onDelete)} />
             </>
           )}
 
@@ -673,12 +653,7 @@ export const RowActions = memo(function RowActions({
               {handlers.onChat && (
                 <MenuItem icon={MessageCircle} label="Chat" onClick={withClose(handlers.onChat)} />
               )}
-              <MenuItem
-                icon={Trash2}
-                label="Delete"
-                onClick={withClose(handlers.onDelete)}
-                variant="destructive"
-              />
+              <MenuItem icon={Archive} label="Archive" onClick={withClose(handlers.onDelete)} />
             </>
           )}
 
@@ -704,12 +679,7 @@ export const RowActions = memo(function RowActions({
                 <MenuItem icon={MessageCircle} label="Chat" onClick={withClose(handlers.onChat)} />
               )}
               <DropdownMenuSeparator />
-              <MenuItem
-                icon={Trash2}
-                label="Delete"
-                onClick={withClose(handlers.onDelete)}
-                variant="destructive"
-              />
+              <MenuItem icon={Archive} label="Archive" onClick={withClose(handlers.onDelete)} />
             </>
           )}
         </DropdownMenuContent>

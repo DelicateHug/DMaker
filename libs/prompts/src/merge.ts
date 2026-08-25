@@ -17,6 +17,7 @@ import type {
   CommitMessagePrompts,
   TitleGenerationPrompts,
   IssueValidationPrompts,
+  IssueDraftPrompts,
   IdeationPrompts,
   AppSpecPrompts,
   ContextDescriptionPrompts,
@@ -30,6 +31,7 @@ import type {
   ResolvedCommitMessagePrompts,
   ResolvedTitleGenerationPrompts,
   ResolvedIssueValidationPrompts,
+  ResolvedIssueDraftPrompts,
   ResolvedIdeationPrompts,
   ResolvedAppSpecPrompts,
   ResolvedContextDescriptionPrompts,
@@ -44,6 +46,7 @@ import {
   DEFAULT_COMMIT_MESSAGE_PROMPTS,
   DEFAULT_TITLE_GENERATION_PROMPTS,
   DEFAULT_ISSUE_VALIDATION_PROMPTS,
+  DEFAULT_ISSUE_DRAFT_PROMPTS,
   DEFAULT_IDEATION_PROMPTS,
   DEFAULT_APP_SPEC_PROMPTS,
   DEFAULT_CONTEXT_DESCRIPTION_PROMPTS,
@@ -191,6 +194,16 @@ export function mergeIssueValidationPrompts(
 }
 
 /**
+ * Merge custom Issue Draft prompts with defaults
+ * Custom prompts override defaults only when enabled=true
+ */
+export function mergeIssueDraftPrompts(custom?: IssueDraftPrompts): ResolvedIssueDraftPrompts {
+  return {
+    systemPrompt: resolvePrompt(custom?.systemPrompt, DEFAULT_ISSUE_DRAFT_PROMPTS.systemPrompt),
+  };
+}
+
+/**
  * Merge custom Ideation prompts with defaults
  * Custom prompts override defaults only when enabled=true
  */
@@ -333,6 +346,7 @@ export function mergeAllPrompts(custom?: PromptCustomization) {
     commitMessage: mergeCommitMessagePrompts(custom?.commitMessage),
     titleGeneration: mergeTitleGenerationPrompts(custom?.titleGeneration),
     issueValidation: mergeIssueValidationPrompts(custom?.issueValidation),
+    issueDraft: mergeIssueDraftPrompts(custom?.issueDraft),
     ideation: mergeIdeationPrompts(custom?.ideation),
     appSpec: mergeAppSpecPrompts(custom?.appSpec),
     contextDescription: mergeContextDescriptionPrompts(custom?.contextDescription),

@@ -13,10 +13,18 @@
 
 import { test, expect } from '@playwright/test';
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import { authenticateForTests, handleLoginScreenIfPresent } from '../utils';
 
-const SETTINGS_PATH = path.resolve(process.cwd(), '../server/data/settings.json');
+/**
+ * The test backend's settings file — NOT apps/server/data/settings.json, which
+ * is the developer's own project list. This spec rewrites the file it points
+ * at, so aiming it at real data meant a test run edited the user's projects.
+ * Must match playwright.config.ts and scripts/setup-e2e-fixtures.mjs.
+ */
+const TEST_DATA_DIR = process.env.DMAKER_E2E_DATA_DIR || path.join(os.tmpdir(), 'dmaker-e2e-data');
+const SETTINGS_PATH = path.join(TEST_DATA_DIR, 'settings.json');
 const WORKSPACE_ROOT = path.resolve(process.cwd(), '../..');
 const FIXTURE_PROJECT_PATH = path.join(WORKSPACE_ROOT, 'test/fixtures/projectA');
 
@@ -94,7 +102,7 @@ test.describe('Settings startup sync race', () => {
     // App should eventually render a main view after settings hydration.
     await page
       .locator(
-        '[data-testid="welcome-view"], [data-testid="dashboard-view"], [data-testid="board-view"]'
+        '[data-testid="welcome-view"], [data-testid="board-view-no-project"], [data-testid="board-view"]'
       )
       .first()
       .waitFor({ state: 'visible', timeout: 30000 });
@@ -107,44 +115,63 @@ test.describe('Settings startup sync race', () => {
     expect(settingsAfterHydration.projects?.[0]?.path).toBe(FIXTURE_PROJECT_PATH);
   });
 
-  test('does not wipe projects during logout transition', async ({ page }) => {
-    // Ensure authenticated and app is loaded at least to welcome/board.
+  /**
+   * The logout button this used to click is gone with the app's auth UI, but
+   * the guard it exercised is not: useSettingsSync stops syncing and resets
+   * the moment auth is lost, so a session that expires cannot push empty
+   * defaults over the server's project list. Losing the session is now
+   * simulated directly instead of driven through a screen that no longer
+   * exists.
+   */
+  test('does not wipe projects when the session is lost', async ({ page }) => {
     await authenticateForTests(page);
     await page.goto('/');
     await page.waitForLoadState('load');
     await handleLoginScreenIfPresent(page);
     await page
       .locator(
-        '[data-testid="welcome-view"], [data-testid="dashboard-view"], [data-testid="board-view"]'
+        '[data-testid="welcome-view"], [data-testid="board-view-no-project"], [data-testid="board-view"]'
       )
       .first()
       .waitFor({ state: 'visible', timeout: 30000 });
 
-    // Confirm settings.json currently has projects (precondition).
+    // Precondition: the server's settings still list the fixture project.
     const beforeLogout = JSON.parse(fs.readFileSync(SETTINGS_PATH, 'utf-8')) as {
       projects?: Array<unknown>;
     };
     expect(beforeLogout.projects?.length).toBeGreaterThan(0);
 
-    // Navigate to settings, then to Account section (logout button is only visible there)
-    await page.goto('/settings');
-    // Wait for settings view to load, then click on Account section
-    await page.locator('button:has-text("Account")').first().click();
-    // Wait for account section to be visible before clicking logout
-    await page
-      .locator('[data-testid="logout-button"]')
-      .waitFor({ state: 'visible', timeout: 10000 });
-    await page.locator('[data-testid="logout-button"]').click();
+    // From here on, every settings write is rejected as unauthenticated —
+    // exactly what an expired session looks like to the UI.
+    await page.route('**/api/settings/global', async (route) => {
+      if (route.request().method() === 'PUT') {
+        await route.fulfill({
+          status: 401,
+          contentType: 'application/json',
+          body: JSON.stringify({ success: false, error: 'Unauthorized' }),
+        });
+        return;
+      }
+      await route.continue();
+    });
 
-    // Ensure we landed on logged-out or login (either is acceptable).
-    // Note: The page uses curly apostrophe (') so we match the heading role instead
-    await page
-      .getByRole('heading', { name: /logged out/i })
-      .or(page.locator('text=Authentication Required'))
-      .first()
-      .waitFor({ state: 'visible', timeout: 30000 });
+    // Clear the local project list, the state the old bug used to push up.
+    await page.evaluate(() => {
+      const raw = localStorage.getItem('dmaker-storage');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed.state) {
+          parsed.state.projects = [];
+          parsed.state.currentProject = null;
+          localStorage.setItem('dmaker-storage', JSON.stringify(parsed));
+        }
+      }
+    });
+    await page.reload();
+    await page.waitForLoadState('load');
+    await page.waitForTimeout(3000);
 
-    // The server settings file should still have projects after logout.
+    // The server's settings file must still list the project.
     const afterLogout = JSON.parse(fs.readFileSync(SETTINGS_PATH, 'utf-8')) as {
       projects?: Array<unknown>;
     };

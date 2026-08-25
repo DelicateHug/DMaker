@@ -25,6 +25,12 @@ interface DeleteConfirmDialogProps {
   testId?: string;
   /** Test ID for the confirm button */
   confirmTestId?: string;
+  /**
+   * Show the "hold Shift to skip this" tip. Off for callers with no delete
+   * icon to shift-click — a context-menu item, say — where the tip would be
+   * pointing at something that isn't there.
+   */
+  showShiftTip?: boolean;
 }
 
 export function DeleteConfirmDialog({
@@ -37,6 +43,7 @@ export function DeleteConfirmDialog({
   confirmText = 'Delete',
   testId = 'delete-confirm-dialog',
   confirmTestId = 'confirm-delete-button',
+  showShiftTip = true,
 }: DeleteConfirmDialogProps) {
   const handleConfirm = () => {
     onConfirm();
@@ -56,13 +63,15 @@ export function DeleteConfirmDialog({
 
         {children}
 
-        <div className="text-xs text-muted-foreground pt-3 pb-2">
-          Tip: Hold{' '}
-          <kbd className="px-1.5 py-0.5 bg-sidebar-accent/30 border border-sidebar-border rounded text-xs font-mono">
-            Shift
-          </kbd>{' '}
-          and click the delete icon to skip this confirmation.
-        </div>
+        {showShiftTip && (
+          <div className="text-xs text-muted-foreground pt-3 pb-2">
+            Tip: Hold{' '}
+            <kbd className="px-1.5 py-0.5 bg-sidebar-accent/30 border border-sidebar-border rounded text-xs font-mono">
+              Shift
+            </kbd>{' '}
+            and click the delete icon to skip this confirmation.
+          </div>
+        )}
 
         <DialogFooter className="gap-2 sm:gap-2 pt-4">
           <Button

@@ -28,7 +28,7 @@ function logError(error: unknown, context: string): void {
 // Handlers
 // ---------------------------------------------------------------------------
 
-function createIndexHandler(autoModeService: AutoModeService) {
+export function createIndexHandler(autoModeService: AutoModeService) {
   return async (_req: Request, res: Response): Promise<void> => {
     try {
       const runningAgents = [...(await autoModeService.getRunningAgents())];

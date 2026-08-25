@@ -271,6 +271,7 @@ export function SessionSelector({
               'transition-all duration-200',
               'max-w-[200px]'
             )}
+            data-testid="session-selector-trigger"
           >
             {isCurrentSessionRunning ? (
               <Loader2 className="w-4 h-4 animate-spin shrink-0" />
@@ -281,7 +282,11 @@ export function SessionSelector({
             <ChevronDown className="w-4 h-4 opacity-50 shrink-0" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-[280px] max-h-[400px] overflow-y-auto">
+        <DropdownMenuContent
+          align="end"
+          className="w-[280px] max-h-[400px] overflow-y-auto"
+          data-testid="session-selector-content"
+        >
           {/* Project Selector Section */}
           {showProjectSelector && projects.length > 0 && (
             <>
@@ -382,6 +387,7 @@ export function SessionSelector({
           {sessions.map((session) => (
             <DropdownMenuItem
               key={session.id}
+              data-testid={`session-item-${session.id}`}
               onClick={() => {
                 onSelectSession(session.id);
                 setOpen(false);
@@ -439,6 +445,7 @@ export function SessionSelector({
           <DropdownMenuItem
             onClick={handleQuickCreateSession}
             className="cursor-pointer font-medium text-primary"
+            data-testid="new-session-button"
           >
             <Plus className="w-4 h-4 mr-2" />
             Start new chat

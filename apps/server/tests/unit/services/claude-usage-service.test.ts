@@ -544,8 +544,10 @@ Resets in 2h
 
       const promise = ptyService.fetchUsageData();
 
-      // Advance time past timeout (45 seconds)
-      vi.advanceTimersByTime(46000);
+      // Past the PTY timeout, which is 60s to cover the /status + /usage flow.
+      // These advanced only 46s and so never fired it, leaving the promise
+      // pending until vitest's own 5s limit killed the test.
+      vi.advanceTimersByTime(61000);
 
       await expect(promise).rejects.toThrow(
         'The Claude CLI took too long to respond. This can happen if the CLI is waiting for a trust prompt or is otherwise busy.'
@@ -577,8 +579,10 @@ Resets in 2h
       // Simulate receiving usage data
       dataCallback!('Current session\n65% left\nResets in 2h');
 
-      // Advance time past timeout (45 seconds)
-      vi.advanceTimersByTime(46000);
+      // Past the PTY timeout, which is 60s to cover the /status + /usage flow.
+      // These advanced only 46s and so never fired it, leaving the promise
+      // pending until vitest's own 5s limit killed the test.
+      vi.advanceTimersByTime(61000);
 
       // Should resolve with data instead of rejecting
       const result = await promise;

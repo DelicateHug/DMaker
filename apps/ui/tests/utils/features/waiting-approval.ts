@@ -50,13 +50,15 @@ export async function isCommitButtonVisible(page: Page, featureId: string): Prom
  * Get the waiting_approval kanban column
  */
 export async function getWaitingApprovalColumn(page: Page): Promise<Locator> {
-  return page.locator('[data-testid="kanban-column-waiting_approval"]');
+  return page.locator('[data-testid^="sidebar-section-status:"][data-testid$=":waiting_approval"]');
 }
 
 /**
  * Check if the waiting_approval column is visible
  */
 export async function isWaitingApprovalColumnVisible(page: Page): Promise<boolean> {
-  const column = page.locator('[data-testid="kanban-column-waiting_approval"]');
+  const column = page.locator(
+    '[data-testid^="sidebar-section-status:"][data-testid$=":waiting_approval"]'
+  );
   return await column.isVisible().catch(() => false);
 }

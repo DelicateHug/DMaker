@@ -1,4 +1,32 @@
-import { create } from 'zustand';
+import {
+  Brain,
+  FileText,
+  GitPullRequest,
+  Lightbulb,
+  Settings,
+  Sparkles,
+  Terminal,
+  Wand2,
+  type LucideIcon,
+} from 'lucide-react';
+import {
+  useCenterStore,
+  centerTabKey,
+  openToolTab,
+  toolTabKey,
+  useIsTabActive,
+  useIsTabOpen,
+} from './center-store';
+
+/**
+ * Tools — the terminal, spec editor, ideation, memory, the pull-request view
+ * and the settings screens. GitHub issues are not here: they are tasks on the
+ * board, not a view of their own.
+ *
+ * These used to own a stack of their own that covered the centre. They are now
+ * ordinary centre tabs (see `center-store`), so this module is just their
+ * catalogue plus a few helpers that speak in tool ids rather than tab keys.
+ */
 
 export type LayerId =
   | 'settings'
@@ -6,10 +34,10 @@ export type LayerId =
   | 'ideation'
   | 'spec'
   | 'memory'
-  | 'github-issues'
   | 'github-prs'
   | 'project-settings'
-  | 'interview';
+  | 'interview'
+  | 'scratch';
 
 export const LAYER_TITLES: Record<LayerId, string> = {
   settings: 'Settings',
@@ -17,73 +45,60 @@ export const LAYER_TITLES: Record<LayerId, string> = {
   ideation: 'Ideation',
   spec: 'Spec Editor',
   memory: 'Memory',
-  'github-issues': 'GitHub Issues',
   'github-prs': 'GitHub Pull Requests',
   'project-settings': 'Project Settings',
   interview: 'Interview',
+  scratch: 'Scratchpad',
 };
 
-interface LayerState {
-  /** Stack of open layers (last = topmost) */
-  layers: LayerId[];
+/** Short labels for the tab strip, where horizontal space is scarce. */
+export const LAYER_TAB_LABELS: Record<LayerId, string> = {
+  ...LAYER_TITLES,
+  'github-prs': 'GitHub PRs',
+  spec: 'Spec',
+};
 
-  /** Open a layer. If already open, brings it to top. */
-  openLayer: (id: LayerId) => void;
+export const LAYER_ICONS: Record<LayerId, LucideIcon> = {
+  settings: Settings,
+  terminal: Terminal,
+  ideation: Lightbulb,
+  spec: FileText,
+  memory: Brain,
+  'github-prs': GitPullRequest,
+  'project-settings': Settings,
+  interview: Wand2,
+  scratch: Sparkles,
+};
 
-  /** Close the topmost layer */
-  closeLayer: () => void;
-
-  /** Close a specific layer by id */
-  closeLayerById: (id: LayerId) => void;
-
-  /** Close all layers */
-  closeAllLayers: () => void;
-
-  /** Toggle a layer open/closed */
-  toggleLayer: (id: LayerId) => void;
-
-  /** Check if a specific layer is open */
-  isLayerOpen: (id: LayerId) => boolean;
-
-  /** Get the topmost layer id */
-  topLayer: () => LayerId | null;
+/** Open a tool in the centre, adding a tab for it if it has none. */
+export function openLayer(id: LayerId): void {
+  openToolTab(id);
 }
 
-export const useLayerStore = create<LayerState>((set, get) => ({
-  layers: [],
+/** Click-again-to-close: open, focus, then close on the third click. */
+export function toggleLayer(id: LayerId): void {
+  useCenterStore.getState().toggleTab({ kind: 'tool', toolId: id });
+}
 
-  openLayer: (id) =>
-    set((state) => {
-      // Remove if already in stack, then push to top
-      const filtered = state.layers.filter((l) => l !== id);
-      return { layers: [...filtered, id] };
-    }),
+/** Close a tool's tab. */
+export function closeLayer(id: LayerId): void {
+  useCenterStore.getState().closeTab(toolTabKey(id));
+}
 
-  closeLayer: () =>
-    set((state) => ({
-      layers: state.layers.slice(0, -1),
-    })),
+/** Close every open tool, leaving the other tabs alone. */
+export function closeAllLayers(): void {
+  const { tabs, closeTab } = useCenterStore.getState();
+  for (const tab of tabs) {
+    if (tab.kind === 'tool') closeTab(centerTabKey(tab));
+  }
+}
 
-  closeLayerById: (id) =>
-    set((state) => ({
-      layers: state.layers.filter((l) => l !== id),
-    })),
+/** Does this tool hold a tab? */
+export function useIsLayerOpen(id: LayerId): boolean {
+  return useIsTabOpen(toolTabKey(id));
+}
 
-  closeAllLayers: () => set({ layers: [] }),
-
-  toggleLayer: (id) => {
-    const state = get();
-    if (state.layers.includes(id)) {
-      set({ layers: state.layers.filter((l) => l !== id) });
-    } else {
-      set({ layers: [...state.layers.filter((l) => l !== id), id] });
-    }
-  },
-
-  isLayerOpen: (id) => get().layers.includes(id),
-
-  topLayer: () => {
-    const { layers } = get();
-    return layers.length > 0 ? layers[layers.length - 1]! : null;
-  },
-}));
+/** Is this tool the thing currently on screen? */
+export function useIsLayerShowing(id: LayerId): boolean {
+  return useIsTabActive(toolTabKey(id));
+}

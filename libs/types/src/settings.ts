@@ -691,6 +691,42 @@ export interface GlobalSettings {
    * Persists across sessions for account switching UX.
    */
   claudeAccounts?: ClaudeAccountRef[];
+
+  // GitHub Configuration (defaults inherited by every project)
+  /**
+   * Owner/org used when a project names its repo without one (e.g. 'DMaker'
+   * becomes '<owner>/DMaker'). Leave unset to always require 'owner/repo'.
+   */
+  githubDefaultOwner?: string;
+
+  /**
+   * Git remote used for GitHub operations.
+   * @default 'origin'
+   */
+  githubRemoteName?: string;
+
+  /**
+   * Branch new pull requests target when nothing more specific applies.
+   * @default 'main'
+   */
+  githubBaseBranch?: string;
+
+  /**
+   * Open new pull requests as drafts.
+   * @default false
+   */
+  githubDraftPRs?: boolean;
+
+  /**
+   * File a GitHub issue in the background whenever a task is added.
+   *
+   * The task still starts, plans and branches immediately; only its first
+   * commit waits for the issue. Projects with no GitHub remote are skipped
+   * regardless of this setting.
+   *
+   * @default true
+   */
+  githubAutoCreateIssues?: boolean;
 }
 
 /**
@@ -774,6 +810,14 @@ export interface WorktreeInfo {
 }
 
 /**
+ * Where a feature's deploy script runs.
+ *
+ * These are the two the settings UI offers; the deploy script itself receives
+ * the value and decides what it means for a given project.
+ */
+export type DeployEnvironment = 'development' | 'production';
+
+/**
  * ProjectSettings - Project-specific overrides stored in {projectPath}/.dmaker/settings.json
  *
  * Allows per-project customization without affecting global settings.
@@ -798,8 +842,18 @@ export interface ProjectSettings {
   defaultBranch?: string;
 
   // GitHub Configuration
+  //
+  // Every field here is an override. Unset means "inherit", and the inherited
+  // value is the matching global setting, then whatever git/gh reports for the
+  // project, then the built-in default - see resolveGitHubSettings().
   /** Override GitHub repo for issues/PRs (e.g., "owner/repo"). When set, uses this instead of auto-detected remote. */
   githubRepo?: string;
+  /** Git remote used for GitHub operations (undefined = inherit global) */
+  githubRemoteName?: string;
+  /** Branch new pull requests target (undefined = inherit global) */
+  githubBaseBranch?: string;
+  /** Open new pull requests as drafts (undefined = inherit global) */
+  githubDraftPRs?: boolean;
 
   // Worktree Management
   /** Current worktree being used in this project */
@@ -851,6 +905,14 @@ export interface ProjectSettings {
    * Value: agent configuration
    */
   customSubagents?: Record<string, import('./provider.js').AgentDefinition>;
+
+  // E2E Sandbox
+  /**
+   * How this project's app is started and driven inside the browser sandbox,
+   * so an agent can verify its own work against a real rendered page.
+   * Absent means the sandbox is off for this project.
+   */
+  e2eSandbox?: import('./e2e-sandbox.js').E2ESandboxConfig;
 }
 
 /**

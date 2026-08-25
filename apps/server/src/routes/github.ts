@@ -7,6 +7,7 @@
 import { exec } from 'child_process';
 import { spawn } from 'child_process';
 import { promisify } from 'util';
+import { delimiter } from 'path';
 import { Router } from 'express';
 import type { Request, Response } from 'express';
 import type { EventEmitter } from '../lib/events.js';
@@ -27,6 +28,8 @@ import {
   isOpencodeModel,
 } from '@dmaker/types';
 import type { IssueCommentsResult } from '@dmaker/types';
+import { resolveGitHubSettings } from '@dmaker/types';
+import type { DetectedGitHubRemote } from '@dmaker/types';
 import { resolvePhaseModel } from '@dmaker/model-resolver';
 import { createLogger } from '@dmaker/utils';
 import { validatePathParams } from '../middleware.js';
@@ -42,6 +45,10 @@ import {
 import { streamingQuery } from '../providers/simple-query-service.js';
 import { getPromptCustomization, getAutoLoadClaudeMdSetting } from '../lib/settings-helpers.js';
 import { getGitHubSyncService } from '../services/github-sync-service.js';
+import {
+  resolveRemoteName,
+  resolveRemoteDefaultBranch,
+} from '../services/remote-branch-discovery.js';
 import { FeatureLoader } from '../services/feature-loader.js';
 import type { SettingsService } from '../services/settings-service.js';
 
@@ -53,15 +60,25 @@ const validationLogger = createLogger('IssueValidation');
 
 const execAsync = promisify(exec);
 
-const extendedPath = [
-  process.env.PATH,
-  '/opt/homebrew/bin',
-  '/usr/local/bin',
-  '/home/linuxbrew/.linuxbrew/bin',
-  `${process.env.HOME}/.local/bin`,
-]
-  .filter(Boolean)
-  .join(':');
+/**
+ * The usual homes of a Homebrew/linuxbrew `gh` - a GUI-launched server does not
+ * inherit a login shell's PATH, so `gh` is invisible without them. They are
+ * POSIX paths, so on Windows there is nothing to add: appending them there only
+ * risks corrupting a PATH that already works.
+ */
+const EXTRA_TOOL_PATHS =
+  process.platform === 'win32'
+    ? []
+    : [
+        '/opt/homebrew/bin',
+        '/usr/local/bin',
+        '/home/linuxbrew/.linuxbrew/bin',
+        `${process.env.HOME}/.local/bin`,
+      ];
+
+// delimiter, not ':' - on Windows PATH is ';'-separated, and gluing entries on
+// with a colon silently destroys the last one already in it.
+const extendedPath = [process.env.PATH, ...EXTRA_TOOL_PATHS].filter(Boolean).join(delimiter);
 
 const execEnv = {
   ...process.env,
@@ -1130,6 +1147,86 @@ function createCheckGitHubRemoteHandler() {
   };
 }
 
+/**
+ * Everything git and `gh` can tell us about where this project pushes.
+ *
+ * Deliberately best-effort: a project with no remote, or a machine with no
+ * `gh`, still resolves - it just inherits more from settings.
+ */
+async function detectGitHubRemote(projectPath: string): Promise<DetectedGitHubRemote> {
+  const status = await checkGitHubRemote(projectPath);
+
+  let remoteName: string | null = null;
+  let defaultBranch: string | undefined;
+  try {
+    remoteName = await resolveRemoteName(projectPath);
+    if (remoteName) {
+      defaultBranch = await resolveRemoteDefaultBranch(projectPath, remoteName);
+    }
+  } catch {
+    // Not a git repo, or no remotes - leave both unset.
+  }
+
+  return {
+    owner: status.owner,
+    repo: status.repo,
+    remoteName,
+    defaultBranch: defaultBranch ?? null,
+  };
+}
+
+/**
+ * The GitHub configuration in force for a project: what git reports, what the
+ * project overrides, what it inherits from the globals, and which layer each
+ * effective value came from.
+ */
+function createGitHubConfigHandler(settingsService?: SettingsService) {
+  return async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { projectPath } = req.body as { projectPath?: string };
+
+      if (!projectPath) {
+        res.status(400).json({ success: false, error: 'projectPath is required' });
+        return;
+      }
+
+      const [detected, globalSettings, projectSettings] = await Promise.all([
+        detectGitHubRemote(projectPath),
+        settingsService?.getGlobalSettings() ?? Promise.resolve(null),
+        settingsService?.getProjectSettings(projectPath) ?? Promise.resolve(null),
+      ]);
+
+      const { effective, sources } = resolveGitHubSettings(
+        globalSettings,
+        projectSettings,
+        detected
+      );
+
+      res.json({
+        success: true,
+        detected,
+        effective,
+        sources,
+        global: {
+          githubDefaultOwner: globalSettings?.githubDefaultOwner ?? null,
+          githubRemoteName: globalSettings?.githubRemoteName ?? null,
+          githubBaseBranch: globalSettings?.githubBaseBranch ?? null,
+          githubDraftPRs: globalSettings?.githubDraftPRs ?? null,
+        },
+        project: {
+          githubRepo: projectSettings?.githubRepo ?? null,
+          githubRemoteName: projectSettings?.githubRemoteName ?? null,
+          githubBaseBranch: projectSettings?.githubBaseBranch ?? null,
+          githubDraftPRs: projectSettings?.githubDraftPRs ?? null,
+        },
+      });
+    } catch (error) {
+      logError(error, 'Resolve GitHub config failed');
+      res.status(500).json({ success: false, error: getErrorMessage(error) });
+    }
+  };
+}
+
 function createListIssuesHandler() {
   return async (req: Request, res: Response): Promise<void> => {
     try {
@@ -1876,7 +1973,7 @@ function createCreateIssueHandler() {
       const result = await syncService.createIssue(projectPath, title, body, labels);
 
       if (!result.success) {
-        res.status(500).json({ success: false, error: result.error });
+        res.status(500).json({ success: false, error: result.error, errorCode: result.errorCode });
         return;
       }
 
@@ -1884,9 +1981,46 @@ function createCreateIssueHandler() {
         success: true,
         issueNumber: result.issueNumber,
         url: result.url,
+        appliedLabels: result.appliedLabels,
       });
     } catch (error) {
       logError(error, 'Create issue failed');
+      res.status(500).json({ success: false, error: getErrorMessage(error) });
+    }
+  };
+}
+
+function createCreateRepoHandler() {
+  return async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { projectPath, name, visibility, description } = req.body as {
+        projectPath: string;
+        name: string;
+        visibility?: 'private' | 'public';
+        description?: string;
+      };
+
+      if (!projectPath || !name) {
+        res.status(400).json({ success: false, error: 'projectPath and name are required' });
+        return;
+      }
+
+      const syncService = getGitHubSyncService();
+      const result = await syncService.createRepo(
+        projectPath,
+        name,
+        visibility === 'public' ? 'public' : 'private',
+        description
+      );
+
+      if (!result.success) {
+        res.status(500).json({ success: false, error: result.error });
+        return;
+      }
+
+      res.json({ success: true, url: result.url, nameWithOwner: result.nameWithOwner });
+    } catch (error) {
+      logError(error, 'Create repo failed');
       res.status(500).json({ success: false, error: getErrorMessage(error) });
     }
   };
@@ -1972,6 +2106,11 @@ export function createGitHubRoutes(
   getGitHubSyncService(events);
 
   router.post('/check-remote', validatePathParams('projectPath'), createCheckGitHubRemoteHandler());
+  router.post(
+    '/config',
+    validatePathParams('projectPath'),
+    createGitHubConfigHandler(settingsService)
+  );
   router.post('/issues', validatePathParams('projectPath'), createListIssuesHandler());
   router.post('/prs', validatePathParams('projectPath'), createListPRsHandler());
   router.post('/issue-comments', validatePathParams('projectPath'), createListCommentsHandler());
@@ -2010,6 +2149,7 @@ export function createGitHubRoutes(
   router.post('/sync-issue', validatePathParams('projectPath'), createSyncIssueHandler(events));
   router.post('/current-user', validatePathParams('projectPath'), createCurrentUserHandler(events));
   router.post('/create-issue', validatePathParams('projectPath'), createCreateIssueHandler());
+  router.post('/create-repo', validatePathParams('projectPath'), createCreateRepoHandler());
   router.post(
     '/update-issue-labels',
     validatePathParams('projectPath'),

@@ -35,7 +35,7 @@ function logError(error: unknown, context: string): void {
 // POST /config - Get pipeline configuration
 // ---------------------------------------------------------------------------
 
-function createGetConfigHandler(pipelineService: PipelineService) {
+export function createGetConfigHandler(pipelineService: PipelineService) {
   return async (req: Request, res: Response): Promise<void> => {
     try {
       const { projectPath } = req.body;
@@ -62,7 +62,7 @@ function createGetConfigHandler(pipelineService: PipelineService) {
 // POST /config/save - Save entire pipeline configuration
 // ---------------------------------------------------------------------------
 
-function createSaveConfigHandler(pipelineService: PipelineService) {
+export function createSaveConfigHandler(pipelineService: PipelineService) {
   return async (req: Request, res: Response): Promise<void> => {
     try {
       const { projectPath, config } = req.body as {
@@ -96,7 +96,7 @@ function createSaveConfigHandler(pipelineService: PipelineService) {
 // POST /steps/add - Add a new pipeline step
 // ---------------------------------------------------------------------------
 
-function createAddStepHandler(pipelineService: PipelineService) {
+export function createAddStepHandler(pipelineService: PipelineService) {
   return async (req: Request, res: Response): Promise<void> => {
     try {
       const { projectPath, step } = req.body as {
@@ -141,7 +141,7 @@ function createAddStepHandler(pipelineService: PipelineService) {
 // POST /steps/update - Update an existing pipeline step
 // ---------------------------------------------------------------------------
 
-function createUpdateStepHandler(pipelineService: PipelineService) {
+export function createUpdateStepHandler(pipelineService: PipelineService) {
   return async (req: Request, res: Response): Promise<void> => {
     try {
       const { projectPath, stepId, updates } = req.body as {
@@ -182,7 +182,7 @@ function createUpdateStepHandler(pipelineService: PipelineService) {
 // POST /steps/delete - Delete a pipeline step
 // ---------------------------------------------------------------------------
 
-function createDeleteStepHandler(pipelineService: PipelineService) {
+export function createDeleteStepHandler(pipelineService: PipelineService) {
   return async (req: Request, res: Response): Promise<void> => {
     try {
       const { projectPath, stepId } = req.body as {
@@ -216,7 +216,7 @@ function createDeleteStepHandler(pipelineService: PipelineService) {
 // POST /steps/reorder - Reorder pipeline steps
 // ---------------------------------------------------------------------------
 
-function createReorderStepsHandler(pipelineService: PipelineService) {
+export function createReorderStepsHandler(pipelineService: PipelineService) {
   return async (req: Request, res: Response): Promise<void> => {
     try {
       const { projectPath, stepIds } = req.body as {

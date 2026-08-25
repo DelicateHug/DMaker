@@ -33,13 +33,26 @@ import {
   Github,
 } from 'lucide-react';
 import type { GitHubIssue } from '@/lib/electron';
-import type { Feature } from '@dmaker/types';
+// The store's Feature, not the wire type: this builds a feature for the UI
+// (GitHubIssueDialog and friends), which requires `steps`.
+import type { Feature } from '@/store/app-store';
 import { GitHubIssueDialog } from './dialogs/github-issue-dialog';
 
-/** A closed GitHub issue enriched with project info for multi-project support. */
+/**
+ * A closed GitHub issue enriched with project info for multi-project support.
+ *
+ * Archived tasks ride in the same list. They are the same shape so the date
+ * grouping, filters and pagination work unchanged; `archivedFeatureId` is what
+ * marks one, and is what "Restore" acts on. An archived task with no GitHub
+ * issue behind it has `number: 0`.
+ */
 export type ClosedIssueWithProject = GitHubIssue & {
   projectPath?: string;
   projectName?: string;
+  /** Set when this row is a locally archived task rather than a plain closed issue */
+  archivedFeatureId?: string;
+  /** The status the task will return to when restored */
+  archivedFrom?: string;
 };
 
 // ---------------------------------------------------------------------------
@@ -279,6 +292,17 @@ const DEFAULT_PAGE_SIZE: PageSize = 10;
 // Sub-components
 // ---------------------------------------------------------------------------
 
+/**
+ * Stable identity for a row.
+ *
+ * An archived task with no issue behind it has neither a URL nor an issue
+ * number, so neither alone is unique across the merged list.
+ */
+export function rowKey(issue: ClosedIssueWithProject): string {
+  if (issue.archivedFeatureId) return `archived:${issue.archivedFeatureId}`;
+  return issue.url || `issue:${issue.projectPath ?? ''}#${issue.number}`;
+}
+
 /** Build a minimal Feature object from a closed GitHub issue for the GitHubIssueDialog */
 function issueToFeature(issue: ClosedIssueWithProject): Feature {
   return {
@@ -313,6 +337,7 @@ const ClosedIssueCard = memo(function ClosedIssueCard({
   projectName?: string;
 }) {
   const [dialogOpen, setDialogOpen] = useState(false);
+  const isArchived = Boolean(issue.archivedFeatureId);
   const closedDate = getIssueClosedDate(issue);
   const closedTimeStr = closedDate.toLocaleTimeString('en-US', {
     hour: 'numeric',
@@ -330,15 +355,25 @@ const ClosedIssueCard = memo(function ClosedIssueCard({
       >
         <CardHeader className="p-3 pb-2 flex-1">
           <CardTitle className="text-sm leading-tight line-clamp-2">
-            <button
-              type="button"
-              onClick={() => setDialogOpen(true)}
-              className="inline-flex items-center gap-1 mr-1.5 text-primary/70 hover:text-primary hover:underline transition-colors cursor-pointer"
-              title={`View Issue #${issue.number}`}
-            >
-              <Github className="w-3.5 h-3.5 shrink-0" />
-              <span>#{issue.number}</span>
-            </button>
+            {isArchived && (
+              <Badge
+                variant="outline"
+                className="text-[10px] px-1.5 py-0 mr-1.5 align-middle border-amber-500/50 text-amber-600 dark:text-amber-400"
+              >
+                Archived
+              </Badge>
+            )}
+            {issue.number > 0 && (
+              <button
+                type="button"
+                onClick={() => setDialogOpen(true)}
+                className="inline-flex items-center gap-1 mr-1.5 text-primary/70 hover:text-primary hover:underline transition-colors cursor-pointer"
+                title={`View Issue #${issue.number}`}
+              >
+                <Github className="w-3.5 h-3.5 shrink-0" />
+                <span>#{issue.number}</span>
+              </button>
+            )}
             {issue.title}
           </CardTitle>
           <CardDescription className="text-xs mt-1.5 flex flex-col gap-1.5">
@@ -374,7 +409,7 @@ const ClosedIssueCard = memo(function ClosedIssueCard({
             {/* Closed time */}
             <span className="flex items-center gap-1 text-muted-foreground/70">
               <Clock className="w-3 h-3" />
-              Closed {closedTimeStr}
+              {isArchived ? 'Archived' : 'Closed'} {closedTimeStr}
             </span>
 
             {/* Linked PRs */}
@@ -395,26 +430,32 @@ const ClosedIssueCard = memo(function ClosedIssueCard({
           </CardDescription>
         </CardHeader>
         <div className="p-3 pt-0 flex gap-2">
-          <Button
-            variant="secondary"
-            size="sm"
-            className="flex-1 h-7 text-xs"
-            onClick={() => window.open(issue.url, '_blank')}
-            data-testid={`open-github-${issue.number}`}
-          >
-            <ExternalLink className="w-3 h-3 mr-1" />
-            Open in GitHub
-          </Button>
+          {issue.url ? (
+            <Button
+              variant="secondary"
+              size="sm"
+              className="flex-1 h-7 text-xs"
+              onClick={() => window.open(issue.url, '_blank')}
+              data-testid={`open-github-${issue.number}`}
+            >
+              <ExternalLink className="w-3 h-3 mr-1" />
+              Open in GitHub
+            </Button>
+          ) : (
+            <span className="flex-1" />
+          )}
           <Button
             variant="ghost"
             size="sm"
             className="h-7 text-xs"
             onClick={onReopen}
-            title="Reopen issue"
-            data-testid={`reopen-${issue.number}`}
+            title={isArchived ? 'Restore to the board' : 'Reopen issue'}
+            data-testid={
+              isArchived ? `restore-${issue.archivedFeatureId}` : `reopen-${issue.number}`
+            }
           >
             <RotateCcw className="w-3 h-3 mr-1" />
-            Reopen
+            {isArchived ? 'Restore' : 'Reopen'}
           </Button>
         </div>
       </Card>
@@ -475,8 +516,8 @@ const EmptyState = memo(function EmptyState({
       <GitPullRequest className="w-12 h-12 mx-auto mb-4 opacity-50" />
       <p className="text-sm">
         {hasSearchQuery || hasFilters
-          ? 'No closed issues match your filters'
-          : 'No closed issues found'}
+          ? 'Nothing archived or closed matches your filters'
+          : 'No archived tasks or closed issues found'}
       </p>
     </div>
   );
@@ -1166,7 +1207,7 @@ export const CompletedFeaturesListView = memo(function CompletedFeaturesListView
                           undefined;
                         return (
                           <ClosedIssueCard
-                            key={issue.url}
+                            key={rowKey(issue)}
                             issue={issue}
                             onReopen={() => onReopen(issue)}
                             projectName={resolvedProjectName}

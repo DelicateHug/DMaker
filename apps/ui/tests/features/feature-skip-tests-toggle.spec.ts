@@ -18,9 +18,10 @@ import {
   clickAddFeature,
   fillAddFeatureDialog,
   confirmAddFeature,
-  isSkipTestsBadgeVisible,
   authenticateForTests,
   handleLoginScreenIfPresent,
+  showAllStatuses,
+  API_BASE_URL,
 } from '../utils';
 
 const TEST_TEMP_DIR = createTempDirPath('skip-tests-toggle-test');
@@ -62,7 +63,7 @@ test.describe('Feature Skip Tests Badge', () => {
     cleanupTempDir(TEST_TEMP_DIR);
   });
 
-  test('should show skip tests badge for new feature with default settings', async ({ page }) => {
+  test('a new feature inherits the skip-tests default', async ({ page, request }) => {
     const featureDescription = `Skip tests feature ${Date.now()}`;
 
     await setupRealProject(page, projectPath, projectName, { setAsCurrent: true });
@@ -74,20 +75,25 @@ test.describe('Feature Skip Tests Badge', () => {
     await waitForNetworkIdle(page);
 
     await expect(page.locator('[data-testid="board-view"]')).toBeVisible({ timeout: 10000 });
-    await expect(page.locator('[data-testid="kanban-column-backlog"]')).toBeVisible({
-      timeout: 5000,
-    });
+
+    // The funnel starts on a single status, so widen it before looking
+    // for a status group that is not the default one.
+    await showAllStatuses(page);
+    // The group appears only once it holds something, so it is asserted
+    // after the feature below is created rather than before.
 
     // Open the add feature dialog and add feature with default settings
     // Default is skipTests=true (manual verification required)
     await clickAddFeature(page);
-    await fillAddFeatureDialog(page, featureDescription);
+    await fillAddFeatureDialog(page, featureDescription, { source: 'local' });
     await confirmAddFeature(page);
 
     // Wait for the feature to appear in the backlog
     await expect(async () => {
-      const backlogColumn = page.locator('[data-testid="kanban-column-backlog"]');
-      const featureCard = backlogColumn.locator('[data-testid^="kanban-card-"]').filter({
+      const backlogColumn = page.locator(
+        '[data-testid^="sidebar-section-status:"][data-testid$=":local"]'
+      );
+      const featureCard = backlogColumn.locator('[data-testid="sidebar-feature-row"]').filter({
         hasText: featureDescription,
       });
       expect(await featureCard.count()).toBeGreaterThan(0);
@@ -95,18 +101,27 @@ test.describe('Feature Skip Tests Badge', () => {
 
     // Get the feature ID from the card
     const featureCard = page
-      .locator('[data-testid="kanban-column-backlog"]')
-      .locator('[data-testid^="kanban-card-"]')
+      .locator('[data-testid^="sidebar-section-status:"][data-testid$=":local"]')
+      .locator('[data-testid="sidebar-feature-row"]')
       .filter({ hasText: featureDescription })
       .first();
-    const cardTestId = await featureCard.getAttribute('data-testid');
-    const featureId = cardTestId?.replace('kanban-card-', '');
+    // Sidebar rows all share one test id and carry the feature id in an
+    // attribute, rather than encoding it into the test id as the cards did.
+    const featureId = await featureCard.getAttribute('data-feature-id');
 
-    // Verify the skip tests badge is visible on the card (should be there by default)
-    expect(featureId).toBeDefined();
+    expect(featureId).toBeTruthy();
+
+    // The badge this used to look for lived on the kanban card and went with
+    // it; the sidebar row deliberately carries only status, sync and PR
+    // markers. Assert the thing that actually matters — that the feature was
+    // created with the default applied — by reading it back from the server.
     await expect(async () => {
-      const badgeVisible = await isSkipTestsBadgeVisible(page, featureId!);
-      expect(badgeVisible).toBe(true);
-    }).toPass({ timeout: 5000 });
+      const response = await request.post(`${API_BASE_URL}/api/features/get`, {
+        data: { projectPath, featureId },
+      });
+      expect(response.ok()).toBeTruthy();
+      const body = await response.json();
+      expect(body.feature?.skipTests).toBe(true);
+    }).toPass({ timeout: 10000 });
   });
 });

@@ -49,6 +49,7 @@ function createIndexHandler(agentService: AgentService) {
             tags: s.tags || [],
             messageCount: messages.length,
             preview,
+            scratch: s.scratch || false,
           };
         })
       );
@@ -68,11 +69,13 @@ function createIndexHandler(agentService: AgentService) {
 function createCreateHandler(agentService: AgentService) {
   return async (req: Request, res: Response): Promise<void> => {
     try {
-      const { name, projectPath, workingDirectory, model } = req.body as {
+      const { name, projectPath, workingDirectory, model, scratch } = req.body as {
         name: string;
         projectPath?: string;
         workingDirectory?: string;
         model?: string;
+        /** Throwaway scratchpad chat — sandboxed, no project, global skills only */
+        scratch?: boolean;
       };
 
       if (!name) {
@@ -80,7 +83,13 @@ function createCreateHandler(agentService: AgentService) {
         return;
       }
 
-      const session = await agentService.createSession(name, projectPath, workingDirectory, model);
+      const session = await agentService.createSession(
+        name,
+        projectPath,
+        workingDirectory,
+        model,
+        scratch === true
+      );
       res.json({ success: true, session });
     } catch (error) {
       logError(error, 'Create session failed');

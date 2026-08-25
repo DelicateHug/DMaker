@@ -51,6 +51,31 @@ interface WorktreeTabProps {
   hasInitScript: boolean;
 }
 
+/** Ahead/behind against the tracked remote; hidden when the branch is in sync. */
+function SyncCounts({
+  ahead,
+  behind,
+  isSelected,
+}: {
+  ahead: number;
+  behind: number;
+  isSelected: boolean;
+}) {
+  if (ahead <= 0 && behind <= 0) return null;
+  return (
+    <span
+      className={cn(
+        'shrink-0 text-[10px] tabular-nums',
+        isSelected ? 'text-primary-foreground/80' : 'text-muted-foreground'
+      )}
+      title={`${ahead} ahead, ${behind} behind`}
+    >
+      {ahead > 0 && `↑${ahead}`}
+      {behind > 0 && `↓${behind}`}
+    </span>
+  );
+}
+
 export function WorktreeTab({
   worktree,
   cardCount,
@@ -194,12 +219,14 @@ export function WorktreeTab({
             onClick={() => onSelectWorktree(worktree)}
             disabled={isActivating}
             title={`Click to preview ${worktree.branch}`}
-            aria-label={worktree.branch}
+            aria-label={`Branch: ${worktree.branch}`}
             data-testid={`worktree-branch-${worktree.branch}`}
           >
             {isRunning && <Loader2 className="w-3 h-3 animate-spin" />}
             {isActivating && !isRunning && <RefreshCw className="w-3 h-3 animate-spin" />}
+            <span className="font-sans text-muted-foreground/80">Branch:</span>
             {worktree.branch}
+            <SyncCounts ahead={aheadCount} behind={behindCount} isSelected={isSelected} />
             {cardCount !== undefined && cardCount > 0 && (
               <span className="inline-flex items-center justify-center h-4 min-w-[1rem] px-1 text-[10px] font-medium rounded bg-background/80 text-foreground border border-border">
                 {cardCount}
@@ -263,10 +290,13 @@ export function WorktreeTab({
               ? "Click to switch to this worktree's branch"
               : 'Click to switch to this branch'
           }
+          aria-label={`Branch: ${worktree.branch}`}
         >
           {isRunning && <Loader2 className="w-3 h-3 animate-spin" />}
           {isActivating && !isRunning && <RefreshCw className="w-3 h-3 animate-spin" />}
+          <span className="font-sans text-muted-foreground/80">Branch:</span>
           {worktree.branch}
+          <SyncCounts ahead={aheadCount} behind={behindCount} isSelected={isSelected} />
           {cardCount !== undefined && cardCount > 0 && (
             <span className="inline-flex items-center justify-center h-4 min-w-[1rem] px-1 text-[10px] font-medium rounded bg-background/80 text-foreground border border-border">
               {cardCount}

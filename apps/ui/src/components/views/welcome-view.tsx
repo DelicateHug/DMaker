@@ -34,7 +34,7 @@ import { NewProjectModal } from '@/components/dialogs/new-project-modal';
 import { getHttpApiClient } from '@/lib/http-api-client';
 import type { StarterTemplate } from '@/lib/templates';
 import { useNavigate } from '@tanstack/react-router';
-import { useLayerStore } from '@/store/layer-store';
+import { openLayer } from '@/store/layer-store';
 
 const logger = createLogger('WelcomeView');
 
@@ -222,7 +222,7 @@ export function WelcomeView() {
   };
 
   const handleInteractiveMode = () => {
-    useLayerStore.getState().openLayer('interview');
+    openLayer('interview');
   };
 
   /**

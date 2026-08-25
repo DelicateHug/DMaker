@@ -2,7 +2,7 @@
 import { useCallback, useState } from 'react';
 import { Feature, FeatureImage, ModelAlias, ThinkingLevel, useAppStore } from '@/store/app-store';
 import { useShallow } from 'zustand/react/shallow';
-import type { ReasoningEffort } from '@dmaker/types';
+import type { FeatureStatusWithPipeline, ReasoningEffort } from '@dmaker/types';
 import { FeatureImagePath as DescriptionImagePath } from '@/components/ui/description-image-dropzone';
 import { getElectronAPI } from '@/lib/electron';
 import { isConnectionError, handleServerOffline } from '@/lib/http-api-client';
@@ -11,6 +11,8 @@ import { useAutoMode } from '@/hooks/use-auto-mode';
 import { truncateDescription } from '@/lib/utils';
 import { getBlockingDependencies, shouldBlockOnDependencies } from '@dmaker/dependency-resolver';
 import { createLogger } from '@dmaker/utils/logger';
+import { createFeatureIssue } from '../shared/create-feature-issue';
+import { getStatusMeta } from '@/components/layout/sidebar/status-meta';
 
 const logger = createLogger('BoardActions');
 
@@ -37,6 +39,18 @@ export interface UnsatisfiedDependenciesDialogState {
   blockingDependencies: BlockingDependencyInfo[];
 }
 
+/**
+ * State for the "create a GitHub repo for this project" offer, raised when a
+ * feature can't be started because the project has no repository behind it.
+ */
+export interface CreateGitHubRepoDialogState {
+  open: boolean;
+  /** Feature whose start was interrupted — retried once the repo exists. */
+  feature: Feature | null;
+  projectPath: string | null;
+  reason?: string;
+}
+
 interface UseBoardActionsProps {
   currentProject: { path: string; id: string } | null;
   features: Feature[];
@@ -50,7 +64,7 @@ interface UseBoardActionsProps {
     enhancementMode?: 'improve' | 'technical' | 'simplify' | 'acceptance' | 'ux-reviewer',
     preEnhancementDescription?: string
   ) => Promise<void>;
-  persistFeatureDelete: (featureId: string) => Promise<void>;
+  persistFeatureArchive: (featureId: string) => Promise<boolean>;
   saveCategory: (category: string) => Promise<void>;
   setEditingFeature: (feature: Feature | null) => void;
   setShowOutputModal: (show: boolean) => void;
@@ -78,7 +92,7 @@ export function useBoardActions({
   loadFeatures,
   persistFeatureCreate,
   persistFeatureUpdate,
-  persistFeatureDelete,
+  persistFeatureArchive,
   saveCategory,
   setEditingFeature,
   setShowOutputModal,
@@ -131,6 +145,13 @@ export function useBoardActions({
       blockingDependencies: [],
     });
 
+  // State for the "create a GitHub repo for this project" offer
+  const [createRepoDialog, setCreateRepoDialog] = useState<CreateGitHubRepoDialogState>({
+    open: false,
+    feature: null,
+    projectPath: null,
+  });
+
   // Worktrees are created when adding/editing features with a branch name
   // This ensures the worktree exists before the feature starts execution
 
@@ -150,13 +171,17 @@ export function useBoardActions({
       childDependencies?: string[]; // Feature IDs that should depend on this feature
       selectedProjectPath?: string; // Optional project path for multi-project support
       source?: 'local' | 'github'; // Where this feature should be created
+      status?: FeatureStatusWithPipeline; // Status column to land in; defaults to 'local'
+      branchName?: string; // Existing branch to reuse instead of minting a new one
     }) => {
       // Use the selected project path if provided (for multi-project mode),
       // otherwise fall back to the current project
       const targetProjectPath = featureData.selectedProjectPath || currentProject?.path;
 
-      // Always create an isolated worktree for every feature
-      // Branch name = slugified title (or description) + short UUID
+      // A feature created from a branch context (the sidebar's branch groups,
+      // a PR-feedback task) reuses that branch. Everything else gets an
+      // isolated worktree of its own, named slugified-title + short UUID.
+      const reusedBranch = featureData.branchName?.trim();
       const nameSource = featureData.title.trim() || featureData.description.slice(0, 40);
       const slugified = nameSource
         .toLowerCase()
@@ -164,10 +189,13 @@ export function useBoardActions({
         .replace(/^-+|-+$/g, '')
         .slice(0, 50);
       const shortUuid = crypto.randomUUID().slice(0, 8);
-      const finalBranchName = `${slugified}-${shortUuid}`;
+      const finalBranchName = reusedBranch || `${slugified}-${shortUuid}`;
 
-      // Create worktree for the feature
-      if (targetProjectPath) {
+      // Only a freshly minted branch needs a worktree created and selected. A
+      // reused branch already has one — or is the primary branch, which has no
+      // separate worktree at all, so auto-selecting it would leave the board
+      // pointing at the repo root as if it were a secondary worktree.
+      if (!reusedBranch && targetProjectPath) {
         try {
           const api = getElectronAPI();
           if (api?.worktree?.create) {
@@ -210,7 +238,7 @@ export function useBoardActions({
         ...featureData,
         title: featureData.title,
         titleGenerating: needsTitleGeneration,
-        status: 'local' as const,
+        status: featureData.status ?? ('local' as const),
         branchName: finalBranchName,
         dependencies: featureData.dependencies || [],
         // Add project path for multi-project support
@@ -224,77 +252,10 @@ export function useBoardActions({
       await persistFeatureCreate(createdFeature, targetProjectPath);
       saveCategory(featureData.category);
 
-      // If source is github, create a GitHub issue and link it to the feature
-      if (featureData.source === 'github' && targetProjectPath) {
-        try {
-          const api = getElectronAPI();
-          if (api?.github?.createIssue) {
-            // Build label from the feature's initial status (backlog)
-            const statusLabel = `label-backlog`;
-            // Use title as the issue name (AI-generated or human-input)
-            const issueTitle = featureData.title.trim() || featureData.description.slice(0, 100);
-            // Brief summary in issue body (first paragraph or first 200 chars)
-            const firstParagraph = featureData.description.split('\n\n')[0] || '';
-            const issueSummary =
-              firstParagraph.length > 200 ? firstParagraph.slice(0, 200) + '...' : firstParagraph;
-            const result = await api.github.createIssue(
-              targetProjectPath,
-              issueTitle,
-              issueSummary,
-              [statusLabel]
-            );
-            if (result.success && result.issueNumber) {
-              // Link the GitHub issue and move from local to backlog
-              const githubIssueData = {
-                status: 'backlog' as const,
-                githubIssue: {
-                  number: result.issueNumber,
-                  url: result.url || '',
-                  assignees: [],
-                  labels: [statusLabel],
-                  state: 'open' as const,
-                  syncedAt: new Date().toISOString(),
-                },
-              };
-              updateFeature(createdFeature.id, githubIssueData);
-              await persistFeatureUpdate(createdFeature.id, githubIssueData);
-              toast.success(`GitHub issue #${result.issueNumber} created`);
-
-              // Post description + feature options as first comment (non-blocking)
-              if (api.github.addComment) {
-                const optionLines = [
-                  `- **Model**: ${featureData.model || 'default'}`,
-                  `- **Thinking Level**: ${featureData.thinkingLevel || 'none'}`,
-                  `- **Category**: ${featureData.category || 'Uncategorized'}`,
-                  `- **Skip Tests**: ${featureData.skipTests ? 'Yes' : 'No'}`,
-                ];
-                const commentBody = [
-                  '## Description',
-                  '',
-                  featureData.description,
-                  '',
-                  '## Feature Options',
-                  '',
-                  ...optionLines,
-                ].join('\n');
-                api.github
-                  .addComment(targetProjectPath, result.issueNumber, commentBody)
-                  .catch((err) => logger.error('Failed to post feature details comment:', err));
-              }
-            } else if (!result.success) {
-              logger.error('Failed to create GitHub issue:', result.error);
-              toast.error('Failed to create GitHub issue', {
-                description: result.error,
-              });
-            }
-          }
-        } catch (error) {
-          logger.error('Error creating GitHub issue:', error);
-          toast.error('Failed to create GitHub issue', {
-            description: error instanceof Error ? error.message : 'An error occurred',
-          });
-        }
-      }
+      // The GitHub issue is filed by the server the moment the feature is
+      // created — in the background, so adding a task never waits on GitHub.
+      // The task view's Questions tab tracks it, and answers any clarification
+      // the drafter needs. Nothing to do here.
 
       // Handle child dependencies - update other features to depend on this new feature
       if (featureData.childDependencies && featureData.childDependencies.length > 0) {
@@ -469,7 +430,7 @@ export function useBoardActions({
     ]
   );
 
-  const handleDeleteFeature = useCallback(
+  const handleArchiveFeature = useCallback(
     async (featureId: string) => {
       const feature = features.find((f) => f.id === featureId);
       if (!feature) return;
@@ -480,52 +441,36 @@ export function useBoardActions({
         try {
           await autoMode.stopFeature(featureId);
           toast.success('Agent stopped', {
-            description: `Stopped and deleted: ${truncateDescription(feature.description)}`,
+            description: `Stopped and archived: ${truncateDescription(feature.description)}`,
           });
         } catch (error) {
-          logger.error('Error stopping feature before delete:', error);
+          logger.error('Error stopping feature before archive:', error);
           toast.error('Failed to stop agent', {
-            description: 'The feature will still be deleted.',
+            description: 'The feature will still be archived.',
           });
         }
       }
 
-      // Delete linked GitHub issue
-      if (feature.githubIssue?.number) {
-        const featureProjectPath = getFeatureProjectPath(feature, currentProject);
-        if (featureProjectPath) {
-          try {
-            const api = getElectronAPI();
-            if (api?.github?.deleteIssue) {
-              await api.github.deleteIssue(featureProjectPath, feature.githubIssue.number);
-              logger.info(`Deleted GitHub issue #${feature.githubIssue.number}`);
-            }
-          } catch (err) {
-            logger.error(`Failed to delete GitHub issue #${feature.githubIssue.number}:`, err);
-          }
-        }
-      }
-
-      if (feature.imagePaths && feature.imagePaths.length > 0) {
-        try {
-          const api = getElectronAPI();
-          for (const imagePathObj of feature.imagePaths) {
-            try {
-              await api.deleteFile(imagePathObj.path);
-              logger.info(`Deleted image: ${imagePathObj.path}`);
-            } catch (error) {
-              logger.error(`Failed to delete image ${imagePathObj.path}:`, error);
-            }
-          }
-        } catch (error) {
-          logger.error(`Error deleting images for feature ${featureId}:`, error);
-        }
-      }
-
+      // Nothing is destroyed here: the feature directory moves to
+      // features/archived/ and the linked issue is closed (server side), so
+      // both come back through the Closed Issues view. Images stay with it.
       removeFeature(featureId);
-      persistFeatureDelete(featureId);
+      const archived = await persistFeatureArchive(featureId);
+
+      if (!archived) {
+        toast.error('Failed to archive task', {
+          description: truncateDescription(feature.description),
+        });
+        return;
+      }
+
+      toast.success('Task archived', {
+        description: feature.githubIssue?.number
+          ? `Issue #${feature.githubIssue.number} closed — find it under Closed Issues`
+          : 'Find it under Closed Issues',
+      });
     },
-    [features, runningAutoTasks, autoMode, removeFeature, persistFeatureDelete, currentProject]
+    [features, runningAutoTasks, autoMode, removeFeature, persistFeatureArchive]
   );
 
   const handleRunFeature = useCallback(
@@ -678,12 +623,51 @@ export function useBoardActions({
 
   const handleStartImplementation = useCallback(
     async (feature: Feature) => {
-      // Block features in 'local' status without a GitHub issue
+      // Features in 'local' status need a GitHub issue before they can run.
+      // Create one on the fly rather than making the user convert by hand.
       if (feature.status === 'local' && !feature.githubIssue) {
-        toast.error('Cannot start feature', {
-          description: 'Link a GitHub issue before starting this feature.',
-        });
-        return false;
+        const issueProjectPath = getFeatureProjectPath(feature, currentProject);
+        if (!issueProjectPath) {
+          toast.error('Cannot start feature', {
+            description: 'No project path available to create a GitHub issue.',
+          });
+          return false;
+        }
+
+        try {
+          const issueResult = await createFeatureIssue(issueProjectPath, feature);
+          if (!issueResult.success || !issueResult.updates) {
+            // No repository behind the project is fixable — offer to create one
+            // and retry the start rather than dead-ending on the error.
+            if (issueResult.needsRepo) {
+              setCreateRepoDialog({
+                open: true,
+                feature,
+                projectPath: issueProjectPath,
+                reason: issueResult.error,
+              });
+              return false;
+            }
+            toast.error('Cannot start feature', {
+              description: issueResult.error || 'Failed to create a GitHub issue.',
+            });
+            return false;
+          }
+
+          updateFeature(feature.id, issueResult.updates);
+          await persistFeatureUpdate(feature.id, issueResult.updates);
+          toast.success(`GitHub issue #${issueResult.updates.githubIssue.number} created`);
+
+          // Continue with the linked feature so downstream checks see the issue
+          feature = { ...feature, ...issueResult.updates } as Feature;
+        } catch (error) {
+          logger.error('Failed to auto-create GitHub issue on start:', error);
+          toast.error('Cannot start feature', {
+            description:
+              error instanceof Error ? error.message : 'Failed to create a GitHub issue.',
+          });
+          return false;
+        }
       }
 
       if (!autoMode.canStartNewTask) {
@@ -745,7 +729,15 @@ export function useBoardActions({
       // No blocking dependencies or feature doesn't require waiting - start immediately
       return doStartImplementation(feature);
     },
-    [autoMode, enableDependencyBlocking, features, doStartImplementation]
+    [
+      autoMode,
+      enableDependencyBlocking,
+      features,
+      doStartImplementation,
+      currentProject,
+      updateFeature,
+      persistFeatureUpdate,
+    ]
   );
 
   // Handler for confirming start despite unsatisfied dependencies
@@ -781,6 +773,21 @@ export function useBoardActions({
         feature: null,
         blockingDependencies: [],
       });
+    }
+  }, []);
+
+  // The repo now exists and `origin` is wired up — resume the start that was
+  // interrupted, which will create the GitHub issue on this second pass.
+  const handleGitHubRepoCreated = useCallback(async () => {
+    const feature = createRepoDialog.feature;
+    setCreateRepoDialog({ open: false, feature: null, projectPath: null });
+    if (!feature) return;
+    await handleStartImplementation(feature);
+  }, [createRepoDialog.feature, handleStartImplementation]);
+
+  const handleCreateRepoDialogOpenChange = useCallback((open: boolean) => {
+    if (!open) {
+      setCreateRepoDialog({ open: false, feature: null, projectPath: null });
     }
   }, []);
 
@@ -1023,6 +1030,44 @@ export function useBoardActions({
     [updateFeature, persistFeatureUpdate]
   );
 
+  /**
+   * Move a feature to any status.
+   *
+   * The board used to be the only place a status could change — by dragging a
+   * card between columns. The sidebar replaced that list and shipped without
+   * a replacement, leaving a feature stuck wherever it happened to be. This
+   * is the generic move the sidebar's context menu calls.
+   */
+  const handleSetFeatureStatus = useCallback(
+    async (feature: Feature, status: string) => {
+      if (feature.status === status) return;
+
+      const updates: Partial<Feature> = { status };
+      // Keep the timestamps consistent with the dedicated handlers above, so a
+      // feature moved from the menu behaves like one moved any other way.
+      if (status === 'in_progress') updates.startedAt = new Date().toISOString();
+      if (status === 'backlog') updates.startedAt = undefined;
+      if (status === 'completed' || status === 'verified') {
+        updates.completedAt = new Date().toISOString();
+      }
+
+      updateFeature(feature.id, updates);
+      try {
+        await persistFeatureUpdate(feature.id, updates);
+        toast.success('Feature moved', {
+          description: `${truncateDescription(feature.description)} → ${getStatusMeta(status).label}`,
+        });
+      } catch (error) {
+        logger.error('Failed to move feature:', error);
+        toast.error('Failed to move feature', {
+          description: error instanceof Error ? error.message : 'Unknown error',
+        });
+        await loadFeatures();
+      }
+    },
+    [updateFeature, persistFeatureUpdate, loadFeatures]
+  );
+
   const handleOpenFollowUp = useCallback(
     (feature: Feature) => {
       setFollowUpFeature(feature);
@@ -1159,6 +1204,13 @@ export function useBoardActions({
           });
           // Refresh worktree selector to update commit counts
           onWorktreeCreated?.();
+        } else if (result.blocked) {
+          // Not a failure — the task's GitHub issue is not there yet, and
+          // nothing commits before it is.
+          toast.warning('Waiting for the GitHub issue', {
+            description: result.error || 'The issue for this task has not been created yet.',
+          });
+          await loadFeatures();
         } else {
           logger.error('Failed to commit feature:', result.error);
           toast.error('Failed to commit feature', {
@@ -1603,13 +1655,17 @@ export function useBoardActions({
   return {
     handleAddFeature,
     handleUpdateFeature,
-    handleDeleteFeature,
+    handleArchiveFeature,
+    // Kept under the old name so callers that still say "delete" keep working;
+    // deleting from the board archives now.
+    handleDeleteFeature: handleArchiveFeature,
     handleStartImplementation,
     handleVerifyFeature,
     handleResumeFeature,
     handleManualVerify,
     handleMoveBackToInProgress,
     handleMoveBackToBacklog,
+    handleSetFeatureStatus,
     handleOpenFollowUp,
     handleSendFollowUp,
     handleCommitFeature,
@@ -1627,5 +1683,9 @@ export function useBoardActions({
     handleConfirmStartWithUnsatisfiedDeps,
     handleCancelStartWithUnsatisfiedDeps,
     handleUnsatisfiedDepsDialogOpenChange,
+    // "Create a GitHub repo for this project" offer
+    createRepoDialog,
+    handleGitHubRepoCreated,
+    handleCreateRepoDialogOpenChange,
   };
 }

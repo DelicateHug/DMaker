@@ -14,9 +14,11 @@ import {
   waitForNetworkIdle,
   clickAddFeature,
   fillAddFeatureDialog,
+  selectFeatureSource,
   confirmAddFeature,
   authenticateForTests,
   handleLoginScreenIfPresent,
+  showAllStatuses,
 } from '../utils';
 
 const TEST_TEMP_DIR = createTempDirPath('feature-backlog-test');
@@ -71,18 +73,24 @@ test.describe('Feature Backlog', () => {
     await waitForNetworkIdle(page);
 
     await expect(page.locator('[data-testid="board-view"]')).toBeVisible({ timeout: 10000 });
-    await expect(page.locator('[data-testid="kanban-column-backlog"]')).toBeVisible({
-      timeout: 5000,
-    });
+
+    // The funnel starts on a single status, so widen it before looking
+    // for a status group that is not the default one.
+    await showAllStatuses(page);
+    // The backlog group does not exist yet: the list renders only groups that
+    // contain something, unlike the kanban columns it replaced, which were
+    // always on screen. It appears once the feature below is added.
 
     await clickAddFeature(page);
-    await fillAddFeatureDialog(page, featureDescription);
+    await fillAddFeatureDialog(page, featureDescription, { source: 'local' });
     await confirmAddFeature(page);
 
     // Wait for the feature to appear in the backlog
     await expect(async () => {
-      const backlogColumn = page.locator('[data-testid="kanban-column-backlog"]');
-      const featureCard = backlogColumn.locator('[data-testid^="kanban-card-"]').filter({
+      const localGroup = page.locator(
+        '[data-testid^="sidebar-section-status:"][data-testid$=":local"]'
+      );
+      const featureCard = localGroup.locator('[data-testid="sidebar-feature-row"]').filter({
         hasText: featureDescription,
       });
       expect(await featureCard.count()).toBeGreaterThan(0);
@@ -102,11 +110,19 @@ test.describe('Feature Backlog', () => {
     await waitForNetworkIdle(page);
 
     await expect(page.locator('[data-testid="board-view"]')).toBeVisible({ timeout: 10000 });
-    await expect(page.locator('[data-testid="kanban-column-backlog"]')).toBeVisible({
-      timeout: 5000,
-    });
+
+    // The funnel starts on a single status, so widen it before looking
+    // for a status group that is not the default one.
+    await showAllStatuses(page);
+    // The backlog group does not exist yet: the list renders only groups that
+    // contain something, unlike the kanban columns it replaced, which were
+    // always on screen. It appears once the feature below is added.
 
     await clickAddFeature(page);
+
+    // Local, for the same reason as the test above: the GitHub path needs a
+    // real repository behind the project.
+    await selectFeatureSource(page, 'local');
 
     // Fill only the description
     const descriptionInput = page.locator('[data-testid="add-feature-dialog"] textarea').first();
@@ -117,8 +133,10 @@ test.describe('Feature Backlog', () => {
 
     // Wait for the feature to appear in the backlog
     await expect(async () => {
-      const backlogColumn = page.locator('[data-testid="kanban-column-backlog"]');
-      const featureCard = backlogColumn.locator('[data-testid^="kanban-card-"]').filter({
+      const localGroup = page.locator(
+        '[data-testid^="sidebar-section-status:"][data-testid$=":local"]'
+      );
+      const featureCard = localGroup.locator('[data-testid="sidebar-feature-row"]').filter({
         hasText: featureDescription,
       });
       expect(await featureCard.count()).toBeGreaterThan(0);

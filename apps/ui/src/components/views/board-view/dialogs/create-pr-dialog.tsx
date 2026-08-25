@@ -15,6 +15,7 @@ import { Checkbox } from '@/components/ui/forms';
 import { BranchAutocomplete } from '@/components/ui/branch-autocomplete';
 import { GitPullRequest, Loader2, ExternalLink } from 'lucide-react';
 import { getElectronAPI } from '@/lib/electron';
+import { useGitHubConfig } from '@/hooks/use-github-config';
 import { toast } from 'sonner';
 
 interface WorktreeInfo {
@@ -31,7 +32,10 @@ interface CreatePRDialogProps {
   worktree: WorktreeInfo | null;
   projectPath: string | null;
   onCreated: (prUrl?: string) => void;
-  /** Default base branch for the PR (defaults to 'main' if not provided) */
+  /**
+   * Base branch for the PR. When omitted, the project's GitHub settings decide
+   * (project override, then global default, then the remote's trunk).
+   */
   defaultBaseBranch?: string;
 }
 
@@ -41,13 +45,17 @@ export function CreatePRDialog({
   worktree,
   projectPath,
   onCreated,
-  defaultBaseBranch = 'main',
+  defaultBaseBranch,
 }: CreatePRDialogProps) {
+  // The project's resolved GitHub settings supply what the caller left open.
+  const { config: githubConfig } = useGitHubConfig(projectPath);
+  const resolvedBaseBranch = defaultBaseBranch || githubConfig?.baseBranch || 'main';
+  const defaultDraft = githubConfig?.draftPRs ?? false;
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
-  const [baseBranch, setBaseBranch] = useState(defaultBaseBranch);
+  const [baseBranch, setBaseBranch] = useState(resolvedBaseBranch);
   const [commitMessage, setCommitMessage] = useState('');
-  const [isDraft, setIsDraft] = useState(false);
+  const [isDraft, setIsDraft] = useState(defaultDraft);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [prUrl, setPrUrl] = useState<string | null>(null);
@@ -58,21 +66,28 @@ export function CreatePRDialog({
   const [isLoadingBranches, setIsLoadingBranches] = useState(false);
   // Track whether an operation completed that warrants a refresh
   const operationCompletedRef = useRef(false);
+  // Latest defaults, read without making resetState a moving target.
+  const defaultsRef = useRef({ baseBranch: resolvedBaseBranch, draft: defaultDraft });
+  defaultsRef.current = { baseBranch: resolvedBaseBranch, draft: defaultDraft };
+  // Once the user picks a base branch or draft state, settings stop overriding it.
+  const touchedRef = useRef(false);
 
-  // Common state reset function to avoid duplication
+  // Common reset. Deliberately dependency-free: the GitHub settings resolve
+  // asynchronously, and a changing identity here would reset an open dialog.
   const resetState = useCallback(() => {
     setTitle('');
     setBody('');
     setCommitMessage('');
-    setBaseBranch(defaultBaseBranch);
-    setIsDraft(false);
+    setBaseBranch(defaultsRef.current.baseBranch);
+    setIsDraft(defaultsRef.current.draft);
     setError(null);
     setPrUrl(null);
     setBrowserUrl(null);
     setShowBrowserFallback(false);
     operationCompletedRef.current = false;
+    touchedRef.current = false;
     setBranches([]);
-  }, [defaultBaseBranch]);
+  }, []);
 
   // Fetch branches for autocomplete
   const fetchBranches = useCallback(async () => {
@@ -99,6 +114,14 @@ export function CreatePRDialog({
       setIsLoadingBranches(false);
     }
   }, [worktree?.path, worktree?.branch]);
+
+  // The settings request may land after the dialog is already open; adopt the
+  // values it brings unless the user has made their own choice.
+  useEffect(() => {
+    if (!open || touchedRef.current) return;
+    setBaseBranch(resolvedBaseBranch);
+    setIsDraft(defaultDraft);
+  }, [open, resolvedBaseBranch, defaultDraft]);
 
   // Reset state when dialog opens or worktree changes
   useEffect(() => {
@@ -374,7 +397,10 @@ export function CreatePRDialog({
                   <Label htmlFor="base-branch">Base Branch</Label>
                   <BranchAutocomplete
                     value={baseBranch}
-                    onChange={setBaseBranch}
+                    onChange={(value: string) => {
+                      touchedRef.current = true;
+                      setBaseBranch(value);
+                    }}
                     branches={branches}
                     placeholder="Select base branch..."
                     disabled={isLoadingBranches}
@@ -386,7 +412,10 @@ export function CreatePRDialog({
                     <Checkbox
                       id="draft"
                       checked={isDraft}
-                      onCheckedChange={(checked) => setIsDraft(checked === true)}
+                      onCheckedChange={(checked) => {
+                        touchedRef.current = true;
+                        setIsDraft(checked === true);
+                      }}
                     />
                     <Label htmlFor="draft" className="cursor-pointer">
                       Create as draft

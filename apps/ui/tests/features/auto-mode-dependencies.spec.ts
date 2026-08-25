@@ -22,6 +22,8 @@ import {
   getKanbanColumn,
   authenticateForTests,
   handleLoginScreenIfPresent,
+  API_BASE_URL,
+  showAllStatuses,
 } from '../utils';
 
 const TEST_TEMP_DIR = createTempDirPath('auto-mode-deps-test');
@@ -102,6 +104,10 @@ test.describe('Auto Mode Dependency Blocking', () => {
     await waitForNetworkIdle(page);
     await expect(page.locator('[data-testid="board-view"]')).toBeVisible({ timeout: 10000 });
 
+    // The funnel starts on a single status, so widen it before looking
+    // for a status group that is not the default one.
+    await showAllStatuses(page);
+
     // Create the dependency feature (in pending status)
     const dependencyFeature = {
       id: dependencyFeatureId,
@@ -132,8 +138,6 @@ test.describe('Auto Mode Dependency Blocking', () => {
       waitForDependencies: true,
     };
 
-    const API_BASE_URL = process.env.VITE_SERVER_URL || 'http://localhost:3008';
-
     // Create features via HTTP API
     const createDep = await page.request.post(`${API_BASE_URL}/api/features/create`, {
       data: { projectPath, feature: dependencyFeature },
@@ -154,8 +158,14 @@ test.describe('Auto Mode Dependency Blocking', () => {
     await waitForNetworkIdle(page);
     await expect(page.locator('[data-testid="board-view"]')).toBeVisible({ timeout: 10000 });
 
+    // The funnel starts on a single status, so widen it before looking
+    // for a status group that is not the default one.
+    await showAllStatuses(page);
+
     // Wait for the blocked feature card to appear
-    const blockedFeatureCard = page.locator(`[data-testid="kanban-card-${blockedFeatureId}"]`);
+    const blockedFeatureCard = page.locator(
+      `[data-testid="sidebar-feature-row"][data-feature-id="${blockedFeatureId}"]`
+    );
     await expect(blockedFeatureCard).toBeVisible({ timeout: 20000 });
 
     // Verify the feature appears in the pending column
@@ -215,6 +225,10 @@ test.describe('Auto Mode Dependency Blocking', () => {
     await waitForNetworkIdle(page);
     await expect(page.locator('[data-testid="board-view"]')).toBeVisible({ timeout: 10000 });
 
+    // The funnel starts on a single status, so widen it before looking
+    // for a status group that is not the default one.
+    await showAllStatuses(page);
+
     // Create test feature IDs unique to this test
     const testDepFeatureId = `dep-feature-manual-${Date.now()}`;
     const testBlockedFeatureId = `blocked-feature-manual-${Date.now()}`;
@@ -249,8 +263,6 @@ test.describe('Auto Mode Dependency Blocking', () => {
       waitForDependencies: true,
     };
 
-    const API_BASE_URL = process.env.VITE_SERVER_URL || 'http://localhost:3008';
-
     // Create features via HTTP API
     await page.request.post(`${API_BASE_URL}/api/features/create`, {
       data: { projectPath, feature: dependencyFeature },
@@ -269,8 +281,14 @@ test.describe('Auto Mode Dependency Blocking', () => {
     await waitForNetworkIdle(page);
     await expect(page.locator('[data-testid="board-view"]')).toBeVisible({ timeout: 10000 });
 
+    // The funnel starts on a single status, so widen it before looking
+    // for a status group that is not the default one.
+    await showAllStatuses(page);
+
     // Wait for the blocked feature card to appear
-    const blockedFeatureCard = page.locator(`[data-testid="kanban-card-${testBlockedFeatureId}"]`);
+    const blockedFeatureCard = page.locator(
+      `[data-testid="sidebar-feature-row"][data-feature-id="${testBlockedFeatureId}"]`
+    );
     await expect(blockedFeatureCard).toBeVisible({ timeout: 20000 });
 
     // Try to manually run the feature by clicking the start button
@@ -350,6 +368,10 @@ test.describe('Auto Mode Dependency Blocking', () => {
     await waitForNetworkIdle(page);
     await expect(page.locator('[data-testid="board-view"]')).toBeVisible({ timeout: 10000 });
 
+    // The funnel starts on a single status, so widen it before looking
+    // for a status group that is not the default one.
+    await showAllStatuses(page);
+
     // Create test feature IDs unique to this test
     const testDepFeatureId = `dep-feature-noblock-${Date.now()}`;
     const testUnblockedFeatureId = `unblocked-feature-noblock-${Date.now()}`;
@@ -384,8 +406,6 @@ test.describe('Auto Mode Dependency Blocking', () => {
       waitForDependencies: false, // This feature should NOT block on dependencies
     };
 
-    const API_BASE_URL = process.env.VITE_SERVER_URL || 'http://localhost:3008';
-
     // Create features via HTTP API
     await page.request.post(`${API_BASE_URL}/api/features/create`, {
       data: { projectPath, feature: dependencyFeature },
@@ -404,9 +424,13 @@ test.describe('Auto Mode Dependency Blocking', () => {
     await waitForNetworkIdle(page);
     await expect(page.locator('[data-testid="board-view"]')).toBeVisible({ timeout: 10000 });
 
+    // The funnel starts on a single status, so widen it before looking
+    // for a status group that is not the default one.
+    await showAllStatuses(page);
+
     // Wait for the unblocked feature card to appear
     const unblockedFeatureCard = page.locator(
-      `[data-testid="kanban-card-${testUnblockedFeatureId}"]`
+      `[data-testid="sidebar-feature-row"][data-feature-id="${testUnblockedFeatureId}"]`
     );
     await expect(unblockedFeatureCard).toBeVisible({ timeout: 20000 });
 
@@ -446,6 +470,10 @@ test.describe('Auto Mode Dependency Blocking', () => {
     await waitForNetworkIdle(page);
     await expect(page.locator('[data-testid="board-view"]')).toBeVisible({ timeout: 10000 });
 
+    // The funnel starts on a single status, so widen it before looking
+    // for a status group that is not the default one.
+    await showAllStatuses(page);
+
     // Create test feature IDs unique to this test
     const testDepFeatureId = `dep-feature-api-${Date.now()}`;
     const testBlockedFeatureId = `blocked-feature-api-${Date.now()}`;
@@ -479,8 +507,6 @@ test.describe('Auto Mode Dependency Blocking', () => {
       dependencies: [testDepFeatureId],
       waitForDependencies: true,
     };
-
-    const API_BASE_URL = process.env.VITE_SERVER_URL || 'http://localhost:3008';
 
     // Create features via HTTP API
     await page.request.post(`${API_BASE_URL}/api/features/create`, {
@@ -523,6 +549,10 @@ test.describe('Auto Mode Dependency Blocking', () => {
     await waitForNetworkIdle(page);
     await expect(page.locator('[data-testid="board-view"]')).toBeVisible({ timeout: 10000 });
 
+    // The funnel starts on a single status, so widen it before looking
+    // for a status group that is not the default one.
+    await showAllStatuses(page);
+
     // Create test feature IDs unique to this test
     const testDepFeatureId = `dep-feature-force-${Date.now()}`;
     const testBlockedFeatureId = `blocked-feature-force-${Date.now()}`;
@@ -556,8 +586,6 @@ test.describe('Auto Mode Dependency Blocking', () => {
       dependencies: [testDepFeatureId],
       waitForDependencies: true,
     };
-
-    const API_BASE_URL = process.env.VITE_SERVER_URL || 'http://localhost:3008';
 
     // Create features via HTTP API
     await page.request.post(`${API_BASE_URL}/api/features/create`, {

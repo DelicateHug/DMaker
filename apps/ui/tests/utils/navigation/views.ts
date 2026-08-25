@@ -139,8 +139,9 @@ export async function navigateToSetup(page: Page): Promise<void> {
 }
 
 /**
- * Navigate to the welcome/dashboard view (clear project selection)
- * Note: The app redirects from / to /dashboard when no project is selected
+ * Navigate to the app's landing view (no project selection).
+ * Note: `/` always redirects to `/board`, which renders the project picker as
+ * its empty state when no project is open.
  */
 export async function navigateToWelcome(page: Page): Promise<void> {
   // Authenticate before navigating
@@ -155,9 +156,9 @@ export async function navigateToWelcome(page: Page): Promise<void> {
   // Handle login redirect if needed
   await handleLoginScreenIfPresent(page);
 
-  // Wait for either welcome-view or dashboard-view (app redirects to /dashboard when no project)
+  // Wait for the welcome view or the board's no-project empty state
   await page
-    .locator('[data-testid="welcome-view"], [data-testid="dashboard-view"]')
+    .locator('[data-testid="welcome-view"], [data-testid="board-view-no-project"]')
     .first()
     .waitFor({ state: 'visible', timeout: 10000 });
 }
@@ -176,7 +177,6 @@ export async function navigateToView(page: Page, viewId: string): Promise<void> 
     spec: '/spec',
     memory: '/memory',
     settings: '/settings',
-    'github-issues': '/github-issues',
     'github-prs': '/github-prs',
   };
 

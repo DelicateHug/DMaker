@@ -72,6 +72,11 @@ import {
   validateWorkingDirectory,
 } from '../lib/sdk-options.js';
 import { FeatureLoader } from './feature-loader.js';
+import {
+  ensureFeatureOwnership,
+  resolveFeatureOwnership,
+  buildReadOnlyNotice,
+} from '../lib/feature-ownership.js';
 import type { SettingsService } from './settings-service.js';
 import { pipelineService, PipelineService } from './pipeline-service.js';
 import {
@@ -92,6 +97,7 @@ import { discoverFilesystemAgents, resolveAgentDependencies } from '../lib/agent
 import { getNotificationService } from './notification-service.js';
 import { invalidateFeaturesCache } from '../routes/features.js';
 import { getGitHubSyncService } from './github-sync-service.js';
+import { getIssueDraftService } from './issue-draft-service.js';
 
 const execAsync = promisify(exec);
 
@@ -280,6 +286,16 @@ const DEFAULT_EXECUTION_STATE: ExecutionState = {
 // Constants for consecutive failure tracking
 const CONSECUTIVE_FAILURE_THRESHOLD = 3; // Pause after 3 consecutive failures
 const FAILURE_WINDOW_MS = 60000; // Failures within 1 minute count as consecutive
+
+/** Outcome of {@link AutoModeService.commitFeature}. */
+export interface CommitFeatureResult {
+  /** The new commit, or null when nothing was committed */
+  commitHash: string | null;
+  /** True when the commit was held back waiting on the task's GitHub issue */
+  blocked?: boolean;
+  /** Why nothing was committed, when that is not simply "no changes" */
+  reason?: string;
+}
 
 export class AutoModeService {
   private events: EventEmitter;
@@ -477,31 +493,39 @@ export class AutoModeService {
           continue;
         }
 
-        // Filter out features claimed by other GitHub users
+        // Skip anything auto mode could not finish anyway.
+        //
+        // A manual run of an unowned task is still worth starting — it can
+        // read the code and tell you what it would do. Auto mode is a loop, so
+        // the same run would repeat forever producing nothing. Only tasks
+        // whose ownership can actually be secured are picked up; 'unclaimed'
+        // is fine, because starting one claims it.
         let claimBlockedCount = 0;
         const claimBlockedNames: string[] = [];
         const executableFeatures: typeof readyFeatures = [];
         try {
-          const syncService = getGitHubSyncService();
           for (const f of readyFeatures) {
-            if (f.githubIssue) {
-              const canExec = await syncService.canExecute(this.config!.projectPath, f);
-              if (!canExec.allowed) {
-                claimBlockedCount++;
-                claimBlockedNames.push(`${f.title || f.id} (claimed by ${canExec.claimedBy})`);
-                continue;
-              }
+            const ownership = await resolveFeatureOwnership(this.config!.projectPath, f);
+            if (!ownership.canWrite && ownership.reason !== 'unclaimed') {
+              claimBlockedCount++;
+              claimBlockedNames.push(
+                ownership.owner
+                  ? `${f.title || f.id} (owned by ${ownership.owner})`
+                  : `${f.title || f.id} (${ownership.message})`
+              );
+              continue;
             }
             executableFeatures.push(f);
           }
         } catch {
-          // If claim check fails, use all ready features
+          // If the ownership check falls over, use all ready features — the
+          // gate in runAgent still refuses to let any of them write.
           executableFeatures.push(...readyFeatures);
         }
 
         if (executableFeatures.length === 0 && claimBlockedCount > 0) {
           this.emitAutoModeEvent('auto_mode_idle', {
-            message: `${claimBlockedCount} feature${claimBlockedCount === 1 ? '' : 's'} claimed by other collaborators`,
+            message: `${claimBlockedCount} feature${claimBlockedCount === 1 ? '' : 's'} cannot be owned by you — auto mode skipped them`,
             reason: 'claimed_by_other',
             blockedCount: claimBlockedCount,
             blockedFeatures: claimBlockedNames,
@@ -1886,16 +1910,45 @@ Address the follow-up instructions above. Review the previous work and make the 
   }
 
   /**
+   * Wait for the task's GitHub issue before letting a commit through.
+   *
+   * Resolves immediately when there is nothing to wait for — no draft job, no
+   * GitHub remote, or an issue already linked — so this never wedges a project
+   * that does not use GitHub issues at all.
+   */
+  private async awaitIssueForCommit(
+    projectPath: string,
+    featureId: string
+  ): Promise<{ ready: boolean; issueNumber?: number; reason?: string }> {
+    try {
+      const service = getIssueDraftService(
+        this.events,
+        this.featureLoader,
+        this.settingsService ?? undefined
+      );
+      const result = await service.waitForIssue(projectPath, featureId);
+      return { ready: result.ready, issueNumber: result.issueNumber, reason: result.reason };
+    } catch (err) {
+      // A broken gate must not become a broken commit.
+      logger.warn(`Issue gate unavailable for ${featureId}, committing anyway:`, err);
+      return { ready: true };
+    }
+  }
+
+  /**
    * Commit feature changes
    * @param projectPath - The main project path
    * @param featureId - The feature ID to commit
    * @param providedWorktreePath - Optional: the worktree path where the feature's changes are located
+   * @returns The commit hash, or null when nothing was committed. `blocked`
+   *   distinguishes "held back, waiting on the GitHub issue" from "there was
+   *   nothing to commit" — the caller must not report the former as success.
    */
   async commitFeature(
     projectPath: string,
     featureId: string,
     providedWorktreePath?: string
-  ): Promise<string | null> {
+  ): Promise<CommitFeatureResult> {
     let workDir = projectPath;
 
     // Use the provided worktree path if given
@@ -1927,16 +1980,30 @@ Address the follow-up instructions above. Review the previous work and make the 
         cwd: workDir,
       });
       if (!status.trim()) {
-        return null; // No changes
+        return { commitHash: null }; // No changes
+      }
+
+      // Nothing lands on a branch before its issue exists. Planning and branch
+      // creation ran unblocked; this is the one place that waits.
+      const issueGate = await this.awaitIssueForCommit(projectPath, featureId);
+      if (!issueGate.ready) {
+        logger.warn(`Commit for ${featureId} blocked: ${issueGate.reason}`);
+        this.emitAutoModeEvent('auto_mode_error', {
+          featureId,
+          message: `Commit is waiting on the GitHub issue — ${issueGate.reason}`,
+          projectPath,
+        });
+        return { commitHash: null, blocked: true, reason: issueGate.reason };
       }
 
       // Load feature for commit message
       const feature = await this.loadFeature(projectPath, featureId);
+      const issueRef = issueGate.issueNumber ? ` (#${issueGate.issueNumber})` : '';
       const commitMessage = feature
         ? `feat: ${this.extractTitleFromDescription(
             feature.description
-          )}\n\nImplemented by DMaker auto-mode`
-        : `feat: Feature ${featureId}`;
+          )}${issueRef}\n\nImplemented by DMaker auto-mode`
+        : `feat: Feature ${featureId}${issueRef}`;
 
       // Stage and commit
       await execAsync('git add -A', { cwd: workDir });
@@ -1958,10 +2025,13 @@ Address the follow-up instructions above. Review the previous work and make the 
         projectPath,
       });
 
-      return hash.trim();
+      return { commitHash: hash.trim() };
     } catch (error) {
       logger.error(`Commit failed for ${featureId}:`, error);
-      return null;
+      return {
+        commitHash: null,
+        reason: error instanceof Error ? error.message : 'Commit failed',
+      };
     }
   }
 
@@ -3084,6 +3154,39 @@ You can use the Read tool to view these images at any time during implementation
     const feature = await this.loadFeature(finalProjectPath, featureId);
     const requiresApproval = feature?.requireApproval === true;
 
+    // Ownership gate. Every agent invocation for a feature — first run,
+    // resume, follow-up, pipeline step — funnels through here, so this is the
+    // one place that has to hold for "no file changes unless the task is
+    // yours" to be true. An unclaimed task is claimed for us here; anything
+    // else drops the run to read-only rather than refusing to run at all.
+    const ownership = feature
+      ? await ensureFeatureOwnership(finalProjectPath, feature, this.featureLoader)
+      : {
+          canWrite: false,
+          reason: 'no_issue' as const,
+          message: 'The task could not be loaded, so its ownership is unknown.',
+        };
+    const readOnly = !ownership.canWrite;
+
+    if (readOnly) {
+      logger.warn(
+        `Feature ${featureId} running READ-ONLY (${ownership.reason}): ${ownership.message}`
+      );
+      this.events.emit('feature:write-blocked', {
+        featureId,
+        projectPath: finalProjectPath,
+        reason: ownership.reason,
+        owner: ownership.owner,
+        message: ownership.message,
+      });
+      this.emitAutoModeEvent('auto_mode_progress', {
+        featureId,
+        content: `⚠ Read-only: ${ownership.message}`,
+      });
+    } else if (ownership.autoClaimed) {
+      logger.info(`Feature ${featureId} auto-claimed for ${ownership.owner}`);
+    }
+
     // CI/CD Mock Mode: Return early with mock response when DMAKER_MOCK_AGENT is set
     // This prevents actual API calls during automated testing
     if (process.env.DMAKER_MOCK_AGENT === 'true') {
@@ -3284,6 +3387,13 @@ This mock response was generated because DMAKER_MOCK_AGENT=true was set.
     // Build SDK options using centralized configuration for feature implementation
     // Pass context files (options?.systemPrompt) as the base systemPrompt so they're
     // included in the SDK system prompt alongside agent instructions
+    // An unowned task keeps its context and its instructions but loses every
+    // tool that could touch the tree; the notice tells the agent why, so it
+    // reports back instead of flailing at tools it no longer has.
+    const ownershipSystemPrompt = readOnly
+      ? [agentSystemPrompt, buildReadOnlyNotice(ownership)].filter(Boolean).join('\n\n')
+      : agentSystemPrompt;
+
     const sdkOptions = createAutoModeOptions({
       cwd: workDir,
       model: model,
@@ -3297,7 +3407,8 @@ This mock response was generated because DMAKER_MOCK_AGENT=true was set.
       includeSubagents:
         featureEnableSubagents && subagentsConfig.shouldIncludeInTools && !!hasCustomSubagents,
       agents: featureEnableSubagents ? filteredSubagents : undefined,
-      agentSystemPrompt,
+      agentSystemPrompt: ownershipSystemPrompt,
+      readOnly,
     });
 
     // Extract model, maxTurns, and allowedTools from SDK options
@@ -3351,6 +3462,13 @@ This mock response was generated because DMAKER_MOCK_AGENT=true was set.
       logger.info(
         `[AgentDebug] Appended agent instructions (${agentSystemPrompt.length} chars) to end of user prompt for ${featureId}`
       );
+    }
+
+    // Last word in the prompt, after any custom agent instructions, because a
+    // custom agent told to "ignore other prompts" must still not be able to
+    // talk itself into editing a task that is not ours.
+    if (readOnly) {
+      finalPrompt += '\n\n---\n\n' + buildReadOnlyNotice(ownership);
     }
 
     // ALWAYS append mandatory summary requirement — this is a system-level requirement

@@ -11,7 +11,12 @@
  * Base URL for the API server
  * Uses TEST_SERVER_PORT env var (default 3008) to match playwright.config.ts
  */
-export const API_BASE_URL = `http://localhost:${process.env.TEST_SERVER_PORT || '3008'}`;
+// Honours both ways the suite can be pointed at a backend: an explicit
+// VITE_SERVER_URL (an already-running server), or TEST_SERVER_PORT (the one
+// playwright.config starts). Specs that hardcoded a fallback port silently
+// talked to the wrong server whenever either was set.
+export const API_BASE_URL =
+  process.env.VITE_SERVER_URL || `http://localhost:${process.env.TEST_SERVER_PORT || '3008'}`;
 
 /**
  * API endpoints for worktree operations
@@ -94,13 +99,13 @@ export const TEST_IDS = {
   ideationView: 'ideation-view',
   settingsView: 'settings-view',
   welcomeView: 'welcome-view',
-  dashboardView: 'dashboard-view',
+  boardNoProjectView: 'board-view-no-project',
   setupView: 'setup-view',
-  githubIssuesView: 'github-issues-view',
   githubPrsView: 'github-prs-view',
 
   // Board View Components
-  addFeatureButton: 'add-feature-button',
+  // Lives in the sidebar since the board header was folded away.
+  addFeatureButton: 'sidebar-new-feature',
   addFeatureDialog: 'add-feature-dialog',
   confirmAddFeature: 'confirm-add-feature',
   featureBranchInput: 'feature-input',

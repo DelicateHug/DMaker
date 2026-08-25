@@ -81,7 +81,19 @@ function getCodexWindowLabel(durationMins: number): { title: string; subtitle: s
   return { title: `${days}d Window`, subtitle: 'Rate limit' };
 }
 
-export function UsagePopover() {
+export interface UsagePopoverProps {
+  /**
+   * Icon-only trigger, for the sidebar footer's icon grid. The usage bar is
+   * dropped; the provider icon still carries the status colour.
+   */
+  compact?: boolean;
+  /** Extra classes for the trigger button */
+  triggerClassName?: string;
+  /** Alignment of the popover relative to its trigger */
+  align?: 'start' | 'center' | 'end';
+}
+
+export function UsagePopover({ compact, triggerClassName, align = 'end' }: UsagePopoverProps = {}) {
   const {
     claudeUsage,
     claudeUsageLastUpdated,
@@ -490,12 +502,15 @@ export function UsagePopover() {
     <Button
       variant="ghost"
       size="sm"
-      className="h-9 gap-2 bg-secondary border border-border px-3"
+      className={cn(
+        compact ? 'p-0' : 'h-9 gap-2 bg-secondary border border-border px-3',
+        triggerClassName
+      )}
       title="Usage"
       data-testid="usage-popover-trigger"
     >
       <ProviderIcon className={cn('w-4 h-4', statusColor)} />
-      {(claudeUsage || codexUsage) && (
+      {!compact && (claudeUsage || codexUsage) && (
         <div
           className={cn(
             'h-1.5 w-16 bg-muted-foreground/20 rounded-full overflow-hidden transition-opacity',
@@ -523,7 +538,7 @@ export function UsagePopover() {
       <PopoverTrigger asChild>{trigger}</PopoverTrigger>
       <PopoverContent
         className="w-80 p-0 overflow-hidden bg-background/95 backdrop-blur-xl border-border shadow-2xl"
-        align="end"
+        align={align}
         sideOffset={8}
         data-testid="usage-popover"
       >

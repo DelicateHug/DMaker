@@ -9,10 +9,10 @@ import { useBoardControlsStore } from '@/store/board-controls-store';
  *
  * Instead of containing inline deploy popover logic (environment tabs,
  * script configuration, deploy triggers), this button simply opens or
- * focuses the DeployPanel in the board view via the board controls store.
+ * focuses the Scripts pane of the project view via the board controls store.
  *
  * The full deploy experience (script listing, environment selection,
- * execution, history, streaming output) lives in the DeployPanel component.
+ * execution, history, streaming output) lives in the ScriptsPanel component.
  */
 export interface DeployButtonProps {
   className?: string;

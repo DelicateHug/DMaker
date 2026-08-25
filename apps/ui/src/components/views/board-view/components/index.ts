@@ -24,8 +24,6 @@ export { RunningAgentsPanel, type RunningAgentsPanelProps } from './running-agen
 
 export { default as AgentChatPanel, type AgentChatPanelProps } from './agent-chat-panel';
 
-export { default as DeployPanel, type DeployPanelProps } from './deploy-panel';
-
 // List view components
 export {
   ListRow,

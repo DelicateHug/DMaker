@@ -113,20 +113,26 @@ test.describe('Open Project', () => {
 
     // Now navigate to the app
     await authenticateForTests(page);
-    // Navigate directly to dashboard to avoid auto-open which would bypass the project selection
-    await page.goto('/dashboard');
+    // The board is the only home now — the recent-projects list moved into the
+    // quick launcher's Projects modal.
+    await page.goto('/board');
     await page.waitForLoadState('load');
     await handleLoginScreenIfPresent(page);
 
-    // Wait for dashboard view
-    await expect(page.locator('[data-testid="dashboard-view"]')).toBeVisible({ timeout: 15000 });
+    await page.locator('[data-testid="quick-launcher-trigger"]').first().click();
+    await page.locator('[data-testid="launcher-switch-project"]').click();
+
+    await expect(page.locator('[data-testid="project-picker-modal"]')).toBeVisible({
+      timeout: 15000,
+    });
 
     // Verify we see the "Recent Projects" section
     await expect(page.getByText('Recent Projects')).toBeVisible({ timeout: 5000 });
 
     // Look for our test project by name OR any available project
     // First try our specific project, if not found, use the first available project card
-    let recentProjectCard = page.getByText(projectName).first();
+    const picker = page.locator('[data-testid="project-picker-modal"]');
+    let recentProjectCard = picker.getByText(projectName).first();
     let targetProjectName = projectName;
 
     const isOurProjectVisible = await recentProjectCard
@@ -136,7 +142,7 @@ test.describe('Open Project', () => {
     if (!isOurProjectVisible) {
       // Our project isn't visible - use the first available recent project card instead
       // This tests the "open recent project" flow even if our specific project didn't get injected
-      const firstProjectCard = page.locator('[data-testid^="project-card-"]').first();
+      const firstProjectCard = picker.locator('[data-testid^="project-card-"]').first();
       await expect(firstProjectCard).toBeVisible({ timeout: 5000 });
       // Get the project name from the card to verify later
       targetProjectName = (await firstProjectCard.locator('p').first().textContent()) || '';
@@ -148,13 +154,15 @@ test.describe('Open Project', () => {
     // Wait for the board view to appear (project was opened)
     await expect(page.locator('[data-testid="board-view"]')).toBeVisible({ timeout: 15000 });
 
-    // Wait for a project to be set as current and visible in the top navigation bar
-    // The project name appears in the project dropdown trigger
+    // The top nav's project dropdown is gone. The current project names itself
+    // on the project view's centre tab, so open it and read the tab.
     if (targetProjectName) {
-      await expect(page.getByTestId('project-dropdown-trigger')).toBeVisible({ timeout: 15000 });
-      await expect(page.getByTestId('project-dropdown-trigger')).toContainText(targetProjectName, {
-        timeout: 15000,
-      });
+      await page.locator('[data-testid="sidebar-project-view"]').first().click();
+      await expect(page.locator('[data-testid="project-view"]')).toBeVisible({ timeout: 15000 });
+      await expect(page.locator('[data-testid="center-tab-project"]')).toContainText(
+        targetProjectName,
+        { timeout: 15000 }
+      );
     }
 
     // Only verify filesystem if we opened our specific test project

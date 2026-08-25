@@ -12,9 +12,15 @@
 
 import { Router } from 'express';
 import type { Request, Response } from 'express';
+import path from 'path';
 import { createLogger } from '@dmaker/utils';
 import { secureFs } from '@dmaker/platform';
 import type { DeployScriptRunner } from '../services/deploy-service.js';
+import {
+  ensureFrontmatter,
+  parseScriptFrontmatter,
+  upsertFrontmatter,
+} from '../services/deploy-script-meta.js';
 import type { EventEmitter } from '../lib/events.js';
 
 // ---------------------------------------------------------------------------
@@ -75,17 +81,188 @@ async function folderExists(runner: DeployScriptRunner, projectPath: string): Pr
 }
 
 // ---------------------------------------------------------------------------
+// Script authoring - read, write and delete files in .dmaker/deploy
+// ---------------------------------------------------------------------------
+
+/** Extensions the deploy runner knows how to execute. */
+const ALLOWED_SCRIPT_EXTENSIONS = ['.ps1', '.sh', '.bat', '.cmd', '.js', '.py'];
+
+/**
+ * Resolve a script's absolute path inside the project's deploy folder.
+ * Rejects anything that escapes the folder or is not a runnable script.
+ */
+function resolveScriptPath(
+  runner: DeployScriptRunner,
+  projectPath: string,
+  relativePath: string
+): { path: string } | { error: string } {
+  const folder = runner.getDeployFolderPath(projectPath);
+  const target = path.resolve(folder, relativePath);
+  const relative = path.relative(folder, target);
+
+  if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) {
+    return { error: 'Script path must stay inside the deploy folder' };
+  }
+  if (!ALLOWED_SCRIPT_EXTENSIONS.includes(path.extname(target).toLowerCase())) {
+    return {
+      error: `Script must use one of: ${ALLOWED_SCRIPT_EXTENSIONS.join(', ')}`,
+    };
+  }
+  return { path: target };
+}
+
+/** GET /script - Read one script's contents for editing */
+function createReadScriptHandler(runner: DeployScriptRunner) {
+  return async (req: Request, res: Response): Promise<void> => {
+    try {
+      const projectPath = req.query.projectPath as string | undefined;
+      const scriptPath = req.query.path as string | undefined;
+
+      if (!projectPath || !scriptPath) {
+        res.status(400).json({
+          success: false,
+          error: 'projectPath and path query parameters are required',
+        });
+        return;
+      }
+
+      const resolved = resolveScriptPath(runner, projectPath, scriptPath);
+      if ('error' in resolved) {
+        res.status(400).json({ success: false, error: resolved.error });
+        return;
+      }
+
+      const content = String(await secureFs.readFile(resolved.path, 'utf-8'));
+      const meta = parseScriptFrontmatter(content);
+      res.json({ success: true, content, path: resolved.path, meta });
+    } catch (error) {
+      logError(error, 'Read deploy script failed');
+      res.status(500).json({ success: false, error: getErrorMessage(error) });
+    }
+  };
+}
+
+/** POST /script - Create or update a script in the deploy folder */
+function createSaveScriptHandler(runner: DeployScriptRunner) {
+  return async (req: Request, res: Response): Promise<void> => {
+    try {
+      const {
+        projectPath,
+        path: scriptPath,
+        content,
+      } = req.body as {
+        projectPath?: string;
+        path?: string;
+        content?: string;
+      };
+
+      if (!projectPath || !scriptPath || typeof content !== 'string') {
+        res.status(400).json({
+          success: false,
+          error: 'projectPath, path and content are required',
+        });
+        return;
+      }
+
+      const resolved = resolveScriptPath(runner, projectPath, scriptPath);
+      if ('error' in resolved) {
+        res.status(400).json({ success: false, error: resolved.error });
+        return;
+      }
+
+      // Keep the script's identity across edits. If the incoming content
+      // still declares an id we take it as-is; if the author deleted the
+      // frontmatter we restore the id the file already had on disk, so its
+      // run history stays attached. Only a genuinely new script gets a new id.
+      const extension = path.extname(resolved.path).toLowerCase();
+      let finalContent = content;
+
+      if (!parseScriptFrontmatter(content)) {
+        let existingId: string | undefined;
+        try {
+          const onDisk = String(await secureFs.readFile(resolved.path, 'utf-8'));
+          existingId = parseScriptFrontmatter(onDisk)?.id;
+        } catch {
+          // New file — nothing to preserve
+        }
+        finalContent = existingId
+          ? upsertFrontmatter(content, { id: existingId }, extension)
+          : ensureFrontmatter(content, extension).updatedContent!;
+      }
+
+      await secureFs.mkdir(path.dirname(resolved.path), { recursive: true });
+      await secureFs.writeFile(resolved.path, finalContent, 'utf-8');
+      logger.info(`Saved deploy script: ${resolved.path}`);
+
+      res.json({
+        success: true,
+        path: resolved.path,
+        content: finalContent,
+        meta: parseScriptFrontmatter(finalContent),
+      });
+    } catch (error) {
+      logError(error, 'Save deploy script failed');
+      res.status(500).json({ success: false, error: getErrorMessage(error) });
+    }
+  };
+}
+
+/** DELETE /script - Remove a script from the deploy folder */
+function createDeleteScriptHandler(runner: DeployScriptRunner) {
+  return async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { projectPath, path: scriptPath } = req.body as {
+        projectPath?: string;
+        path?: string;
+      };
+
+      if (!projectPath || !scriptPath) {
+        res.status(400).json({ success: false, error: 'projectPath and path are required' });
+        return;
+      }
+
+      const resolved = resolveScriptPath(runner, projectPath, scriptPath);
+      if ('error' in resolved) {
+        res.status(400).json({ success: false, error: resolved.error });
+        return;
+      }
+
+      await secureFs.unlink(resolved.path);
+      logger.info(`Deleted deploy script: ${resolved.path}`);
+
+      res.json({ success: true });
+    } catch (error) {
+      logError(error, 'Delete deploy script failed');
+      res.status(500).json({ success: false, error: getErrorMessage(error) });
+    }
+  };
+}
+
+// ---------------------------------------------------------------------------
 // POST /run - Execute a deploy script with SSE streaming output
 // ---------------------------------------------------------------------------
 
 function createRunHandler(runner: DeployScriptRunner, events?: EventEmitter) {
   return async (req: Request, res: Response): Promise<void> => {
     try {
-      const { projectPath, scriptName, timeout } = req.body as {
+      const {
+        projectPath,
+        scriptName,
+        timeout,
+        runId: requestedRunId,
+      } = req.body as {
         projectPath?: string;
         scriptName?: string;
         timeout?: number;
+        runId?: string;
       };
+
+      // Clients pass their own run id so they can route streamed output to
+      // the right run when several are in flight at once.
+      const runId =
+        typeof requestedRunId === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(requestedRunId)
+          ? requestedRunId
+          : undefined;
 
       if (!projectPath) {
         res.status(400).json({ success: false, error: 'projectPath is required' });
@@ -135,24 +312,43 @@ function createRunHandler(runner: DeployScriptRunner, events?: EventEmitter) {
       await runner.runScript({
         projectPath,
         scriptName,
+        runId,
         timeout,
         onEvent: (event) => {
           // Send via SSE (primary channel)
           sendEvent(event.type, event);
 
-          // Also emit via WebSocket (fallback channel)
+          // Also emit via WebSocket (fallback channel). Every payload carries
+          // the run id so clients watching concurrent runs can tell them apart.
           if (events) {
             if (event.type === 'stdout' || event.type === 'stderr') {
-              events.emit('deploy:output', { data: event.data });
+              events.emit('deploy:output', {
+                runId: event.runId,
+                scriptName,
+                data: event.data,
+              });
+            } else if (event.type === 'start') {
+              events.emit('deploy:started', {
+                runId: event.runId,
+                scriptId: event.script.id,
+                scriptName,
+                startedAt: new Date().toISOString(),
+              });
             } else if (event.type === 'done') {
               const result = event.result;
               if (result.success) {
                 events.emit('deploy:success', {
+                  runId: event.runId,
+                  scriptId: result.scriptId,
+                  scriptName,
                   message: `Completed "${scriptName}"`,
                   duration: result.duration,
                 });
               } else {
                 events.emit('deploy:error', {
+                  runId: event.runId,
+                  scriptId: result.scriptId,
+                  scriptName,
                   message:
                     result.exitCode != null
                       ? `Failed "${scriptName}" (exit code ${result.exitCode})`
@@ -204,16 +400,41 @@ function createRunsHandler(runner: DeployScriptRunner) {
     try {
       const limitStr = req.query.limit as string | undefined;
       const limit = limitStr ? parseInt(limitStr, 10) : undefined;
+      const scriptId = (req.query.scriptId as string | undefined) || undefined;
 
-      const history = runner.getHistory(limit);
+      const history = runner.getHistory({ limit, scriptId });
 
       res.json({
         success: true,
         history,
         total: history.length,
+        active: runner.getActiveRuns(scriptId),
       });
     } catch (error) {
       logError(error, 'Get deploy runs failed');
+      res.status(500).json({ success: false, error: getErrorMessage(error) });
+    }
+  };
+}
+
+// ---------------------------------------------------------------------------
+// POST /cancel - Stop a run in flight
+// ---------------------------------------------------------------------------
+
+function createCancelHandler(runner: DeployScriptRunner) {
+  return async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { runId } = req.body as { runId?: string };
+
+      if (!runId) {
+        res.status(400).json({ success: false, error: 'runId is required' });
+        return;
+      }
+
+      const cancelled = runner.cancelRun(runId);
+      res.json({ success: true, cancelled });
+    } catch (error) {
+      logError(error, 'Cancel deploy run failed');
       res.status(500).json({ success: false, error: getErrorMessage(error) });
     }
   };
@@ -224,17 +445,19 @@ function createRunsHandler(runner: DeployScriptRunner) {
 // ---------------------------------------------------------------------------
 
 function createDeleteRunsHandler(runner: DeployScriptRunner) {
-  return async (_req: Request, res: Response): Promise<void> => {
+  return async (req: Request, res: Response): Promise<void> => {
     try {
-      const history = runner.getHistory();
-      const cleared = history.length;
+      const { scriptId, runId } = (req.body ?? {}) as { scriptId?: string; runId?: string };
 
-      runner.clearHistory();
+      // Deleting one run, one script's runs, or everything.
+      if (runId) {
+        const deleted = runner.deleteRun(runId);
+        res.json({ success: true, cleared: deleted ? 1 : 0 });
+        return;
+      }
 
-      res.json({
-        success: true,
-        cleared,
-      });
+      const cleared = runner.clearHistory(scriptId);
+      res.json({ success: true, cleared });
     } catch (error) {
       logError(error, 'Clear deploy run history failed');
       res.status(500).json({ success: false, error: getErrorMessage(error) });
@@ -250,16 +473,24 @@ function createDeleteRunsHandler(runner: DeployScriptRunner) {
  * Create deploy router with all endpoints
  *
  * Endpoints:
- * - GET    /folder-scripts?projectPath=...  - List deploy folder scripts
- * - POST   /run                             - Run a script with SSE streaming output
- * - GET    /runs?limit=N                    - Get run history
- * - DELETE /runs                            - Clear run history
+ * - GET    /folder-scripts?projectPath=...     - List deploy folder scripts
+ * - GET    /script?projectPath=...&path=...    - Read one script for editing
+ * - POST   /script                             - Create or update a script
+ * - DELETE /script                             - Delete a script
+ * - POST   /run                                - Run a script with SSE streaming output
+ * - POST   /cancel                             - Stop a run in flight
+ * - GET    /runs?limit=N&scriptId=...          - Get run history (optionally per script)
+ * - DELETE /runs                               - Clear run history (all, per script, or one run)
  */
 export function createDeployRoutes(runner: DeployScriptRunner, events?: EventEmitter): Router {
   const router = Router();
 
   router.get('/folder-scripts', createFolderScriptsHandler(runner));
+  router.get('/script', createReadScriptHandler(runner));
+  router.post('/script', createSaveScriptHandler(runner));
+  router.delete('/script', createDeleteScriptHandler(runner));
   router.post('/run', createRunHandler(runner, events));
+  router.post('/cancel', createCancelHandler(runner));
   router.get('/runs', createRunsHandler(runner));
   router.delete('/runs', createDeleteRunsHandler(runner));
 

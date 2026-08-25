@@ -3,6 +3,7 @@ import { createLogger } from '@dmaker/utils/logger';
 import { GitPullRequest, Loader2, RefreshCw, ExternalLink, GitMerge, X } from 'lucide-react';
 import { getElectronAPI, GitHubPR } from '@/lib/electron';
 import { useAppStore } from '@/store/app-store';
+import { useGitHubConfig } from '@/hooks/use-github-config';
 import { Button } from '@/components/ui/button';
 import { Markdown } from '@/components/ui/markdown';
 import { cn } from '@/lib/utils';
@@ -17,6 +18,9 @@ export function GitHubPRsView() {
   const [error, setError] = useState<string | null>(null);
   const [selectedPR, setSelectedPR] = useState<GitHubPR | null>(null);
   const { currentProject } = useAppStore();
+  // Respects the project's repository override, so a fork can list the PRs of
+  // whichever repo its GitHub settings point at.
+  const { repo: githubRepo, isLoading: configLoading } = useGitHubConfig(currentProject?.path);
 
   const fetchPRs = useCallback(async () => {
     if (!currentProject?.path) {
@@ -29,7 +33,7 @@ export function GitHubPRsView() {
       setError(null);
       const api = getElectronAPI();
       if (api.github) {
-        const result = await api.github.listPRs(currentProject.path);
+        const result = await api.github.listPRs(currentProject.path, githubRepo);
         if (result.success) {
           setOpenPRs(result.openPRs || []);
           setMergedPRs(result.mergedPRs || []);
@@ -44,11 +48,14 @@ export function GitHubPRsView() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [currentProject?.path]);
+  }, [currentProject?.path, githubRepo]);
 
   useEffect(() => {
+    // Wait for the override to resolve, or the first fetch would read the
+    // detected remote and then immediately re-read the configured one.
+    if (configLoading) return;
     fetchPRs();
-  }, [fetchPRs]);
+  }, [configLoading, fetchPRs]);
 
   const handleRefresh = useCallback(() => {
     setRefreshing(true);

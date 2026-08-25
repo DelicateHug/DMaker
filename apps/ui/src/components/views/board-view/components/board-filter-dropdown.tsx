@@ -841,4 +841,6 @@ function ProjectItem({
 }
 
 export { ALL_PROJECTS_ID };
-export type { StatusTabId, StatusTab, BoardMode };
+// BoardMode is exported at its declaration above; re-exporting it here too
+// is a duplicate export of the same name.
+export type { StatusTabId, StatusTab };

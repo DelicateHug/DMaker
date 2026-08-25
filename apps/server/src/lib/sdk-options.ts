@@ -141,6 +141,16 @@ export const TOOL_PRESETS = {
     'TodoWrite',
   ] as const,
 
+  /**
+   * What an agent gets when it may look but not touch.
+   *
+   * Bash is absent on purpose: `bash -c 'echo x > file'` is a write, so
+   * leaving it in would make the read-only claim a lie. The cost is that a
+   * read-only run cannot execute tests or builds, which is the right trade
+   * when it is not allowed to change what those would test.
+   */
+  readOnlyResearch: ['Read', 'Glob', 'Grep', 'WebSearch', 'WebFetch', 'TodoWrite'] as const,
+
   /** Tools for chat/interactive mode */
   chat: [
     'Read',
@@ -370,6 +380,15 @@ export interface CreateSdkOptionsConfig {
 
   /** Agent system prompt to append (highest priority, overrides conflicting instructions) */
   agentSystemPrompt?: string;
+
+  /**
+   * Strip every file-modifying tool from the run.
+   *
+   * Set when the task's ownership could not be proven — see
+   * `lib/feature-ownership.ts`. Write, Edit and Bash all go, and so do Skill
+   * and Task, which would otherwise hand a subagent the tools we just removed.
+   */
+  readOnly?: boolean;
 }
 
 // Re-export MCP types from @dmaker/types for convenience
@@ -541,12 +560,18 @@ export function createAutoModeOptions(config: CreateSdkOptionsConfig): Options {
   // Build thinking options
   const thinkingOptions = buildThinkingOptions(config.thinkingLevel);
 
-  // Build allowed tools with optional Skill and Task tools
-  const allowedTools: string[] = [...TOOL_PRESETS.fullAccess];
-  if (config.includeSkills) {
+  // Build allowed tools with optional Skill and Task tools.
+  //
+  // A read-only run gets the research preset and nothing else: Skill runs
+  // arbitrary shell and Task spawns a subagent with its own tool set, so both
+  // would reopen the door that dropping Write/Edit/Bash just closed.
+  const allowedTools: string[] = config.readOnly
+    ? [...TOOL_PRESETS.readOnlyResearch]
+    : [...TOOL_PRESETS.fullAccess];
+  if (!config.readOnly && config.includeSkills) {
     allowedTools.push('Skill');
   }
-  if (config.includeSubagents) {
+  if (!config.readOnly && config.includeSubagents) {
     allowedTools.push('Task');
   }
 
@@ -570,8 +595,10 @@ export function createAutoModeOptions(config: CreateSdkOptionsConfig): Options {
     ...(settingSources && { settingSources }),
     ...thinkingOptions,
     ...(config.abortController && { abortController: config.abortController }),
-    ...mcpOptions.mcpServerOptions,
-    ...(config.agents && { agents: config.agents }),
+    // MCP servers ship their own tools, and nothing here can tell which of
+    // them write. A read-only run does without them.
+    ...(config.readOnly ? {} : mcpOptions.mcpServerOptions),
+    ...(!config.readOnly && config.agents && { agents: config.agents }),
   };
 }
 

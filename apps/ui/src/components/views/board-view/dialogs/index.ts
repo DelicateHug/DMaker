@@ -103,6 +103,11 @@ export const CreateBranchDialog = lazyDialogPassthrough(
   'CreateBranchDialog'
 );
 
+export const CreateGitHubRepoDialog = lazyDialogPassthrough(
+  () => import('./create-github-repo-dialog'),
+  'CreateGitHubRepoDialog'
+);
+
 export const MergeWorktreeDialog = lazyDialogPassthrough(
   () => import('./merge-worktree-dialog'),
   'MergeWorktreeDialog'

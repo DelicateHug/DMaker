@@ -3,6 +3,7 @@ import { useMemo, useCallback } from 'react';
 import { Feature, useAppStore } from '@/store/app-store';
 import { resolveDependencies, getBlockingDependencies } from '@dmaker/dependency-resolver';
 import type { StatusTabId } from './use-board-status-tabs';
+import { DEFAULT_ASSIGNEE_FILTER, matchesAssigneeFilter } from './use-board-assignees';
 
 type ColumnId = Feature['status'];
 
@@ -11,6 +12,13 @@ interface UseBoardColumnFeaturesProps {
   runningAutoTasks: string[];
   searchQuery: string;
   showFavoritesOnly: boolean;
+  /**
+   * Optional: GitHub logins (or the special ids from `use-board-assignees`)
+   * the board is narrowed to. Defaults to everything.
+   */
+  assigneeFilter?: string[];
+  /** Optional: the `gh` CLI user, so the "Me" option can resolve to a login */
+  currentUser?: string | null;
   currentWorktreePath: string | null; // Currently selected worktree path
   currentWorktreeBranch: string | null; // Branch name of the selected worktree (null = main)
   projectPath: string | null; // Main project path (for main worktree)
@@ -52,6 +60,8 @@ export function useBoardColumnFeatures({
   runningAutoTasks,
   searchQuery,
   showFavoritesOnly,
+  assigneeFilter = DEFAULT_ASSIGNEE_FILTER,
+  currentUser = null,
   currentWorktreePath,
   currentWorktreeBranch,
   projectPath,
@@ -92,6 +102,11 @@ export function useBoardColumnFeatures({
     if (showFavoritesOnly) {
       filteredFeatures = filteredFeatures.filter((f) => f.isFavorite);
     }
+
+    // Apply assignee filter — who the task belongs to on GitHub
+    filteredFeatures = filteredFeatures.filter((f) =>
+      matchesAssigneeFilter(f, assigneeFilter, currentUser)
+    );
 
     // Determine the effective worktree path and branch for filtering
     // If currentWorktreePath is null, we're on the main worktree
@@ -255,6 +270,8 @@ export function useBoardColumnFeatures({
     runningAutoTasks,
     searchQuery,
     showFavoritesOnly,
+    assigneeFilter,
+    currentUser,
     currentWorktreePath,
     currentWorktreeBranch,
     projectPath,

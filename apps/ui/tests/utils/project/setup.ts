@@ -1,4 +1,16 @@
 import { Page } from '@playwright/test';
+import * as fs from 'fs';
+import { API_BASE_URL } from '../core/constants';
+
+/** Is this project directory still on disk? Runs in the Node test process. */
+function directoryExists(projectPath: string | undefined): boolean {
+  if (!projectPath) return false;
+  try {
+    return fs.statSync(projectPath).isDirectory();
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Store version constants - centralized to avoid hardcoding across tests
@@ -185,6 +197,63 @@ export async function setupRealProject(
     },
     { path: projectPath, name: projectName, opts: options, versions: STORE_VERSIONS }
   );
+
+  // The app takes its project list from the SERVER's global settings, not from
+  // localStorage — seeding only localStorage leaves it pointing at whatever
+  // the previous spec registered, so features load for the wrong project and
+  // the sidebar looks inexplicably populated. Register it server-side too.
+  await registerProjectWithServer(page, projectPath, projectName, {
+    setAsCurrent: options?.setAsCurrent,
+  });
+}
+
+/**
+ * Make sure the server knows about this project, and select it.
+ *
+ * Upserts rather than replaces. Specs share one backend, and some of them
+ * (project switching, chat persistence) need more than one project registered
+ * at once — wiping the list on every setup breaks those while fixing nothing.
+ */
+export async function registerProjectWithServer(
+  page: Page,
+  projectPath: string,
+  projectName: string,
+  options?: { setAsCurrent?: boolean }
+): Promise<void> {
+  const projectId = `e2e-${projectName}`;
+  try {
+    const current = await page.request.get(`${API_BASE_URL}/api/settings/global`);
+    const settings = current.ok() ? ((await current.json())?.settings ?? {}) : {};
+    const existing: TestProject[] = Array.isArray(settings.projects) ? settings.projects : [];
+
+    // Match on path: the same directory registered twice under different ids
+    // shows up as two identical projects in the sidebar.
+    //
+    // Also drop projects whose directory is gone. Specs share one backend and
+    // clean their temp directories in afterAll, so without this every earlier
+    // spec's project stays registered and its features keep loading into the
+    // sidebar — which is what made specs pass alone and fail in sequence.
+    const others = existing.filter(
+      (project) => project.path !== projectPath && directoryExists(project.path)
+    );
+    const project = {
+      id: projectId,
+      name: projectName,
+      path: projectPath,
+      lastOpened: new Date().toISOString(),
+    };
+
+    await page.request.put(`${API_BASE_URL}/api/settings/global`, {
+      data: {
+        ...settings,
+        projects: [...others, project],
+        ...(options?.setAsCurrent === false ? {} : { currentProjectId: projectId }),
+      },
+    });
+  } catch {
+    // A spec that never reaches the backend fails on its own assertions with a
+    // clearer message than this would give.
+  }
 }
 
 /**

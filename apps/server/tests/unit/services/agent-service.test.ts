@@ -416,6 +416,129 @@ describe('agent-service.ts', () => {
     });
   });
 
+  describe('scratch sessions', () => {
+    beforeEach(() => {
+      vi.mocked(fs.readFile).mockResolvedValue('{}');
+      vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+      vi.mocked(fs.mkdir).mockResolvedValue(undefined);
+      vi.mocked(fs.unlink).mockResolvedValue(undefined);
+      vi.mocked(fs.rm).mockResolvedValue(undefined);
+    });
+
+    it('should sandbox a scratch session under the data directory', async () => {
+      const session = await service.createSession(
+        'Throwaway',
+        '/test/project',
+        '/test/dir',
+        undefined,
+        true
+      );
+
+      expect(session.scratch).toBe(true);
+      expect(session.workingDirectory).toContain('scratchpad');
+      expect(session.workingDirectory).toContain(session.id);
+      // The sandbox must exist before the agent is pointed at it.
+      expect(fs.mkdir).toHaveBeenCalledWith(expect.stringContaining('scratchpad'), {
+        recursive: true,
+      });
+    });
+
+    it('should drop the project path a scratch session was offered', async () => {
+      const session = await service.createSession(
+        'Throwaway',
+        '/test/project',
+        '/test/dir',
+        undefined,
+        true
+      );
+
+      expect(session.projectPath).toBeUndefined();
+      expect(session.workingDirectory).not.toContain('project');
+    });
+
+    it('should leave a normal session untouched when scratch is not requested', async () => {
+      const session = await service.createSession('Normal', '/test/project', '/test/dir');
+
+      expect(session.scratch).toBeUndefined();
+      expect(session.projectPath).toBe('/test/project');
+      expect(session.workingDirectory).not.toContain('scratchpad');
+    });
+
+    it('should ignore a working directory offered for a scratch session', async () => {
+      vi.mocked(fs.readFile).mockImplementation(((filePath: string) => {
+        if (String(filePath).includes('sessions-metadata')) {
+          return Promise.resolve(
+            JSON.stringify({
+              'scratch-1': {
+                id: 'scratch-1',
+                name: 'Throwaway',
+                workingDirectory: '/test/data/scratchpad/scratch-1',
+                createdAt: '2024-01-01T00:00:00Z',
+                updatedAt: '2024-01-01T00:00:00Z',
+                scratch: true,
+              },
+            })
+          );
+        }
+        const error: any = new Error('ENOENT');
+        error.code = 'ENOENT';
+        return Promise.reject(error);
+      }) as any);
+
+      const result = await service.startConversation({
+        sessionId: 'scratch-1',
+        workingDirectory: '/some/real/repo',
+      });
+
+      expect(result.success).toBe(true);
+      expect(fs.mkdir).toHaveBeenCalledWith(expect.stringContaining('scratchpad'), {
+        recursive: true,
+      });
+    });
+
+    it('should remove the sandbox when a scratch session is deleted', async () => {
+      vi.mocked(fs.readFile).mockResolvedValue(
+        JSON.stringify({
+          'scratch-1': {
+            id: 'scratch-1',
+            name: 'Throwaway',
+            workingDirectory: '/test/data/scratchpad/scratch-1',
+            createdAt: '2024-01-01T00:00:00Z',
+            updatedAt: '2024-01-01T00:00:00Z',
+            scratch: true,
+          },
+        })
+      );
+
+      const result = await service.deleteSession('scratch-1');
+
+      expect(result).toBe(true);
+      expect(fs.rm).toHaveBeenCalledWith(
+        expect.stringContaining('scratch-1'),
+        expect.objectContaining({ recursive: true, force: true })
+      );
+    });
+
+    it('should not remove any directory when a normal session is deleted', async () => {
+      vi.mocked(fs.readFile).mockResolvedValue(
+        JSON.stringify({
+          'session-1': {
+            id: 'session-1',
+            name: 'Test Session',
+            workingDirectory: '/test/project',
+            createdAt: '2024-01-01T00:00:00Z',
+            updatedAt: '2024-01-01T00:00:00Z',
+          },
+        })
+      );
+
+      const result = await service.deleteSession('session-1');
+
+      expect(result).toBe(true);
+      expect(fs.rm).not.toHaveBeenCalled();
+    });
+  });
+
   describe('setSessionModel', () => {
     beforeEach(async () => {
       const error: any = new Error('ENOENT');

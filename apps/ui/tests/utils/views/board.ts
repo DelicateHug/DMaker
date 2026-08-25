@@ -1,45 +1,56 @@
 import { Page, Locator } from '@playwright/test';
 
+// The board was a kanban of columns and cards. The task list now lives in the
+// SIDEBAR — board-view renders no list at all, only the canvas the workbench
+// opens into. These helpers keep the old names so specs read the same, but
+// point at the sidebar, which is where tasks actually are.
+
 /**
- * Get a kanban card by feature ID
+ * A feature's row in the sidebar.
  */
 export async function getKanbanCard(page: Page, featureId: string): Promise<Locator> {
-  return page.locator(`[data-testid="kanban-card-${featureId}"]`);
+  return page.locator(`[data-testid="sidebar-feature-row"][data-feature-id="${featureId}"]`);
 }
 
 /**
- * Get a kanban column by its ID
+ * A status group in the sidebar (e.g. 'backlog', 'local', 'waiting_approval').
+ *
+ * Groups are nested project → branch → status and their test id carries all
+ * three, so match on the status suffix rather than trying to reconstruct the
+ * project path and branch a feature happens to be on.
  */
 export async function getKanbanColumn(page: Page, columnId: string): Promise<Locator> {
-  return page.locator(`[data-testid="kanban-column-${columnId}"]`);
+  return page.locator(`[data-testid^="sidebar-section-status:"][data-testid$=":${columnId}"]`);
 }
 
 /**
- * Get the width of a kanban column
+ * Rows inside a given status group, for counting or filtering by text.
  */
-export async function getKanbanColumnWidth(page: Page, columnId: string): Promise<number> {
-  const column = page.locator(`[data-testid="kanban-column-${columnId}"]`);
-  const box = await column.boundingBox();
-  return box?.width ?? 0;
+export async function getFeatureRowsInStatus(page: Page, status: string): Promise<Locator> {
+  return (await getKanbanColumn(page, status)).locator('[data-testid="sidebar-feature-row"]');
 }
 
 /**
- * Check if a kanban column has CSS columns (masonry) layout
+ * Widen the board's status funnel so every status group renders.
+ *
+ * The funnel starts on a single status, so a spec that seeds a backlog feature
+ * and then looks for the backlog group finds nothing — the feature loaded fine,
+ * it is just filtered out. Call this after the board loads.
  */
-export async function hasKanbanColumnMasonryLayout(page: Page, columnId: string): Promise<boolean> {
-  const column = page.locator(`[data-testid="kanban-column-${columnId}"]`);
-  const contentDiv = column.locator('> div').nth(1); // Second child is the content area
+export async function showAllStatuses(page: Page): Promise<void> {
+  const trigger = page.locator('[data-testid="board-status-dropdown-trigger"]');
+  await trigger.waitFor({ state: 'visible', timeout: 10000 });
+  await trigger.click();
 
-  const columnCount = await contentDiv.evaluate((el) => {
-    const style = window.getComputedStyle(el);
-    return style.columnCount;
-  });
-
-  return columnCount === '2';
+  const content = page.locator('[data-testid="board-status-dropdown-content"]');
+  await content.waitFor({ state: 'visible', timeout: 5000 });
+  await page.locator('[data-testid="board-status-dropdown-option-all"]').click();
+  await page.keyboard.press('Escape');
+  await content.waitFor({ state: 'hidden', timeout: 5000 });
 }
 
 /**
- * Drag a kanban card from one column to another
+ * Drag a feature row onto a status group.
  */
 export async function dragKanbanCard(
   page: Page,
@@ -47,7 +58,9 @@ export async function dragKanbanCard(
   targetColumnId: string
 ): Promise<void> {
   const dragHandle = page.locator(`[data-testid="drag-handle-${featureId}"]`);
-  const targetColumn = page.locator(`[data-testid="kanban-column-${targetColumnId}"]`);
+  const targetColumn = page.locator(
+    `[data-testid^="sidebar-section-status:"][data-testid$=":${targetColumnId}"]`
+  );
 
   // Perform drag and drop
   await dragHandle.dragTo(targetColumn);
@@ -93,13 +106,42 @@ export async function getDragHandleForFeature(page: Page, featureId: string): Pr
 // ============================================================================
 
 /**
- * Click the add feature button
+ * Open the Add Feature dialog.
+ *
+ * The button moved out of the board header and into the sidebar when the
+ * header was folded away, so the old `add-feature-button` hook no longer
+ * exists anywhere.
  */
 export async function clickAddFeature(page: Page): Promise<void> {
-  await page.click('[data-testid="add-feature-button"]');
+  await page.click('[data-testid="sidebar-new-feature"]');
   await page.waitForSelector('[data-testid="add-feature-dialog"]', {
     timeout: 5000,
   });
+}
+
+/**
+ * Choose whether the new feature is created locally or as a GitHub issue.
+ *
+ * The dialog defaults to GitHub when the board's GitHub mode is on. That path
+ * needs a real repository behind the project, so tests running against a bare
+ * temp directory have to pick 'local' explicitly or the issue creation fails
+ * and the feature stays local anyway, just with an error toast.
+ */
+export async function selectFeatureSource(page: Page, source: 'local' | 'github'): Promise<void> {
+  // The source toggle lives in the collapsed "More Options" section.
+  const optionals = page.locator('[data-testid="add-feature-more-options"]');
+  if ((await optionals.getAttribute('aria-expanded')) !== 'true') {
+    await optionals.click();
+  }
+
+  const button = page.locator(`[data-testid="feature-source-${source}"]`);
+  await button.waitFor({ state: 'visible', timeout: 5000 });
+  await button.click();
+  await page.waitForFunction(
+    (testId) => document.querySelector(testId)?.getAttribute('aria-pressed') === 'true',
+    `[data-testid="feature-source-${source}"]`,
+    { timeout: 5000 }
+  );
 }
 
 /**
@@ -108,8 +150,11 @@ export async function clickAddFeature(page: Page): Promise<void> {
 export async function fillAddFeatureDialog(
   page: Page,
   description: string,
-  options?: { branch?: string; category?: string }
+  options?: { branch?: string; category?: string; source?: 'local' | 'github' }
 ): Promise<void> {
+  if (options?.source) {
+    await selectFeatureSource(page, options.source);
+  }
   // Fill description (using the dropzone textarea)
   const descriptionInput = page.locator('[data-testid="add-feature-dialog"] textarea').first();
   await descriptionInput.fill(description);

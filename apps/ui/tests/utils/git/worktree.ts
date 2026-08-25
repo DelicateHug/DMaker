@@ -26,6 +26,8 @@ export interface FeatureData {
   category: string;
   description: string;
   status: string;
+  title?: string;
+  createdAt?: string;
   branchName?: string;
   worktreePath?: string;
 }
@@ -158,12 +160,32 @@ export async function cleanupTestRepo(repoPath: string): Promise<void> {
 }
 
 /**
- * Cleanup a temp directory and all its contents
+ * Cleanup a temp directory and all its contents.
+ *
+ * Best effort. On Windows the backend still holds handles inside a project it
+ * just watched or ran git in, so the first rm can lose an EPERM race with it —
+ * and an afterAll that throws fails a test whose assertions all passed. Retry
+ * briefly, then leave the directory behind: the next run prunes any project
+ * still registered against it, and `test/` is scratch space either way.
  */
 export function cleanupTempDir(tempDir: string): void {
-  if (fs.existsSync(tempDir)) {
-    fs.rmSync(tempDir, { recursive: true, force: true });
+  if (!fs.existsSync(tempDir)) return;
+
+  for (let attempt = 0; attempt < 5; attempt++) {
+    try {
+      fs.rmSync(tempDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+      return;
+    } catch {
+      // Busy-wait rather than sleep: this runs in afterAll, where async is
+      // allowed but the callers are all synchronous.
+      const until = Date.now() + 200;
+      while (Date.now() < until) {
+        /* wait for the handle to be released */
+      }
+    }
   }
+
+  console.warn(`[cleanupTempDir] Could not remove ${tempDir} — leaving it for the next run`);
 }
 
 // ============================================================================
@@ -289,15 +311,18 @@ export async function getLatestCommitMessage(repoPath: string): Promise<string> 
 // ============================================================================
 
 /**
- * Create a feature file in the test repo
+ * Create a feature file in the test repo.
+ *
+ * Features are stored under their status —
+ * `.dmaker/features/<status>/<featureId>/feature.json`. Writing straight to
+ * `.dmaker/features/<featureId>/` produces a file the server silently ignores.
  */
 export function createTestFeature(
   repoPath: string,
   featureId: string,
   featureData: FeatureData
 ): void {
-  const featuresDir = path.join(repoPath, '.dmaker', 'features');
-  const featureDir = path.join(featuresDir, featureId);
+  const featureDir = path.join(repoPath, '.dmaker', 'features', featureData.status, featureId);
 
   fs.mkdirSync(featureDir, { recursive: true });
   fs.writeFileSync(path.join(featureDir, 'feature.json'), JSON.stringify(featureData, null, 2));
@@ -307,17 +332,29 @@ export function createTestFeature(
  * Read a feature file from the test repo
  */
 export function readTestFeature(repoPath: string, featureId: string): FeatureData | null {
-  const featureFilePath = path.join(repoPath, '.dmaker', 'features', featureId, 'feature.json');
+  const featuresDir = path.join(repoPath, '.dmaker', 'features');
+  if (!fs.existsSync(featuresDir)) return null;
 
-  if (!fs.existsSync(featureFilePath)) {
-    return null;
+  // A feature sits either directly under features/ or inside its status
+  // directory, and it moves between statuses — so search rather than assume.
+  const candidates = [
+    path.join(featuresDir, featureId, 'feature.json'),
+    ...fs
+      .readdirSync(featuresDir)
+      .map((statusDir) => path.join(featuresDir, statusDir, featureId, 'feature.json')),
+  ];
+
+  for (const featureFilePath of candidates) {
+    if (fs.existsSync(featureFilePath)) {
+      return JSON.parse(fs.readFileSync(featureFilePath, 'utf-8'));
+    }
   }
 
-  return JSON.parse(fs.readFileSync(featureFilePath, 'utf-8'));
+  return null;
 }
 
 /**
- * List all feature directories in the test repo
+ * List all feature ids in the test repo, across every status directory.
  */
 export function listTestFeatures(repoPath: string): string[] {
   const featuresDir = path.join(repoPath, '.dmaker', 'features');
@@ -326,7 +363,18 @@ export function listTestFeatures(repoPath: string): string[] {
     return [];
   }
 
-  return fs.readdirSync(featuresDir);
+  // Both layouts are live: a feature directory sits either directly under
+  // features/ or one level down inside its status directory.
+  return fs
+    .readdirSync(featuresDir)
+    .filter((entry) => fs.statSync(path.join(featuresDir, entry)).isDirectory())
+    .flatMap((entry) => {
+      const entryPath = path.join(featuresDir, entry);
+      if (fs.existsSync(path.join(entryPath, 'feature.json'))) return [entry];
+      return fs
+        .readdirSync(entryPath)
+        .filter((child) => fs.statSync(path.join(entryPath, child)).isDirectory());
+    });
 }
 
 // ============================================================================

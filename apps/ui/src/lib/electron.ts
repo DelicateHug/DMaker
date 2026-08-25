@@ -33,7 +33,11 @@ import type {
   SummaryErrorResponse,
   FeatureListSummary,
   ListFeatureSummariesResponse,
+  DetectedGitHubRemote,
+  EffectiveGitHubSettings,
+  GitHubSettingSources,
 } from '@dmaker/types';
+import { GITHUB_SETTINGS_DEFAULTS } from '@dmaker/types';
 import { getJSON, setJSON, removeItem } from './storage';
 
 // Distributive Omit that works correctly with union types
@@ -310,11 +314,40 @@ export interface GitHubPR {
   body: string;
 }
 
+/** Why a `gh` call failed, so callers can offer the right remedy. */
+export type GhErrorCode = 'no-remote' | 'not-authenticated' | 'gh-missing' | 'unknown';
+
 export interface GitHubRemoteStatus {
   hasGitHubRemote: boolean;
   remoteUrl: string | null;
   owner: string | null;
   repo: string | null;
+}
+
+/** The GitHub configuration in force for a project, and where it came from. */
+export interface GitHubConfigResult {
+  success: boolean;
+  /** What git and `gh` report about the checkout */
+  detected?: DetectedGitHubRemote;
+  /** The values GitHub operations will actually use */
+  effective?: EffectiveGitHubSettings;
+  /** Which layer supplied each effective value */
+  sources?: GitHubSettingSources;
+  /** Raw global defaults, so the UI can show what a blank field inherits */
+  global?: {
+    githubDefaultOwner: string | null;
+    githubRemoteName: string | null;
+    githubBaseBranch: string | null;
+    githubDraftPRs: boolean | null;
+  };
+  /** Raw project overrides, so the UI can tell "unset" from "same as global" */
+  project?: {
+    githubRepo: string | null;
+    githubRemoteName: string | null;
+    githubBaseBranch: string | null;
+    githubDraftPRs: boolean | null;
+  };
+  error?: string;
 }
 
 export interface GitHubAPI {
@@ -326,6 +359,8 @@ export interface GitHubAPI {
     repo?: string | null;
     error?: string;
   }>;
+  /** Resolve project overrides + global defaults + git detection into one answer */
+  getConfig: (projectPath: string) => Promise<GitHubConfigResult>;
   listIssues: (
     projectPath: string,
     githubRepo?: string
@@ -425,7 +460,22 @@ export interface GitHubAPI {
     title: string,
     body?: string,
     labels?: string[]
-  ) => Promise<{ success: boolean; issueNumber?: number; url?: string; error?: string }>;
+  ) => Promise<{
+    success: boolean;
+    issueNumber?: number;
+    url?: string;
+    /** Labels actually applied — one that could not be created is dropped, not fatal */
+    appliedLabels?: string[];
+    error?: string;
+    errorCode?: GhErrorCode;
+  }>;
+  /** Create a GitHub repository for a project that has no remote yet */
+  createRepo: (
+    projectPath: string,
+    name: string,
+    visibility?: 'private' | 'public',
+    description?: string
+  ) => Promise<{ success: boolean; url?: string; nameWithOwner?: string; error?: string }>;
   /** Sync assignee/label/state data from GitHub for a linked issue */
   syncIssue: (
     projectPath: string,
@@ -622,6 +672,34 @@ export interface FeaturesAPI {
   getCountsByStatus: (
     projectPath: string
   ) => Promise<{ success: boolean; counts?: Record<string, number>; error?: string }>;
+  /** Archive a feature — the board's "delete". Closes the linked issue too. */
+  archive: (
+    projectPath: string,
+    featureId: string
+  ) => Promise<{ success: boolean; feature?: Feature; issueClosed?: boolean; error?: string }>;
+  /** Restore an archived feature to the status it held before archiving */
+  unarchive: (
+    projectPath: string,
+    featureId: string,
+    targetStatus?: string
+  ) => Promise<{ success: boolean; feature?: Feature; error?: string }>;
+  /** List archived features, newest first */
+  listArchived: (
+    projectPath: string
+  ) => Promise<{ success: boolean; features?: Feature[]; error?: string }>;
+  /** Answer (or skip) a question an agent parked on a feature */
+  answerQuestion: (
+    projectPath: string,
+    featureId: string,
+    questionId: string,
+    answer: string,
+    skipped?: boolean
+  ) => Promise<{ success: boolean; feature?: Feature; error?: string }>;
+  /** Start or retry background GitHub issue creation for a feature */
+  startIssueDraft: (
+    projectPath: string,
+    featureId: string
+  ) => Promise<{ success: boolean; error?: string }>;
 }
 
 export interface AutoModeAPI {
@@ -687,7 +765,13 @@ export interface AutoModeAPI {
     projectPath: string,
     featureId: string,
     worktreePath?: string
-  ) => Promise<{ success: boolean; error?: string }>;
+  ) => Promise<{
+    success: boolean;
+    commitHash?: string | null;
+    /** The commit was held back waiting for the task's GitHub issue */
+    blocked?: boolean;
+    error?: string;
+  }>;
   approvePlan: (
     projectPath: string,
     featureId: string,
@@ -914,7 +998,9 @@ export interface ElectronAPI {
     create: (
       name: string,
       projectPath: string,
-      workingDirectory?: string
+      workingDirectory?: string,
+      /** `scratch` makes a throwaway Scratchpad chat: sandboxed, no project */
+      options?: { scratch?: boolean }
     ) => Promise<{
       success: boolean;
       session?: {
@@ -924,6 +1010,8 @@ export interface ElectronAPI {
         workingDirectory?: string;
         createdAt: string;
         updatedAt: string;
+        /** True when the server actually made this a Scratchpad session */
+        scratch?: boolean;
       };
       error?: string;
     }>;
@@ -1121,6 +1209,9 @@ const mockFeatures = [
     description: 'Sample Feature',
     steps: ['Step 1', 'Step 2'],
     passes: false,
+    // Real features always carry a status, and getCountsByStatus below groups
+    // on it. Leaving it off made the mock an unrepresentative shape.
+    status: 'backlog',
   },
 ];
 
@@ -1823,6 +1914,42 @@ function createMockWorktreeAPI(): WorktreeAPI {
       };
     },
 
+    getBranchDeleteInfo: async (projectPath: string, branchName: string) => {
+      console.log('[Mock] Branch delete info:', { projectPath, branchName });
+      return {
+        success: true,
+        info: {
+          branchName,
+          hasLocal: true,
+          isDefault: false,
+          isCurrent: false,
+          worktreePath: null,
+          remoteRef: `origin/${branchName}`,
+          remote: 'origin',
+          isMerged: false,
+          unmergedCommits: 2,
+          comparedAgainst: 'main',
+        },
+      };
+    },
+
+    deleteBranch: async (
+      projectPath: string,
+      branchName: string,
+      options?: { force?: boolean; deleteRemote?: boolean }
+    ) => {
+      console.log('[Mock] Deleting branch:', { projectPath, branchName, options });
+      return {
+        success: true,
+        deleted: {
+          branch: branchName,
+          local: true,
+          remote: !!options?.deleteRemote,
+          remoteRef: `origin/${branchName}`,
+        },
+      };
+    },
+
     commit: async (worktreePath: string, message: string) => {
       console.log('[Mock] Committing changes:', { worktreePath, message });
       return {
@@ -2064,6 +2191,91 @@ function createMockWorktreeAPI(): WorktreeAPI {
         result: {
           servers: [],
         },
+      };
+    },
+
+    getSyncStatus: async (worktreePaths: string[]) => {
+      console.log('[Mock] Getting worktree sync status:', worktreePaths);
+      return {
+        success: true,
+        statuses: worktreePaths.map((worktreePath) => ({
+          worktreePath,
+          branch: 'main',
+          ahead: 0,
+          behind: 0,
+          dirtyCount: 0,
+        })),
+      };
+    },
+
+    getRemoteBranches: async (projectPaths: string[]) => {
+      console.log('[Mock] Discovering remote branches:', projectPaths);
+      return {
+        success: true,
+        projects: projectPaths.map((projectPath) => ({
+          projectPath,
+          remote: 'origin',
+          defaultBranch: 'main',
+          branches: [],
+        })),
+      };
+    },
+
+    getLocalBranches: async (projectPaths: string[]) => {
+      console.log('[Mock] Listing local branches:', projectPaths);
+      return {
+        success: true,
+        projects: projectPaths.map((projectPath) => ({
+          projectPath,
+          defaultBranch: 'main',
+          branches: [
+            {
+              name: 'main',
+              isDefault: true,
+              isCurrent: true,
+              hasWorktree: true,
+              worktreePath: projectPath,
+              upstreamGone: false,
+            },
+          ],
+        })),
+      };
+    },
+
+    branchSync: async (
+      projects: Array<{ projectPath: string; worktreePaths: string[] }>,
+      autoUpdate?: boolean
+    ) => {
+      console.log('[Mock] Branch sync check:', { projects, autoUpdate });
+      return {
+        success: true,
+        projects: projects.map((project) => ({
+          projectPath: project.projectPath,
+          remote: 'origin',
+          fetched: true,
+          branches: project.worktreePaths.map((worktreePath) => ({
+            worktreePath,
+            branch: 'main',
+            upstream: 'origin/main',
+            ahead: 0,
+            behind: 0,
+            dirtyCount: 0,
+            conflictedFiles: [],
+            state: 'in-sync' as const,
+            message: 'Level with origin/main',
+            canAutoFix: false,
+            didUpdate: false,
+          })),
+        })),
+      };
+    },
+
+    branchAutoFix: async (worktreePath: string) => {
+      console.log('[Mock] Branch auto-fix:', worktreePath);
+      return {
+        success: false,
+        steps: [],
+        error: 'Branch auto-fix is not available in mock mode',
       };
     },
 
@@ -3380,6 +3592,81 @@ function createMockFeaturesAPI(): FeaturesAPI {
       }
       return { success: true, counts };
     },
+
+    archive: async (projectPath: string, featureId: string) => {
+      console.log('[Mock] Archiving feature:', { projectPath, featureId });
+      const featurePath = `${projectPath}/.dmaker/features/${featureId}/feature.json`;
+      const raw = mockFileSystem[featurePath];
+      if (!raw) return { success: false, error: 'Feature not found' };
+      const feature = JSON.parse(raw) as Feature;
+      const archived: Feature = {
+        ...feature,
+        status: 'archived',
+        archivedAt: new Date().toISOString(),
+        archivedFrom: feature.status || 'backlog',
+      };
+      mockFileSystem[featurePath] = JSON.stringify(archived);
+      return { success: true, feature: archived };
+    },
+
+    unarchive: async (projectPath: string, featureId: string, targetStatus?: string) => {
+      console.log('[Mock] Restoring feature:', { projectPath, featureId });
+      const featurePath = `${projectPath}/.dmaker/features/${featureId}/feature.json`;
+      const raw = mockFileSystem[featurePath];
+      if (!raw) return { success: false, error: 'Feature not found' };
+      const feature = JSON.parse(raw) as Feature;
+      const restored: Feature = {
+        ...feature,
+        status: (targetStatus || feature.archivedFrom || 'backlog') as Feature['status'],
+        archivedAt: undefined,
+        archivedFrom: undefined,
+      };
+      mockFileSystem[featurePath] = JSON.stringify(restored);
+      return { success: true, feature: restored };
+    },
+
+    listArchived: async (projectPath: string) => {
+      console.log('[Mock] Listing archived features for:', projectPath);
+      const featuresDir = `${projectPath}/.dmaker/features/`;
+      const archived: Feature[] = [];
+      for (const key of Object.keys(mockFileSystem)) {
+        if (!key.startsWith(featuresDir) || !key.endsWith('/feature.json')) continue;
+        try {
+          const feature = JSON.parse(mockFileSystem[key]!) as Feature;
+          if (feature.status === 'archived') archived.push(feature);
+        } catch {
+          // Ignore unparseable mock entries
+        }
+      }
+      return { success: true, features: archived };
+    },
+
+    answerQuestion: async (
+      projectPath: string,
+      featureId: string,
+      questionId: string,
+      answer: string,
+      skipped?: boolean
+    ) => {
+      console.log('[Mock] Answering question:', { projectPath, featureId, questionId });
+      const featurePath = `${projectPath}/.dmaker/features/${featureId}/feature.json`;
+      const raw = mockFileSystem[featurePath];
+      if (!raw) return { success: false, error: 'Feature not found' };
+      const feature = JSON.parse(raw) as Feature;
+      const updated: Feature = {
+        ...feature,
+        agentQuestions: (feature.agentQuestions || []).map((q) =>
+          q.id === questionId ? { ...q, answer, answeredAt: new Date().toISOString(), skipped } : q
+        ),
+      };
+      mockFileSystem[featurePath] = JSON.stringify(updated);
+      return { success: true, feature: updated };
+    },
+
+    startIssueDraft: async (projectPath: string, featureId: string) => {
+      console.log('[Mock] Starting issue draft:', { projectPath, featureId });
+      return { success: true };
+    },
   };
 }
 
@@ -3419,6 +3706,38 @@ function createMockGitHubAPI(): GitHubAPI {
         remoteUrl: null,
         owner: null,
         repo: null,
+      };
+    },
+    getConfig: async (projectPath: string) => {
+      console.log('[Mock] Resolving GitHub config for:', projectPath);
+      return {
+        success: true,
+        detected: { owner: null, repo: null, remoteName: null, defaultBranch: null },
+        effective: {
+          repo: null,
+          owner: null,
+          remoteName: GITHUB_SETTINGS_DEFAULTS.remoteName,
+          baseBranch: GITHUB_SETTINGS_DEFAULTS.baseBranch,
+          draftPRs: GITHUB_SETTINGS_DEFAULTS.draftPRs,
+        },
+        sources: {
+          repo: 'default' as const,
+          remoteName: 'default' as const,
+          baseBranch: 'default' as const,
+          draftPRs: 'default' as const,
+        },
+        global: {
+          githubDefaultOwner: null,
+          githubRemoteName: null,
+          githubBaseBranch: null,
+          githubDraftPRs: null,
+        },
+        project: {
+          githubRepo: null,
+          githubRemoteName: null,
+          githubBaseBranch: null,
+          githubDraftPRs: null,
+        },
       };
     },
     listIssues: async (projectPath: string) => {
@@ -3553,6 +3872,15 @@ function createMockGitHubAPI(): GitHubAPI {
       console.log('[Mock] Creating GitHub issue:', { projectPath, title, body, labels });
       return { success: false, error: 'Not available in mock mode' };
     },
+    createRepo: async (
+      projectPath: string,
+      name: string,
+      visibility?: 'private' | 'public',
+      description?: string
+    ) => {
+      console.log('[Mock] Creating GitHub repo:', { projectPath, name, visibility, description });
+      return { success: false, error: 'Not available in mock mode' };
+    },
     updateIssueLabels: async (
       projectPath: string,
       issueNumber: number,
@@ -3612,7 +3940,7 @@ export interface Project {
   theme?: string; // Per-project theme override (uses ThemeMode from app-store)
   fontFamilySans?: string; // Per-project UI/sans font override
   fontFamilyMono?: string; // Per-project code/mono font override
-  isFavorite?: boolean; // Pin project to top of dashboard
+  isFavorite?: boolean; // Pin project to top of the project picker
   icon?: string; // Lucide icon name for project identification
   customIconPath?: string; // Path to custom uploaded icon image in .dmaker/images/
   defaultBranch?: string; // Default git branch for this project (e.g., "main", "develop")

@@ -30,7 +30,7 @@ export function WorktreeMobileDropdown({
 }: WorktreeMobileDropdownProps) {
   // Find the currently selected worktree to display in the trigger
   const selectedWorktree = worktrees.find((w) => isWorktreeSelected(w));
-  const displayBranch = selectedWorktree?.branch || 'Select branch';
+  const displayBranch = selectedWorktree?.branch || 'none selected';
 
   return (
     <DropdownMenu>
@@ -42,6 +42,7 @@ export function WorktreeMobileDropdown({
           disabled={isActivating}
         >
           <GitBranch className="w-3.5 h-3.5 shrink-0" />
+          <span className="shrink-0 font-sans text-muted-foreground/80">Branch:</span>
           <span className="truncate">{displayBranch}</span>
           {isActivating ? (
             <Loader2 className="w-3 h-3 animate-spin shrink-0" />
@@ -55,7 +56,7 @@ export function WorktreeMobileDropdown({
         className="w-64 max-w-[calc(100vw-2rem)] max-h-[min(20rem,60vh)] overflow-y-auto"
       >
         <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
-          Branches & Worktrees
+          Branches
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         {worktrees.map((worktree) => {

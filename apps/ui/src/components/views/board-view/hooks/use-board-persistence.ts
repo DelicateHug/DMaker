@@ -176,16 +176,24 @@ export function useBoardPersistence({ currentProject }: UseBoardPersistenceProps
     [currentProject, updateFeature]
   );
 
-  // Persist feature deletion to API
-  const persistFeatureDelete = useCallback(
-    async (featureId: string) => {
-      if (!currentProject) return;
+  /**
+   * Archive a feature server-side — what the board's delete now does.
+   *
+   * The server also closes the linked GitHub issue, so the task resurfaces
+   * under Closed Issues rather than disappearing.
+   *
+   * @returns Whether the archive succeeded, so the caller can put the card
+   *   back if it did not.
+   */
+  const persistFeatureArchive = useCallback(
+    async (featureId: string): Promise<boolean> => {
+      if (!currentProject) return false;
 
       try {
         const api = getElectronAPI();
-        if (!api.features) {
-          logger.error('Features API not available');
-          return;
+        if (!api.features?.archive) {
+          logger.error('Features archive API not available');
+          return false;
         }
 
         // Get the feature to find its project path (needed for "All Projects" mode)
@@ -193,9 +201,14 @@ export function useBoardPersistence({ currentProject }: UseBoardPersistenceProps
         const feature = features.find((f) => f.id === featureId);
         const projectPath = (feature as any)?.projectPath || currentProject.path;
 
-        await api.features.delete(projectPath, featureId);
+        const result = await api.features.archive(projectPath, featureId);
+        if (!result.success) {
+          logger.error('Failed to archive feature:', result.error);
+        }
+        return result.success;
       } catch (error) {
-        logger.error('Failed to persist feature deletion:', error);
+        logger.error('Failed to persist feature archive:', error);
+        return false;
       }
     },
     [currentProject]
@@ -204,6 +217,6 @@ export function useBoardPersistence({ currentProject }: UseBoardPersistenceProps
   return {
     persistFeatureCreate,
     persistFeatureUpdate,
-    persistFeatureDelete,
+    persistFeatureArchive,
   };
 }

@@ -12,6 +12,7 @@ import {
 } from '@/config/ui-font-options';
 import type {
   Feature as BaseFeature,
+  DeployEnvironment,
   FeatureImagePath,
   FeatureTextFilePath,
   SummaryHistoryEntry,
@@ -345,7 +346,6 @@ export interface KeyboardShortcuts {
   projectSettings: string;
   terminal: string;
   ideation: string;
-  githubIssues: string;
   githubPrs: string;
 
   // Action shortcuts
@@ -383,12 +383,11 @@ export const DEFAULT_KEYBOARD_SHORTCUTS: KeyboardShortcuts = {
   projectSettings: 'Shift+S',
   terminal: 'T',
   ideation: 'I',
-  githubIssues: 'G',
   githubPrs: 'R',
 
   // Actions
   addFeature: 'N', // Only active in board view
-  startNext: 'Shift+G', // Only active in board view (changed to avoid conflict with githubIssues)
+  startNext: 'Shift+G', // Only active in board view
   newSession: 'Shift+N', // Only active in agent view (changed to avoid conflict with addFeature)
   openProject: 'O', // Global shortcut
   projectPicker: 'P', // Global shortcut - opens project dropdown in top bar
@@ -458,8 +457,24 @@ export interface FeatureImage {
 // Available models for feature execution
 export type ClaudeModel = 'opus' | 'sonnet' | 'haiku';
 
+/**
+ * A type's named keys, with any string/number index signature stripped out.
+ *
+ * `Omit` cannot be applied to BaseFeature directly. `keyof` a type carrying
+ * `[key: string]: unknown` is `string | number`, so `Exclude<keyof T, K>` still
+ * covers every key and the resulting `Pick` returns nothing but the index
+ * signature — every named field is silently discarded. That is why
+ * `branchName`, `githubIssue`, `prUrl` and the rest were surfacing as
+ * `unknown` / `{}` across the board views and dialogs.
+ *
+ * Removing the index signature before omitting keeps the named fields intact.
+ */
+type NamedKeysOnly<T> = {
+  [K in keyof T as string extends K ? never : number extends K ? never : K]: T[K];
+};
+
 export interface Feature extends Omit<
-  BaseFeature,
+  NamedKeysOnly<BaseFeature>,
   'steps' | 'imagePaths' | 'textFilePaths' | 'status' | 'planSpec'
 > {
   id: string;
@@ -475,6 +490,21 @@ export interface Feature extends Omit<
   justFinishedAt?: string; // UI-specific: ISO timestamp when agent just finished
   prUrl?: string; // UI-specific: Pull request URL
   planSpec?: PlanSpec; // Explicit planSpec type to override BaseFeature's index signature
+
+  // Stamped on by the loaders when features from several projects share one
+  // list. They were previously carried by BaseFeature's catch-all index
+  // signature, which typed them as `unknown` — declaring them is what lets the
+  // views read them without casting.
+  projectId?: string;
+  projectPath?: string;
+  projectName?: string;
+
+  /**
+   * Kept so a field the server adds ahead of the UI does not become a compile
+   * error. Named fields above still type-check normally — the catch-all only
+   * covers what is not declared.
+   */
+  [key: string]: unknown;
 }
 
 // Parsed task from spec (for spec and full planning modes)
@@ -674,6 +704,12 @@ export interface AppState {
   enableDependencyBlocking: boolean; // When true, show blocked badges and warnings for features with incomplete dependencies (default: true)
   skipVerificationInAutoMode: boolean; // When true, auto-mode grabs features even if dependencies are not verified (only checks they're not running)
   enableAiCommitMessages: boolean; // When true, auto-generate commit messages using AI when opening commit dialog
+  /** Suppress the warning shown before running an agent outside a sandbox */
+  skipSandboxWarning: boolean;
+  /** Run a feature's deploy script automatically once it is approved */
+  defaultAutoDeploy: boolean;
+  /** Environment a deploy script is handed when auto-deploy runs it */
+  defaultDeployEnvironment: DeployEnvironment;
   planUseSelectedWorktreeBranch: boolean; // When true, Plan dialog creates features on the currently selected worktree branch
   addFeatureUseSelectedWorktreeBranch: boolean; // When true, Add Feature dialog defaults to custom mode with selected worktree branch
   // User-managed Worktrees (per-project)
@@ -908,20 +944,6 @@ export interface AppState {
       dismissed: boolean; // Whether user has dismissed this notification
     }
   >;
-
-  // Independent Running Agents State
-  // This state is independent of board state and is updated by the polling hook
-  // Stores all running agents across all projects, fetched independently
-  runningAgentsData: {
-    /** Array of all running agents across all projects */
-    agents: RunningAgent[];
-    /** Whether the data is currently being fetched */
-    isLoading: boolean;
-    /** Error message if the last fetch failed, null otherwise */
-    error: string | null;
-    /** Timestamp of the last successful update, null if never updated */
-    lastUpdated: number | null;
-  };
 }
 
 // Claude Usage interface matching the server response
@@ -1182,6 +1204,9 @@ export interface AppActions {
   setEnableDependencyBlocking: (enabled: boolean) => void;
   setSkipVerificationInAutoMode: (enabled: boolean) => Promise<void>;
   setEnableAiCommitMessages: (enabled: boolean) => Promise<void>;
+  setSkipSandboxWarning: (enabled: boolean) => Promise<void>;
+  setDefaultAutoDeploy: (enabled: boolean) => Promise<void>;
+  setDefaultDeployEnvironment: (environment: DeployEnvironment) => Promise<void>;
   setPlanUseSelectedWorktreeBranch: (enabled: boolean) => Promise<void>;
   setAddFeatureUseSelectedWorktreeBranch: (enabled: boolean) => Promise<void>;
   // Worktree Settings actions
@@ -1502,31 +1527,6 @@ export interface AppActions {
     projectPath: string
   ) => Array<{ key: string; state: InitScriptState }>;
 
-  // Independent Running Agents State actions
-  // These actions manage running agents state independently of board state
-  setRunningAgents: (agents: RunningAgent[]) => void;
-  setRunningAgentsLoading: (isLoading: boolean) => void;
-  setRunningAgentsError: (error: string | null) => void;
-  updateRunningAgentsData: (data: {
-    agents?: RunningAgent[];
-    isLoading?: boolean;
-    error?: string | null;
-    lastUpdated?: number | null;
-  }) => void;
-  getRunningAgentsData: () => {
-    agents: RunningAgent[];
-    isLoading: boolean;
-    error: string | null;
-    lastUpdated: number | null;
-  };
-  getRunningAgentsCount: () => number;
-  getRunningAgentsByProject: () => Array<{
-    projectPath: string;
-    projectName: string;
-    agentCount: number;
-    agents: RunningAgent[];
-  }>;
-
   // Reset
   reset: () => void;
 }
@@ -1581,6 +1581,9 @@ const initialState: AppState = {
   enableDependencyBlocking: true, // Default to enabled (show dependency blocking UI)
   skipVerificationInAutoMode: false, // Default to disabled (require dependencies to be verified)
   enableAiCommitMessages: true, // Default to enabled (auto-generate commit messages)
+  skipSandboxWarning: false, // Warn by default — opting out is a deliberate act
+  defaultAutoDeploy: false, // Deploying without being asked is never the safe default
+  defaultDeployEnvironment: 'development',
   planUseSelectedWorktreeBranch: true, // Default to enabled (Plan creates features on selected worktree branch)
   addFeatureUseSelectedWorktreeBranch: false, // Default to disabled (Add Feature uses normal defaults)
   currentWorktreeByProject: {},
@@ -1676,13 +1679,6 @@ const initialState: AppState = {
   isDeployPanelCollapsed: true, // Default: deploy panel is collapsed
   initScriptState: {},
   recentlyCompletedFeatures: {}, // Tracks features that recently entered waiting_approval
-  // Independent Running Agents State - updated by polling hook, independent of board state
-  runningAgentsData: {
-    agents: [],
-    isLoading: false,
-    error: null,
-    lastUpdated: null,
-  },
 };
 
 export const useAppStore = create<AppState & AppActions>()((set, get) => ({
@@ -2448,6 +2444,38 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
     if (!ok) {
       logger.error('Failed to sync enableAiCommitMessages setting to server - reverting');
       set({ enableAiCommitMessages: previous });
+    }
+  },
+  setSkipSandboxWarning: async (enabled) => {
+    const previous = get().skipSandboxWarning;
+    set({ skipSandboxWarning: enabled });
+    const { syncSettingsToServer } = await import('@/hooks/use-settings-migration');
+    const ok = await syncSettingsToServer();
+    if (!ok) {
+      // Reverting matters more here than elsewhere: the UI would otherwise
+      // show the warning as disabled while the server still has it on.
+      logger.error('Failed to sync skipSandboxWarning setting to server - reverting');
+      set({ skipSandboxWarning: previous });
+    }
+  },
+  setDefaultAutoDeploy: async (enabled) => {
+    const previous = get().defaultAutoDeploy;
+    set({ defaultAutoDeploy: enabled });
+    const { syncSettingsToServer } = await import('@/hooks/use-settings-migration');
+    const ok = await syncSettingsToServer();
+    if (!ok) {
+      logger.error('Failed to sync defaultAutoDeploy setting to server - reverting');
+      set({ defaultAutoDeploy: previous });
+    }
+  },
+  setDefaultDeployEnvironment: async (environment) => {
+    const previous = get().defaultDeployEnvironment;
+    set({ defaultDeployEnvironment: environment });
+    const { syncSettingsToServer } = await import('@/hooks/use-settings-migration');
+    const ok = await syncSettingsToServer();
+    if (!ok) {
+      logger.error('Failed to sync defaultDeployEnvironment setting to server - reverting');
+      set({ defaultDeployEnvironment: previous });
     }
   },
   setPlanUseSelectedWorktreeBranch: async (enabled) => {
@@ -4227,112 +4255,6 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
     return Object.entries(states)
       .filter(([key]) => key.startsWith(prefix))
       .map(([key, state]) => ({ key, state }));
-  },
-
-  // Independent Running Agents State actions
-  // T004: These setters are designed to ensure Zustand subscription notifications
-  // are properly triggered by:
-  // 1. Always creating a new runningAgentsData object reference
-  // 2. Always creating a new agents array reference (via spread) to ensure shallow comparison detects changes
-  // 3. Updating lastUpdated timestamp on meaningful changes to provide additional change signal
-  setRunningAgents: (agents) => {
-    // Create a new array reference to ensure Zustand detects the change
-    // even if the array contents are structurally identical
-    const newAgents = [...agents];
-    set({
-      runningAgentsData: {
-        ...get().runningAgentsData,
-        agents: newAgents,
-        lastUpdated: Date.now(),
-      },
-    });
-  },
-
-  setRunningAgentsLoading: (isLoading) => {
-    const current = get().runningAgentsData;
-    // Skip update if value hasn't changed to avoid unnecessary re-renders
-    if (current.isLoading === isLoading) {
-      return;
-    }
-    set({
-      runningAgentsData: {
-        ...current,
-        isLoading,
-      },
-    });
-  },
-
-  setRunningAgentsError: (error) => {
-    const current = get().runningAgentsData;
-    // Skip update if value hasn't changed to avoid unnecessary re-renders
-    if (current.error === error) {
-      return;
-    }
-    set({
-      runningAgentsData: {
-        ...current,
-        error,
-        // Update timestamp when error state changes to signal the change
-        lastUpdated: Date.now(),
-      },
-    });
-  },
-
-  updateRunningAgentsData: (data) => {
-    const current = get().runningAgentsData;
-    // If updating agents, ensure a new array reference is created
-    const newAgents = data.agents !== undefined ? [...data.agents] : current.agents;
-    set({
-      runningAgentsData: {
-        ...current,
-        ...data,
-        agents: newAgents,
-        // Always update timestamp when data changes to ensure subscriptions fire
-        lastUpdated: data.lastUpdated ?? Date.now(),
-      },
-    });
-  },
-
-  getRunningAgentsData: () => {
-    return get().runningAgentsData;
-  },
-
-  getRunningAgentsCount: () => {
-    return get().runningAgentsData.agents.length;
-  },
-
-  getRunningAgentsByProject: () => {
-    const agents = get().runningAgentsData.agents;
-    const projectMap = new Map<
-      string,
-      {
-        projectPath: string;
-        projectName: string;
-        agentCount: number;
-        agents: RunningAgent[];
-      }
-    >();
-
-    for (const agent of agents) {
-      const existing = projectMap.get(agent.projectPath);
-      if (existing) {
-        existing.agents.push(agent);
-        existing.agentCount = existing.agents.length;
-      } else {
-        projectMap.set(agent.projectPath, {
-          projectPath: agent.projectPath,
-          projectName: agent.projectName,
-          agentCount: 1,
-          agents: [agent],
-        });
-      }
-    }
-
-    // Sort by project name for consistent ordering
-    const groups = Array.from(projectMap.values());
-    groups.sort((a, b) => a.projectName.localeCompare(b.projectName));
-
-    return groups;
   },
 
   // Reset

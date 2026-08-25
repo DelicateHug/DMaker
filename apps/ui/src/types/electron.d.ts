@@ -69,6 +69,8 @@ export interface SessionListItem {
   isDirty?: boolean; // Indicates session has completed work that needs review
   tags: string[];
   preview: string;
+  /** Throwaway Scratchpad chat — sandboxed, no project, global skills only */
+  scratch?: boolean;
 }
 
 export interface AgentAPI {
@@ -124,7 +126,8 @@ export interface SessionsAPI {
   create: (
     name: string,
     projectPath: string,
-    workingDirectory?: string
+    workingDirectory?: string,
+    options?: { scratch?: boolean }
   ) => Promise<{
     success: boolean;
     sessionId?: string;
@@ -698,6 +701,35 @@ export interface FileDiffResult {
   error?: string;
 }
 
+/**
+ * What the branch-delete dialog needs before it dares offer the button.
+ *
+ * `remoteRef` is read from this clone's remote-tracking refs, not from a live
+ * fetch — so it can be stale in the over-warning direction (the branch was
+ * deleted upstream and nobody has pruned yet), never in the under-warning one.
+ */
+export interface BranchDeleteInfo {
+  branchName: string;
+  /** The repository has the branch itself, not just a remote-tracking ref */
+  hasLocal: boolean;
+  /** The repository's trunk — refused outright */
+  isDefault: boolean;
+  /** Checked out in the main working copy — refused outright */
+  isCurrent: boolean;
+  /** Checked out in a worktree, which has to be removed first */
+  worktreePath: string | null;
+  /** e.g. 'origin/feature-x', when the remote has it */
+  remoteRef: string | null;
+  /** e.g. 'origin' */
+  remote: string | null;
+  /** Fully merged into the trunk — deleting loses nothing */
+  isMerged: boolean;
+  /** Commits on this branch the trunk does not have */
+  unmergedCommits: number;
+  /** Trunk it was compared against, when there was one */
+  comparedAgainst: string | null;
+}
+
 export interface WorktreeAPI {
   // Merge worktree branch into main and clean up
   mergeFeature: (
@@ -792,6 +824,37 @@ export interface WorktreeAPI {
       worktreePath: string;
       branch: string | null;
     };
+    error?: string;
+  }>;
+
+  // What deleting a branch would cost, and what stands in the way of it
+  getBranchDeleteInfo: (
+    projectPath: string,
+    branchName: string
+  ) => Promise<{
+    success: boolean;
+    info?: BranchDeleteInfo;
+    error?: string;
+  }>;
+
+  // Delete a branch that still exists, optionally on its remote too
+  deleteBranch: (
+    projectPath: string,
+    branchName: string,
+    options?: { force?: boolean; deleteRemote?: boolean }
+  ) => Promise<{
+    success: boolean;
+    deleted?: {
+      branch: string;
+      local: boolean;
+      remote: boolean;
+      remoteRef: string | null;
+    };
+    /** The local delete landed but the remote one did not */
+    remoteError?: string;
+    /** `git branch -d` refused because the trunk lacks the commits */
+    needsForce?: boolean;
+    info?: BranchDeleteInfo;
     error?: string;
   }>;
 
@@ -1012,6 +1075,137 @@ export interface WorktreeAPI {
       worktreePath: string;
       message: string;
     };
+    error?: string;
+  }>;
+
+  /**
+   * Batched ahead/behind + uncommitted-change counts for a set of worktrees.
+   * Never runs `git fetch`, so it is cheap enough for the sidebar to poll.
+   */
+  getSyncStatus: (worktreePaths: string[]) => Promise<{
+    success: boolean;
+    statuses?: Array<{
+      worktreePath: string;
+      branch: string;
+      ahead: number;
+      behind: number;
+      dirtyCount: number;
+    }>;
+    error?: string;
+  }>;
+
+  /**
+   * Branches that exist on each project's remote but have no worktree locally.
+   * Fetches with --prune, and drops branches already merged into the trunk.
+   */
+  getRemoteBranches: (projectPaths: string[]) => Promise<{
+    success: boolean;
+    projects?: Array<{
+      projectPath: string;
+      remote?: string;
+      defaultBranch?: string;
+      branches: Array<{
+        name: string;
+        remoteRef: string;
+        lastCommitAt?: string;
+        lastCommitBy?: string;
+        lastCommitSubject?: string;
+        hasLocalBranch: boolean;
+      }>;
+      error?: string;
+    }>;
+    error?: string;
+  }>;
+
+  /**
+   * Every branch each project actually has, read from `refs/heads`.
+   *
+   * Local only — no fetch — so it is cheap to poll, and it is the only source
+   * that says a branch has been deleted rather than merely gone quiet.
+   */
+  getLocalBranches: (projectPaths: string[]) => Promise<{
+    success: boolean;
+    projects?: Array<{
+      projectPath: string;
+      defaultBranch?: string;
+      branches: Array<{
+        name: string;
+        isDefault: boolean;
+        isCurrent: boolean;
+        hasWorktree: boolean;
+        worktreePath?: string;
+        lastCommitAt?: string;
+        lastCommitBy?: string;
+        lastCommitSubject?: string;
+        upstream?: string;
+        upstreamGone: boolean;
+      }>;
+      error?: string;
+    }>;
+    error?: string;
+  }>;
+
+  /**
+   * Fetches each project's remote, then reports every listed worktree's real
+   * position against its upstream. With `autoUpdate` it also fast-forwards
+   * branches that are cleanly behind — never anything more invasive.
+   */
+  branchSync: (
+    projects: Array<{ projectPath: string; worktreePaths: string[] }>,
+    autoUpdate?: boolean
+  ) => Promise<{
+    success: boolean;
+    projects?: Array<{
+      projectPath: string;
+      remote?: string;
+      fetched: boolean;
+      error?: string;
+      branches: Array<{
+        worktreePath: string;
+        branch: string;
+        upstream?: string;
+        ahead: number;
+        behind: number;
+        dirtyCount: number;
+        conflictedFiles: string[];
+        state:
+          | 'in-sync'
+          | 'updated'
+          | 'ahead'
+          | 'no-upstream'
+          | 'behind'
+          | 'blocked'
+          | 'diverged'
+          | 'conflict'
+          | 'error';
+        message?: string;
+        canAutoFix: boolean;
+        didUpdate: boolean;
+      }>;
+    }>;
+    error?: string;
+  }>;
+
+  /**
+   * Deterministic repair for one branch: stash, then fast-forward or rebase.
+   * Refuses a branch that already has unresolved conflicts.
+   */
+  branchAutoFix: (worktreePath: string) => Promise<{
+    success: boolean;
+    result?: {
+      worktreePath: string;
+      branch: string;
+      upstream?: string;
+      ahead: number;
+      behind: number;
+      dirtyCount: number;
+      conflictedFiles: string[];
+      state: string;
+      message?: string;
+      canAutoFix: boolean;
+      didUpdate: boolean;
+    };
+    steps?: string[];
     error?: string;
   }>;
 

@@ -5,6 +5,9 @@ import { CursorProvider } from '@/providers/cursor-provider.js';
 import { CodexProvider } from '@/providers/codex-provider.js';
 import { OpencodeProvider } from '@/providers/opencode-provider.js';
 
+/** Every provider registered in provider-factory.ts. */
+const EXPECTED_PROVIDERS = ['claude', 'cursor', 'codex', 'opencode', 'gcp'] as const;
+
 describe('provider-factory.ts', () => {
   let consoleSpy: any;
   let detectClaudeSpy: any;
@@ -90,31 +93,60 @@ describe('provider-factory.ts', () => {
       });
     });
 
+    // CursorProvider detects its CLI eagerly in the constructor, which shells
+    // out via execSync and probes the filesystem. That is deliberate in
+    // production but makes these tests take seconds each, and the first one
+    // pays the cold cost — it was intermittently blowing the 5s default under
+    // full-suite load while passing in isolation. These tests are about
+    // routing a model id to a provider, not about CLI discovery, so give the
+    // detection room rather than letting the suite flake.
     describe('Cursor models (cursor-* prefix)', () => {
-      it('should return CursorProvider for cursor-auto', () => {
-        const provider = ProviderFactory.getProviderForModel('cursor-auto');
-        expect(provider).toBeInstanceOf(CursorProvider);
-      });
+      const CLI_DETECTION_TIMEOUT_MS = 30_000;
 
-      it('should return CursorProvider for cursor-sonnet-4.5', () => {
-        const provider = ProviderFactory.getProviderForModel('cursor-sonnet-4.5');
-        expect(provider).toBeInstanceOf(CursorProvider);
-      });
+      it(
+        'should return CursorProvider for cursor-auto',
+        { timeout: CLI_DETECTION_TIMEOUT_MS },
+        () => {
+          const provider = ProviderFactory.getProviderForModel('cursor-auto');
+          expect(provider).toBeInstanceOf(CursorProvider);
+        }
+      );
 
-      it('should return CursorProvider for cursor-gpt-5.2', () => {
-        const provider = ProviderFactory.getProviderForModel('cursor-gpt-5.2');
-        expect(provider).toBeInstanceOf(CursorProvider);
-      });
+      it(
+        'should return CursorProvider for cursor-sonnet-4.5',
+        { timeout: CLI_DETECTION_TIMEOUT_MS },
+        () => {
+          const provider = ProviderFactory.getProviderForModel('cursor-sonnet-4.5');
+          expect(provider).toBeInstanceOf(CursorProvider);
+        }
+      );
 
-      it('should be case-insensitive for cursor models', () => {
-        const provider = ProviderFactory.getProviderForModel('CURSOR-AUTO');
-        expect(provider).toBeInstanceOf(CursorProvider);
-      });
+      it(
+        'should return CursorProvider for cursor-gpt-5.2',
+        { timeout: CLI_DETECTION_TIMEOUT_MS },
+        () => {
+          const provider = ProviderFactory.getProviderForModel('cursor-gpt-5.2');
+          expect(provider).toBeInstanceOf(CursorProvider);
+        }
+      );
 
-      it('should return CursorProvider for known cursor model ID without prefix', () => {
-        const provider = ProviderFactory.getProviderForModel('auto');
-        expect(provider).toBeInstanceOf(CursorProvider);
-      });
+      it(
+        'should be case-insensitive for cursor models',
+        { timeout: CLI_DETECTION_TIMEOUT_MS },
+        () => {
+          const provider = ProviderFactory.getProviderForModel('CURSOR-AUTO');
+          expect(provider).toBeInstanceOf(CursorProvider);
+        }
+      );
+
+      it(
+        'should return CursorProvider for known cursor model ID without prefix',
+        { timeout: CLI_DETECTION_TIMEOUT_MS },
+        () => {
+          const provider = ProviderFactory.getProviderForModel('auto');
+          expect(provider).toBeInstanceOf(CursorProvider);
+        }
+      );
     });
 
     describe('Unknown models', () => {
@@ -166,9 +198,12 @@ describe('provider-factory.ts', () => {
       expect(hasClaudeProvider).toBe(true);
     });
 
-    it('should return exactly 4 providers', () => {
+    it('should return every registered provider', () => {
       const providers = ProviderFactory.getAllProviders();
-      expect(providers).toHaveLength(4);
+      // claude, cursor, codex, opencode, gcp — assert against the registry so
+      // adding a provider does not silently leave this test asserting a stale
+      // count, which is exactly how it came to expect 4 after gcp landed.
+      expect(providers).toHaveLength(EXPECTED_PROVIDERS.length);
     });
 
     it('should include CursorProvider', () => {
@@ -202,11 +237,7 @@ describe('provider-factory.ts', () => {
       const statuses = await ProviderFactory.checkAllProviders();
       const keys = Object.keys(statuses);
 
-      expect(keys).toContain('claude');
-      expect(keys).toContain('cursor');
-      expect(keys).toContain('codex');
-      expect(keys).toContain('opencode');
-      expect(keys).toHaveLength(4);
+      expect([...keys].sort()).toEqual([...EXPECTED_PROVIDERS].sort());
     });
 
     it('should include cursor status', async () => {

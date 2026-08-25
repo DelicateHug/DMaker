@@ -4,6 +4,8 @@ import type { Message, StreamEvent } from '@/types/electron';
 import { useMessageQueue } from './utilities';
 import type { ImageAttachment, TextFileAttachment } from '@/store/app-store';
 import { getElectronAPI } from '@/lib/electron';
+import { useAppStore } from '@/store/app-store';
+import { useScratchStore } from '@/store/scratch-store';
 import { sanitizeFilename } from '@/lib/image-utils';
 import { createLogger } from '@dmaker/utils/logger';
 
@@ -81,6 +83,36 @@ export function useElectronAgent({
   const unsubscribeRef = useRef<(() => void) | null>(null);
   const currentMessageRef = useRef<Message | null>(null);
 
+  // Messages we have painted locally but the server has not echoed back yet.
+  // The user's own bubble must appear the instant they hit Enter — waiting for
+  // the round trip makes the chat look like it swallowed the message. When the
+  // server's `message` event arrives we swap the optimistic bubble for the real
+  // one instead of appending a duplicate.
+  const pendingUserMessagesRef = useRef<{ id: string; content: string }[]>([]);
+
+  const addOptimisticUserMessage = useCallback(
+    (content: string, images?: ImageAttachment[]): string => {
+      const id = `local_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      const optimistic: Message = {
+        id,
+        role: 'user',
+        content,
+        images: images && images.length > 0 ? images : undefined,
+        timestamp: new Date().toISOString(),
+      };
+      pendingUserMessagesRef.current.push({ id, content });
+      setMessages((prev) => [...prev, optimistic]);
+      return id;
+    },
+    []
+  );
+
+  // Send failed, so the bubble was a lie — take it back.
+  const removeOptimisticUserMessage = useCallback((id: string) => {
+    pendingUserMessagesRef.current = pendingUserMessagesRef.current.filter((m) => m.id !== id);
+    setMessages((prev) => prev.filter((m) => m.id !== id));
+  }, []);
+
   // Send message directly to the agent (bypassing queue)
   const sendMessageDirectly = useCallback(
     async (content: string, images?: ImageAttachment[], textFiles?: TextFileAttachment[]) => {
@@ -96,6 +128,8 @@ export function useElectronAgent({
 
       setIsProcessing(true);
       setError(null);
+
+      let optimisticId: string | null = null;
 
       try {
         logger.info('Sending message directly', {
@@ -114,6 +148,10 @@ export function useElectronAgent({
           const contextBlock = `Here are some files for context:\n\n${contextParts.join('\n\n')}\n\n`;
           messageContent = contextBlock + content;
         }
+
+        // Paint the user's own message now — everything below this point is a
+        // round trip, and none of it changes what the bubble says.
+        optimisticId = addOptimisticUserMessage(messageContent, images);
 
         // Save images to .dmaker/images and get paths
         let imagePaths: string[] | undefined;
@@ -145,6 +183,7 @@ export function useElectronAgent({
         );
 
         if (!result.success) {
+          if (optimisticId) removeOptimisticUserMessage(optimisticId);
           setError(result.error || 'Failed to send message');
           setIsProcessing(false);
         }
@@ -152,12 +191,21 @@ export function useElectronAgent({
         // it will be set by the "complete" or "error" stream event
       } catch (err) {
         logger.error('Failed to send message:', err);
+        if (optimisticId) removeOptimisticUserMessage(optimisticId);
         setError(err instanceof Error ? err.message : 'Failed to send message');
         setIsProcessing(false);
         throw err;
       }
     },
-    [sessionId, workingDirectory, model, thinkingLevel, isProcessing]
+    [
+      sessionId,
+      workingDirectory,
+      model,
+      thinkingLevel,
+      isProcessing,
+      addOptimisticUserMessage,
+      removeOptimisticUserMessage,
+    ]
   );
 
   // Message queue for queuing messages when agent is busy
@@ -179,6 +227,9 @@ export function useElectronAgent({
       setError('API not available.');
       return;
     }
+
+    // Optimistic bubbles belong to the session that was on screen.
+    pendingUserMessagesRef.current = [];
 
     if (!sessionId) {
       // No session selected - reset state
@@ -298,10 +349,24 @@ export function useElectronAgent({
           setIsProcessing(true);
           break;
 
-        case 'message':
-          // User message added
-          setMessages((prev) => [...prev, event.message]);
+        case 'message': {
+          // User message echoed back by the server. If we already painted it
+          // optimistically, swap that bubble in place rather than appending a
+          // second copy of what the user just typed.
+          const echoed = event.message;
+          const pendingIndex = pendingUserMessagesRef.current.findIndex(
+            (p) => p.content === echoed.content
+          );
+
+          if (pendingIndex >= 0) {
+            const pending = pendingUserMessagesRef.current[pendingIndex];
+            pendingUserMessagesRef.current.splice(pendingIndex, 1);
+            setMessages((prev) => prev.map((msg) => (msg.id === pending.id ? echoed : msg)));
+          } else {
+            setMessages((prev) => [...prev, echoed]);
+          }
           break;
+        }
 
         case 'stream':
           // Assistant message streaming
@@ -368,6 +433,14 @@ export function useElectronAgent({
           }
           break;
 
+        case 'session-updated':
+          // The server renames a session from its first message, off the turn's
+          // critical path — so the rename can land at any point. Nudge the
+          // lists that show session names so the new one appears on its own.
+          useAppStore.getState().bumpSessionListVersion();
+          void useScratchStore.getState().refresh();
+          break;
+
         case 'queue_updated':
           // Server queue was updated
           logger.info('Queue updated:', event.queue);
@@ -414,6 +487,8 @@ export function useElectronAgent({
       setIsProcessing(true);
       setError(null);
 
+      let optimisticId: string | null = null;
+
       try {
         logger.info('Sending message', {
           hasImages: images && images.length > 0,
@@ -431,6 +506,10 @@ export function useElectronAgent({
           const contextBlock = `Here are some files for context:\n\n${contextParts.join('\n\n')}\n\n`;
           messageContent = contextBlock + content;
         }
+
+        // Paint the user's own message now — everything below this point is a
+        // round trip, and none of it changes what the bubble says.
+        optimisticId = addOptimisticUserMessage(messageContent, images);
 
         // Save images to .dmaker/images and get paths
         let imagePaths: string[] | undefined;
@@ -462,6 +541,7 @@ export function useElectronAgent({
         );
 
         if (!result.success) {
+          if (optimisticId) removeOptimisticUserMessage(optimisticId);
           setError(result.error || 'Failed to send message');
           setIsProcessing(false);
         }
@@ -469,11 +549,20 @@ export function useElectronAgent({
         // it will be set by the "complete" or "error" stream event
       } catch (err) {
         logger.error('Failed to send message:', err);
+        if (optimisticId) removeOptimisticUserMessage(optimisticId);
         setError(err instanceof Error ? err.message : 'Failed to send message');
         setIsProcessing(false);
       }
     },
-    [sessionId, workingDirectory, model, thinkingLevel, isProcessing]
+    [
+      sessionId,
+      workingDirectory,
+      model,
+      thinkingLevel,
+      isProcessing,
+      addOptimisticUserMessage,
+      removeOptimisticUserMessage,
+    ]
   );
 
   // Stop current execution
@@ -512,6 +601,7 @@ export function useElectronAgent({
       const result = await api.agent!.clear(sessionId);
 
       if (result.success) {
+        pendingUserMessagesRef.current = [];
         setMessages([]);
         setError(null);
       } else {

@@ -31,9 +31,8 @@ import { cn } from '@/lib/utils';
 import { getElectronAPI } from '@/lib/electron';
 import { useAppStore } from '@/store/app-store';
 import type { Feature } from '@/store/app-store';
-import { useIssueComments } from '../../github-issues-view/hooks/use-issue-comments';
-import { CommentItem } from '../../github-issues-view/components/comment-item';
-import { formatDate } from '../../github-issues-view/utils';
+import { useIssueComments } from './github-issue/use-issue-comments';
+import { CommentItem } from './github-issue/comment-item';
 
 interface GitHubIssueDialogProps {
   feature: Feature;

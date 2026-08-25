@@ -12,18 +12,7 @@ import { toast } from 'sonner';
 import { getBlockingDependencies } from '@dmaker/dependency-resolver';
 import { BoardBackgroundModal } from '@/components/dialogs';
 import { Button } from '@/components/ui/button';
-import {
-  Activity,
-  Bot,
-  PanelRight,
-  GripVertical,
-  ChevronLeft,
-  ChevronRight,
-  LayoutGrid,
-  FolderOpen,
-  Rocket,
-  Layers,
-} from 'lucide-react';
+import { Activity, PanelRight, GripVertical, LayoutGrid, Rocket, Layers } from 'lucide-react';
 import { getProjectIcon } from '@/lib/icon-registry';
 import {
   DropdownMenu,
@@ -37,15 +26,15 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/overlay
 import { getAuthenticatedImageUrl } from '@/lib/api-fetch';
 import { LazyImage } from '@/components/ui/lazy-image';
 import type { Project } from '@/lib/electron';
+import { AutoModeModal } from '@/components/dialogs/auto-mode-modal';
 import { DeleteProjectDialog } from '@/components/dialogs';
 import { initializeProject, hasDMakerDir, hasAppSpec } from '@/lib/project-init';
-import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import { useAutoMode } from '@/hooks/use-auto-mode';
 import { useKeyboardShortcutsConfig } from '@/hooks/use-keyboard-shortcuts';
 import { useWindowState, useIsTablet } from '@/hooks/utilities';
 // Board-view specific imports
-// BoardHeader is now integrated into top-nav-bar
-// import { BoardHeader } from './board-view/board-header';
+// The board header was folded into the sidebar; its component and the
+// kanban ViewToggle it used were removed with the kanban modules.
 import {
   AddFeatureDialog,
   AgentOutputModal,
@@ -56,13 +45,13 @@ import {
   PlanApprovalDialog,
   UnsatisfiedDependenciesDialog,
   MassEditDialog,
-  CodeEditorWindow,
   PipelineSettingsDialog,
   CreateWorktreeDialog,
   DeleteWorktreeDialog,
   CommitWorktreeDialog,
   CreatePRDialog,
   CreateBranchDialog,
+  CreateGitHubRepoDialog,
   MergeWorktreeDialog,
 } from './board-view/dialogs';
 import type { PRInfo, WorktreeInfo } from './board-view/worktree-panel/types';
@@ -81,25 +70,37 @@ import {
 } from './board-view/hooks';
 import { useBoardStatusTabs } from './board-view/hooks/use-board-status-tabs';
 import { useGithubBoardIssues } from './board-view/hooks/use-github-board-issues';
+import { useGithubCurrentUser } from './board-view/hooks/use-github-current-user';
+import { useBoardAssignees, DEFAULT_ASSIGNEE_FILTER } from './board-view/hooks/use-board-assignees';
 import { ALL_PROJECTS_ID } from './board-view/components/board-project-dropdown';
 import {
   SelectionActionBar,
   ListView,
   BoardStatusDropdown,
-  AgentChatPanel,
-  DeployPanel,
-  FileExplorer,
   BoardSkeleton,
-  RunningAgentsPanel,
 } from './board-view/components';
 import { AgentsSkillsSection } from '@/components/views/settings-view/agents-skills/agents-skills-section';
+import { NoProjectView } from '@/components/projects/no-project-view';
 import { InitScriptIndicator } from './board-view/init-script-indicator';
 import { useInitScriptEvents } from '@/hooks/use-init-script-events';
 import { useBoardControlsStore } from '@/store/board-controls-store';
+import {
+  openProjectView,
+  toggleProjectView,
+  useIsProjectViewOpen,
+  useProjectViewStore,
+} from '@/store/project-view-store';
+import type { AddFeatureContext, QuickAddFeatureInput } from '@/store/board-controls-store';
+import { createFeatureIssue } from '@/components/views/board-view/shared/create-feature-issue';
 
 // Stable empty array to avoid infinite loop in selector
 const EMPTY_WORKTREES: ReturnType<ReturnType<typeof useAppStore.getState>['getWorktrees']> = [];
 
+/**
+ * Fixed board modes. GitHub is the source of truth for work; local features are
+ * the backlog. Users no longer pick a mode, so this is a constant.
+ */
+const BOARD_MODES: ('local' | 'github')[] = ['local', 'github'];
 const logger = createLogger('Board');
 
 export function BoardView() {
@@ -129,22 +130,6 @@ export function BoardView() {
     showAllProjects,
     pendingBoardStatusTab,
     setPendingBoardStatusTab,
-    kanbanPanelSize,
-    agentChatPanelSize,
-    isKanbanPanelCollapsed,
-    isAgentChatPanelCollapsed,
-    isDeployPanelCollapsed,
-    setKanbanPanelSize,
-    setAgentChatPanelSize,
-    setKanbanPanelCollapsed,
-    setAgentChatPanelCollapsed,
-    agentsPanelSize,
-    isAgentsPanelCollapsed,
-    setAgentsPanelSize,
-    setAgentsPanelCollapsed,
-    deployPanelSize,
-    setDeployPanelSize,
-    setDeployPanelCollapsed,
     moveProjectToTrash,
     removeProject,
     upsertAndSetCurrentProject,
@@ -177,22 +162,6 @@ export function BoardView() {
       showAllProjects: state.showAllProjects,
       pendingBoardStatusTab: state.pendingBoardStatusTab,
       setPendingBoardStatusTab: state.setPendingBoardStatusTab,
-      kanbanPanelSize: state.kanbanPanelSize,
-      agentChatPanelSize: state.agentChatPanelSize,
-      isKanbanPanelCollapsed: state.isKanbanPanelCollapsed,
-      isAgentChatPanelCollapsed: state.isAgentChatPanelCollapsed,
-      isDeployPanelCollapsed: state.isDeployPanelCollapsed,
-      setKanbanPanelSize: state.setKanbanPanelSize,
-      setAgentChatPanelSize: state.setAgentChatPanelSize,
-      setKanbanPanelCollapsed: state.setKanbanPanelCollapsed,
-      setAgentChatPanelCollapsed: state.setAgentChatPanelCollapsed,
-      agentsPanelSize: state.agentsPanelSize,
-      isAgentsPanelCollapsed: state.isAgentsPanelCollapsed,
-      setAgentsPanelSize: state.setAgentsPanelSize,
-      setAgentsPanelCollapsed: state.setAgentsPanelCollapsed,
-      deployPanelSize: state.deployPanelSize,
-      setDeployPanelSize: state.setDeployPanelSize,
-      setDeployPanelCollapsed: state.setDeployPanelCollapsed,
       moveProjectToTrash: state.moveProjectToTrash,
       removeProject: state.removeProject,
       upsertAndSetCurrentProject: state.upsertAndSetCurrentProject,
@@ -229,6 +198,9 @@ export function BoardView() {
   } = useBoardFeatures({ currentProject, projects });
   const [editingFeature, setEditingFeature] = useState<Feature | null>(null);
   const [showAddDialog, setShowAddDialog] = useState(false);
+  // Project / branch / status the "new feature" gesture came from, so the Add
+  // Feature dialog can open pre-filled. Null for a plain Ctrl+N.
+  const [addFeatureContext, setAddFeatureContext] = useState<AddFeatureContext | null>(null);
   // GitHub collaboration: current authenticated user
   const [currentGitHubUser, setCurrentGitHubUser] = useState<string | null>(null);
   const [isMounted, setIsMounted] = useState(false);
@@ -267,17 +239,6 @@ export function BoardView() {
 
   // Pipeline settings dialog state
   const [showPipelineSettings, setShowPipelineSettings] = useState(false);
-
-  // File explorer and code editor state
-  const [showFileExplorer, setShowFileExplorer] = useState(false);
-  const [showCodeEditor, setShowCodeEditor] = useState(false);
-  const [codeEditorFilePath, setCodeEditorFilePath] = useState<string | undefined>(undefined);
-
-  // Handle file selection from file explorer
-  const handleFileSelect = useCallback((filePath: string) => {
-    setCodeEditorFilePath(filePath);
-    setShowCodeEditor(true);
-  }, []);
 
   // Project selector state and handlers (in board status tabs row)
   const [isProjectDropdownOpen, setIsProjectDropdownOpen] = useState(false);
@@ -379,55 +340,14 @@ export function BoardView() {
     setAgentPanelProject(project);
   }, []);
 
-  // Memoized callback for agent chat panel collapse changes
-  // This prevents unnecessary re-renders of the memoized AgentChatPanel component
-  const handleAgentChatPanelCollapseChange = useCallback(
-    (collapsed: boolean) => {
-      setAgentChatPanelCollapsed(collapsed);
-    },
-    [setAgentChatPanelCollapsed]
-  );
-
-  // Memoized callback for agents panel collapse changes
-  const handleAgentsPanelCollapseChange = useCallback(
-    (collapsed: boolean) => {
-      setAgentsPanelCollapsed(collapsed);
-    },
-    [setAgentsPanelCollapsed]
-  );
-
-  // Memoized callback for deploy panel collapse changes
-  // This prevents unnecessary re-renders of the memoized DeployPanel component
-  const handleDeployPanelCollapseChange = useCallback(
-    (collapsed: boolean) => {
-      setDeployPanelCollapsed(collapsed);
-    },
-    [setDeployPanelCollapsed]
-  );
-
   // Track specific project IDs when multiple projects are selected
   // null means "all projects" (no filtering), otherwise contains specific project IDs
   const [multiSelectedProjectIds, setMultiSelectedProjectIds] = useState<string[] | null>(null);
 
-  // Board mode state (local, github, or both for hybrid) - persisted in localStorage
-  const [activeModes, setActiveModes] = useState<('local' | 'github')[]>(() => {
-    try {
-      const stored = localStorage.getItem('dmaker-board-modes');
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-    } catch {}
-    return ['local'];
-  });
-  // Persist mode changes to localStorage
-  useEffect(() => {
-    localStorage.setItem('dmaker-board-modes', JSON.stringify(activeModes));
-  }, [activeModes]);
-
-  const handleModeChange = useCallback((modes: ('local' | 'github')[]) => {
-    setActiveModes(modes.length === 0 ? ['local'] : modes);
-  }, []);
+  // Board modes are no longer user-selectable. The model is GitHub-first with
+  // local features acting as the backlog, which is exactly the old hybrid mode:
+  // local features plus any GitHub issue that has no local counterpart.
+  const activeModes = BOARD_MODES;
 
   // Handle project selection from dropdown
   // Uses board-scoped state instead of global state to allow browsing
@@ -658,14 +578,6 @@ export function BoardView() {
   );
   // Responsive breakpoint detection
   const isTabletOrSmaller = useIsTablet();
-  // Ref to track panel sizes during drag - only commit to Zustand when drag ends
-  // This prevents excessive state updates/re-renders during resize
-  const pendingPanelSizesRef = useRef<{
-    kanban: number;
-    agentChat: number;
-    agents: number;
-    deploy: number;
-  } | null>(null);
   // Derive spec creation state from store - check if current project is the one being created
   const isCreatingSpec = specCreatingForProject === currentProject?.path;
   const creatingSpecProjectPath = specCreatingForProject ?? undefined;
@@ -743,9 +655,6 @@ export function BoardView() {
 
     // Close other project-specific dialogs
     setShowPipelineSettings(false);
-    // Keep file explorer open across project switches - users expect it to stay visible
-    setShowCodeEditor(false);
-    setCodeEditorFilePath(undefined);
 
     // Reset features with context tracking
     setFeaturesWithContext(new Set());
@@ -853,9 +762,11 @@ export function BoardView() {
   }, [currentProject, worktreeRefreshKey]);
 
   // Use persistence hook
-  const { persistFeatureCreate, persistFeatureUpdate, persistFeatureDelete } = useBoardPersistence({
-    currentProject,
-  });
+  const { persistFeatureCreate, persistFeatureUpdate, persistFeatureArchive } = useBoardPersistence(
+    {
+      currentProject,
+    }
+  );
 
   // Memoize the removed worktrees handler to prevent infinite loops
   const handleRemovedWorktrees = useCallback(
@@ -971,6 +882,7 @@ export function BoardView() {
     handleManualVerify,
     handleMoveBackToInProgress,
     handleMoveBackToBacklog,
+    handleSetFeatureStatus,
     handleOpenFollowUp,
     handleSendFollowUp,
     handleCommitFeature,
@@ -987,6 +899,10 @@ export function BoardView() {
     handleConfirmStartWithUnsatisfiedDeps,
     handleCancelStartWithUnsatisfiedDeps,
     handleUnsatisfiedDepsDialogOpenChange,
+    // "Create a GitHub repo for this project" offer
+    createRepoDialog,
+    handleGitHubRepoCreated,
+    handleCreateRepoDialogOpenChange,
   } = useBoardActions({
     currentProject: boardSelectedProject,
     features: hookFeatures,
@@ -994,7 +910,7 @@ export function BoardView() {
     loadFeatures,
     persistFeatureCreate,
     persistFeatureUpdate,
-    persistFeatureDelete,
+    persistFeatureArchive,
     saveCategory,
     setEditingFeature,
     setShowOutputModal,
@@ -1049,7 +965,8 @@ export function BoardView() {
     [boardSelectedProject, selectedFeatureIds, updateFeature, exitSelectionMode]
   );
 
-  // Handler for bulk deleting multiple features
+  // Handler for bulk archiving multiple features. Named "delete" because that
+  // is still what the selection bar calls it; nothing is destroyed.
   const handleBulkDelete = useCallback(async () => {
     if (!boardSelectedProject || selectedFeatureIds.size === 0) return;
 
@@ -1066,12 +983,14 @@ export function BoardView() {
         successfullyDeletedIds.forEach((featureId) => {
           useAppStore.getState().removeFeature(featureId);
         });
-        toast.success(`Deleted ${successfullyDeletedIds.length} features`);
+        toast.success(`Archived ${successfullyDeletedIds.length} features`, {
+          description: 'Find them under Closed Issues',
+        });
       }
 
       if (result.failedCount && result.failedCount > 0) {
-        toast.error('Failed to delete some features', {
-          description: `${result.failedCount} features failed to delete`,
+        toast.error('Failed to archive some features', {
+          description: `${result.failedCount} features failed to archive`,
         });
       }
 
@@ -1080,11 +999,11 @@ export function BoardView() {
         exitSelectionMode();
         loadFeatures();
       } else if (!result.success) {
-        toast.error('Failed to delete features', { description: result.error });
+        toast.error('Failed to archive features', { description: result.error });
       }
     } catch (error) {
-      logger.error('Bulk delete failed:', error);
-      toast.error('Failed to delete features');
+      logger.error('Bulk archive failed:', error);
+      toast.error('Failed to archive features');
     }
   }, [boardSelectedProject, selectedFeatureIds, exitSelectionMode, loadFeatures]);
 
@@ -1309,64 +1228,15 @@ export function BoardView() {
       }
 
       try {
-        const api = getElectronAPI();
-        if (!api?.github?.createIssue) {
-          toast.error('GitHub API not available');
+        const result = await createFeatureIssue(projectPath, feature);
+        if (!result.success || !result.updates) {
+          toast.error('Failed to create GitHub issue', { description: result.error });
           return;
         }
 
-        const statusLabel = 'label-backlog';
-        const issueTitle =
-          (feature.title || '').trim() || (feature.description || '').slice(0, 100);
-        const firstParagraph = (feature.description || '').split('\n\n')[0] || '';
-        const issueSummary =
-          firstParagraph.length > 200 ? firstParagraph.slice(0, 200) + '...' : firstParagraph;
-
-        const result = await api.github.createIssue(projectPath, issueTitle, issueSummary, [
-          statusLabel,
-        ]);
-
-        if (result.success && result.issueNumber) {
-          const updates = {
-            status: 'backlog' as const,
-            source: 'github' as const,
-            githubIssue: {
-              number: result.issueNumber,
-              url: result.url || '',
-              assignees: [] as string[],
-              labels: [statusLabel],
-              state: 'open' as const,
-              syncedAt: new Date().toISOString(),
-            },
-          };
-          updateFeature(feature.id, updates);
-          persistFeatureUpdate(feature.id, updates);
-          toast.success(`Converted to GitHub issue #${result.issueNumber}`);
-
-          // Post description as first comment (non-blocking)
-          if (api.github.addComment && feature.description) {
-            const optionLines = [
-              `- **Model**: ${feature.model || 'default'}`,
-              `- **Category**: ${feature.category || 'Uncategorized'}`,
-            ];
-            const commentBody = [
-              '## Description',
-              '',
-              feature.description,
-              '',
-              '## Feature Options',
-              '',
-              ...optionLines,
-            ].join('\n');
-            api.github
-              .addComment(projectPath, result.issueNumber, commentBody)
-              .catch((err: unknown) =>
-                logger.error('Failed to post feature details comment:', err)
-              );
-          }
-        } else if (!result.success) {
-          toast.error('Failed to create GitHub issue', { description: result.error });
-        }
+        updateFeature(feature.id, result.updates);
+        persistFeatureUpdate(feature.id, result.updates);
+        toast.success(`Converted to GitHub issue #${result.updates.githubIssue.number}`);
       } catch (error) {
         logger.error('Error converting to GitHub issue:', error);
         toast.error('Failed to convert to GitHub issue', {
@@ -1422,23 +1292,15 @@ export function BoardView() {
             setAgentPanelProject(matchingProject);
           }
 
-          // Expand agent chat panel
-          if (isAgentChatPanelCollapsed) {
-            setAgentChatPanelCollapsed(false);
-          }
+          // Surface the chat pane in the project view
+          openProjectView('chat');
         }
       } catch (error) {
         logger.error('Error creating chat session for feature:', error);
         toast.error('Failed to open chat for feature');
       }
     },
-    [
-      boardSelectedProject,
-      currentProject,
-      projects,
-      isAgentChatPanelCollapsed,
-      setAgentChatPanelCollapsed,
-    ]
+    [boardSelectedProject, currentProject, projects]
   );
 
   // Client-side auto mode: periodically check for backlog items and move them to in-progress
@@ -1790,7 +1652,7 @@ export function BoardView() {
   useBoardKeyboardShortcuts({
     features: hookFeatures,
     runningAutoTasks,
-    onAddFeature: () => setShowAddDialog(true),
+    onAddFeature: () => handleOpenAddFeatureDialog(),
     onStartNextFeatures: handleStartNextFeatures,
     onViewOutput: handleViewOutput,
     onToggleAutoMode: () => setShowAutoModeModal(true),
@@ -1798,11 +1660,10 @@ export function BoardView() {
     onPreviousTab: previousStatusTab,
     onGoToTab: handleStatusTabChange,
     tabs: statusTabs,
-    // Board panel toggle shortcuts
-    onToggleFileExplorer: () => setShowFileExplorer((prev) => !prev),
-    onToggleKanbanPanel: () => setKanbanPanelCollapsed(!isKanbanPanelCollapsed),
-    onToggleAgentChat: () => setAgentChatPanelCollapsed(!isAgentChatPanelCollapsed),
-    onToggleDeployPanel: () => setDeployPanelCollapsed(!isDeployPanelCollapsed),
+    // Project pane shortcuts — these panes now live in the project view
+    onToggleFileExplorer: () => toggleProjectView('files'),
+    onToggleAgentChat: () => toggleProjectView('chat'),
+    onToggleDeployPanel: () => toggleProjectView('scripts'),
   });
 
   // Get pipeline config for column features hook (uses board-scoped project)
@@ -1878,12 +1739,26 @@ export function BoardView() {
   const displayFeatures =
     modeFilteredFeatures.length > 0 ? modeFilteredFeatures : lastGoodFeaturesRef.current;
 
+  // Who tasks can be filtered by. `gh` names the account this machine acts as,
+  // which is what lets the filter offer a meaningful "Me"; the rest of the
+  // list is whoever is actually assigned on the visible tasks.
+  const currentGithubUser = useGithubCurrentUser(
+    boardSelectedProject?.path || currentProject?.path || null
+  );
+  const [assigneeFilter, setAssigneeFilter] = useState<string[]>(DEFAULT_ASSIGNEE_FILTER);
+  const assigneeOptions = useBoardAssignees({
+    features: displayFeatures,
+    currentUser: currentGithubUser,
+  });
+
   // Use column features hook with single-column mode support
   const { getColumnFeatures, columnFeaturesMap, columnCounts } = useBoardColumnFeatures({
     features: displayFeatures,
     runningAutoTasks,
     searchQuery,
     showFavoritesOnly,
+    assigneeFilter,
+    currentUser: currentGithubUser,
     currentWorktreePath,
     currentWorktreeBranch,
     projectPath: boardSelectedProject?.path || null,
@@ -1902,6 +1777,60 @@ export function BoardView() {
   // Phase 2: T006 - Sync board controls to store for TopNavigationBar
   // This effect populates the board controls store so that TopNavigationBar
   // can display board-specific controls without prop drilling
+  // Callbacks published to board-controls-store for the sidebar and home
+  // composer. These are memoised deliberately: the app shell reads them, so a
+  // fresh identity on every publish would re-render the whole tree — which in
+  // turn re-runs this effect and loops.
+  const handleOpenAddFeatureDialog = useCallback((context?: AddFeatureContext) => {
+    setAddFeatureContext(context ?? null);
+    setShowAddDialog(true);
+  }, []);
+
+  const handleOpenCreateWorktreeDialog = useCallback(() => {
+    setShowCreateWorktreeDialog(true);
+  }, []);
+
+  // Read the live handlers off refs so this callback never needs to change
+  // identity when the board re-renders.
+  const handleAddFeatureRef = useRef(handleAddFeature);
+  handleAddFeatureRef.current = handleAddFeature;
+  const handleAddAndStartFeatureRef = useRef(handleAddAndStartFeature);
+  handleAddAndStartFeatureRef.current = handleAddAndStartFeature;
+  const defaultSkipTestsRef = useRef(defaultSkipTests);
+  defaultSkipTestsRef.current = defaultSkipTests;
+
+  const handleQuickAddFeature = useCallback<(input: QuickAddFeatureInput) => Promise<void>>(
+    async ({ description, title, model, thinkingLevel, startImmediately }) => {
+      const featureData = {
+        title: title ?? '',
+        category: '',
+        description,
+        images: [],
+        imagePaths: [],
+        skipTests: defaultSkipTestsRef.current,
+        model: model ?? ('opus' as const),
+        thinkingLevel: thinkingLevel ?? ('none' as const),
+        priority: 2,
+        // Local is the backlog: quick-added work starts local and is promoted
+        // to a GitHub issue explicitly.
+        source: 'local' as const,
+      };
+
+      if (startImmediately) {
+        await handleAddAndStartFeatureRef.current(featureData);
+      } else {
+        await handleAddFeatureRef.current(featureData);
+      }
+    },
+    []
+  );
+
+  const isProjectViewOpen = useIsProjectViewOpen();
+  const activeProjectTab = useProjectViewStore((state) => state.activeTab);
+  // The top-bar deploy button reflects the Scripts pane, which is where
+  // deploy scripts are written and run.
+  const isDeployPaneOpen = isProjectViewOpen && activeProjectTab === 'scripts';
+
   const setBoardControls = useBoardControlsStore((state) => state.setControls);
   const clearBoardControls = useBoardControlsStore((state) => state.clearControls);
 
@@ -1922,6 +1851,20 @@ export function BoardView() {
 
       // Board background
       onShowBoardBackground: () => setShowBoardBackgroundModal(true),
+
+      // Editing a task. The sidebar owns the task list but this view owns the
+      // dialog, so it registers the way in here.
+      onEditFeature: (featureId: string) => {
+        const target = hookFeatures.find((candidate) => candidate.id === featureId);
+        if (target) setEditingFeature(target);
+      },
+
+      // Moving a task between statuses. Same reason as onEditFeature: the
+      // sidebar owns the list, this view owns the logic that persists a move.
+      onSetFeatureStatus: (featureId: string, status: string) => {
+        const target = hookFeatures.find((candidate) => candidate.id === featureId);
+        if (target) void handleSetFeatureStatus(target, status);
+      },
 
       // Auto mode
       isAutoModeRunning: autoMode.isRunning,
@@ -1959,22 +1902,30 @@ export function BoardView() {
       statusTabs,
       statusTabCounts: columnCounts,
 
-      // Mode filter
-      activeModes,
-      onModeChange: handleModeChange,
+      // Assignee filter — the funnel in the sidebar is what changes it
+      assigneeFilter,
+      assigneeOptions,
+      currentGithubUser,
+      onAssigneeFilterChange: setAssigneeFilter,
 
-      // Deploy panel
-      isDeployPanelCollapsed,
-      onToggleDeployPanel: () => setDeployPanelCollapsed(!isDeployPanelCollapsed),
-      onOpenDeployPanel: () => {
-        if (isDeployPanelCollapsed) {
-          setDeployPanelCollapsed(false);
-        }
-      },
+      // Mode filter — fixed, no longer user-selectable
+      activeModes,
+      onModeChange: null,
+
+      // Deploy — opens the project view's Deploy pane
+      isDeployPanelCollapsed: !isDeployPaneOpen,
+      onToggleDeployPanel: () => toggleProjectView('scripts'),
+      onOpenDeployPanel: () => openProjectView('scripts'),
 
       // Refresh
       onRefresh: refreshFeatures,
       isRefreshing,
+
+      // Feature creation — consumed by the sidebar and the home composer so
+      // they reuse the board's concurrency/dependency/worktree logic.
+      onOpenAddFeature: handleOpenAddFeatureDialog,
+      onCreateWorktree: handleOpenCreateWorktreeDialog,
+      onQuickAddFeature: handleQuickAddFeature,
 
       // Mounted
       isMounted: true,
@@ -1997,6 +1948,11 @@ export function BoardView() {
     pendingBacklogPlan,
     setBoardControls,
     clearBoardControls,
+    // onEditFeature and onSetFeatureStatus close over the feature list to
+    // resolve an id.
+    hookFeatures,
+    handleSetFeatureStatus,
+    setEditingFeature,
     setSearchQuery,
     setShowFavoritesOnly,
     setShowBoardBackgroundModal,
@@ -2018,15 +1974,21 @@ export function BoardView() {
     toggleStatusTab,
     statusTabs,
     columnCounts,
+    // Assignee filter deps
+    assigneeFilter,
+    assigneeOptions,
+    currentGithubUser,
     // Mode filter deps
     activeModes,
-    handleModeChange,
     // Deploy panel deps
-    isDeployPanelCollapsed,
-    setDeployPanelCollapsed,
+    isDeployPaneOpen,
     // Refresh deps
     refreshFeatures,
     isRefreshing,
+    // Feature creation deps
+    handleOpenAddFeatureDialog,
+    handleOpenCreateWorktreeDialog,
+    handleQuickAddFeature,
   ]);
 
   // Find feature for pending plan approval
@@ -2171,11 +2133,7 @@ export function BoardView() {
   );
 
   if (!currentProject) {
-    return (
-      <div className="flex-1 flex items-center justify-center" data-testid="board-view-no-project">
-        <p className="text-muted-foreground">No project selected</p>
-      </div>
-    );
+    return <NoProjectView />;
   }
 
   // NOTE: We intentionally do NOT have an early return for isLoading here.
@@ -2188,665 +2146,20 @@ export function BoardView() {
       className="flex-1 flex flex-col min-h-0 overflow-hidden content-bg relative"
       data-testid="board-view"
     >
-      {/* Main Content Area - Single scrollable box filling available space */}
-      <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-        {/* Main Content Row - Kanban/List + Running Agents + Deploy Panel */}
-        {/* Desktop: Resizable panels with drag handle */}
-        {/* Tablet/Mobile: Panel toggle buttons - show one panel at a time */}
-        {isTabletOrSmaller ? (
-          /* Mobile/Tablet Layout - Single panel with toggle buttons */
-          /* Single scrollable box filling available space */
-          <div className="flex-1 flex flex-col min-h-0 overflow-hidden relative">
-            {/* Floating panel toggle buttons - positioned at top right */}
-            <div className="absolute right-2 top-2 z-10 flex gap-1 rounded-lg border border-border bg-background/95 backdrop-blur-sm shadow-md p-1">
-              {/* Board toggle */}
-              <Button
-                variant={activeMobilePanel === 'kanban' ? 'default' : 'ghost'}
-                size="sm"
-                className={cn(
-                  'gap-1.5 h-8 px-2',
-                  activeMobilePanel === 'kanban' && 'bg-brand-500 hover:bg-brand-600'
-                )}
-                onClick={() => setActiveMobilePanel('kanban')}
-              >
-                <LayoutGrid className="h-4 w-4" />
-                <span className="hidden sm:inline text-xs">Board</span>
-              </Button>
-
-              {/* Agents toggle */}
-              <Button
-                variant={activeMobilePanel === 'agents' ? 'default' : 'ghost'}
-                size="sm"
-                className={cn(
-                  'gap-1.5 h-8 px-2',
-                  activeMobilePanel === 'agents' && 'bg-brand-500 hover:bg-brand-600',
-                  activeMobilePanel !== 'agents' &&
-                    runningAutoTasks.length > 0 &&
-                    'border-brand-500/50'
-                )}
-                onClick={() => setActiveMobilePanel('agents')}
-              >
-                <Activity className="h-4 w-4" />
-                <span className="hidden sm:inline text-xs">Agents</span>
-                {runningAutoTasks.length > 0 && activeMobilePanel !== 'agents' && (
-                  <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-brand-500 px-1 text-[10px] font-medium text-white">
-                    {runningAutoTasks.length}
-                  </span>
-                )}
-              </Button>
-
-              {/* Deploy toggle */}
-              <Button
-                variant={activeMobilePanel === 'deploy' ? 'default' : 'ghost'}
-                size="sm"
-                className={cn(
-                  'gap-1.5 h-8 px-2',
-                  activeMobilePanel === 'deploy' && 'bg-brand-500 hover:bg-brand-600'
-                )}
-                onClick={() => setActiveMobilePanel('deploy')}
-              >
-                <Rocket className="h-4 w-4" />
-                <span className="hidden sm:inline text-xs">Deploy</span>
-              </Button>
-            </div>
-
-            {/* Panel content - show one panel at a time */}
-            <div className="flex-1 min-h-0 overflow-hidden">
-              {/* Kanban/List Panel */}
-              {activeMobilePanel === 'kanban' && (
-                <div className="h-full min-h-0 relative">
-                  {isLoading ? (
-                    /* Progressive skeleton — replaces the old full-screen loading overlay */
-                    <BoardSkeleton
-                      pipelineConfig={pipelineConfig}
-                      showBorder={backgroundSettings.columnBorderEnabled}
-                      backgroundImageStyle={backgroundImageStyle}
-                      singleColumnMode={!isAllStatusMode}
-                      activeStatusTab={activeStatusTab}
-                      activeStatusTabs={activeStatusTabs}
-                    />
-                  ) : (
-                    <ListView
-                      columnFeaturesMap={columnFeaturesMap}
-                      allFeatures={displayFeatures}
-                      sortConfig={sortConfig}
-                      onSortChange={setSortColumn}
-                      actionHandlers={{
-                        onEdit: (feature) => setEditingFeature(feature),
-                        onDelete: (featureId) => handleDeleteFeature(featureId),
-                        onViewOutput: handleViewOutput,
-                        onVerify: handleVerifyFeature,
-                        onResume: handleResumeFeature,
-                        onForceStop: handleForceStopFeature,
-                        onManualVerify: handleManualVerify,
-                        onFollowUp: handleOpenFollowUp,
-                        onImplement: handleStartImplementation,
-                        onViewPlan: (feature) => setViewPlanFeature(feature),
-                        onApprovePlan: handleOpenApprovalDialog,
-                        onSpawnTask: (feature) => {
-                          setSpawnParentFeature(feature);
-                          setShowAddDialog(true);
-                        },
-                        onToggleFavorite: (feature) => {
-                          const updates = { isFavorite: !feature.isFavorite };
-                          const storeFeatures = useAppStore.getState().features;
-                          if (!storeFeatures.some((f) => f.id === feature.id)) {
-                            // Virtual feature (e.g. GitHub issue) not in store - add it and create on server
-                            const newFeature = { ...feature, ...updates };
-                            useAppStore.setState({
-                              features: [...storeFeatures, newFeature],
-                            });
-                            persistFeatureCreate(newFeature);
-                          } else {
-                            updateFeature(feature.id, updates);
-                            persistFeatureUpdate(feature.id, updates);
-                          }
-                        },
-                        onConvertToIssue: handleConvertToIssue,
-                        onChat: handleChatWithFeature,
-                      }}
-                      runningAutoTasks={runningAutoTasks}
-                      pipelineConfig={pipelineConfig}
-                      onAddFeature={() => setShowAddDialog(true)}
-                      isSelectionMode={isSelectionMode}
-                      selectedFeatureIds={selectedFeatureIds}
-                      onToggleFeatureSelection={toggleFeatureSelection}
-                      onRowClick={(feature) => {
-                        if (feature.status === 'backlog') {
-                          setEditingFeature(feature);
-                        } else {
-                          handleViewOutput(feature);
-                        }
-                      }}
-                      className="transition-opacity duration-200"
-                      singleColumnMode={!isAllStatusMode}
-                      activeStatusTab={activeStatusTab}
-                      activeStatusTabs={activeStatusTabs}
-                      showAllProjects={showAllProjectsInBoard}
-                      currentGitHubUser={currentGitHubUser}
-                    />
-                  )}
-                </div>
-              )}
-
-              {/* Agents Panel */}
-              {activeMobilePanel === 'agents' && (
-                <div className="h-full overflow-auto p-3">
-                  <AgentsSkillsSection />
-                </div>
-              )}
-
-              {/* Deploy Panel */}
-              {activeMobilePanel === 'deploy' && (
-                <div className="h-full overflow-hidden p-2">
-                  <DeployPanel
-                    project={agentPanelProject}
-                    isCollapsed={false}
-                    onCollapseChange={handleDeployPanelCollapseChange}
-                    onProjectChange={handleAgentPanelProjectChange}
-                    showProjectSelector
-                    compact
-                    className="h-full"
-                  />
-                </div>
-              )}
-            </div>
-          </div>
-        ) : (
-          /* Desktop Layout - File Explorer | Kanban | RunningAgents */
-          /* VS Code-style: Double-click resize handles to snap panels between sizes (25%, 50%, 75%) */
-          /* Single scrollable box filling available space */
-          <div className="flex-1 flex min-h-0 overflow-hidden">
-            {/* File Explorer Panel - collapsible sidebar */}
-            {showFileExplorer && (
-              <div className="w-64 border-r border-border bg-background shrink-0 flex flex-col">
-                <div className="flex items-center justify-between h-10 px-3 border-b border-border bg-muted/30 shrink-0">
-                  <div className="flex items-center gap-2">
-                    <div className="p-1 rounded bg-brand-500/10">
-                      <FolderOpen className="h-3.5 w-3.5 text-brand-500" />
-                    </div>
-                    <span className="text-sm font-medium">Files</span>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-6 w-6"
-                    onClick={() => setShowFileExplorer(false)}
-                    title="Close File Explorer"
-                  >
-                    <ChevronLeft className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
-                <FileExplorer
-                  projectPath={boardSelectedProject?.path || null}
-                  onFileSelect={handleFileSelect}
-                  className="flex-1"
-                />
-              </div>
-            )}
-
-            {/* File Explorer Toggle Button - shown when collapsed */}
-            {!showFileExplorer && (
-              <div className="flex items-center justify-center w-10 border-r border-border bg-muted/30 shrink-0">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-full w-full rounded-none hover:bg-brand-500/10"
-                  onClick={() => setShowFileExplorer(true)}
-                  title="Open File Explorer"
-                >
-                  <div className="flex flex-col items-center gap-2">
-                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                    <div className="p-1 rounded bg-brand-500/10">
-                      <FolderOpen className="h-3.5 w-3.5 text-brand-500" />
-                    </div>
-                    <span
-                      className="text-xs font-medium text-muted-foreground"
-                      style={{ writingMode: 'vertical-rl', textOrientation: 'mixed' }}
-                    >
-                      Files
-                    </span>
-                  </div>
-                </Button>
-              </div>
-            )}
-
-            {/* Collapsed Kanban panel - show expand button */}
-            {isKanbanPanelCollapsed && (
-              <div className="flex items-center justify-center w-10 border-r border-border bg-muted/30 shrink-0">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-full w-full rounded-none hover:bg-brand-500/10"
-                  onClick={() => setKanbanPanelCollapsed(false)}
-                  title="Expand Kanban Board"
-                >
-                  <div className="flex flex-col items-center gap-2">
-                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                    <div className="p-1 rounded bg-brand-500/10">
-                      <LayoutGrid className="h-3.5 w-3.5 text-brand-500" />
-                    </div>
-                    <span
-                      className="text-xs font-medium text-muted-foreground"
-                      style={{ writingMode: 'vertical-rl', textOrientation: 'mixed' }}
-                    >
-                      Board
-                    </span>
-                  </div>
-                </Button>
-              </div>
-            )}
-
-            {/* Main Panel Group - only render visible panels */}
-            <PanelGroup
-              id="board-panels"
-              direction="horizontal"
-              className="flex-1"
-              onLayout={(sizes) => {
-                // Store panel sizes in ref during drag - don't update Zustand yet
-                // This prevents excessive state updates/re-renders during resize
-                // The actual Zustand update happens in PanelResizeHandle's onDragging callback
-                let sizeIndex = 0;
-                const newKanbanSize = !isKanbanPanelCollapsed
-                  ? sizes[sizeIndex++]
-                  : kanbanPanelSize;
-                const newAgentChatSize = !isAgentChatPanelCollapsed
-                  ? sizes[sizeIndex++]
-                  : agentChatPanelSize;
-                const newAgentsSize = !isAgentsPanelCollapsed
-                  ? sizes[sizeIndex++]
-                  : agentsPanelSize;
-                const newDeploySize = !isDeployPanelCollapsed ? sizes[sizeIndex] : deployPanelSize;
-                pendingPanelSizesRef.current = {
-                  kanban: newKanbanSize,
-                  agentChat: newAgentChatSize,
-                  agents: newAgentsSize,
-                  deploy: newDeploySize,
-                };
-              }}
-            >
-              {/* Kanban/List Panel */}
-              {!isKanbanPanelCollapsed && (
-                <Panel
-                  id="kanban"
-                  order={1}
-                  defaultSize={kanbanPanelSize}
-                  minSize={25}
-                  className="overflow-hidden"
-                >
-                  <div className="h-full flex flex-col min-h-0">
-                    {/* Kanban/List content - full-bleed container filling available space */}
-                    <div className="flex-1 min-h-0 relative">
-                      {isLoading ? (
-                        /* Progressive skeleton — replaces the old full-screen loading overlay */
-                        <BoardSkeleton
-                          pipelineConfig={pipelineConfig}
-                          showBorder={backgroundSettings.columnBorderEnabled}
-                          backgroundImageStyle={backgroundImageStyle}
-                          singleColumnMode={!isAllStatusMode}
-                          activeStatusTab={activeStatusTab}
-                          activeStatusTabs={activeStatusTabs}
-                        />
-                      ) : (
-                        <ListView
-                          columnFeaturesMap={columnFeaturesMap}
-                          allFeatures={displayFeatures}
-                          sortConfig={sortConfig}
-                          onSortChange={setSortColumn}
-                          actionHandlers={{
-                            onEdit: (feature) => setEditingFeature(feature),
-                            onDelete: (featureId) => handleDeleteFeature(featureId),
-                            onViewOutput: handleViewOutput,
-                            onVerify: handleVerifyFeature,
-                            onResume: handleResumeFeature,
-                            onForceStop: handleForceStopFeature,
-                            onManualVerify: handleManualVerify,
-                            onFollowUp: handleOpenFollowUp,
-                            onImplement: handleStartImplementation,
-                            onViewPlan: (feature) => setViewPlanFeature(feature),
-                            onApprovePlan: handleOpenApprovalDialog,
-                            onSpawnTask: (feature) => {
-                              setSpawnParentFeature(feature);
-                              setShowAddDialog(true);
-                            },
-                            onToggleFavorite: (feature) => {
-                              const updates = { isFavorite: !feature.isFavorite };
-                              const storeFeatures = useAppStore.getState().features;
-                              if (!storeFeatures.some((f) => f.id === feature.id)) {
-                                const newFeature = { ...feature, ...updates };
-                                useAppStore.setState({
-                                  features: [...storeFeatures, newFeature],
-                                });
-                                persistFeatureCreate(newFeature);
-                              } else {
-                                updateFeature(feature.id, updates);
-                                persistFeatureUpdate(feature.id, updates);
-                              }
-                            },
-                            onConvertToIssue: handleConvertToIssue,
-                            onChat: handleChatWithFeature,
-                          }}
-                          runningAutoTasks={runningAutoTasks}
-                          pipelineConfig={pipelineConfig}
-                          onAddFeature={() => setShowAddDialog(true)}
-                          isSelectionMode={isSelectionMode}
-                          selectedFeatureIds={selectedFeatureIds}
-                          onToggleFeatureSelection={toggleFeatureSelection}
-                          onRowClick={(feature) => {
-                            if (feature.status === 'backlog') {
-                              setEditingFeature(feature);
-                            } else {
-                              handleViewOutput(feature);
-                            }
-                          }}
-                          className="transition-opacity duration-200"
-                          singleColumnMode={!isAllStatusMode}
-                          activeStatusTab={activeStatusTab}
-                          activeStatusTabs={activeStatusTabs}
-                          showAllProjects={showAllProjectsInBoard}
-                        />
-                      )}
-                    </div>
-                  </div>
-                </Panel>
-              )}
-
-              {/* Resize Handle between Kanban and Agent Chat - with VS Code-style double-click snapping */}
-              {!isKanbanPanelCollapsed && !isAgentChatPanelCollapsed && (
-                <PanelResizeHandle
-                  className="w-2 group relative flex items-center justify-center hover:bg-brand-500/10 transition-colors data-[resize-handle-active]:bg-brand-500/20"
-                  title="Drag to resize • Double-click to snap (25%, 50%, 75%)"
-                  onDragging={(isDragging) => {
-                    // Commit panel sizes to Zustand only when dragging ends
-                    // This prevents lag from excessive state updates during resize
-                    if (!isDragging && pendingPanelSizesRef.current) {
-                      setKanbanPanelSize(pendingPanelSizesRef.current.kanban);
-                      setAgentChatPanelSize(pendingPanelSizesRef.current.agentChat);
-                      setAgentsPanelSize(pendingPanelSizesRef.current.agents);
-                      setDeployPanelSize(pendingPanelSizesRef.current.deploy);
-                      pendingPanelSizesRef.current = null;
-                    }
-                  }}
-                  onDoubleClick={() => {
-                    // VS Code-style snap: cycle between 25%, 50%, 75%
-                    const snapPoints = [25, 50, 75];
-                    const currentIndex = snapPoints.findIndex(
-                      (p) => Math.abs(kanbanPanelSize - p) < 10
-                    );
-                    const nextIndex = (currentIndex + 1) % snapPoints.length;
-                    setKanbanPanelSize(snapPoints[nextIndex]);
-                  }}
-                >
-                  <div className="absolute inset-y-0 flex items-center">
-                    <div className="h-8 w-1 rounded-full bg-border group-hover:bg-brand-500/50 group-data-[resize-handle-active]:bg-brand-500 transition-colors" />
-                  </div>
-                </PanelResizeHandle>
-              )}
-
-              {/* Resize Handle between Kanban and Agents (when Chat is collapsed) */}
-              {!isKanbanPanelCollapsed && isAgentChatPanelCollapsed && !isAgentsPanelCollapsed && (
-                <PanelResizeHandle
-                  className="w-2 group relative flex items-center justify-center hover:bg-brand-500/10 transition-colors data-[resize-handle-active]:bg-brand-500/20"
-                  title="Drag to resize"
-                  onDragging={(isDragging) => {
-                    if (!isDragging && pendingPanelSizesRef.current) {
-                      setKanbanPanelSize(pendingPanelSizesRef.current.kanban);
-                      setAgentChatPanelSize(pendingPanelSizesRef.current.agentChat);
-                      setAgentsPanelSize(pendingPanelSizesRef.current.agents);
-                      setDeployPanelSize(pendingPanelSizesRef.current.deploy);
-                      pendingPanelSizesRef.current = null;
-                    }
-                  }}
-                >
-                  <div className="absolute inset-y-0 flex items-center">
-                    <div className="h-8 w-1 rounded-full bg-border group-hover:bg-brand-500/50 group-data-[resize-handle-active]:bg-brand-500 transition-colors" />
-                  </div>
-                </PanelResizeHandle>
-              )}
-
-              {/* Resize Handle between Kanban and Deploy (when Chat and Agents are collapsed) */}
-              {!isKanbanPanelCollapsed &&
-                isAgentChatPanelCollapsed &&
-                isAgentsPanelCollapsed &&
-                !isDeployPanelCollapsed && (
-                  <PanelResizeHandle
-                    className="w-2 group relative flex items-center justify-center hover:bg-brand-500/10 transition-colors data-[resize-handle-active]:bg-brand-500/20"
-                    title="Drag to resize"
-                    onDragging={(isDragging) => {
-                      if (!isDragging && pendingPanelSizesRef.current) {
-                        setKanbanPanelSize(pendingPanelSizesRef.current.kanban);
-                        setAgentChatPanelSize(pendingPanelSizesRef.current.agentChat);
-                        setAgentsPanelSize(pendingPanelSizesRef.current.agents);
-                        setDeployPanelSize(pendingPanelSizesRef.current.deploy);
-                        pendingPanelSizesRef.current = null;
-                      }
-                    }}
-                  >
-                    <div className="absolute inset-y-0 flex items-center">
-                      <div className="h-8 w-1 rounded-full bg-border group-hover:bg-brand-500/50 group-data-[resize-handle-active]:bg-brand-500 transition-colors" />
-                    </div>
-                  </PanelResizeHandle>
-                )}
-
-              {/* Agent Chat Panel */}
-              {!isAgentChatPanelCollapsed && (
-                <Panel
-                  id="agent-chat"
-                  order={2}
-                  defaultSize={agentChatPanelSize}
-                  minSize={25}
-                  maxSize={60}
-                  className="overflow-hidden"
-                >
-                  <AgentChatPanel
-                    project={agentPanelProject}
-                    isCollapsed={false}
-                    onCollapseChange={handleAgentChatPanelCollapseChange}
-                    onProjectChange={handleAgentPanelProjectChange}
-                    showProjectSelector
-                    compact
-                    className="h-full"
-                  />
-                </Panel>
-              )}
-
-              {/* Resize Handle between Agent Chat and Agents */}
-              {!isAgentChatPanelCollapsed && !isAgentsPanelCollapsed && (
-                <PanelResizeHandle
-                  className="w-2 group relative flex items-center justify-center hover:bg-brand-500/10 transition-colors data-[resize-handle-active]:bg-brand-500/20"
-                  title="Drag to resize"
-                  onDragging={(isDragging) => {
-                    if (!isDragging && pendingPanelSizesRef.current) {
-                      setKanbanPanelSize(pendingPanelSizesRef.current.kanban);
-                      setAgentChatPanelSize(pendingPanelSizesRef.current.agentChat);
-                      setAgentsPanelSize(pendingPanelSizesRef.current.agents);
-                      setDeployPanelSize(pendingPanelSizesRef.current.deploy);
-                      pendingPanelSizesRef.current = null;
-                    }
-                  }}
-                >
-                  <div className="absolute inset-y-0 flex items-center">
-                    <div className="h-8 w-1 rounded-full bg-border group-hover:bg-brand-500/50 group-data-[resize-handle-active]:bg-brand-500 transition-colors" />
-                  </div>
-                </PanelResizeHandle>
-              )}
-
-              {/* Agents Panel */}
-              {!isAgentsPanelCollapsed && (
-                <Panel
-                  id="agents"
-                  order={3}
-                  defaultSize={agentsPanelSize}
-                  minSize={15}
-                  maxSize={50}
-                  className="overflow-hidden"
-                >
-                  <div className="h-full flex flex-col border-l border-border">
-                    <div className="flex items-center justify-between h-10 px-3 border-b border-border bg-muted/30 shrink-0">
-                      <div className="flex items-center gap-2">
-                        <div className="p-1 rounded bg-violet-500/10">
-                          <Bot className="h-3.5 w-3.5 text-violet-500" />
-                        </div>
-                        <span className="text-sm font-medium">Agents</span>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-6 w-6"
-                        onClick={() => setAgentsPanelCollapsed(true)}
-                        title="Close Agents Panel"
-                      >
-                        <ChevronRight className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                    <div className="flex-1 overflow-auto p-3">
-                      <AgentsSkillsSection />
-                    </div>
-                  </div>
-                </Panel>
-              )}
-
-              {/* Resize Handle between Agents and Deploy */}
-              {!isAgentsPanelCollapsed && !isDeployPanelCollapsed && (
-                <PanelResizeHandle
-                  className="w-2 group relative flex items-center justify-center hover:bg-brand-500/10 transition-colors data-[resize-handle-active]:bg-brand-500/20"
-                  title="Drag to resize"
-                  onDragging={(isDragging) => {
-                    if (!isDragging && pendingPanelSizesRef.current) {
-                      setKanbanPanelSize(pendingPanelSizesRef.current.kanban);
-                      setAgentChatPanelSize(pendingPanelSizesRef.current.agentChat);
-                      setAgentsPanelSize(pendingPanelSizesRef.current.agents);
-                      setDeployPanelSize(pendingPanelSizesRef.current.deploy);
-                      pendingPanelSizesRef.current = null;
-                    }
-                  }}
-                >
-                  <div className="absolute inset-y-0 flex items-center">
-                    <div className="h-8 w-1 rounded-full bg-border group-hover:bg-brand-500/50 group-data-[resize-handle-active]:bg-brand-500 transition-colors" />
-                  </div>
-                </PanelResizeHandle>
-              )}
-
-              {/* Resize Handle between Agent Chat and Deploy (when Agents is collapsed) */}
-              {!isAgentChatPanelCollapsed && isAgentsPanelCollapsed && !isDeployPanelCollapsed && (
-                <PanelResizeHandle
-                  className="w-2 group relative flex items-center justify-center hover:bg-brand-500/10 transition-colors data-[resize-handle-active]:bg-brand-500/20"
-                  title="Drag to resize"
-                  onDragging={(isDragging) => {
-                    if (!isDragging && pendingPanelSizesRef.current) {
-                      setKanbanPanelSize(pendingPanelSizesRef.current.kanban);
-                      setAgentChatPanelSize(pendingPanelSizesRef.current.agentChat);
-                      setAgentsPanelSize(pendingPanelSizesRef.current.agents);
-                      setDeployPanelSize(pendingPanelSizesRef.current.deploy);
-                      pendingPanelSizesRef.current = null;
-                    }
-                  }}
-                >
-                  <div className="absolute inset-y-0 flex items-center">
-                    <div className="h-8 w-1 rounded-full bg-border group-hover:bg-brand-500/50 group-data-[resize-handle-active]:bg-brand-500 transition-colors" />
-                  </div>
-                </PanelResizeHandle>
-              )}
-
-              {/* Deploy Panel */}
-              {!isDeployPanelCollapsed && (
-                <Panel
-                  id="deploy"
-                  order={4}
-                  defaultSize={deployPanelSize}
-                  minSize={15}
-                  maxSize={40}
-                  className="overflow-hidden"
-                >
-                  <DeployPanel
-                    project={agentPanelProject}
-                    isCollapsed={false}
-                    onCollapseChange={handleDeployPanelCollapseChange}
-                    onProjectChange={handleAgentPanelProjectChange}
-                    showProjectSelector
-                    compact
-                    className="h-full"
-                  />
-                </Panel>
-              )}
-            </PanelGroup>
-
-            {/* Collapsed agent chat panel - show expand button (outside PanelGroup) */}
-            {isAgentChatPanelCollapsed && (
-              <div className="flex items-center justify-center w-10 border-l border-border bg-muted/30 shrink-0">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-full w-full rounded-none hover:bg-brand-500/10"
-                  onClick={() => setAgentChatPanelCollapsed(false)}
-                  title="Expand Agent Chat Panel"
-                >
-                  <div className="flex flex-col items-center gap-2">
-                    <div className="p-1 rounded bg-brand-500/10">
-                      <Bot className="h-3.5 w-3.5 text-brand-500" />
-                    </div>
-                    <span
-                      className="text-xs font-medium text-muted-foreground"
-                      style={{ writingMode: 'vertical-rl', textOrientation: 'mixed' }}
-                    >
-                      Chat
-                    </span>
-                  </div>
-                </Button>
-              </div>
-            )}
-
-            {/* Collapsed agents panel - show expand button (outside PanelGroup) */}
-            {isAgentsPanelCollapsed && (
-              <div className="flex items-center justify-center w-10 border-l border-border bg-muted/30 shrink-0">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-full w-full rounded-none hover:bg-brand-500/10"
-                  onClick={() => setAgentsPanelCollapsed(false)}
-                  title="Expand Agents Panel"
-                >
-                  <div className="flex flex-col items-center gap-2">
-                    <div className="p-1 rounded bg-violet-500/10">
-                      <Bot className="h-3.5 w-3.5 text-violet-500" />
-                    </div>
-                    <span
-                      className="text-xs font-medium text-muted-foreground"
-                      style={{ writingMode: 'vertical-rl', textOrientation: 'mixed' }}
-                    >
-                      Agents
-                    </span>
-                  </div>
-                </Button>
-              </div>
-            )}
-
-            {/* Collapsed deploy panel - show expand button (outside PanelGroup) */}
-            {isDeployPanelCollapsed && (
-              <div className="flex items-center justify-center w-10 border-l border-border bg-muted/30 shrink-0">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-full w-full rounded-none hover:bg-brand-500/10"
-                  onClick={() => setDeployPanelCollapsed(false)}
-                  title="Expand Deploy Panel"
-                >
-                  <div className="flex flex-col items-center gap-2">
-                    <div className="p-1 rounded bg-brand-500/10">
-                      <Rocket className="h-3.5 w-3.5 text-brand-500" />
-                    </div>
-                    <span
-                      className="text-xs font-medium text-muted-foreground"
-                      style={{ writingMode: 'vertical-rl', textOrientation: 'mixed' }}
-                    >
-                      Deploy
-                    </span>
-                  </div>
-                </Button>
-              </div>
-            )}
-          </div>
-        )}
+      {/* The task list lives in the sidebar now. This pane is the canvas the
+          workbench and the project view render into. */}
+      <div
+        className="flex-1 flex flex-col min-h-0 items-center justify-center overflow-hidden"
+        data-testid="board-view-canvas"
+      >
+        <div className="max-w-sm px-6 text-center">
+          <p className="text-sm text-muted-foreground">
+            Select a task in the sidebar to open it here.
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground/70">
+            The project view holds files, chat, agents, scripts, deploy and MCP.
+          </p>
+        </div>
       </div>
 
       {/* Selection Action Bar */}
@@ -2872,6 +2185,9 @@ export function BoardView() {
           mode={selectionTarget === 'waiting_approval' ? 'waiting_approval' : 'backlog'}
         />
       )}
+
+      {/* Auto Mode Modal — the old top bar used to host this */}
+      <AutoModeModal open={showAutoModeModal} onOpenChange={setShowAutoModeModal} />
 
       {/* Mass Edit Dialog */}
       <MassEditDialog
@@ -2911,6 +2227,7 @@ export function BoardView() {
           setShowAddDialog(open);
           if (!open) {
             setSpawnParentFeature(null);
+            setAddFeatureContext(null);
           }
         }}
         componentProps={{
@@ -2938,6 +2255,8 @@ export function BoardView() {
           showAllProjectsMode: showAllProjectsInBoard,
           // Pass active modes so dialog can default source selection
           activeModes,
+          // Sidebar project/branch/status the '+' or "Add task" came from
+          context: addFeatureContext,
         }}
       />
 
@@ -2995,6 +2314,17 @@ export function BoardView() {
           blockingDependencies: unsatisfiedDepsDialog.blockingDependencies,
           onConfirm: handleConfirmStartWithUnsatisfiedDeps,
           onCancel: handleCancelStartWithUnsatisfiedDeps,
+        }}
+      />
+
+      {/* Offer to create a GitHub repository when the project has none */}
+      <CreateGitHubRepoDialog
+        open={createRepoDialog.open}
+        onOpenChange={handleCreateRepoDialogOpenChange}
+        componentProps={{
+          projectPath: createRepoDialog.projectPath,
+          reason: createRepoDialog.reason,
+          onCreated: handleGitHubRepoCreated,
         }}
       />
 
@@ -3222,16 +2552,6 @@ export function BoardView() {
             setWorktreeRefreshKey((k) => k + 1);
             setSelectedWorktreeForAction(null);
           },
-        }}
-      />
-
-      {/* Code Editor Window - popout file editor with syntax highlighting */}
-      <CodeEditorWindow
-        open={showCodeEditor}
-        onOpenChange={setShowCodeEditor}
-        componentProps={{
-          initialFilePath: codeEditorFilePath,
-          projectPath: currentProject?.path || null,
         }}
       />
 

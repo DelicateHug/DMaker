@@ -59,6 +59,11 @@ interface Session {
   isRunning: boolean;
   abortController: AbortController | null;
   workingDirectory: string;
+  /**
+   * Scratchpad chat: runs in its own throwaway sandbox instead of a repo, and
+   * sees only global (`~/.claude`) skills and settings. See `isScratchSession`.
+   */
+  isScratch?: boolean;
   model?: string;
   thinkingLevel?: ThinkingLevel; // Thinking level for Claude models
   reasoningEffort?: ReasoningEffort; // Reasoning effort for Codex models
@@ -77,6 +82,8 @@ interface SessionMetadata {
   tags?: string[];
   model?: string;
   sdkSessionId?: string; // Claude SDK session ID for conversation continuity
+  /** Throwaway scratchpad chat — sandboxed working directory, global skills only */
+  scratch?: boolean;
 }
 
 /**
@@ -238,6 +245,7 @@ export class AgentService {
   private sessions = new Map<string, Session>();
   private stateDir: string;
   private metadataFile: string;
+  private scratchRoot: string;
   private events: EventEmitter;
   private settingsService: SettingsService | null = null;
   private logger = createLogger('AgentService');
@@ -245,12 +253,30 @@ export class AgentService {
   constructor(dataDir: string, events: EventEmitter, settingsService?: SettingsService) {
     this.stateDir = path.join(dataDir, 'agent-sessions');
     this.metadataFile = path.join(dataDir, 'sessions-metadata.json');
+    this.scratchRoot = path.join(dataDir, 'scratchpad');
     this.events = events;
     this.settingsService = settingsService ?? null;
   }
 
   async initialize(): Promise<void> {
     await secureFs.mkdir(this.stateDir, { recursive: true });
+  }
+
+  /**
+   * Sandbox directory for one scratchpad chat.
+   *
+   * Lives under DATA_DIR — which `isPathAllowed` always permits — so a scratch
+   * chat has somewhere real to write without touching any repository.
+   */
+  private getScratchWorkspace(sessionId: string): string {
+    return path.join(this.scratchRoot, sessionId);
+  }
+
+  /** Create a scratch chat's sandbox, so the agent starts in a real directory. */
+  private async ensureScratchWorkspace(sessionId: string): Promise<string> {
+    const workspace = this.getScratchWorkspace(sessionId);
+    await secureFs.mkdir(workspace, { recursive: true });
+    return workspace;
   }
 
   /**
@@ -268,8 +294,15 @@ export class AgentService {
       const metadata = await this.loadMetadata();
       const sessionMetadata = metadata[sessionId];
 
+      // A scratch chat ignores whatever directory the client offers — it always
+      // runs in its own sandbox, which is the point of it being throwaway.
+      const isScratch = sessionMetadata?.scratch === true;
+      if (isScratch) await this.ensureScratchWorkspace(sessionId);
+
       // Determine the effective working directory
-      const effectiveWorkingDirectory = workingDirectory || process.cwd();
+      const effectiveWorkingDirectory = isScratch
+        ? this.getScratchWorkspace(sessionId)
+        : workingDirectory || process.cwd();
       const resolvedWorkingDirectory = path.resolve(effectiveWorkingDirectory);
 
       // Validate that the working directory is allowed using centralized validation
@@ -283,6 +316,7 @@ export class AgentService {
         isRunning: false,
         abortController: null,
         workingDirectory: resolvedWorkingDirectory,
+        isScratch,
         sdkSessionId: sessionMetadata?.sdkSessionId, // Load persisted SDK session ID
         promptQueue,
       });
@@ -393,45 +427,15 @@ export class AgentService {
       isRunning: true,
     });
 
-    // Auto-rename session if this is the first user message and name is still auto-generated
-    const userMessageCount = session.messages.filter((m) => m.role === 'user').length;
-    if (userMessageCount === 1) {
-      // Get the current session metadata to check the name
-      const metadata = await this.loadMetadata();
-      const currentName = metadata[sessionId]?.name;
-
-      // Only rename if the current name is a placeholder or auto-generated
-      if (currentName && shouldAutoRename(currentName)) {
-        const generatedName = await generateSessionNameFromMessage(
-          message,
-          this.settingsService,
-          this.logger
-        );
-        this.logger.debug(
-          `Auto-renaming session ${sessionId} from "${currentName}" to "${generatedName}"`
-        );
-        const updatedSession = await this.updateSession(sessionId, { name: generatedName });
-
-        // Emit session updated event so UI can refresh
-        if (updatedSession) {
-          this.emitAgentEvent(sessionId, {
-            type: 'session-updated',
-            session: updatedSession,
-          });
-        }
-      } else if (currentName) {
-        this.logger.debug(
-          `Skipping auto-rename for session ${sessionId} - name "${currentName}" is not auto-generated`
-        );
-      }
-    }
-
     // Emit started event so UI can show thinking indicator
     this.emitAgentEvent(sessionId, {
       type: 'started',
     });
 
-    // Emit user message event
+    // Emit user message event.
+    // This has to happen before anything slow: the UI paints the user's own
+    // bubble from it, so any await in front of it is dead time the user spends
+    // staring at a chat that has swallowed their message.
     this.emitAgentEvent(sessionId, {
       type: 'message',
       message: userMessage,
@@ -439,50 +443,81 @@ export class AgentService {
 
     await this.saveSession(sessionId, session.messages);
 
-    try {
-      // Determine the effective working directory for context loading
-      const effectiveWorkDir = workingDirectory || session.workingDirectory;
+    // Auto-rename session if this is the first user message and name is still
+    // auto-generated. This calls a model, so it runs detached — the turn must
+    // not wait on it, and neither must the user's message bubble.
+    const userMessageCount = session.messages.filter((m) => m.role === 'user').length;
+    if (userMessageCount === 1) {
+      void this.autoRenameSession(sessionId, message);
+    }
 
-      // Load autoLoadClaudeMd setting (project setting takes precedence over global)
-      const autoLoadClaudeMd = await getAutoLoadClaudeMdSetting(
-        effectiveWorkDir,
-        this.settingsService,
-        '[AgentService]'
-      );
+    try {
+      // Determine the effective working directory for context loading.
+      // A scratch chat is pinned to its sandbox — no caller can point it at a repo.
+      const isScratch = session.isScratch === true;
+      const effectiveWorkDir = isScratch
+        ? session.workingDirectory
+        : workingDirectory || session.workingDirectory;
+
+      // Load autoLoadClaudeMd setting (project setting takes precedence over global).
+      // Scratch chats never auto-load a project CLAUDE.md — they have no project.
+      const autoLoadClaudeMd = isScratch
+        ? false
+        : await getAutoLoadClaudeMdSetting(
+            effectiveWorkDir,
+            this.settingsService,
+            '[AgentService]'
+          );
 
       // Load MCP servers from settings (global setting only)
       const mcpServers = await getMCPServersFromSettings(this.settingsService, '[AgentService]');
 
-      // Get Skills configuration from settings
-      const skillsConfig = this.settingsService
+      // Get Skills configuration from settings.
+      // A scratch chat is restricted to global (~/.claude) skills — project
+      // skills would tie it to a repository it deliberately has no part in.
+      const loadedSkillsConfig = this.settingsService
         ? await getSkillsConfiguration(this.settingsService)
         : { enabled: false, sources: [] as Array<'user' | 'project'>, shouldIncludeInTools: false };
+      const skillsConfig =
+        isScratch && loadedSkillsConfig.enabled
+          ? {
+              enabled: true,
+              sources: ['user'] as Array<'user' | 'project'>,
+              shouldIncludeInTools: true,
+            }
+          : loadedSkillsConfig;
 
       // Get Subagents configuration from settings
       const subagentsConfig = this.settingsService
         ? await getSubagentsConfiguration(this.settingsService)
         : { enabled: false, sources: [] as Array<'user' | 'project'>, shouldIncludeInTools: false };
 
-      // Get custom subagents from settings (merge global + project-level) only if enabled
+      // Get custom subagents from settings (merge global + project-level) only if
+      // enabled. A scratch chat asks for no project path, so it gets globals only.
       const customSubagents =
         this.settingsService && subagentsConfig.enabled
-          ? await getCustomSubagents(this.settingsService, effectiveWorkDir)
+          ? await getCustomSubagents(this.settingsService, isScratch ? undefined : effectiveWorkDir)
           : undefined;
 
       // Load project context files (CLAUDE.md, CODE_QUALITY.md, etc.) and memory files
-      // Use the user's message as task context for smart memory selection
-      const contextResult = await loadContextFiles({
-        projectPath: effectiveWorkDir,
-        fsModule: secureFs as Parameters<typeof loadContextFiles>[0]['fsModule'],
-        taskContext: {
-          title: message.substring(0, 200), // Use first 200 chars as title
-          description: message,
-        },
-      });
+      // Use the user's message as task context for smart memory selection.
+      // Scratch chats skip this entirely — they carry no project context by design.
+      const contextResult = isScratch
+        ? null
+        : await loadContextFiles({
+            projectPath: effectiveWorkDir,
+            fsModule: secureFs as Parameters<typeof loadContextFiles>[0]['fsModule'],
+            taskContext: {
+              title: message.substring(0, 200), // Use first 200 chars as title
+              description: message,
+            },
+          });
 
       // When autoLoadClaudeMd is enabled, filter out CLAUDE.md to avoid duplication
       // (SDK handles CLAUDE.md via settingSources), but keep other context files like CODE_QUALITY.md
-      const contextFilesPrompt = filterClaudeMdFromContext(contextResult, autoLoadClaudeMd);
+      const contextFilesPrompt = contextResult
+        ? filterClaudeMdFromContext(contextResult, autoLoadClaudeMd)
+        : '';
 
       // Build combined system prompt with base prompt and context files
       const baseSystemPrompt = await this.getSystemPrompt();
@@ -831,6 +866,48 @@ export class AgentService {
     }
   }
 
+  /**
+   * Give a freshly created session a name derived from its first message.
+   *
+   * Detached on purpose: naming asks a model, which takes seconds, and nothing
+   * about the turn depends on the answer. Failures are logged and dropped —
+   * a session keeps its placeholder name rather than breaking the turn.
+   */
+  private async autoRenameSession(sessionId: string, message: string): Promise<void> {
+    try {
+      const metadata = await this.loadMetadata();
+      const currentName = metadata[sessionId]?.name;
+      if (!currentName) return;
+
+      if (!shouldAutoRename(currentName)) {
+        this.logger.debug(
+          `Skipping auto-rename for session ${sessionId} - name "${currentName}" is not auto-generated`
+        );
+        return;
+      }
+
+      const generatedName = await generateSessionNameFromMessage(
+        message,
+        this.settingsService,
+        this.logger
+      );
+      this.logger.debug(
+        `Auto-renaming session ${sessionId} from "${currentName}" to "${generatedName}"`
+      );
+      const updatedSession = await this.updateSession(sessionId, { name: generatedName });
+
+      // Emit session updated event so UI can refresh
+      if (updatedSession) {
+        this.emitAgentEvent(sessionId, {
+          type: 'session-updated',
+          session: updatedSession,
+        });
+      }
+    } catch (error) {
+      this.logger.warn(`Auto-rename failed for session ${sessionId}:`, error);
+    }
+  }
+
   async saveSession(sessionId: string, messages: Message[]): Promise<void> {
     const sessionFile = path.join(this.stateDir, `${sessionId}.json`);
 
@@ -880,31 +957,39 @@ export class AgentService {
     name: string,
     projectPath?: string,
     workingDirectory?: string,
-    model?: string
+    model?: string,
+    scratch?: boolean
   ): Promise<SessionMetadata> {
     const sessionId = this.generateId();
     const metadata = await this.loadMetadata();
 
+    // A scratch chat belongs to no project: it gets a fresh sandbox of its own
+    // and drops whatever project path or directory the caller suggested.
+    const effectiveProjectPath = scratch ? undefined : projectPath;
+
     // Determine the effective working directory
-    const effectiveWorkingDirectory = workingDirectory || projectPath || process.cwd();
+    const effectiveWorkingDirectory = scratch
+      ? await this.ensureScratchWorkspace(sessionId)
+      : workingDirectory || projectPath || process.cwd();
     const resolvedWorkingDirectory = path.resolve(effectiveWorkingDirectory);
 
     // Validate that the working directory is allowed using centralized validation
     validateWorkingDirectory(resolvedWorkingDirectory);
 
     // Validate that projectPath is allowed if provided
-    if (projectPath) {
-      validateWorkingDirectory(projectPath);
+    if (effectiveProjectPath) {
+      validateWorkingDirectory(effectiveProjectPath);
     }
 
     const session: SessionMetadata = {
       id: sessionId,
       name,
-      projectPath,
+      projectPath: effectiveProjectPath,
       workingDirectory: resolvedWorkingDirectory,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       model,
+      ...(scratch ? { scratch: true } : {}),
     };
 
     metadata[sessionId] = session;
@@ -954,6 +1039,8 @@ export class AgentService {
     const metadata = await this.loadMetadata();
     if (!metadata[sessionId]) return false;
 
+    const wasScratch = metadata[sessionId].scratch === true;
+
     delete metadata[sessionId];
     await this.saveMetadata(metadata);
 
@@ -963,6 +1050,18 @@ export class AgentService {
       await secureFs.unlink(sessionFile);
     } catch {
       // File may not exist
+    }
+
+    // A scratch chat is throwaway: its sandbox goes with it.
+    if (wasScratch) {
+      try {
+        await secureFs.rm(this.getScratchWorkspace(sessionId), {
+          recursive: true,
+          force: true,
+        });
+      } catch (error) {
+        this.logger.warn(`Failed to remove scratch workspace for ${sessionId}:`, error);
+      }
     }
 
     // Clear from memory

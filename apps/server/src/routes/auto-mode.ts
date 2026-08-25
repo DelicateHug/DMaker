@@ -11,6 +11,7 @@ import { validatePathParams } from '../middleware.js';
 import { createLogger } from '@dmaker/utils';
 import { getBlockingDependencies } from '@dmaker/dependency-resolver';
 import { getGitHubSyncService } from '../services/github-sync-service.js';
+import { ensureFeatureOwnership } from '../lib/feature-ownership.js';
 
 // ---------------------------------------------------------------------------
 // Logger & error helpers (inlined from common.ts)
@@ -99,10 +100,13 @@ function createRunFeatureHandler(autoModeService: AutoModeService) {
           const syncService = getGitHubSyncService();
           const canExecute = await syncService.canExecute(projectPath, feature);
           if (!canExecute.allowed) {
+            // Denied by default. Forcing past this is allowed, but the run
+            // that follows is read-only — the ownership gate in runAgent
+            // strips its write tools regardless of what was forced here.
             res.json({
               success: false,
               warning: 'claimed_by_other',
-              message: `This issue is claimed by ${canExecute.claimedBy} on GitHub`,
+              message: `This issue is claimed by ${canExecute.claimedBy} on GitHub. Running anyway starts a read-only run that cannot change files.`,
               claimedBy: canExecute.claimedBy,
             });
             return;
@@ -112,42 +116,16 @@ function createRunFeatureHandler(autoModeService: AutoModeService) {
         }
       }
 
-      // Auto-claim: if feature has an unclaimed GitHub issue, claim for current user
-      if (feature.githubIssue?.number) {
-        try {
-          const assignees = feature.githubIssue.assignees ?? [];
-          if (assignees.length === 0) {
-            const syncService = getGitHubSyncService();
-            const currentUser = await syncService.getCurrentUser(projectPath);
-            if (currentUser) {
-              logger.info(`Auto-claiming issue #${feature.githubIssue.number} for ${currentUser}`);
-              const claimResult = await syncService.claimIssue(
-                projectPath,
-                feature.githubIssue.number
-              );
-              if (claimResult.success) {
-                await featureLoader.update(projectPath, featureId, {
-                  claimedBy: currentUser,
-                  claimedAt: new Date().toISOString(),
-                });
-                // Refresh issue data to reflect new assignee
-                const issueData = await syncService.syncIssueData(
-                  projectPath,
-                  feature.githubIssue.number
-                );
-                if (issueData) {
-                  await featureLoader.update(projectPath, featureId, { githubIssue: issueData });
-                }
-              } else {
-                logger.warn(
-                  `Auto-claim failed for issue #${feature.githubIssue.number}: ${claimResult.error}`
-                );
-              }
-            }
-          }
-        } catch (autoClaimErr) {
-          logger.warn('Auto-claim failed, continuing with execution:', autoClaimErr);
-        }
+      // Settle ownership before the run starts: an unclaimed issue becomes
+      // ours here, and the answer is persisted onto the feature so the board
+      // shows it immediately. This is the same call the agent gate makes, so
+      // what the user is told here matches what the run will actually be
+      // allowed to do.
+      const ownership = await ensureFeatureOwnership(projectPath, feature, featureLoader);
+      if (!ownership.canWrite) {
+        logger.warn(
+          `Feature ${featureId} will run read-only (${ownership.reason}): ${ownership.message}`
+        );
       }
 
       // Check if feature is already running before attempting execution
@@ -431,8 +409,21 @@ function createCommitFeatureHandler(autoModeService: AutoModeService) {
         return;
       }
 
-      const commitHash = await autoModeService.commitFeature(projectPath, featureId, worktreePath);
-      res.json({ success: true, commitHash });
+      const result = await autoModeService.commitFeature(projectPath, featureId, worktreePath);
+
+      // A blocked commit is not a success: the caller would otherwise mark the
+      // feature complete having committed nothing.
+      if (result.blocked) {
+        res.json({
+          success: false,
+          commitHash: null,
+          blocked: true,
+          error: result.reason || 'Waiting for the GitHub issue to be created',
+        });
+        return;
+      }
+
+      res.json({ success: true, commitHash: result.commitHash });
     } catch (error) {
       logError(error, 'Commit feature failed');
       res.status(500).json({ success: false, error: getErrorMessage(error) });

@@ -1049,6 +1049,27 @@
   animation: pulse-subtle 2s ease-in-out infinite;
 }
 
+/* Sidebar branch that has fallen out of sync with its remote.
+
+   A gentle red breath rather than a hard flash: it has to be noticeable in
+   peripheral vision without turning a sidebar full of branches into a strobe.
+   The background stays translucent so the row underneath still reads. */
+@keyframes branch-sync-alert {
+  0%,
+  100% {
+    background-color: color-mix(in srgb, var(--destructive) 10%, transparent);
+    color: color-mix(in srgb, var(--destructive) 70%, transparent);
+  }
+  50% {
+    background-color: color-mix(in srgb, var(--destructive) 26%, transparent);
+    color: var(--destructive);
+  }
+}
+
+.branch-sync-alert {
+  animation: branch-sync-alert 2.4s ease-in-out infinite;
+}
+
 /* Progress bar indeterminate animation */
 @keyframes progress-indeterminate {
   0% {
@@ -1204,5 +1225,13 @@
   .animate-progress-indeterminate,
   .graph-node-matched {
     animation: none;
+  }
+
+  /* Keep the alert legible without the breathing — it still has to read as
+     "this branch needs you", just statically. */
+  .branch-sync-alert {
+    animation: none;
+    background-color: color-mix(in srgb, var(--destructive) 18%, transparent);
+    color: var(--destructive);
   }
 }

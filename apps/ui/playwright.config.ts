@@ -1,4 +1,6 @@
 import { defineConfig, devices } from '@playwright/test';
+import * as os from 'os';
+import * as path from 'path';
 
 const port = process.env.TEST_PORT || 3007;
 const serverPort = process.env.TEST_SERVER_PORT || 3008;
@@ -6,6 +8,15 @@ const reuseServer = process.env.TEST_REUSE_SERVER === 'true';
 const useExternalBackend = !!process.env.VITE_SERVER_URL;
 // Always use mock agent for tests (disables rate limiting, uses mock Claude responses)
 const mockAgent = true;
+
+/**
+ * Throwaway data directory for the test backend.
+ *
+ * Must match setup-e2e-fixtures.mjs, which seeds settings.json into it. The
+ * suite used to run against apps/server/data — the developer's own DMaker
+ * data — and overwrote their real settings and project list on every run.
+ */
+const testDataDir = process.env.DMAKER_E2E_DATA_DIR || path.join(os.tmpdir(), 'dmaker-e2e-data');
 
 export default defineConfig({
   testDir: './tests',
@@ -46,6 +57,8 @@ export default defineConfig({
                   env: {
                     ...process.env,
                     PORT: String(serverPort),
+                    // Keep the suite off the developer's real DMaker data.
+                    DATA_DIR: testDataDir,
                     // Enable mock agent in CI to avoid real API calls
                     DMAKER_MOCK_AGENT: mockAgent ? 'true' : 'false',
                     // Set a test API key for web mode authentication
@@ -71,6 +84,12 @@ export default defineConfig({
               VITE_SKIP_SETUP: 'true',
               // Always skip electron plugin during tests - prevents duplicate server spawning
               VITE_SKIP_ELECTRON: 'true',
+              // Point the UI at the backend this config just started. Without
+              // it the UI falls back to its dev default (port 3019) and talks
+              // to nothing, so every spec fails on an app that never loads.
+              // Only the vite process sees this — `useExternalBackend` reads
+              // process.env, so setting it here does not suppress the backend.
+              VITE_SERVER_URL: process.env.VITE_SERVER_URL || `http://localhost:${serverPort}`,
             },
           },
         ],

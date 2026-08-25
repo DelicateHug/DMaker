@@ -42,6 +42,9 @@ import {
   type WorktreePRInfo,
 } from '../lib/worktree-metadata.js';
 import { getDevServerService } from '../services/dev-server-service.js';
+import { discoverRemoteBranches } from '../services/remote-branch-discovery.js';
+import { discoverLocalBranches } from '../services/local-branch-discovery.js';
+import { syncProjectBranches, autoFixBranch } from '../services/branch-sync-service.js';
 import { runInitScript, forceRunInitScript } from '../services/init-script-service.js';
 import type { SettingsService } from '../services/settings-service.js';
 import { checkGitHubRemote, type GitHubRemoteStatus } from './github.js';
@@ -53,6 +56,9 @@ const execAsync = promisify(exec);
 // ============================================================================
 
 const logger = createLogger('Worktree');
+
+/** Per-command budget for the batched sidebar sync-status reads. */
+const SYNC_STATUS_TIMEOUT_MS = 5000;
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Unknown error';
@@ -657,6 +663,33 @@ interface BranchInfo {
 // Create worktree helpers (from worktree/routes/create.ts)
 // ============================================================================
 
+/**
+ * The remote-tracking ref for a branch that exists on a remote but not locally
+ * (e.g. 'origin/feature/login'), or null when no remote has it.
+ *
+ * Prefers origin when several remotes carry the same branch name.
+ */
+async function findRemoteBranchRef(
+  projectPath: string,
+  branchName: string
+): Promise<string | null> {
+  try {
+    const output = await execGitCommand(
+      ['for-each-ref', '--format=%(refname:short)', `refs/remotes/*/${branchName}`],
+      projectPath
+    );
+    const refs = output
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean);
+
+    if (refs.length === 0) return null;
+    return refs.find((ref) => ref.startsWith('origin/')) ?? refs[0];
+  } catch {
+    return null;
+  }
+}
+
 async function findExistingWorktreeForBranch(
   projectPath: string,
   branchName: string
@@ -1181,14 +1214,27 @@ export function createCreateHandler(events: EventEmitter) {
 
       let branchExists = false;
       try {
-        await execGitCommand(['rev-parse', '--verify', branchName], projectPath);
+        await execGitCommand(
+          ['rev-parse', '--verify', '--quiet', `refs/heads/${branchName}`],
+          projectPath
+        );
         branchExists = true;
       } catch {
-        // Branch doesn't exist
+        // No local branch by that name
       }
+
+      // A branch picked up from the remote has no local ref yet. Adopt it with
+      // tracking rather than cutting an unrelated branch of the same name off
+      // HEAD, which would silently orphan the work already on it.
+      const remoteRef = branchExists ? null : await findRemoteBranchRef(projectPath, branchName);
 
       if (branchExists) {
         await execGitCommand(['worktree', 'add', worktreePath, branchName], projectPath);
+      } else if (remoteRef) {
+        await execGitCommand(
+          ['worktree', 'add', '--track', '-b', branchName, worktreePath, remoteRef],
+          projectPath
+        );
       } else {
         const base = baseBranch || 'HEAD';
         await execGitCommand(
@@ -1206,7 +1252,7 @@ export function createCreateHandler(events: EventEmitter) {
         worktree: {
           path: normalizePath(absoluteWorktreePath),
           branch: branchName,
-          isNew: !branchExists,
+          isNew: !branchExists && !remoteRef,
         },
       });
 
@@ -1290,6 +1336,258 @@ function createDeleteHandler() {
       });
     } catch (error) {
       logError(error, 'Delete worktree failed');
+      res.status(500).json({ success: false, error: getErrorMessage(error) });
+    }
+  };
+}
+
+// ============================================================================
+// Branch Deletion (sidebar right-click)
+// ============================================================================
+
+/**
+ * Everything the delete dialog has to know before it dares offer the button.
+ *
+ * Read locally — no fetch — so opening a right-click menu never sits on the
+ * network. "On the remote" therefore means "this clone has a remote-tracking
+ * ref for it", which is the last thing it was told; a branch someone deleted
+ * upstream ten seconds ago still reads as present until the next prune. That is
+ * the safe direction to be wrong in: it over-warns rather than quietly skipping
+ * the remote.
+ */
+interface BranchDeleteInfo {
+  branchName: string;
+  /** The repository has the branch itself, not just a remote-tracking ref */
+  hasLocal: boolean;
+  /** The repository's trunk — refused outright */
+  isDefault: boolean;
+  /** Checked out in the main working copy — refused outright */
+  isCurrent: boolean;
+  /** Checked out in some worktree; that worktree has to go first */
+  worktreePath: string | null;
+  /** Remote-tracking ref, e.g. 'origin/feature-x', when the remote has it */
+  remoteRef: string | null;
+  /** Remote the ref belongs to, e.g. 'origin' */
+  remote: string | null;
+  /** Fully merged into the trunk — deleting loses nothing */
+  isMerged: boolean;
+  /** Commits on this branch the trunk does not have */
+  unmergedCommits: number;
+  /** Trunk it was compared against, when there was one */
+  comparedAgainst: string | null;
+}
+
+/** The remote-tracking ref for `branchName`, preferring origin. */
+async function findRemoteTrackingRef(
+  projectPath: string,
+  branchName: string
+): Promise<{ remoteRef: string; remote: string } | null> {
+  try {
+    const stdout = await execGitCommand(
+      ['for-each-ref', '--format=%(refname:short)', `refs/remotes/*/${branchName}`],
+      projectPath
+    );
+    const refs = stdout
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean);
+    if (refs.length === 0) return null;
+
+    const preferred = refs.find((ref) => ref.startsWith('origin/')) ?? refs[0];
+    return { remoteRef: preferred, remote: preferred.slice(0, -(branchName.length + 1)) };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * What deleting `branchName` would cost, and what stands in the way.
+ *
+ * Never throws for the ordinary "cannot answer" cases — an unreadable commit
+ * count comes back as not-merged, because claiming work has landed when we do
+ * not know is the one wrong answer that loses commits.
+ */
+async function gatherBranchDeleteInfo(
+  projectPath: string,
+  branchName: string
+): Promise<BranchDeleteInfo> {
+  const local = await discoverLocalBranches(projectPath);
+  const branch = local.branches.find((candidate) => candidate.name === branchName);
+  const remote = await findRemoteTrackingRef(projectPath, branchName);
+
+  const trunk = local.defaultBranch;
+  let unmergedCommits = 0;
+  let isMerged = false;
+  if (trunk && trunk !== branchName) {
+    try {
+      const stdout = await execGitCommand(
+        ['rev-list', '--count', `${trunk}..${branchName}`],
+        projectPath
+      );
+      unmergedCommits = Number.parseInt(stdout.trim(), 10) || 0;
+      isMerged = unmergedCommits === 0;
+    } catch {
+      // Unreadable — leave it as "not known to be merged".
+    }
+  }
+
+  return {
+    branchName,
+    hasLocal: !!branch,
+    isDefault: branch?.isDefault ?? branchName === trunk,
+    isCurrent: branch?.isCurrent ?? false,
+    worktreePath: branch?.worktreePath ?? null,
+    remoteRef: remote?.remoteRef ?? null,
+    remote: remote?.remote ?? null,
+    isMerged,
+    unmergedCommits,
+    comparedAgainst: trunk && trunk !== branchName ? trunk : null,
+  };
+}
+
+function createBranchDeleteInfoHandler() {
+  return async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { projectPath, branchName } = req.body as {
+        projectPath: string;
+        branchName: string;
+      };
+
+      if (!projectPath || !branchName) {
+        res.status(400).json({ success: false, error: 'projectPath and branchName are required' });
+        return;
+      }
+      if (!isValidBranchName(branchName)) {
+        res.status(400).json({ success: false, error: `Invalid branch name: ${branchName}` });
+        return;
+      }
+      if (!(await isGitRepo(projectPath))) {
+        res.status(400).json({ success: false, error: 'Not a git repository' });
+        return;
+      }
+
+      res.json({ success: true, info: await gatherBranchDeleteInfo(projectPath, branchName) });
+    } catch (error) {
+      logError(error, 'Branch delete info failed');
+      res.status(500).json({ success: false, error: getErrorMessage(error) });
+    }
+  };
+}
+
+/**
+ * Delete a branch that still exists, optionally on the remote too.
+ *
+ * The refusals are the point. Deleting the trunk, or the branch a working copy
+ * is sitting on, is never what someone meant by right-clicking a sidebar row —
+ * so those come back as an explained 400 rather than as a raw git error the UI
+ * has to guess at.
+ *
+ * Local goes first, and the two halves are reported separately: a remote delete
+ * can fail on its own (no credentials, a protected branch) long after the local
+ * one succeeded, and the user has to be told which half happened.
+ */
+function createDeleteBranchHandler() {
+  return async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { projectPath, branchName, force, deleteRemote } = req.body as {
+        projectPath: string;
+        branchName: string;
+        /** Delete even when the trunk does not have the commits */
+        force?: boolean;
+        /** Also run `git push <remote> --delete <branch>` */
+        deleteRemote?: boolean;
+      };
+
+      if (!projectPath || !branchName) {
+        res.status(400).json({ success: false, error: 'projectPath and branchName are required' });
+        return;
+      }
+      if (!isValidBranchName(branchName)) {
+        res.status(400).json({ success: false, error: `Invalid branch name: ${branchName}` });
+        return;
+      }
+      if (!(await isGitRepo(projectPath))) {
+        res.status(400).json({ success: false, error: 'Not a git repository' });
+        return;
+      }
+
+      const info = await gatherBranchDeleteInfo(projectPath, branchName);
+
+      if (info.isDefault) {
+        res.status(400).json({
+          success: false,
+          error: `${branchName} is this repository's default branch and cannot be deleted here.`,
+        });
+        return;
+      }
+      if (info.isCurrent) {
+        res.status(400).json({
+          success: false,
+          error: `${branchName} is checked out in the main working copy. Switch to another branch first.`,
+        });
+        return;
+      }
+      if (info.worktreePath) {
+        res.status(400).json({
+          success: false,
+          error: `${branchName} is checked out in a worktree (${info.worktreePath}). Remove that worktree first.`,
+        });
+        return;
+      }
+
+      // A branch discovered on the remote has no local ref to remove, so the
+      // remote delete is the whole operation — and without it there is nothing
+      // to do at all.
+      if (!info.hasLocal && !deleteRemote) {
+        res.status(400).json({
+          success: false,
+          error: `${branchName} exists only on the remote — there is nothing to delete locally.`,
+          info,
+        });
+        return;
+      }
+
+      // Local first: a remote delete that lands while the local branch survives
+      // is the confusing half-state, and this ordering cannot produce it.
+      if (info.hasLocal) {
+        try {
+          await execGitCommand(['branch', force ? '-D' : '-d', branchName], projectPath);
+        } catch (error) {
+          res.status(409).json({
+            success: false,
+            error: getErrorMessage(error),
+            /** Tells the UI to offer force rather than only reporting a failure */
+            needsForce: !force,
+            info,
+          });
+          return;
+        }
+      }
+
+      let remoteDeleted = false;
+      let remoteError: string | undefined;
+      if (deleteRemote && info.remote) {
+        try {
+          await execGitCommand(['push', info.remote, '--delete', branchName], projectPath);
+          remoteDeleted = true;
+        } catch (error) {
+          remoteError = getErrorMessage(error);
+          logger.warn(`Deleted ${branchName} locally but not on ${info.remote}: ${remoteError}`);
+        }
+      }
+
+      res.json({
+        success: true,
+        deleted: {
+          branch: branchName,
+          local: info.hasLocal,
+          remote: remoteDeleted,
+          remoteRef: info.remoteRef,
+        },
+        remoteError,
+      });
+    } catch (error) {
+      logError(error, 'Delete branch failed');
       res.status(500).json({ success: false, error: getErrorMessage(error) });
     }
   };
@@ -3018,6 +3316,218 @@ function createRunInitScriptHandler(events: EventEmitter) {
   };
 }
 
+/**
+ * Batch discovery of remote branches that have no worktree, for the sidebar.
+ *
+ * One project failing (offline, no remote, not a repo) must not blank the rest,
+ * so each result carries its own `error` instead of rejecting the request.
+ */
+function createRemoteBranchesHandler() {
+  return async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { projectPaths } = req.body as { projectPaths?: string[] };
+
+      if (!Array.isArray(projectPaths) || projectPaths.length === 0) {
+        res.json({ success: true, projects: [] });
+        return;
+      }
+
+      const unique = Array.from(
+        new Set(projectPaths.filter((p): p is string => typeof p === 'string' && p.trim() !== ''))
+      );
+
+      const projects = await Promise.all(unique.map(discoverRemoteBranches));
+      res.json({ success: true, projects });
+    } catch (error) {
+      logError(error, 'Remote branch discovery failed');
+      res.status(500).json({ success: false, error: getErrorMessage(error) });
+    }
+  };
+}
+
+/**
+ * Batch listing of the branches each project actually has.
+ *
+ * Unlike remote discovery this never fetches — it reads `refs/heads` — so it is
+ * cheap enough to poll, and it is the only source that tells the sidebar when a
+ * branch has been deleted rather than merely gone quiet.
+ */
+function createLocalBranchesHandler() {
+  return async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { projectPaths } = req.body as { projectPaths?: string[] };
+
+      if (!Array.isArray(projectPaths) || projectPaths.length === 0) {
+        res.json({ success: true, projects: [] });
+        return;
+      }
+
+      const unique = Array.from(
+        new Set(projectPaths.filter((p): p is string => typeof p === 'string' && p.trim() !== ''))
+      );
+
+      const projects = await Promise.all(unique.map(discoverLocalBranches));
+      res.json({ success: true, projects });
+    } catch (error) {
+      logError(error, 'Local branch discovery failed');
+      res.status(500).json({ success: false, error: getErrorMessage(error) });
+    }
+  };
+}
+
+/**
+ * Batch ahead/behind + dirty status for every worktree in a project.
+ *
+ * The sidebar renders one row per worktree and needs the ahead/behind counts
+ * for all of them at once. The existing /list-branches handler also returns
+ * these, but only for a single worktree and only after a `git fetch --all`,
+ * which is far too slow to run per row. This handler never fetches — it reads
+ * whatever the local refs already know.
+ */
+function createSyncStatusHandler() {
+  return async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { worktreePaths } = req.body as { worktreePaths?: string[] };
+
+      if (!Array.isArray(worktreePaths) || worktreePaths.length === 0) {
+        res.json({ success: true, statuses: [] });
+        return;
+      }
+
+      const readStatus = async (worktreePath: string) => {
+        const base = { worktreePath, ahead: 0, behind: 0, dirtyCount: 0, branch: '' };
+
+        // A worktree may have been deleted out from under us — report zeros
+        // rather than failing the whole batch.
+        if (!existsSync(worktreePath)) return base;
+
+        try {
+          base.branch = await getCurrentBranch(worktreePath);
+        } catch {
+          return base;
+        }
+
+        // Ahead/behind relative to the tracked upstream, if one is configured.
+        try {
+          const { stdout } = await execAsync(
+            'git rev-list --left-right --count @{upstream}...HEAD',
+            { cwd: worktreePath, timeout: SYNC_STATUS_TIMEOUT_MS }
+          );
+          const [behind, ahead] = stdout.trim().split(/\s+/).map(Number);
+          base.ahead = Number.isFinite(ahead) ? ahead : 0;
+          base.behind = Number.isFinite(behind) ? behind : 0;
+        } catch {
+          // No upstream configured — leave both at zero.
+        }
+
+        // Uncommitted change count, used for the sidebar's dirty dot.
+        try {
+          const { stdout } = await execAsync('git status --porcelain', {
+            cwd: worktreePath,
+            timeout: SYNC_STATUS_TIMEOUT_MS,
+          });
+          base.dirtyCount = stdout.split('\n').filter((line) => line.trim()).length;
+        } catch {
+          // Leave at zero.
+        }
+
+        return base;
+      };
+
+      const statuses = await Promise.all(worktreePaths.map(readStatus));
+      res.json({ success: true, statuses });
+    } catch (error) {
+      logError(error, 'Worktree sync status failed');
+      res.status(500).json({ success: false, error: getErrorMessage(error) });
+    }
+  };
+}
+
+/**
+ * Round trip to the remote for the sidebar's per-branch sync indicator.
+ *
+ * Unlike /sync-status (which only reads local refs), this fetches, so it is
+ * the only thing that can tell you a teammate pushed. With `autoUpdate` it
+ * also fast-forwards branches that are cleanly behind — never anything more
+ * invasive than that; see branch-sync-service for why.
+ *
+ * One project failing must not blank the rest, so each result carries its own
+ * `error` rather than rejecting the request.
+ */
+function createBranchSyncHandler() {
+  return async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { projects, autoUpdate } = req.body as {
+        projects?: Array<{ projectPath?: string; worktreePaths?: string[] }>;
+        autoUpdate?: boolean;
+      };
+
+      if (!Array.isArray(projects) || projects.length === 0) {
+        res.json({ success: true, projects: [] });
+        return;
+      }
+
+      const requests = projects
+        .filter((entry) => typeof entry?.projectPath === 'string' && entry.projectPath.trim())
+        .map((entry) => ({
+          projectPath: entry.projectPath as string,
+          worktreePaths: Array.from(
+            new Set(
+              (entry.worktreePaths ?? []).filter(
+                (worktreePath): worktreePath is string =>
+                  typeof worktreePath === 'string' && worktreePath.trim() !== ''
+              )
+            )
+          ),
+        }));
+
+      const results = await Promise.all(
+        requests.map((entry) =>
+          syncProjectBranches({
+            projectPath: entry.projectPath,
+            worktreePaths: entry.worktreePaths,
+            autoUpdate: autoUpdate === true,
+          })
+        )
+      );
+
+      res.json({ success: true, projects: results });
+    } catch (error) {
+      logError(error, 'Branch sync failed');
+      res.status(500).json({ success: false, error: getErrorMessage(error) });
+    }
+  };
+}
+
+/**
+ * The sidebar's "Auto fix" — stash, fast-forward or rebase one branch back
+ * into line. Refuses branches that are already conflicted; those go to an
+ * agent instead.
+ */
+function createBranchAutoFixHandler() {
+  return async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { worktreePath } = req.body as { worktreePath?: string };
+
+      if (!worktreePath) {
+        res.status(400).json({ success: false, error: 'worktreePath is required' });
+        return;
+      }
+
+      const outcome = await autoFixBranch(worktreePath);
+      res.json({
+        success: outcome.success,
+        result: outcome.result,
+        steps: outcome.steps,
+        error: outcome.error,
+      });
+    } catch (error) {
+      logError(error, 'Branch auto-fix failed');
+      res.status(500).json({ success: false, error: getErrorMessage(error) });
+    }
+  };
+}
+
 // ============================================================================
 // Router Factory
 // ============================================================================
@@ -3041,6 +3551,12 @@ export function createWorktreeRoutes(
   );
   router.post('/create', validatePathParams('projectPath'), createCreateHandler(events));
   router.post('/delete', validatePathParams('projectPath', 'worktreePath'), createDeleteHandler());
+  router.post(
+    '/branch-delete-info',
+    validatePathParams('projectPath'),
+    createBranchDeleteInfoHandler()
+  );
+  router.post('/delete-branch', validatePathParams('projectPath'), createDeleteBranchHandler());
   router.post('/create-pr', createCreatePRHandler());
   router.post('/pr-info', createPRInfoHandler());
   router.post(
@@ -3088,6 +3604,19 @@ export function createWorktreeRoutes(
   );
   router.post('/stop-dev', createStopDevHandler());
   router.post('/list-dev-servers', createListDevServersHandler());
+  router.post('/sync-status', createSyncStatusHandler());
+  router.post('/branch-sync', createBranchSyncHandler());
+  router.post('/branch-auto-fix', validatePathParams('worktreePath'), createBranchAutoFixHandler());
+  router.post(
+    '/remote-branches',
+    validatePathParams('projectPaths[]'),
+    createRemoteBranchesHandler()
+  );
+  router.post(
+    '/local-branches',
+    validatePathParams('projectPaths[]'),
+    createLocalBranchesHandler()
+  );
   router.get(
     '/dev-server-logs',
     validatePathParams('worktreePath'),

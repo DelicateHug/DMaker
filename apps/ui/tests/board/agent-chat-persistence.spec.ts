@@ -7,7 +7,7 @@
  * Related: T007 - Test that agent chat persists through project switches
  */
 
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
 import {
@@ -59,6 +59,46 @@ const STORE_VERSIONS = {
   APP_STORE: 2,
   SETUP_STORE: 1,
 } as const;
+
+/**
+ * Open the project view and show its Chat pane.
+ *
+ * The agent chat lives in the project view (an overlay opened from the
+ * sidebar), not beside the board.
+ */
+async function openProjectChat(page: Page): Promise<void> {
+  await page.locator('[data-testid="sidebar-project-view"]').click();
+  await expect(page.locator('[data-testid="project-view"]')).toBeVisible({ timeout: 5000 });
+  await page.locator('[data-testid="project-tab-chat"]').click();
+  await expect(page.locator('[data-testid="agent-chat-panel"]')).toBeVisible({ timeout: 5000 });
+}
+
+/** Close the project view overlay, returning to the board. */
+async function closeProjectView(page: Page): Promise<void> {
+  await page.keyboard.press('Escape');
+  await expect(page.locator('[data-testid="project-view"]')).toBeHidden({ timeout: 5000 });
+}
+
+/** Switch the board to another project via its own project dropdown. */
+async function switchBoardProject(page: Page, projectName: string): Promise<void> {
+  const boardProjectDropdown = page.locator(
+    '[data-testid="board-status-project-dropdown-trigger"]'
+  );
+  if (!(await boardProjectDropdown.isVisible({ timeout: 3000 }).catch(() => false))) return;
+
+  await boardProjectDropdown.click();
+  await page.waitForTimeout(300);
+
+  const projectOption = page
+    .locator('[data-testid="board-status-project-dropdown-content"]')
+    .locator('[role="menuitem"]')
+    .filter({ hasText: projectName });
+
+  if (await projectOption.isVisible({ timeout: 2000 }).catch(() => false)) {
+    await projectOption.click();
+    await page.waitForTimeout(500);
+  }
+}
 
 test.describe('Agent Chat Persistence Through Project Switches', () => {
   let projectAPath: string;
@@ -157,44 +197,33 @@ test.describe('Agent Chat Persistence Through Project Switches', () => {
     // Wait for board view to be visible
     await expect(page.locator('[data-testid="board-view"]')).toBeVisible({ timeout: 10000 });
 
-    // Verify agent chat panel is visible
+    // Open the chat pane, then go back to the board to switch projects
+    await openProjectChat(page);
     const agentChatPanel = page.locator('[data-testid="agent-chat-panel"]');
+    await closeProjectView(page);
+
+    await switchBoardProject(page, projectBName);
+
+    // Reopening the project view must show the same, still-intact chat pane
+    await openProjectChat(page);
     await expect(agentChatPanel).toBeVisible({ timeout: 5000 });
 
-    // Find and click the board's project selector dropdown
-    // This uses the board-specific project dropdown (data-testid="board-status-project-dropdown-trigger")
-    const boardProjectDropdown = page.locator(
-      '[data-testid="board-status-project-dropdown-trigger"]'
-    );
-
-    if (await boardProjectDropdown.isVisible({ timeout: 3000 }).catch(() => false)) {
-      // Click the project selector to open dropdown
-      await boardProjectDropdown.click();
-      await page.waitForTimeout(300);
-
-      // Select Project B from the dropdown menu
-      const projectBOption = page
-        .locator('[data-testid="board-status-project-dropdown-content"]')
-        .locator('[role="menuitem"]')
-        .filter({ hasText: projectBName });
-
-      if (await projectBOption.isVisible({ timeout: 2000 }).catch(() => false)) {
-        await projectBOption.click();
-        await page.waitForTimeout(500);
-      }
-    }
-
-    // Regardless of whether we switched projects, verify agent chat panel is still visible
-    // This is the key assertion - the panel should not unmount during project switch
-    await expect(agentChatPanel).toBeVisible({ timeout: 5000 });
-
-    // Verify the agent chat panel still has its structure intact
-    // The panel should have the "Chat" title
     const chatTitle = agentChatPanel.locator('text=Chat').first();
     await expect(chatTitle).toBeVisible({ timeout: 3000 });
   });
 
-  test('agent chat panel does not remount when board project changes', async ({ page }) => {
+  /**
+   * The board used to carry its own project dropdown, and this test switched
+   * it to prove the chat pane was keyed independently of it. Both are gone:
+   * the sidebar lists every project, and the chat pane lives in the project
+   * view's own tab, keyed to the current project.
+   *
+   * What still needs guarding is the property that test was really about —
+   * the pane keeps its state instead of remounting. The project view mounts
+   * each pane once visited and hides the inactive ones, so moving between
+   * panes and coming back must leave the chat exactly as it was.
+   */
+  test('agent chat panel does not remount when switching project panes', async ({ page }) => {
     // Set up localStorage with both projects
     await page.addInitScript(
       ({
@@ -270,6 +299,9 @@ test.describe('Agent Chat Persistence Through Project Switches', () => {
     // Wait for board view
     await expect(page.locator('[data-testid="board-view"]')).toBeVisible({ timeout: 10000 });
 
+    // The chat pane lives in the project view — open it before marking it
+    await openProjectChat(page);
+
     // Inject a marker attribute to track if the panel remounts
     await page.evaluate(() => {
       const panel = document.querySelector('[data-testid="agent-chat-panel"]');
@@ -285,26 +317,11 @@ test.describe('Agent Chat Persistence Through Project Switches', () => {
     });
     expect(markerBefore).toBe('original');
 
-    // Trigger a project switch by clicking on a different project in the board
-    // This simulates changing boardSelectedProject which should NOT affect agentPanelProject
-    const boardProjectDropdown = page.locator(
-      '[data-testid="board-status-project-dropdown-trigger"]'
-    );
-
-    if (await boardProjectDropdown.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await boardProjectDropdown.click();
-      await page.waitForTimeout(300);
-
-      const projectBOption = page
-        .locator('[data-testid="board-status-project-dropdown-content"]')
-        .locator('[role="menuitem"]')
-        .filter({ hasText: projectBName });
-
-      if (await projectBOption.isVisible({ timeout: 2000 }).catch(() => false)) {
-        await projectBOption.click();
-        await page.waitForTimeout(500);
-      }
-    }
+    // Move to another pane and back. Panes are hidden, not unmounted.
+    await page.locator('[data-testid="project-tab-files"]').click();
+    await expect(page.locator('[data-testid="agent-chat-panel"]')).toBeHidden({ timeout: 5000 });
+    await page.locator('[data-testid="project-tab-chat"]').click();
+    await expect(page.locator('[data-testid="agent-chat-panel"]')).toBeVisible({ timeout: 5000 });
 
     // Verify the marker is still present - if the panel remounted, it would be gone
     const markerAfter = await page.evaluate(() => {
@@ -316,8 +333,8 @@ test.describe('Agent Chat Persistence Through Project Switches', () => {
     expect(markerAfter).toBe('original');
   });
 
-  test('collapsed agent chat panel state persists through project switches', async ({ page }) => {
-    // Set up localStorage with collapsed agent chat panel
+  test('chat pane is closed until the project view is opened', async ({ page }) => {
+    // Set up localStorage with both projects
     await page.addInitScript(
       ({
         pathA,
@@ -393,48 +410,17 @@ test.describe('Agent Chat Persistence Through Project Switches', () => {
     // Wait for board view
     await expect(page.locator('[data-testid="board-view"]')).toBeVisible({ timeout: 10000 });
 
-    // Verify the collapsed indicator is visible (the expand button with Bot icon)
-    // When collapsed, the full panel is not rendered, but an expand button is shown
-    const collapsedIndicator = page.locator('[data-testid="agent-chat-panel-collapsed"]');
-    const expandButton = page.locator('button[title="Expand Agent Chat Panel"]');
+    // The board no longer carries the chat: nothing chat-related on load
+    await expect(page.locator('[data-testid="agent-chat-panel"]')).toBeHidden({ timeout: 3000 });
 
-    // Either the collapsed panel indicator or the expand button should be visible
-    const isCollapsedIndicatorVisible = await collapsedIndicator
-      .isVisible({ timeout: 3000 })
-      .catch(() => false);
-    const isExpandButtonVisible = await expandButton
-      .isVisible({ timeout: 3000 })
-      .catch(() => false);
+    // Opening the project view surfaces it, and Escape puts it away again
+    await openProjectChat(page);
+    await closeProjectView(page);
+    await expect(page.locator('[data-testid="agent-chat-panel"]')).toBeHidden({ timeout: 3000 });
 
-    expect(isCollapsedIndicatorVisible || isExpandButtonVisible).toBe(true);
-
-    // Attempt to switch projects using the board's project dropdown
-    const boardProjectDropdown = page.locator(
-      '[data-testid="board-status-project-dropdown-trigger"]'
-    );
-
-    if (await boardProjectDropdown.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await boardProjectDropdown.click();
-      await page.waitForTimeout(300);
-
-      const projectBOption = page
-        .locator('[data-testid="board-status-project-dropdown-content"]')
-        .locator('[role="menuitem"]')
-        .filter({ hasText: projectBName });
-
-      if (await projectBOption.isVisible({ timeout: 2000 }).catch(() => false)) {
-        await projectBOption.click();
-        await page.waitForTimeout(500);
-      }
-    }
-
-    // Verify the collapsed state is still maintained
-    const isStillCollapsedIndicator = await collapsedIndicator
-      .isVisible({ timeout: 3000 })
-      .catch(() => false);
-    const isStillExpandButton = await expandButton.isVisible({ timeout: 3000 }).catch(() => false);
-
-    expect(isStillCollapsedIndicator || isStillExpandButton).toBe(true);
+    // Switching board projects while it is closed leaves the board usable
+    await switchBoardProject(page, projectBName);
+    await expect(page.locator('[data-testid="board-view"]')).toBeVisible({ timeout: 5000 });
   });
 
   test('agent chat panel project selector allows independent project selection', async ({
@@ -515,9 +501,9 @@ test.describe('Agent Chat Persistence Through Project Switches', () => {
     // Wait for board view
     await expect(page.locator('[data-testid="board-view"]')).toBeVisible({ timeout: 10000 });
 
-    // Verify agent chat panel is visible
+    // Verify agent chat panel is visible in the project view
+    await openProjectChat(page);
     const agentChatPanel = page.locator('[data-testid="agent-chat-panel"]');
-    await expect(agentChatPanel).toBeVisible({ timeout: 5000 });
 
     // The agent chat panel has its own project selector (showProjectSelector={true})
     // Look for the project selector within the agent chat panel

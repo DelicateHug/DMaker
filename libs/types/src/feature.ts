@@ -154,6 +154,62 @@ export interface ExecutionMetrics {
   authMethod?: 'cli' | 'api_key' | 'unknown';
 }
 
+/**
+ * A question an agent needs the user to answer before it can finish its job.
+ *
+ * Questions live on the feature itself so the task view can show them, track
+ * which are still outstanding, and collect answers without a live agent
+ * session being attached. The GitHub issue drafter is the first producer:
+ * when a task description is too thin to write an issue from, it asks here
+ * rather than guessing.
+ */
+export interface AgentQuestion {
+  id: string;
+  /** Which agent asked. Used to route the answer back. */
+  source: 'issue-draft' | 'planning' | 'implementation' | string;
+  question: string;
+  /** Suggested answers the UI can offer as one-click chips. */
+  options?: string[];
+  /** ISO timestamp when the question was raised */
+  askedAt: string;
+  /** The user's answer. Absent while the question is still outstanding. */
+  answer?: string;
+  /** ISO timestamp when the user answered */
+  answeredAt?: string;
+  /** Set when the question was dismissed instead of answered */
+  skipped?: boolean;
+}
+
+/** Lifecycle of the background "file a GitHub issue for this task" job. */
+export type GitHubIssueDraftStatus =
+  | 'pending'
+  | 'drafting'
+  | 'awaiting_clarification'
+  | 'creating'
+  | 'created'
+  | 'skipped'
+  | 'failed';
+
+/**
+ * State of the background GitHub issue creation kicked off when a task is added.
+ *
+ * The task is free to plan and create its branch while this runs; only the
+ * commit waits on it (see AutoModeService.commitFeature).
+ */
+export interface GitHubIssueDraft {
+  status: GitHubIssueDraftStatus;
+  /** ISO timestamp when the draft job started */
+  startedAt?: string;
+  /** ISO timestamp when the job reached a terminal state */
+  finishedAt?: string;
+  /** Failure reason when status is 'failed' */
+  error?: string;
+  /** Why the job was skipped (e.g. no GitHub remote) */
+  skipReason?: string;
+  /** How many times the drafter has asked for clarification */
+  clarificationRounds?: number;
+}
+
 export interface Feature {
   id: string;
   title?: string;
@@ -229,6 +285,13 @@ export interface Feature {
   };
   claimedBy?: string; // GitHub username of the person who claimed this feature
   claimedAt?: string; // ISO timestamp when the feature was claimed
+  /** Background "file an issue for this task" job state. Gates commits. */
+  githubIssueDraft?: GitHubIssueDraft;
+  /** Outstanding and answered agent questions, shown in the task view */
+  agentQuestions?: AgentQuestion[];
+  // Archiving — deleting a task archives it instead of removing it from disk
+  archivedAt?: string; // ISO timestamp when the feature was archived
+  archivedFrom?: string; // The status the feature held before it was archived
   // Source tracking for board mode filtering
   source?: 'local' | 'github'; // Where this feature originated from
   // Adaptive planning
@@ -269,6 +332,13 @@ export interface FeatureListSummary {
   updatedAt?: string;
   /** Number of images attached to the feature (count only, not full paths) */
   imagePathsCount: number;
+  /**
+   * How many agent questions are still unanswered.
+   *
+   * Carried in the summary so the board can flag a blocked task during the
+   * fast list load, before the full features arrive.
+   */
+  pendingQuestionCount?: number;
   /** GitHub issue claim state for collaboration */
   githubIssue?: {
     number: number;

@@ -18,7 +18,18 @@ const __dirname = path.dirname(__filename);
 const WORKSPACE_ROOT = path.resolve(__dirname, '../../..');
 const FIXTURE_PATH = path.join(WORKSPACE_ROOT, 'test/fixtures/projectA');
 const SPEC_FILE_PATH = path.join(FIXTURE_PATH, '.dmaker/app_spec.txt');
-const SERVER_SETTINGS_PATH = path.join(WORKSPACE_ROOT, 'apps/server/data/settings.json');
+
+/**
+ * Where the test backend keeps its data.
+ *
+ * This used to be apps/server/data — the SAME directory a developer's own
+ * DMaker instance uses — so running the E2E suite silently overwrote their
+ * real settings and project list. Tests get their own throwaway directory
+ * instead, and playwright.config.ts passes the identical path to the backend
+ * as DATA_DIR so the two agree.
+ */
+const TEST_DATA_DIR = process.env.DMAKER_E2E_DATA_DIR || path.join(os.tmpdir(), 'dmaker-e2e-data');
+const SERVER_SETTINGS_PATH = path.join(TEST_DATA_DIR, 'settings.json');
 // Create a shared test workspace directory that will be used as default for project creation
 const TEST_WORKSPACE_DIR = path.join(os.tmpdir(), 'dmaker-e2e-workspace');
 
@@ -125,6 +136,7 @@ function setupFixtures() {
   console.log(`Workspace root: ${WORKSPACE_ROOT}`);
   console.log(`Fixture path: ${FIXTURE_PATH}`);
   console.log(`Test workspace dir: ${TEST_WORKSPACE_DIR}`);
+  console.log(`Test data dir: ${TEST_DATA_DIR}`);
 
   // Create test workspace directory for project creation tests
   if (!fs.existsSync(TEST_WORKSPACE_DIR)) {

@@ -17,6 +17,7 @@ export type SettingsViewId =
   | 'keyboard'
   | 'defaults'
   | 'worktrees'
+  | 'github'
   | 'account'
   | 'security'
   | 'developer'

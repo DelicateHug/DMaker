@@ -1,7 +1,11 @@
 /**
  * Start New Chat Session E2E Test
  *
- * Happy path: Start a new agent chat session
+ * Happy path: start a new agent chat session.
+ *
+ * The standalone /agent route and its full-screen AgentView are gone — chat is
+ * a pane inside the project view now. The session selector it reuses is the
+ * same component, so this covers the same flow where it actually lives.
  */
 
 import { test, expect } from '@playwright/test';
@@ -12,11 +16,8 @@ import {
   cleanupTempDir,
   setupRealProject,
   waitForNetworkIdle,
-  navigateToAgent,
-  clickNewSessionButton,
-  waitForNewSession,
-  countSessionItems,
   authenticateForTests,
+  handleLoginScreenIfPresent,
 } from '../utils';
 
 const TEST_TEMP_DIR = createTempDirPath('agent-session-test');
@@ -63,29 +64,36 @@ test.describe('Agent Chat Session', () => {
     await setupRealProject(page, projectPath, projectName, { setAsCurrent: true });
 
     await authenticateForTests(page);
-    await page.goto('/');
+    await page.goto('/board');
+    await page.waitForLoadState('load');
+    await handleLoginScreenIfPresent(page);
     await waitForNetworkIdle(page);
+    await expect(page.locator('[data-testid="board-view"]')).toBeVisible({ timeout: 10000 });
 
-    // Navigate to agent view
-    await navigateToAgent(page);
+    // Chat lives in the project view's Chat pane
+    await page.locator('[data-testid="sidebar-project-view"]').first().click();
+    await expect(page.locator('[data-testid="project-view"]')).toBeVisible({ timeout: 10000 });
+    await page.locator('[data-testid="project-tab-chat"]').click();
+    await expect(page.locator('[data-testid="agent-chat-panel"]')).toBeVisible({ timeout: 10000 });
 
-    // Verify we're on the agent view
-    await expect(page.locator('[data-testid="agent-view"]')).toBeVisible({ timeout: 10000 });
+    // Start a new chat from the session selector
+    await page.locator('[data-testid="session-selector-trigger"]').click();
+    await expect(page.locator('[data-testid="session-selector-content"]')).toBeVisible({
+      timeout: 5000,
+    });
+    await page.locator('[data-testid="new-session-button"]').click();
 
-    // Click new session button
-    await clickNewSessionButton(page);
+    // A fresh session is selected: its transcript and input are on screen
+    await expect(page.locator('[data-testid="message-list"]')).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('[data-testid="agent-input"]')).toBeVisible({ timeout: 5000 });
 
-    // Wait for new session to appear in the list
-    await waitForNewSession(page, { timeout: 10000 });
-
-    // Verify at least one session exists
-    const sessionCount = await countSessionItems(page);
-    expect(sessionCount).toBeGreaterThanOrEqual(1);
-
-    // Verify the message list is visible (indicates a session is selected)
-    await expect(page.locator('[data-testid="message-list"]')).toBeVisible({ timeout: 5000 });
-
-    // Verify the agent input is visible
-    await expect(page.locator('[data-testid="agent-input"]')).toBeVisible();
+    // …and it is listed as a session
+    await page.locator('[data-testid="session-selector-trigger"]').click();
+    await expect(page.locator('[data-testid="session-selector-content"]')).toBeVisible({
+      timeout: 5000,
+    });
+    await expect(page.locator('[data-testid^="session-item-"]').first()).toBeVisible({
+      timeout: 10000,
+    });
   });
 });

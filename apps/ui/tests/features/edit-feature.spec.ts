@@ -18,6 +18,7 @@ import {
   clickElement,
   authenticateForTests,
   handleLoginScreenIfPresent,
+  showAllStatuses,
 } from '../utils';
 
 const TEST_TEMP_DIR = createTempDirPath('edit-feature-test');
@@ -72,19 +73,24 @@ test.describe('Edit Feature', () => {
     await waitForNetworkIdle(page);
 
     await expect(page.locator('[data-testid="board-view"]')).toBeVisible({ timeout: 10000 });
-    await expect(page.locator('[data-testid="kanban-column-backlog"]')).toBeVisible({
-      timeout: 5000,
-    });
+
+    // The funnel starts on a single status, so widen it before looking
+    // for a status group that is not the default one.
+    await showAllStatuses(page);
+    // The group appears only once it holds something, so it is asserted
+    // after the feature below is created rather than before.
 
     // Create a feature first
     await clickAddFeature(page);
-    await fillAddFeatureDialog(page, originalDescription);
+    await fillAddFeatureDialog(page, originalDescription, { source: 'local' });
     await confirmAddFeature(page);
 
     // Wait for the feature to appear in the backlog
     await expect(async () => {
-      const backlogColumn = page.locator('[data-testid="kanban-column-backlog"]');
-      const featureCard = backlogColumn.locator('[data-testid^="kanban-card-"]').filter({
+      const backlogColumn = page.locator(
+        '[data-testid^="sidebar-section-status:"][data-testid$=":local"]'
+      );
+      const featureCard = backlogColumn.locator('[data-testid="sidebar-feature-row"]').filter({
         hasText: originalDescription,
       });
       expect(await featureCard.count()).toBeGreaterThan(0);
@@ -92,17 +98,20 @@ test.describe('Edit Feature', () => {
 
     // Get the feature ID from the card
     const featureCard = page
-      .locator('[data-testid="kanban-column-backlog"]')
-      .locator('[data-testid^="kanban-card-"]')
+      .locator('[data-testid^="sidebar-section-status:"][data-testid$=":local"]')
+      .locator('[data-testid="sidebar-feature-row"]')
       .filter({ hasText: originalDescription })
       .first();
-    const cardTestId = await featureCard.getAttribute('data-testid');
-    const featureId = cardTestId?.replace('kanban-card-', '');
+    // Sidebar rows all share one test id and carry the feature id in an
+    // attribute, rather than encoding it into the test id as the cards did.
+    const featureId = await featureCard.getAttribute('data-feature-id');
 
-    // Click the edit button on the card using JavaScript click to bypass pointer interception
-    const editButton = page.locator(`[data-testid="edit-backlog-${featureId}"]`);
-    await expect(editButton).toBeVisible({ timeout: 5000 });
-    await editButton.evaluate((el) => (el as HTMLElement).click());
+    // Editing is reached from the row's right-click menu now that the task
+    // list is the sidebar; the per-card edit button went with the kanban.
+    await featureCard.click({ button: 'right' });
+    const editItem = page.locator('[data-testid="context-menu-edit-feature"]');
+    await expect(editItem).toBeVisible({ timeout: 5000 });
+    await editItem.click();
 
     // Wait for edit dialog to appear
     await expect(page.locator('[data-testid="edit-feature-dialog"]')).toBeVisible({
@@ -127,8 +136,10 @@ test.describe('Edit Feature', () => {
 
     // Verify the updated description appears in the card
     await expect(async () => {
-      const backlogColumn = page.locator('[data-testid="kanban-column-backlog"]');
-      const updatedCard = backlogColumn.locator('[data-testid^="kanban-card-"]').filter({
+      const backlogColumn = page.locator(
+        '[data-testid^="sidebar-section-status:"][data-testid$=":local"]'
+      );
+      const updatedCard = backlogColumn.locator('[data-testid="sidebar-feature-row"]').filter({
         hasText: updatedDescription,
       });
       expect(await updatedCard.count()).toBeGreaterThan(0);

@@ -1,6 +1,7 @@
 export { useAutoMode } from './use-auto-mode';
 export { useBoardBackgroundSettings } from './use-board-background-settings';
 export { useElectronAgent } from './use-electron-agent';
+export { useGitHubConfig, type UseGitHubConfigResult } from './use-github-config';
 export { useGuidedPrompts } from './use-guided-prompts';
 export { useKeyboardShortcuts } from './use-keyboard-shortcuts';
 export { useMessageQueue } from './utilities';
@@ -36,3 +37,4 @@ export {
   type ProjectAgentGroup,
   type RunningAgentFeature,
 } from './use-running-agents';
+export { useRunningFeatureIds } from './use-running-feature-ids';
