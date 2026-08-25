@@ -144,28 +144,32 @@ function createUpdateGlobalHandler(settingsService: SettingsService) {
       // in-memory `projects` array - so a client writing a registry it built
       // before someone else's change silently deletes the entries it never saw.
       // Two rules keep that from costing a project list, both of them dropping
-      // fields rather than failing the request, so unrelated view state
-      // (panel sizes, collapse flags) still persists normally.
+      // fields rather than failing the request, so unrelated view state (panel
+      // sizes, collapse flags) still persists normally.
       const touchedRegistry = REGISTRY_FIELDS.filter((field) => field in updates);
+
+      // Only a genuine conflict is reported back. A read-only environment being
+      // refused is its steady state, not news: a client told to refetch on every
+      // sync would refetch, change its store, sync again, and never stop.
       let registryRejected = false;
+      let dropRegistry = false;
 
       if (touchedRegistry.length > 0) {
-        // 1. A read-only environment may look at the registry, never rewrite it.
         if (isReadOnly()) {
-          registryRejected = true;
+          dropRegistry = true;
           logger.debug(
             `Read-only environment: ignored registry fields [${touchedRegistry.join(', ')}]`
           );
         } else {
-          // 2. Anyone else must say which revision they built the write from.
-          //    A missing revision means a client too old to know about this, and
-          //    is treated as stale for the same reason: it cannot prove it saw
-          //    the current list.
+          // Everyone else must say which revision they built the write from. A
+          // missing revision means a client too old to know about this, and is
+          // treated the same way: it cannot prove it saw the current list.
           const current = await settingsService.getGlobalSettings();
           const serverRevision = current.projectsRevision ?? 0;
           const clientRevision = (updates as { projectsRevision?: unknown }).projectsRevision;
 
           if (typeof clientRevision !== 'number' || clientRevision < serverRevision) {
+            dropRegistry = true;
             registryRejected = true;
             logger.warn(
               `Stale registry write ignored: client revision ${String(clientRevision)}, ` +
@@ -174,7 +178,7 @@ function createUpdateGlobalHandler(settingsService: SettingsService) {
           }
         }
 
-        if (registryRejected) {
+        if (dropRegistry) {
           for (const field of touchedRegistry) {
             delete updates[field];
           }

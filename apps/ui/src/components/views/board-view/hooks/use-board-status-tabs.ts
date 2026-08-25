@@ -100,7 +100,19 @@ function getSmartDefaultTab(
       return tab.id;
     }
   }
+
+  // Nothing to go on. Falling through to the first tab picks a single status -
+  // 'Local' - and quietly hides every task that is not in it, which reads as
+  // "my tasks are gone" rather than "a filter is on". With no counts to be
+  // smart about, show everything.
+  if (availableTabs.some((tab) => tab.id === 'all')) return 'all';
   return availableTabs[0]?.id ?? DEFAULT_ACTIVE_TAB;
+}
+
+/** Whether the counts describe any task at all, or are just not loaded yet. */
+function hasAnyFeatures(featureCounts: Record<string, number> | undefined): boolean {
+  if (!featureCounts) return false;
+  return Object.values(featureCounts).some((count) => count > 0);
 }
 
 /** Special view tabs appended after column-based tabs */
@@ -313,7 +325,12 @@ export function useBoardStatusTabs(
   // Apply smart default when featureCounts become available after initial render
   // This handles the case where featureCounts are loaded asynchronously
   useEffect(() => {
-    if (featureCounts && !hasAppliedSmartDefault && !initialTab) {
+    // Features load asynchronously, so on the first render the counts are an
+    // empty object - truthy, but describing nothing. Latching the "smart"
+    // default then picks a status at random and never reconsiders once the real
+    // counts arrive, leaving the board filtered to something nothing is in.
+    // Wait for counts that actually describe a task.
+    if (hasAnyFeatures(featureCounts) && !hasAppliedSmartDefault && !initialTab) {
       // Only apply smart default if no explicit/persisted tab was set
       if (persist) {
         const persisted = loadPersistedTabs();
@@ -326,7 +343,7 @@ export function useBoardStatusTabs(
           }
         }
       }
-      const smartTab = getSmartDefaultTab(featureCounts, tabs);
+      const smartTab = getSmartDefaultTab(featureCounts ?? {}, tabs);
       setActiveTabsState([smartTab]);
       setHasAppliedSmartDefault(true);
     }
