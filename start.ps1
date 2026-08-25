@@ -247,9 +247,11 @@ function Start-DevServer {
     $env:DMAKER_LAUNCHER_MANAGED = 'true'
     $env:DMAKER_SELF_URL        = $DevUiUrl
     $env:DMAKER_PEER_URL        = $ProdUiUrl
-    # Its own data directory - a second live server writing prod's settings.json
-    # is how you lose a project list.
-    $env:DATA_DIR               = Join-Path $Root 'data-dev'
+    # Same data directory as prod on purpose: one project list, one set of
+    # tasks, whichever half you are looking at. Dev cannot rewrite the shared
+    # registry - the server drops those fields for a read-only environment -
+    # so a second live server here cannot cost you a project list.
+    $env:DATA_DIR               = Join-Path $Root 'data'
     $env:PORT                   = "$DevServerPort"
     return Start-Tracked 'dev server' @('run', '_dev:server')
 }

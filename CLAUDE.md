@@ -171,8 +171,13 @@ dev  UI 3017 -> dev  server 3019 --/   (dev never reaches it — it is read-only
   runner's event stream to its own WebSocket clients (`lib/runner-client.ts`).
   Because the runner is a separate PID, "Update Prod" can rebuild and restart the
   prod server without stopping work already in flight.
-- **Separate data directories.** Prod uses `data/`, dev uses `data-dev/`, so two
-  live servers never write the same `settings.json`.
+- **One shared data directory.** Both halves use `data/`, so they show the same
+  repos and the same tasks - two lists was the bug, not the feature. Both UIs
+  PUT their whole in-memory `projects` array, so the read-only half is barred
+  from writing the shared registry (`projects`, `currentProjectId`,
+  `projectHistory`, `projectHistoryIndex`, `recentFolders`, `lastProjectDir`)
+  and reads global settings through its cache rather than from it. Dev keeps its
+  own view state - panel sizes, collapse flags - and nothing else.
 - **Update Prod** (`services/self-update-service.ts`) stashes local changes,
   pulls `origin` with a rebase, pops the stash, rebuilds, then exits with code 75
   to ask `start.ps1` for a restart. Any conflict rolls the repo back to exactly

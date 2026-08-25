@@ -23,6 +23,7 @@ import type { SettingsService } from '../services/settings-service.js';
 import type { GlobalSettings, Credentials, ProjectSettings } from '../types/settings.js';
 import { validatePathParams } from '../middleware.js';
 import { RequestCache } from '../lib/request-cache.js';
+import { isReadOnly } from '../lib/runtime-env.js';
 import { discoverFilesystemAgents } from '../lib/agent-discovery.js';
 import { setRequestLoggingEnabled } from '../index.js';
 
@@ -103,8 +104,14 @@ function createStatusHandler(settingsService: SettingsService) {
 function createGetGlobalHandler(settingsService: SettingsService) {
   return async (_req: Request, res: Response): Promise<void> => {
     try {
-      const settings = await globalSettingsCache.getOrSet(GLOBAL_SETTINGS_CACHE_KEY, () =>
-        settingsService.getGlobalSettings()
+      // The cache is only invalidated by this process's own PUT, and dev and
+      // prod share one settings file. A read-only environment never writes, so
+      // its cache can only ever be behind the other half - read through instead
+      // and it always shows the same repos and tasks as prod.
+      const settings = await globalSettingsCache.getOrSet(
+        GLOBAL_SETTINGS_CACHE_KEY,
+        () => settingsService.getGlobalSettings(),
+        { forceRefresh: isReadOnly() }
       );
 
       res.json({
@@ -120,6 +127,25 @@ function createGetGlobalHandler(settingsService: SettingsService) {
 
 // --- PUT /global ---
 
+/**
+ * Fields that make up the shared project registry.
+ *
+ * Dev and prod run against one DATA_DIR so they show the same repos and the
+ * same tasks - two lists was the bug, not the feature. The cost of sharing is
+ * that both UIs PUT their whole in-memory `projects` array, so a tab left open
+ * across a change will happily write back a list missing everything it never
+ * saw. Only the executing environment is allowed to rewrite the registry; the
+ * read-only half keeps its own view state and nothing else.
+ */
+const SHARED_REGISTRY_FIELDS = [
+  'projects',
+  'currentProjectId',
+  'projectHistory',
+  'projectHistoryIndex',
+  'recentFolders',
+  'lastProjectDir',
+] as const satisfies readonly (keyof GlobalSettings)[];
+
 function createUpdateGlobalHandler(settingsService: SettingsService) {
   return async (req: Request, res: Response): Promise<void> => {
     try {
@@ -131,6 +157,21 @@ function createUpdateGlobalHandler(settingsService: SettingsService) {
           error: 'Invalid request body - expected settings object',
         });
         return;
+      }
+
+      // A read-only environment may look at the shared registry but never
+      // rewrite it. Dropping the fields rather than rejecting the request keeps
+      // dev's own view state (panel sizes, collapse flags) persisting normally.
+      if (isReadOnly()) {
+        const dropped = SHARED_REGISTRY_FIELDS.filter((field) => field in updates);
+        for (const field of dropped) {
+          delete updates[field];
+        }
+        if (dropped.length > 0) {
+          logger.debug(
+            `Read-only environment: ignored shared registry fields [${dropped.join(', ')}]`
+          );
+        }
       }
 
       // Minimal debug logging to help diagnose accidental wipes.
