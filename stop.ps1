@@ -4,7 +4,7 @@
     Stop DMaker precisely.
 
 .DESCRIPTION
-    NEVER kill by image name (e.g. Stop-Process -Name node/python) — that would
+    NEVER kill by image name (e.g. Stop-Process -Name node/python) - that would
     take down unrelated processes, including StudyPC itself. Target EXACT PIDs only:
 
       -ProcessId : the PID StudyPC launched; we kill its whole TREE (taskkill /T).
@@ -48,7 +48,7 @@ if ($Port -gt 0) {
     if (Stop-Port $Port 'DMaker') { $killed = $true }
 }
 
-# No specific target — sweep the whole start.ps1 set. UIs first, runner last.
+# No specific target - sweep the whole start.ps1 set. UIs first, runner last.
 if ($ProcessId -le 0 -and $Port -le 0) {
     $targets = @(
         @{ Port = 3007; Label = 'prod UI' },

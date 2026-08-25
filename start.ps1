@@ -16,7 +16,7 @@
     live servers never fight over one settings.json.
 
     Dev is read-only: it refuses to start agents, features, pipelines, deploys
-    and terminals. Prod does the running — and it delegates that to the runner
+    and terminals. Prod does the running - and it delegates that to the runner
     daemon, which is why "Update Prod" can rebuild and restart the prod server
     without stopping work that is already in flight.
 
@@ -30,7 +30,7 @@
     (3007/3009/3017/3019/3029), which is what RESERVED_PORTS protects.
 
     StudyPC passes -Port and then opens http://localhost:<Port>, which lands on
-    prod — the half that can actually run things.
+    prod - the half that can actually run things.
 
 .PARAMETER SkipBuild
     Never build, even if the prod bundles are missing or stale. Fast, but prod
@@ -107,7 +107,7 @@ function Start-Tracked([string]$Label, [string[]]$ArgumentList) {
 function Stop-Tracked($Entry) {
     if ($null -eq $Entry -or $null -eq $Entry.Process) { return }
     if ($Entry.Process.HasExited) { return }
-    # By PID and its children only — never by image name, which would take down
+    # By PID and its children only - never by image name, which would take down
     # unrelated node processes (StudyPC's own, other projects', this script's).
     taskkill /PID $Entry.Process.Id /T /F 2>$null | Out-Null
 }
@@ -123,7 +123,7 @@ function Wait-ForHealth([int]$HealthPort, [string]$Label, [int]$TimeoutSeconds =
                 return $true
             }
         } catch {
-            # Not up yet — expected while it boots.
+            # Not up yet - expected while it boots.
         }
         Start-Sleep -Milliseconds 750
     }
@@ -132,7 +132,7 @@ function Wait-ForHealth([int]$HealthPort, [string]$Label, [int]$TimeoutSeconds =
 }
 
 # --- staleness check --------------------------------------------------------
-# Prod serves compiled bundles, so it needs a build — but rebuilding on every
+# Prod serves compiled bundles, so it needs a build - but rebuilding on every
 # quick-start would cost minutes. Build only when a bundle is missing or older
 # than the newest source file.
 function Test-BuildStale {
@@ -229,7 +229,7 @@ function Start-DevServer {
     $env:DMAKER_LAUNCHER_MANAGED = 'true'
     $env:DMAKER_SELF_URL        = $DevUiUrl
     $env:DMAKER_PEER_URL        = $ProdUiUrl
-    # Its own data directory — a second live server writing prod's settings.json
+    # Its own data directory - a second live server writing prod's settings.json
     # is how you lose a project list.
     $env:DATA_DIR               = Join-Path $Root 'data-dev'
     $env:PORT                   = "$DevServerPort"
@@ -264,7 +264,7 @@ try {
     } elseif ($ForceBuild -or (Test-BuildStale)) {
         Invoke-Build
     } else {
-        Write-Step 'Prod bundles are up to date — skipping build' 'Green'
+        Write-Step 'Prod bundles are up to date - skipping build' 'Green'
     }
 
     Write-Host ''
@@ -291,7 +291,7 @@ try {
     Write-Host ''
 
     # --- supervisor ---------------------------------------------------------
-    # Only the prod server is restartable, and only it exits 75 — that is the
+    # Only the prod server is restartable, and only it exits 75 - that is the
     # signal Update Prod sends after it has pulled and rebuilt. Everything else
     # exiting means the set is done.
     $RestartExitCode = 75
@@ -306,7 +306,7 @@ try {
             $Started.Remove($prodServerEntry)
 
             if ($code -eq $RestartExitCode) {
-                Write-Step 'Update Prod finished — restarting prod on the new build...' 'Cyan'
+                Write-Step 'Update Prod finished - restarting prod on the new build...' 'Cyan'
                 $crashRestarts = 0
 
                 # The bundle on disk changed underneath it, so the static server
@@ -327,7 +327,7 @@ try {
 
             if ($crashRestarts -lt $maxCrashRestarts) {
                 $crashRestarts++
-                Write-Step "Prod server exited with code $code — restarting ($crashRestarts/$maxCrashRestarts)" 'Yellow'
+                Write-Step "Prod server exited with code $code - restarting ($crashRestarts/$maxCrashRestarts)" 'Yellow'
                 $prodServer = Start-ProdServer
                 $prodServerEntry = $Started[$Started.Count - 1]
                 [void](Wait-ForHealth $ProdServerPort 'prod server')
@@ -339,15 +339,15 @@ try {
         }
 
         if ($runner.HasExited) {
-            Write-Step "Runner exited with code $($runner.ExitCode) — shutting down." 'Red'
+            Write-Step "Runner exited with code $($runner.ExitCode) - shutting down." 'Red'
             break
         }
         if ($devServer.HasExited -and $devUi.HasExited) {
-            Write-Step 'Dev half has exited — shutting down.' 'Yellow'
+            Write-Step 'Dev half has exited - shutting down.' 'Yellow'
             break
         }
         if ($prodUi.HasExited) {
-            Write-Step 'Prod UI exited — shutting down.' 'Yellow'
+            Write-Step 'Prod UI exited - shutting down.' 'Yellow'
             break
         }
     }
