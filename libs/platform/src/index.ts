@@ -164,7 +164,14 @@ export {
 } from './system-paths.js';
 
 // Port configuration (re-exported from @dmaker/types)
-export { STATIC_PORT, SERVER_PORT, RESERVED_PORTS } from '@dmaker/types';
+export {
+  STATIC_PORT,
+  SERVER_PORT,
+  DEV_STATIC_PORT,
+  DEV_SERVER_PORT,
+  RUNNER_PORT,
+  RESERVED_PORTS,
+} from '@dmaker/types';
 
 // Editor detection and launching (cross-platform)
 export {

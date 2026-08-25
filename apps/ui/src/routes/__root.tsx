@@ -1,9 +1,8 @@
 import { createRootRoute, Outlet, useLocation, useNavigate } from '@tanstack/react-router';
-import { lazy, Suspense, useEffect, useState, useCallback, useDeferredValue } from 'react';
+import { useEffect, useState, useCallback, useDeferredValue } from 'react';
 import { createLogger } from '@dmaker/utils/logger';
 import { loadFontByFamily } from '@/lib/font-loader';
 import { loadTheme } from '@/lib/theme-loader';
-import { TopNavigationBar } from '@/components/layout/top-nav-bar';
 import {
   FileBrowserProvider,
   useFileBrowser,
@@ -30,16 +29,17 @@ import {
 import { Toaster } from 'sonner';
 import { ThemeOption, themeOptions } from '@/config';
 import { LoadingState } from '@/components/ui/loading-state';
-import { LayerStack } from '@/components/ui/layer-stack';
-import { RouteErrorBoundary } from '@/components/ui/route-error-boundary';
+import { Button } from '@/components/ui/button';
+import { AppSidebar } from '@/components/layout/sidebar/app-sidebar';
+import { EnvironmentBar } from '@/components/layout/environment-bar';
+import { CommandPalette } from '@/components/layout/command-palette';
+import { CenterTabs } from '@/components/center/center-tabs';
+import { CenterPanes } from '@/components/center/center-panes';
+import { useBoardControlsStore, type AddFeatureContext } from '@/store/board-controls-store';
 import { useProjectSettingsLoader } from '@/hooks/use-project-settings-loader';
-import { useLayerStore, type LayerId } from '@/store/layer-store';
+import { openLayer, type LayerId } from '@/store/layer-store';
 import type { Project } from '@/lib/electron';
-
-// Lazy-load the board view (also eagerly preloaded below)
-const LazyBoardView = lazy(() =>
-  import('@/components/views/board-view').then((m) => ({ default: m.BoardView }))
-);
+import type { GlobalSettings } from '@dmaker/types';
 
 // Eagerly preload the board view chunk so it's ready when gates clear.
 // This runs at module evaluation time (before any component renders).
@@ -62,17 +62,23 @@ const DEFAULT_LAST_OPENED_TIME_MS = 0;
 const SETTINGS_CACHE_KEY = 'dmaker:settings-cache';
 const AUTO_OPEN_DONE_CACHE_KEY = 'dmaker:auto-open-done';
 
-function getCachedSettings(): unknown | null {
+function getCachedSettings(): GlobalSettings | null {
   try {
     const cached = localStorage.getItem(SETTINGS_CACHE_KEY);
-    if (cached) return JSON.parse(cached);
+    if (!cached) return null;
+    const parsed: unknown = JSON.parse(cached);
+    // The cache is our own write, but it survives upgrades and can be edited
+    // by hand, so check it is at least an object before hydrating the store
+    // from it. Anything else is treated as no cache at all.
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+    return parsed as GlobalSettings;
   } catch {
     // Corrupted cache — ignore
   }
   return null;
 }
 
-function setCachedSettings(settings: unknown): void {
+function setCachedSettings(settings: GlobalSettings): void {
   try {
     localStorage.setItem(SETTINGS_CACHE_KEY, JSON.stringify(settings));
   } catch {
@@ -230,13 +236,32 @@ function RootLayoutContent() {
   const [streamerPanelOpen, setStreamerPanelOpen] = useState(false);
   const [appReady, setAppReady] = useState(false);
   const [settingsReady, setSettingsReady] = useState(false);
+  // Set when the health check gives up, so the loading gate can say what is
+  // wrong instead of spinning forever. See `initialize`.
+  const [serverOffline, setServerOffline] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
   const { openFileBrowser } = useFileBrowser();
+
+  // Workspace-centric shell: everything that can fill the centre — the board,
+  // tasks, the project workspace, tools — is a tab, so opening a second thing
+  // never displaces the first. See `center-store`.
+
+  // Board-view publishes these callbacks into board-controls-store. Read them
+  // imperatively rather than subscribing: this component is the app shell, and
+  // re-rendering it whenever the board republishes its controls would remount
+  // the board's subtree (and re-trigger the publish, looping).
+  const handleCreateFeature = useCallback((context?: AddFeatureContext) => {
+    useBoardControlsStore.getState().onOpenAddFeature?.(context);
+  }, []);
+
+  const handleCreateWorktree = useCallback(() => {
+    useBoardControlsStore.getState().onCreateWorktree?.();
+  }, []);
 
   // Load project settings when switching projects
   useProjectSettingsLoader();
 
   const isSetupRoute = location.pathname === '/setup';
-  const isDashboardRoute = location.pathname === '/dashboard';
   const isRootRoute = location.pathname === '/';
   const [autoOpenStatus, setAutoOpenStatus] = useState<AutoOpenStatus>(AUTO_OPEN_STATUS.idle);
   const autoOpenCandidate = selectAutoOpenProject(currentProject, projects, projectHistory);
@@ -332,9 +357,14 @@ function RootLayoutContent() {
       try {
         const serverReady = await waitForServerReady();
         if (!serverReady) {
+          // Nothing downstream can work without the backend, so stop here —
+          // but surface it. This used to `return` with `appReady` still false,
+          // leaving the app on its spinner with no message and no way out.
           handleServerOffline();
+          setServerOffline(true);
           return;
         }
+        setServerOffline(false);
 
         // Load settings from server
         const api = getHttpApiClient();
@@ -395,7 +425,9 @@ function RootLayoutContent() {
     };
 
     initialize();
-  }, []);
+    // `retryCount` re-runs the whole bootstrap when the offline screen's Retry
+    // is pressed, so a backend started after the UI no longer needs a reload.
+  }, [retryCount]);
 
   // Map of old routes to layer IDs for redirect handling
   const routeToLayerMap: Record<string, string> = {
@@ -404,11 +436,14 @@ function RootLayoutContent() {
     '/ideation': 'ideation',
     '/spec': 'spec',
     '/memory': 'memory',
-    '/github-issues': 'github-issues',
     '/github-prs': 'github-prs',
     '/project-settings': 'project-settings',
     '/interview': 'interview',
   };
+
+  // Routes for views that no longer exist. GitHub issues are board tasks now,
+  // so the old standalone page just lands on the board.
+  const RETIRED_ROUTES = ['/github-issues'];
 
   // Simplified routing: no auth gates, just setup check
   // Also redirects old view routes to board + layer
@@ -421,14 +456,26 @@ function RootLayoutContent() {
     }
 
     if (setupComplete && location.pathname === '/setup') {
-      navigate({ to: '/dashboard' });
+      navigate({ to: '/board' });
+      return;
+    }
+
+    // The standalone project dashboard is gone — the board is the only home.
+    if (location.pathname === '/dashboard') {
+      navigate({ to: '/board' });
+      return;
+    }
+
+    // A retired view's route just goes home — there is no layer to open.
+    if (RETIRED_ROUTES.includes(location.pathname)) {
+      navigate({ to: '/board' });
       return;
     }
 
     // Redirect old routes to board + open their layer
     const layerId = routeToLayerMap[location.pathname];
     if (layerId) {
-      useLayerStore.getState().openLayer(layerId as LayerId);
+      openLayer(layerId as LayerId);
       navigate({ to: '/board' });
     }
   }, [appReady, settingsReady, setupComplete, location.pathname, navigate]);
@@ -469,13 +516,9 @@ function RootLayoutContent() {
       if (!settingsReady || shouldAutoOpen) {
         return;
       }
-      if (currentProject) {
-        // Project is selected, go to board
-        navigate({ to: '/board' });
-      } else {
-        // No project selected, go to dashboard
-        navigate({ to: '/dashboard' });
-      }
+      // The board is the only home now; it shows the project picker when no
+      // project is open.
+      navigate({ to: '/board' });
     }
   }, [isMounted, currentProject, isRootRoute, navigate, shouldAutoOpen, settingsReady]);
 
@@ -494,7 +537,7 @@ function RootLayoutContent() {
         if (!initResult.success) {
           logger.warn('Auto-open project failed:', initResult.error);
           if (isRootRoute) {
-            navigate({ to: '/dashboard' });
+            navigate({ to: '/board' });
           }
           return;
         }
@@ -513,7 +556,7 @@ function RootLayoutContent() {
       } catch (error) {
         logger.error('Auto-open project crashed:', error);
         if (isRootRoute) {
-          navigate({ to: '/dashboard' });
+          navigate({ to: '/board' });
         }
       } finally {
         setAutoOpenStatus(AUTO_OPEN_STATUS.done);
@@ -619,6 +662,40 @@ function RootLayoutContent() {
     });
   }, [effectiveFontSans, effectiveFontMono]);
 
+  // The backend never answered. Say so, and name the URL that was tried — the
+  // usual cause is that only half the dev stack is running, and the port in
+  // the message is what tells you which half.
+  if (serverOffline) {
+    return (
+      <main
+        className="flex h-screen flex-col items-center justify-center gap-4 px-6 text-center"
+        data-testid="app-container"
+      >
+        <div data-testid="server-offline" className="max-w-md space-y-2">
+          <h1 className="text-lg font-semibold">Can&apos;t reach the DMaker server</h1>
+          <p className="text-sm text-muted-foreground">
+            No response from{' '}
+            <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs">
+              {getServerUrlSync()}
+            </code>
+            . Start the backend (<code className="font-mono text-xs">npm run dev:full</code>), then
+            retry.
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          data-testid="server-offline-retry"
+          onClick={() => {
+            setServerOffline(false);
+            setRetryCount((count) => count + 1);
+          }}
+        >
+          Retry
+        </Button>
+      </main>
+    );
+  }
+
   // Single loading gate: wait for app to be ready
   if (!appReady) {
     return (
@@ -637,19 +714,9 @@ function RootLayoutContent() {
     );
   }
 
-  // Show dashboard page (full screen, no sidebar)
-  if (isDashboardRoute) {
-    return (
-      <main className="h-screen overflow-hidden" data-testid="app-container">
-        <Outlet />
-        <Toaster richColors position="bottom-right" />
-      </main>
-    );
-  }
-
   return (
     <>
-      <main className="flex flex-col h-screen overflow-hidden" data-testid="app-container">
+      <main className="flex h-screen flex-col overflow-hidden" data-testid="app-container">
         {/* Full-width titlebar drag region for Electron window dragging */}
         {isElectron() && (
           <div
@@ -657,24 +724,28 @@ function RootLayoutContent() {
             aria-hidden="true"
           />
         )}
-        {/* Top Navigation Bar - simplified single row */}
-        <div className="relative z-50 shrink-0">
-          <TopNavigationBar />
-        </div>
-        {/* Board View - always mounted as the base layer */}
+        {/* Sidebar + main column */}
         <div
-          className="flex-1 flex flex-col overflow-hidden transition-all duration-300"
+          className="flex-1 flex min-h-0 overflow-hidden transition-[margin-right] duration-300"
           style={{ marginRight: streamerPanelOpen ? '250px' : '0' }}
         >
-          <RouteErrorBoundary>
-            <Suspense fallback={<LoadingState message="Loading board..." />}>
-              <LazyBoardView />
-            </Suspense>
-          </RouteErrorBoundary>
+          <AppSidebar
+            onCreateFeature={handleCreateFeature}
+            onCreateWorktree={handleCreateWorktree}
+          />
+
+          {/* The sidebar owns the app chrome — filters, tools, refresh, agents. */}
+          <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+            {/* Only renders when start.ps1 launched this as one half of a
+                dev/prod pair; otherwise it is invisible. */}
+            <EnvironmentBar />
+            <CenterTabs />
+            <CenterPanes />
+          </div>
         </div>
 
-        {/* Layer stack - renders tool/settings overlays on top of the board */}
-        <LayerStack />
+        {/* Global command palette (Ctrl/Cmd+K) */}
+        <CommandPalette onCreateFeature={handleCreateFeature} />
 
         {/* Hidden streamer panel - opens with "\" key, pushes content */}
         <div

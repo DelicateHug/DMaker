@@ -85,14 +85,44 @@ export interface ImageContentBlock {
  * killed or terminated by AI agents during feature implementation.
  */
 
-/** Port for the static/UI server (Vite dev server) */
+/** Port for the static/UI server, production build (Vite preview / Electron) */
 export const STATIC_PORT = 3007;
 
-/** Port for the backend API server (Express + WebSocket) */
-export const SERVER_PORT = 3008;
+/** Port for the backend API server, production build (Express + WebSocket) */
+export const SERVER_PORT = 3009;
 
-/** Array of all reserved DMaker ports */
-export const RESERVED_PORTS = [STATIC_PORT, SERVER_PORT] as const;
+/** Port for the static/UI server in dev (`vite`) */
+export const DEV_STATIC_PORT = 3017;
+
+/** Port for the backend API server in dev (`tsx watch`) */
+export const DEV_SERVER_PORT = 3019;
+
+/**
+ * Port for the standalone task runner daemon.
+ *
+ * The runner owns agent/feature execution and lives in its own process, so a
+ * rebuild-and-restart of either app server (dev or prod) leaves in-flight tasks
+ * untouched. Both app servers proxy execution requests to it and relay its
+ * event stream back to their own WebSocket clients.
+ */
+export const RUNNER_PORT = 3029;
+
+/**
+ * Array of all reserved DMaker ports.
+ *
+ * Both the dev and production pairs belong here: an agent runs against a
+ * checkout that is usually being developed on, so the dev pair is just as
+ * fatal to kill. This list previously named 3007 and 3008 — 3008 has not been
+ * the backend port for some time, so the guard protected a port nothing used
+ * while leaving the live server (3009/3019) and the dev UI (3017) fair game.
+ */
+export const RESERVED_PORTS = [
+  STATIC_PORT,
+  SERVER_PORT,
+  DEV_STATIC_PORT,
+  DEV_SERVER_PORT,
+  RUNNER_PORT,
+] as const;
 
 // =============================================================================
 // Enhancement Types
@@ -446,6 +476,17 @@ export interface IssueValidationPrompts {
 }
 
 /**
+ * IssueDraftPrompts - Customizable prompts for background GitHub issue drafting
+ *
+ * Controls how a newly added task is turned into a GitHub issue, and how
+ * readily the drafter stops to ask the user for clarification.
+ */
+export interface IssueDraftPrompts {
+  /** System prompt for drafting a GitHub issue from a task description */
+  systemPrompt?: CustomPrompt;
+}
+
+/**
  * IdeationPrompts - Customizable prompts for AI-powered ideation and brainstorming
  *
  * Controls how the AI generates feature ideas and suggestions for the project.
@@ -571,6 +612,9 @@ export interface PromptCustomization {
   /** Issue validation prompts (GitHub issue validation) */
   issueValidation?: IssueValidationPrompts;
 
+  /** Issue drafting prompts (background GitHub issue creation for new tasks) */
+  issueDraft?: IssueDraftPrompts;
+
   /** Ideation prompts (AI-powered brainstorming and suggestions) */
   ideation?: IdeationPrompts;
 
@@ -598,6 +642,7 @@ export const DEFAULT_PROMPT_CUSTOMIZATION: PromptCustomization = {
   commitMessage: {},
   titleGeneration: {},
   issueValidation: {},
+  issueDraft: {},
   ideation: {},
   appSpec: {},
   contextDescription: {},
@@ -647,6 +692,10 @@ export interface ResolvedTitleGenerationPrompts {
 }
 
 export interface ResolvedIssueValidationPrompts {
+  systemPrompt: string;
+}
+
+export interface ResolvedIssueDraftPrompts {
   systemPrompt: string;
 }
 

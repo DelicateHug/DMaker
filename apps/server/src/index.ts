@@ -12,10 +12,11 @@ import morgan from 'morgan';
 import compression from 'compression';
 import { WebSocketServer, WebSocket } from 'ws';
 import { createServer } from 'http';
+import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 
 import { createEventEmitter, createThrottledCallback, type EventEmitter } from './lib/events.js';
-import { initAllowedPaths } from '@dmaker/platform';
+import { initAllowedPaths, SERVER_PORT, DEV_SERVER_PORT } from '@dmaker/platform';
 import { createLogger, setLogLevel, LogLevel } from '@dmaker/utils';
 
 const logger = createLogger('Server');
@@ -29,7 +30,7 @@ const LOG_LEVEL_MAP: Record<string, LogLevel> = {
   info: LogLevel.INFO,
   debug: LogLevel.DEBUG,
 };
-import { requireJsonContentType } from './middleware.js';
+import { requireJsonContentType, createReadOnlyMiddleware } from './middleware.js';
 import { createFsRoutes } from './routes/fs.js';
 import { createHealthRoutes, createDetailedHandler } from './routes/health.js';
 import { createAgentRoutes } from './routes/agent.js';
@@ -82,14 +83,38 @@ import { getDevServerService } from './services/dev-server-service.js';
 import { createNotificationsRoutes } from './routes/notifications.js';
 import { getNotificationService } from './services/notification-service.js';
 import { createDeployRoutes } from './routes/deploy.js';
+import { createSkillsRoutes } from './routes/skills.js';
+import { createE2ERoutes } from './routes/e2e.js';
 import { deployScriptRunner } from './services/deploy-service.js';
+import { createEnvironmentRoutes } from './routes/environment.js';
+import { createSelfUpdateRoutes } from './routes/self-update.js';
+import { SelfUpdateService } from './services/self-update-service.js';
+import { ensureSelfProjectRegistered } from './services/self-project-service.js';
+import { RunnerClient } from './lib/runner-client.js';
+import { getRunnerUrl, getRuntimeInfo, getRole, isReadOnly } from './lib/runtime-env.js';
 // Load environment variables
 dotenv.config();
 
-const PORT = parseInt(process.env.PORT || '3009', 10);
+// The dev and production stacks are deliberately on separate ports so both can
+// run side by side: Vite dev UI 3017 -> server 3019, built UI 3007 -> server
+// 3009. The UI picks its side from `import.meta.env.DEV` (see http-api-client),
+// and this picks the matching one from whether it is running off TypeScript
+// source (`tsx watch`, npm run dev) or the compiled `dist/index.js`.
+//
+// Without this the two halves disagreed: `npm run dev:full` started the server
+// on 3009 while the dev UI called 3019, so the app sat on its loading spinner
+// forever. An explicit PORT still wins, which is what every launcher sets.
+const RUNNING_FROM_SOURCE = fileURLToPath(import.meta.url).endsWith('.ts');
+const DEFAULT_PORT = String(RUNNING_FROM_SOURCE ? DEV_SERVER_PORT : SERVER_PORT);
+const PORT = parseInt(process.env.PORT || DEFAULT_PORT, 10);
 const HOST = process.env.HOST || '0.0.0.0';
 const HOSTNAME = process.env.HOSTNAME || 'localhost';
 const DATA_DIR = process.env.DATA_DIR || './data';
+
+// Which half of the dev/prod pair this is, whether it may execute anything, and
+// whether a runner daemon owns execution on its behalf. All env-driven, so a
+// plain `npm run dev:full` still gets the old single-process behaviour.
+const RUNTIME = getRuntimeInfo();
 const ENABLE_REQUEST_LOGGING_DEFAULT = process.env.ENABLE_REQUEST_LOGGING !== 'false'; // Default to true
 
 // Runtime-configurable request logging flag (can be changed via settings)
@@ -233,6 +258,17 @@ devServerService.setEventEmitter(events);
 const notificationService = getNotificationService();
 notificationService.setEventEmitter(events);
 
+// Update Prod: pull -> rebuild -> ask the launcher for a restart. Only ever
+// does anything on a launcher-managed prod server (see isSelfUpdateEnabled).
+const selfUpdateService = new SelfUpdateService(events);
+
+// When a runner daemon is configured, execution is forwarded to it and its
+// event stream is replayed onto this server's bus. `null` means "run in
+// process", which is what every non-launcher entry point does.
+const runnerUrl = getRunnerUrl();
+const runnerClient = runnerUrl ? new RunnerClient(runnerUrl, events) : null;
+runnerClient?.start();
+
 // DeployScriptRunner requires no initialization – it's a simple
 // stateless service that discovers and runs scripts from the deploy folder.
 
@@ -256,6 +292,13 @@ notificationService.setEventEmitter(events);
   await agentService.initialize();
   logger.info('Agent service initialized');
 
+  // Put the launching DMaker checkout on this environment's own board. Only the
+  // app servers do this — the runner shares prod's data dir and would just race
+  // it writing the same entry.
+  if (getRole() === 'app') {
+    await ensureSelfProjectRegistered(settingsService);
+  }
+
   // Bootstrap Codex model cache in background (don't block server startup)
   void codexModelCacheService.getModels().catch((err) => {
     logger.error('Failed to bootstrap Codex model cache:', err);
@@ -275,8 +318,20 @@ setInterval(() => {
 // This helps prevent CSRF and content-type confusion attacks
 app.use('/api', requireJsonContentType);
 
+// Refuse execution requests on the read-only dev environment. Mounted ahead of
+// every route so a blocked request never reaches a service.
+app.use('/api', createReadOnlyMiddleware());
+
+// Forward the execution surface to the runner daemon when one is configured.
+// Falls through to the local routers below whenever the runner is unreachable.
+if (runnerClient) {
+  app.use('/api', runnerClient.createProxyMiddleware());
+}
+
 // Mount API routes
 app.use('/api/health', createHealthRoutes());
+app.use('/api/environment', createEnvironmentRoutes(runnerClient));
+app.use('/api/self-update', createSelfUpdateRoutes(selfUpdateService));
 app.use('/api/setup', createSetupRoutes());
 
 // Detailed health endpoint
@@ -312,6 +367,8 @@ app.use('/api/ideation', createIdeationRoutes(events, ideationService, featureLo
 app.use('/api/notifications', createNotificationsRoutes(notificationService));
 app.use('/api/deploy', createDeployRoutes(deployScriptRunner, events));
 app.use('/api/agents', createAgentCrudRoutes());
+app.use('/api/skills', createSkillsRoutes());
+app.use('/api/e2e', createE2ERoutes(settingsService));
 app.use('/api/memory', createMemoryRoutes(settingsService));
 // Create HTTP server
 const server = createServer(app);
@@ -611,6 +668,16 @@ const startServer = (port: number, host: string) => {
 ║  Terminal:    ${terminalStatus.padEnd(37)}║
 ╚═══════════════════════════════════════════════════════╝
 `);
+
+    // One line that says exactly what this process is allowed to do, so a
+    // confusing "why won't it run anything" is answerable from the log alone.
+    logger.info(
+      `Runtime: role=${RUNTIME.role} env=${RUNTIME.env} ` +
+        `mode=${isReadOnly() ? 'read-only' : 'read-write'} ` +
+        `runner=${RUNTIME.runnerUrl ?? 'in-process'} ` +
+        `peer=${RUNTIME.peerUrl} ` +
+        `selfUpdate=${RUNTIME.selfUpdateEnabled ? 'enabled' : 'disabled'}`
+    );
   });
 
   server.on('error', (error: NodeJS.ErrnoException) => {
@@ -666,6 +733,7 @@ process.on('uncaughtException', (error: Error) => {
 // Graceful shutdown
 process.on('SIGTERM', () => {
   logger.info('SIGTERM received, shutting down...');
+  runnerClient?.stop();
   terminalService.cleanup();
   server.close(() => {
     logger.info('Server closed');
@@ -675,6 +743,7 @@ process.on('SIGTERM', () => {
 
 process.on('SIGINT', () => {
   logger.info('SIGINT received, shutting down...');
+  runnerClient?.stop();
   terminalService.cleanup();
   server.close(() => {
     logger.info('Server closed');

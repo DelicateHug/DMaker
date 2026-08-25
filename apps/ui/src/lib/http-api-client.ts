@@ -23,6 +23,7 @@ import type {
   SpecRegenerationEvent,
   SuggestionType,
   GitHubAPI,
+  GhErrorCode,
   IssueValidationInput,
   IssueValidationEvent,
   IdeationAPI,
@@ -38,6 +39,7 @@ import type { Message, SessionListItem } from '@/types/electron';
 import type { Feature, ClaudeUsageResponse, CodexUsageResponse } from '@/store/app-store';
 import type { WorktreeAPI, GitAPI, ModelDefinition, ProviderStatus } from '@/types/electron';
 import type { ModelId, ThinkingLevel, ReasoningEffort } from '@dmaker/types';
+import { SERVER_PORT, DEV_SERVER_PORT } from '@dmaker/types';
 import { getGlobalFileBrowser } from '@/contexts/file-browser-context';
 import {
   DEFAULT_CACHE_OPTIONS,
@@ -135,11 +137,28 @@ const getServerUrl = (): string => {
     const envUrl = import.meta.env.VITE_SERVER_URL;
     if (envUrl) return envUrl;
   }
-  // Use VITE_HOSTNAME if set, otherwise default to localhost
-  // Dev mode uses port 3019 to avoid conflicts with production on 3009
+  // Use VITE_HOSTNAME if set, otherwise default to localhost.
+  // Dev runs on its own pair so it can sit alongside a production instance;
+  // the backend derives its default from the same constants (see
+  // apps/server/src/index.ts), which is what keeps the two halves agreeing.
   const hostname = import.meta.env.VITE_HOSTNAME || 'localhost';
-  const port = import.meta.env.DEV ? 3019 : 3009;
+  const port = import.meta.env.DEV ? DEV_SERVER_PORT : SERVER_PORT;
   return `http://${hostname}:${port}`;
+};
+
+/**
+ * Announce that the read-only dev environment refused an execution request.
+ * Handled by the environment bar, which knows where prod is.
+ */
+const notifyReadOnlyBlocked = (message: string, peerUrl?: string): void => {
+  if (typeof window === 'undefined') return;
+  try {
+    window.dispatchEvent(
+      new CustomEvent('dmaker:read-only-blocked', { detail: { message, peerUrl } })
+    );
+  } catch {
+    // Ignore
+  }
 };
 
 /**
@@ -179,6 +198,7 @@ type EventType =
   | 'dev-server:output'
   | 'dev-server:stopped'
   | 'notification:created'
+  | 'deploy:started'
   | 'deploy:output'
   | 'deploy:success'
   | 'deploy:error';
@@ -215,6 +235,134 @@ export type DevServerLogEvent =
 /**
  * Response type for fetching dev server logs
  */
+/** Ahead/behind + dirty state for one worktree, as shown on a sidebar row. */
+export interface WorktreeSyncStatus {
+  worktreePath: string;
+  branch: string;
+  ahead: number;
+  behind: number;
+  dirtyCount: number;
+}
+
+export interface WorktreeSyncStatusResponse {
+  success: boolean;
+  statuses?: WorktreeSyncStatus[];
+  error?: string;
+}
+
+/** A branch that lives on the remote but has no worktree in this project. */
+export interface RemoteBranchInfo {
+  name: string;
+  remoteRef: string;
+  lastCommitAt?: string;
+  lastCommitBy?: string;
+  lastCommitSubject?: string;
+  hasLocalBranch: boolean;
+}
+
+export interface RemoteBranchesForProject {
+  projectPath: string;
+  remote?: string;
+  defaultBranch?: string;
+  branches: RemoteBranchInfo[];
+  error?: string;
+}
+
+/** A branch this project actually has, read from `refs/heads`. */
+export interface LocalBranchInfo {
+  name: string;
+  /** The repository's trunk */
+  isDefault: boolean;
+  /** Checked out in the main working copy */
+  isCurrent: boolean;
+  hasWorktree: boolean;
+  worktreePath?: string;
+  lastCommitAt?: string;
+  lastCommitBy?: string;
+  lastCommitSubject?: string;
+  upstream?: string;
+  /** An upstream is configured but its remote-tracking ref has been deleted */
+  upstreamGone: boolean;
+}
+
+export interface LocalBranchesForProject {
+  projectPath: string;
+  defaultBranch?: string;
+  branches: LocalBranchInfo[];
+  /** Unknown, not empty: a project that errored has not had its branches deleted */
+  error?: string;
+}
+
+export interface LocalBranchesResponse {
+  success: boolean;
+  projects?: LocalBranchesForProject[];
+  error?: string;
+}
+
+/**
+ * What a sidebar branch is doing relative to its upstream, after a real fetch.
+ *
+ * The last four states are the ones that turn a branch's refresh icon into the
+ * blinking '!'; see `branchNeedsAttention`.
+ */
+export type BranchSyncState =
+  | 'in-sync'
+  | 'updated'
+  | 'ahead'
+  | 'no-upstream'
+  | 'behind'
+  | 'blocked'
+  | 'diverged'
+  | 'conflict'
+  | 'error';
+
+export interface BranchSyncResult {
+  worktreePath: string;
+  branch: string;
+  upstream?: string;
+  ahead: number;
+  behind: number;
+  dirtyCount: number;
+  /** Paths with unresolved merge conflicts; non-empty only when state is 'conflict' */
+  conflictedFiles: string[];
+  state: BranchSyncState;
+  /** Why it is in this state, or what git said when it refused */
+  message?: string;
+  /** A deterministic git repair exists — the "Auto fix" button */
+  canAutoFix: boolean;
+  /** This pass moved the branch forward */
+  didUpdate: boolean;
+}
+
+export interface ProjectBranchSync {
+  projectPath: string;
+  remote?: string;
+  fetched: boolean;
+  /** Project-level failure — offline, no remote, not a repo */
+  error?: string;
+  branches: BranchSyncResult[];
+}
+
+export interface BranchSyncResponse {
+  success: boolean;
+  projects?: ProjectBranchSync[];
+  error?: string;
+}
+
+export interface BranchAutoFixResponse {
+  success: boolean;
+  result?: BranchSyncResult;
+  /** What the repair actually did, in order */
+  steps?: string[];
+  error?: string;
+}
+
+export interface RemoteBranchesResponse {
+  success: boolean;
+  projects?: RemoteBranchesForProject[];
+  error?: string;
+}
+
 export interface DevServerLogsResponse {
   success: boolean;
   result?: {
@@ -364,15 +512,31 @@ export class HttpApiClient implements ElectronAPI {
 
     if (!response.ok) {
       let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+      let errorCode: string | undefined;
       try {
         const errorData = await response.json();
         if (errorData.error) {
           errorMessage = errorData.error;
         }
+        if (typeof errorData.errorCode === 'string') {
+          errorCode = errorData.errorCode;
+        }
+        // The read-only dev environment refuses execution. Announce it once,
+        // centrally, so every caller doesn't need its own special case — the
+        // environment bar turns this into a "switch to prod" toast.
+        if (response.status === 403 && errorData.readOnly === true) {
+          notifyReadOnlyBlocked(errorMessage, errorData.peerUrl);
+        }
       } catch {
         // If parsing JSON fails, use status text
       }
-      throw new Error(errorMessage);
+      const error = new Error(errorMessage);
+      // Carry the server's machine-readable code so callers can offer a remedy
+      // rather than just echoing the message.
+      if (errorCode) {
+        (error as Error & { errorCode?: string }).errorCode = errorCode;
+      }
+      throw error;
     }
 
     return response.json();
@@ -1231,6 +1395,27 @@ export class HttpApiClient implements ElectronAPI {
       this.post('/api/features/bulk-update', { projectPath, featureIds, updates }),
     bulkDelete: (projectPath: string, featureIds: string[]) =>
       this.post('/api/features/bulk-delete', { projectPath, featureIds }),
+    archive: (projectPath: string, featureId: string) =>
+      this.post('/api/features/archive', { projectPath, featureId }),
+    unarchive: (projectPath: string, featureId: string, targetStatus?: string) =>
+      this.post('/api/features/unarchive', { projectPath, featureId, targetStatus }),
+    listArchived: (projectPath: string) => this.post('/api/features/archived', { projectPath }),
+    answerQuestion: (
+      projectPath: string,
+      featureId: string,
+      questionId: string,
+      answer: string,
+      skipped?: boolean
+    ) =>
+      this.post('/api/features/answer-question', {
+        projectPath,
+        featureId,
+        questionId,
+        answer,
+        skipped,
+      }),
+    startIssueDraft: (projectPath: string, featureId: string) =>
+      this.post('/api/features/issue-draft', { projectPath, featureId }),
   };
 
   // Auto Mode API
@@ -1345,6 +1530,19 @@ export class HttpApiClient implements ElectronAPI {
         worktreePath,
         deleteBranch,
       }),
+    getBranchDeleteInfo: (projectPath: string, branchName: string) =>
+      this.post('/api/worktree/branch-delete-info', { projectPath, branchName }),
+    deleteBranch: (
+      projectPath: string,
+      branchName: string,
+      options?: { force?: boolean; deleteRemote?: boolean }
+    ) =>
+      this.post('/api/worktree/delete-branch', {
+        projectPath,
+        branchName,
+        force: options?.force,
+        deleteRemote: options?.deleteRemote,
+      }),
     commit: (worktreePath: string, message: string) =>
       this.post('/api/worktree/commit', { worktreePath, message }),
     generateCommitMessage: (worktreePath: string) =>
@@ -1378,6 +1576,36 @@ export class HttpApiClient implements ElectronAPI {
       this.post('/api/worktree/start-dev', { projectPath, worktreePath }),
     stopDevServer: (worktreePath: string) => this.post('/api/worktree/stop-dev', { worktreePath }),
     listDevServers: () => this.post('/api/worktree/list-dev-servers', {}),
+    /** Batched ahead/behind + dirty counts for the sidebar. Never fetches. */
+    getSyncStatus: (worktreePaths: string[]): Promise<WorktreeSyncStatusResponse> =>
+      this.post('/api/worktree/sync-status', { worktreePaths }),
+    /**
+     * Branches that exist on each project's remote but have no worktree here.
+     * Fetches with --prune, so branches deleted on the remote drop out and
+     * branches merged into the trunk are filtered server-side.
+     */
+    getRemoteBranches: (projectPaths: string[]): Promise<RemoteBranchesResponse> =>
+      this.post('/api/worktree/remote-branches', { projectPaths }),
+    /**
+     * Every branch each project actually has. Reads local refs only — no fetch —
+     * so it is cheap to poll, and it is what tells the sidebar a branch has been
+     * deleted rather than merely gone quiet.
+     */
+    getLocalBranches: (projectPaths: string[]): Promise<LocalBranchesResponse> =>
+      this.post('/api/worktree/local-branches', { projectPaths }),
+    /**
+     * Fetches each project's remote, then reports every worktree branch's real
+     * position against its upstream. With `autoUpdate` it also fast-forwards
+     * branches that are cleanly behind — nothing more invasive than that.
+     */
+    branchSync: (
+      projects: Array<{ projectPath: string; worktreePaths: string[] }>,
+      autoUpdate = false
+    ): Promise<BranchSyncResponse> =>
+      this.post('/api/worktree/branch-sync', { projects, autoUpdate }),
+    /** Deterministic repair for one branch: stash, fast-forward or rebase. */
+    branchAutoFix: (worktreePath: string): Promise<BranchAutoFixResponse> =>
+      this.post('/api/worktree/branch-auto-fix', { worktreePath }),
     getDevServerLogs: (worktreePath: string): Promise<DevServerLogsResponse> =>
       this.get(`/api/worktree/dev-server-logs?worktreePath=${encodeURIComponent(worktreePath)}`),
     onDevServerLogEvent: (callback: (event: DevServerLogEvent) => void) => {
@@ -1520,6 +1748,7 @@ export class HttpApiClient implements ElectronAPI {
   // GitHub API
   github: GitHubAPI = {
     checkRemote: (projectPath: string) => this.post('/api/github/check-remote', { projectPath }),
+    getConfig: (projectPath: string) => this.post('/api/github/config', { projectPath }),
     listIssues: (projectPath: string, githubRepo?: string) =>
       this.post('/api/github/issues', { projectPath, githubRepo }),
     listPRs: (projectPath: string, githubRepo?: string) =>
@@ -1577,8 +1806,25 @@ export class HttpApiClient implements ElectronAPI {
       title: string,
       body?: string,
       labels?: string[]
-    ): Promise<{ success: boolean; issueNumber?: number; url?: string; error?: string }> =>
-      this.post('/api/github/create-issue', { projectPath, title, body, labels }),
+    ): Promise<{
+      success: boolean;
+      issueNumber?: number;
+      url?: string;
+      appliedLabels?: string[];
+      error?: string;
+      errorCode?: GhErrorCode;
+    }> => this.post('/api/github/create-issue', { projectPath, title, body, labels }),
+    createRepo: (
+      projectPath: string,
+      name: string,
+      visibility?: 'private' | 'public',
+      description?: string
+    ): Promise<{
+      success: boolean;
+      url?: string;
+      nameWithOwner?: string;
+      error?: string;
+    }> => this.post('/api/github/create-repo', { projectPath, name, visibility, description }),
     updateIssueLabels: (
       projectPath: string,
       issueNumber: number,
@@ -1994,7 +2240,8 @@ export class HttpApiClient implements ElectronAPI {
     create: (
       name: string,
       projectPath: string,
-      workingDirectory?: string
+      workingDirectory?: string,
+      options?: { scratch?: boolean }
     ): Promise<{
       success: boolean;
       session?: {
@@ -2004,9 +2251,17 @@ export class HttpApiClient implements ElectronAPI {
         workingDirectory?: string;
         createdAt: string;
         updatedAt: string;
+        /** True when the server actually made this a Scratchpad session */
+        scratch?: boolean;
       };
       error?: string;
-    }> => this.post('/api/sessions', { name, projectPath, workingDirectory }),
+    }> =>
+      this.post('/api/sessions', {
+        name,
+        projectPath,
+        workingDirectory,
+        ...(options?.scratch ? { scratch: true } : {}),
+      }),
 
     update: (
       sessionId: string,
@@ -2454,18 +2709,41 @@ export class HttpApiClient implements ElectronAPI {
     },
   };
 
-  // Deploy event subscriptions (WebSocket fallback for SSE streaming)
+  // Deploy event subscriptions (WebSocket fallback for SSE streaming).
+  // Every payload carries the `runId` of the run that produced it, so a
+  // client watching several concurrent runs can route output correctly.
   deploy = {
-    onDeployOutput: (callback: (payload: { data: string }) => void): (() => void) => {
+    onDeployStarted: (
+      callback: (payload: {
+        runId: string;
+        scriptId?: string;
+        scriptName?: string;
+        startedAt?: string;
+      }) => void
+    ): (() => void) => {
+      return this.subscribeToEvent('deploy:started', callback as EventCallback);
+    },
+    onDeployOutput: (
+      callback: (payload: { runId: string; scriptName?: string; data: string }) => void
+    ): (() => void) => {
       return this.subscribeToEvent('deploy:output', callback as EventCallback);
     },
     onDeploySuccess: (
-      callback: (payload: { message?: string; duration?: number }) => void
+      callback: (payload: {
+        runId: string;
+        scriptId?: string;
+        scriptName?: string;
+        message?: string;
+        duration?: number;
+      }) => void
     ): (() => void) => {
       return this.subscribeToEvent('deploy:success', callback as EventCallback);
     },
     onDeployError: (
       callback: (payload: {
+        runId: string;
+        scriptId?: string;
+        scriptName?: string;
         message?: string;
         error?: string;
         duration?: number;

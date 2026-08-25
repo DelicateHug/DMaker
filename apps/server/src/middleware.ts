@@ -6,6 +6,11 @@
 
 import type { Request, Response, NextFunction } from 'express';
 import { validatePath, PathNotAllowedError } from '@dmaker/platform';
+import { createLogger } from '@dmaker/utils';
+import { findReadOnlyRule } from './lib/execution-routes.js';
+import { getPeerUrl, isReadOnly } from './lib/runtime-env.js';
+
+const readOnlyLogger = createLogger('ReadOnly');
 
 // ============================================================================
 // Require JSON Content-Type (from middleware/require-json-content-type.ts)
@@ -128,5 +133,47 @@ export function validatePathParams(...paramNames: string[]) {
       // Re-throw unexpected errors
       throw error;
     }
+  };
+}
+
+// ============================================================================
+// Read-only gate (dev half of a start.ps1 pair)
+// ============================================================================
+
+/**
+ * Refuse execution requests when this process is the read-only environment.
+ *
+ * Dev exists to look at and edit — browse the board, write features, change
+ * settings, read diffs. It must never *start* anything: two environments
+ * pointed at the same repo both running agents would fight over worktrees and
+ * over the shared git checkout.
+ *
+ * The refusal carries `readOnly: true` so the UI can tell "you're on the
+ * read-only environment, switch to prod" apart from a real permission error.
+ */
+export function createReadOnlyMiddleware() {
+  return function readOnlyGuard(req: Request, res: Response, next: NextFunction): void {
+    if (!isReadOnly()) {
+      next();
+      return;
+    }
+
+    const rule = findReadOnlyRule(req.method, req.originalUrl);
+    if (!rule) {
+      next();
+      return;
+    }
+
+    readOnlyLogger.warn(`Blocked in read-only dev: ${req.method} ${req.originalUrl}`);
+    res.status(403).json({
+      success: false,
+      readOnly: true,
+      // Machine-readable so the UI can offer "switch to prod" rather than just
+      // echoing the message as a generic failure.
+      errorCode: 'READ_ONLY_ENV',
+      error: `${rule.what} is disabled on the read-only dev environment.`,
+      message: `Switch to the prod environment (${getPeerUrl()}) to run tasks.`,
+      peerUrl: getPeerUrl(),
+    });
   };
 }

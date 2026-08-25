@@ -70,6 +70,9 @@ export type {
   PlanningMode,
   DescriptionHistoryEntry,
   SummaryHistoryEntry,
+  AgentQuestion,
+  GitHubIssueDraft,
+  GitHubIssueDraftStatus,
   // Summary file API types
   ListSummariesRequest,
   ListSummariesResponse,
@@ -114,6 +117,7 @@ export type {
   CommitMessagePrompts,
   TitleGenerationPrompts,
   IssueValidationPrompts,
+  IssueDraftPrompts,
   IdeationPrompts,
   AppSpecPrompts,
   ContextDescriptionPrompts,
@@ -127,6 +131,7 @@ export type {
   ResolvedCommitMessagePrompts,
   ResolvedTitleGenerationPrompts,
   ResolvedIssueValidationPrompts,
+  ResolvedIssueDraftPrompts,
   ResolvedIdeationPrompts,
   ResolvedAppSpecPrompts,
   ResolvedContextDescriptionPrompts,
@@ -161,6 +166,9 @@ export {
   // Port configuration
   STATIC_PORT,
   SERVER_PORT,
+  DEV_STATIC_PORT,
+  DEV_SERVER_PORT,
+  RUNNER_PORT,
   RESERVED_PORTS,
   // Spec schema
   specOutputSchema,
@@ -221,6 +229,7 @@ export type {
   DeployFolderScript,
   DeployRunStatus,
   DeployRun,
+  DeployEnvironment,
   // Build verification types
   BuildCommand,
 } from './settings.js';
@@ -257,6 +266,7 @@ export * from './tool-types.js';
 
 // OpenCode types
 export * from './opencode-models.js';
+export * from './e2e-sandbox.js';
 
 // Provider utilities
 export {
@@ -273,6 +283,21 @@ export {
   normalizeModelString,
   validateBareModelId,
 } from './provider-utils.js';
+
+// GitHub settings resolution
+export {
+  GITHUB_SETTINGS_DEFAULTS,
+  qualifyRepo,
+  ownerOf,
+  resolveGitHubSettings,
+} from './github-settings.js';
+export type {
+  GitHubSettingSource,
+  GitHubSettingSources,
+  DetectedGitHubRemote,
+  EffectiveGitHubSettings,
+  ResolvedGitHubSettings,
+} from './github-settings.js';
 
 // Pipeline types
 export type {

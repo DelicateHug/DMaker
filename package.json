@@ -28,6 +28,8 @@
     "dev:server": "npm run build:packages && npm run _dev:server",
     "dev:restart": "powershell -ExecutionPolicy Bypass -File dev-restart.ps1",
     "dev:full": "npm run build:packages && concurrently \"npm run _dev:server\" \"npm run _dev:web\"",
+    "start:pair": "powershell -NoProfile -ExecutionPolicy Bypass -File start.ps1",
+    "runner": "npm run runner --workspace=apps/server",
     "build": "npm run build:packages && npm run build --workspace=apps/ui",
     "build:packages": "npm run build -w @dmaker/types && npm run build -w @dmaker/platform && npm run build -w @dmaker/utils && npm run build -w @dmaker/prompts -w @dmaker/model-resolver -w @dmaker/dependency-resolver && npm run build -w @dmaker/git-utils",
     "build:server": "npm run build:packages && npm run build --workspace=apps/server",
@@ -66,6 +68,7 @@
     "tree-kill": "1.2.2"
   },
   "devDependencies": {
+    "concurrently": "^10.0.5",
     "husky": "9.1.7",
     "lint-staged": "16.2.7",
     "prettier": "3.7.4",

@@ -1,3 +1,4 @@
-export { TopNavigationBar, ALL_PROJECTS_VALUE } from './top-nav-bar';
+export { QuickLauncher } from './quick-launcher';
 export { DeployButton } from './deploy-button';
 export type { DeployButtonProps } from './deploy-button';
+export { EnvironmentBar } from './environment-bar';

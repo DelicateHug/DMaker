@@ -51,11 +51,25 @@ export type EventType =
   | 'feature:status-changed'
   | 'session:state-changed'
   | 'usage:updated'
+  | 'deploy:started'
   | 'deploy:output'
   | 'deploy:success'
   | 'deploy:error'
   | 'feature:claimed'
   | 'feature:unclaimed'
-  | 'feature:claim-blocked';
+  | 'feature:claim-blocked'
+  // An agent started on a task it does not own, so it runs without write tools
+  | 'feature:write-blocked'
+  | 'feature:archived'
+  | 'feature:restored'
+  // Background GitHub issue drafting kicked off when a task is added
+  | 'feature:issue-draft-updated'
+  // An agent needs the user to answer something before it can continue
+  | 'feature:question-asked'
+  | 'feature:question-answered'
+  // Attach/detach of the standalone task runner daemon that owns execution
+  | 'runner:status'
+  // Progress of the prod self-update (pull -> rebuild -> restart)
+  | 'self-update:event';
 
 export type EventCallback = (type: EventType, payload: unknown) => void;

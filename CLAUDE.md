@@ -11,9 +11,15 @@ DMaker is an autonomous AI development studio built as an npm workspace monorepo
 ```bash
 # Development
 npm run dev                 # Interactive launcher (choose web or electron)
-npm run dev:web             # Web browser mode (localhost:3007)
+npm run dev:web             # Web browser mode (localhost:3017, backend on 3019)
 npm run dev:electron        # Desktop app mode
 npm run dev:electron:debug  # Desktop with DevTools open
+npm run dev:full            # Server + web UI together (dev pair only)
+
+# Dev/prod pair (Windows, PowerShell)
+./start.ps1                 # Bring up prod, dev and the task runner together
+./start.ps1 -SkipBuild      # Same, but serve the last prod build as-is
+./stop.ps1                  # Stop the whole set by exact PID/port
 
 # Building
 npm run build               # Build web application
@@ -44,8 +50,8 @@ npm run format:check        # Prettier check
 ```
 dmaker/
 ├── apps/
-│   ├── ui/           # React + Vite + Electron frontend (port 3007)
-│   └── server/       # Express + WebSocket backend (port 3008)
+│   ├── ui/           # React + Vite + Electron frontend (3017 dev / 3007 built)
+│   └── server/       # Express + WebSocket backend (3019 dev / 3009 built)
 └── libs/             # Shared packages (@dmaker/*)
     ├── types/        # Core TypeScript definitions (no dependencies)
     ├── utils/        # Logging, errors, image processing, context loading
@@ -147,6 +153,33 @@ import { createLogger } from '../lib/logger'; // Wrong
 
 All server operations emit events that stream to the frontend via WebSocket. Events are created using `createEventEmitter()` from `lib/events.ts`.
 
+### Dev/Prod Pair and the Task Runner
+
+`start.ps1` runs two DMaker environments against one checkout plus a third
+process that owns execution:
+
+```
+prod UI 3007 -> prod server 3009 --                                    >-- runner daemon 3029 (executes everything)
+dev  UI 3017 -> dev  server 3019 --/   (dev never reaches it — it is read-only)
+```
+
+- **Dev is read-only.** It can browse and edit features, settings and specs, but
+  every endpoint that _starts_ something (agents, features, pipelines, deploys,
+  terminals) returns 403. The rules live in `apps/server/src/lib/execution-routes.ts`
+  and drive both the read-only gate and the runner proxy, so the two can't drift.
+- **Prod executes**, but delegates to the runner over HTTP and replays the
+  runner's event stream to its own WebSocket clients (`lib/runner-client.ts`).
+  Because the runner is a separate PID, "Update Prod" can rebuild and restart the
+  prod server without stopping work already in flight.
+- **Separate data directories.** Prod uses `data/`, dev uses `data-dev/`, so two
+  live servers never write the same `settings.json`.
+- **Update Prod** (`services/self-update-service.ts`) stashes local changes,
+  pulls `origin` with a rebase, pops the stash, rebuilds, then exits with code 75
+  to ask `start.ps1` for a restart. Any conflict rolls the repo back to exactly
+  where it started and rebuilds nothing.
+- Without these environment variables nothing changes: `npm run dev:full`, the
+  Electron build and the tests all still execute in process.
+
 ### Git Worktree Isolation
 
 Each feature executes in an isolated git worktree, created via `@dmaker/git-utils`. This protects the main branch during AI agent execution.
@@ -168,8 +201,18 @@ Use `resolveModelString()` from `@dmaker/model-resolver` to convert model aliase
 - `ANTHROPIC_API_KEY` - Anthropic API key (or use Claude Code CLI auth)
 - `HOST` - Host to bind server to (default: 0.0.0.0)
 - `HOSTNAME` - Hostname for user-facing URLs (default: localhost)
-- `PORT` - Server port (default: 3008)
+- `PORT` - Server port (default: 3019 from source via `tsx`, 3009 from built `dist`)
 - `DATA_DIR` - Data storage directory (default: ./data)
 - `ALLOWED_ROOT_DIRECTORY` - Restrict file operations to specific directory
 - `DMAKER_MOCK_AGENT=true` - Enable mock agent mode for CI testing
 - `VITE_HOSTNAME` - Hostname for frontend API URLs (default: localhost)
+
+### Dev/prod pair (set by `start.ps1`)
+
+- `DMAKER_ENV` - `dev` or `prod`; defaults to whether the process runs from source or `dist`
+- `DMAKER_ROLE` - `app` (serves a UI) or `runner` (executes tasks only)
+- `DMAKER_READ_ONLY=true` - Refuse execution requests; never applies to a runner
+- `DMAKER_RUNNER_URL` - Forward execution to a runner daemon (`auto` = `http://127.0.0.1:3029`)
+- `DMAKER_PEER_URL` / `DMAKER_SELF_URL` - The two UIs, for the switch-environment link
+- `DMAKER_SELF_PROJECT` - Path to this checkout; registers DMaker as one of its own projects
+- `DMAKER_LAUNCHER_MANAGED=true` - A supervisor will restart this process, which is what enables Update Prod

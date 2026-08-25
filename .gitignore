@@ -94,12 +94,23 @@ yarn.lock
 data/.api-key
 data/credentials.json
 data/
+# Read-only dev half of a start.ps1 pair keeps its own store
+data-dev/
 .codex/
 
 # Personal/local scripts
 *.ps1
+# ...except the launcher pair, which is part of the project: start.ps1 brings up
+# the dev/prod set and stop.ps1 tears it down by exact PID/port.
+!start.ps1
+!stop.ps1
 start_this.txt
 test-output.txt
+
+# TanStack Router temp output and Playwright scratch repos (test runs create
+# throwaway git repositories under apps/ui/test/)
+apps/ui/.tanstack/
+apps/ui/test/
 
 # Windows NUL artifacts
 nul
