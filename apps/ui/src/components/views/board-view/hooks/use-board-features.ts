@@ -124,8 +124,6 @@ function summaryToFeature(
     githubIssue: summary.githubIssue,
     claimedBy: summary.claimedBy,
     claimedAt: summary.claimedAt,
-    // Source tracking
-    source: 'local' as const,
     // Project info for multi-project support
     projectPath,
     projectName,
@@ -287,7 +285,6 @@ export function useBoardFeatures({
                 startedAt: f.startedAt,
                 model: f.model || 'opus',
                 thinkingLevel: f.thinkingLevel || 'none',
-                source: f.source || 'local',
                 projectPath: project.path,
                 projectName: project.name,
               }));
@@ -345,7 +342,6 @@ export function useBoardFeatures({
           startedAt: f.startedAt,
           model: f.model || 'opus',
           thinkingLevel: f.thinkingLevel || 'none',
-          source: f.source || 'local',
           projectPath: effectiveProject.path,
           projectName: (effectiveProject as { name?: string }).name,
         }));

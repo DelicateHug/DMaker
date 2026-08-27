@@ -55,6 +55,12 @@ describe('execution-routes.ts', () => {
       expect(findReadOnlyRule('POST', '/api/settings/global')).toBeNull();
     });
 
+    // Answering is proxied to the runner, not blocked — dev must still be able
+    // to answer a question about work the runner is doing.
+    it('allows answering an agent question', () => {
+      expect(findReadOnlyRule('POST', '/api/features/answer-question')).toBeNull();
+    });
+
     it('allows stopping something that is already running', () => {
       expect(findReadOnlyRule('POST', '/api/auto-mode/stop-feature')).toBeNull();
       expect(findReadOnlyRule('POST', '/api/agent/stop')).toBeNull();
@@ -94,6 +100,13 @@ describe('execution-routes.ts', () => {
 
     it('proxies the running-features read that pairs with them', () => {
       expect(shouldProxyToRunner('/api/features/running')).toBe(true);
+    });
+
+    // The agent waiting on the answer lives in the runner; answering anywhere
+    // else writes the answer to disk and resumes nothing.
+    it('proxies answering an agent question', () => {
+      expect(shouldProxyToRunner('/api/features/answer-question')).toBe(true);
+      expect(shouldProxyToRunner('/api/features/answer-question?projectPath=x')).toBe(true);
     });
 
     it('leaves the rest of the features router local', () => {

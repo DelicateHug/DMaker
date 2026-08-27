@@ -85,13 +85,13 @@ test.describe('Feature Skip Tests Badge', () => {
     // Open the add feature dialog and add feature with default settings
     // Default is skipTests=true (manual verification required)
     await clickAddFeature(page);
-    await fillAddFeatureDialog(page, featureDescription, { source: 'local' });
+    await fillAddFeatureDialog(page, featureDescription);
     await confirmAddFeature(page);
 
     // Wait for the feature to appear in the backlog
     await expect(async () => {
       const backlogColumn = page.locator(
-        '[data-testid^="sidebar-section-status:"][data-testid$=":local"]'
+        '[data-testid^="sidebar-section-status:"][data-testid$=":backlog"]'
       );
       const featureCard = backlogColumn.locator('[data-testid="sidebar-feature-row"]').filter({
         hasText: featureDescription,
@@ -101,7 +101,7 @@ test.describe('Feature Skip Tests Badge', () => {
 
     // Get the feature ID from the card
     const featureCard = page
-      .locator('[data-testid^="sidebar-section-status:"][data-testid$=":local"]')
+      .locator('[data-testid^="sidebar-section-status:"][data-testid$=":backlog"]')
       .locator('[data-testid="sidebar-feature-row"]')
       .filter({ hasText: featureDescription })
       .first();

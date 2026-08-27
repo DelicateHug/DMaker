@@ -13,7 +13,7 @@ export async function getKanbanCard(page: Page, featureId: string): Promise<Loca
 }
 
 /**
- * A status group in the sidebar (e.g. 'backlog', 'local', 'waiting_approval').
+ * A status group in the sidebar (e.g. 'backlog', 'planning', 'waiting_approval').
  *
  * Groups are nested project → branch → status and their test id carries all
  * three, so match on the status suffix rather than trying to reconstruct the
@@ -120,41 +120,13 @@ export async function clickAddFeature(page: Page): Promise<void> {
 }
 
 /**
- * Choose whether the new feature is created locally or as a GitHub issue.
- *
- * The dialog defaults to GitHub when the board's GitHub mode is on. That path
- * needs a real repository behind the project, so tests running against a bare
- * temp directory have to pick 'local' explicitly or the issue creation fails
- * and the feature stays local anyway, just with an error toast.
- */
-export async function selectFeatureSource(page: Page, source: 'local' | 'github'): Promise<void> {
-  // The source toggle lives in the collapsed "More Options" section.
-  const optionals = page.locator('[data-testid="add-feature-more-options"]');
-  if ((await optionals.getAttribute('aria-expanded')) !== 'true') {
-    await optionals.click();
-  }
-
-  const button = page.locator(`[data-testid="feature-source-${source}"]`);
-  await button.waitFor({ state: 'visible', timeout: 5000 });
-  await button.click();
-  await page.waitForFunction(
-    (testId) => document.querySelector(testId)?.getAttribute('aria-pressed') === 'true',
-    `[data-testid="feature-source-${source}"]`,
-    { timeout: 5000 }
-  );
-}
-
-/**
  * Fill in the add feature dialog
  */
 export async function fillAddFeatureDialog(
   page: Page,
   description: string,
-  options?: { branch?: string; category?: string; source?: 'local' | 'github' }
+  options?: { branch?: string; category?: string }
 ): Promise<void> {
-  if (options?.source) {
-    await selectFeatureSource(page, options.source);
-  }
   // Fill description (using the dropzone textarea)
   const descriptionInput = page.locator('[data-testid="add-feature-dialog"] textarea').first();
   await descriptionInput.fill(description);

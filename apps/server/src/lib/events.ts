@@ -72,6 +72,13 @@ const NEVER_THROTTLE: Set<string> = new Set([
   'auto_mode_phase',
   'auto_mode_stopped',
   'auto_mode_metrics_update',
+  // Agent-tree events. None of them matches a throttle rule today, so listing
+  // them changes nothing right now — it states the requirement, which is that
+  // they must never coalesce. A dropped spawn event is a node missing from the
+  // tree forever, and every later event carrying that agentId has no node.
+  'auto_mode_subagent_started',
+  'auto_mode_subagent_finished',
+  'auto_mode_agent_tree',
 ]);
 
 /**
@@ -86,10 +93,21 @@ function getThrottleKey(type: EventType, payload: unknown): string | null {
     if (subType) {
       if (NEVER_THROTTLE.has(subType)) return null;
       if (subType in DEFAULT_THROTTLE_RULES) {
-        // For content-accumulating events, key by featureId so concurrent
-        // features don't mix their content in the same throttle bucket
+        // Key by featureId so concurrent features never share a bucket, and by
+        // agentId so Master and its sub-agents never share one either. Two
+        // different bugs live in a shared bucket: under `accumulateContent` the
+        // texts are concatenated into one payload that can only carry one
+        // agentId, so half the prose is attributed to the wrong agent — worse
+        // than no attribution; without it the later payload simply replaces the
+        // earlier one and another agent's tool call vanishes from the timeline.
+        // Events with no agentId (pipeline steps, spec regeneration, every
+        // session recorded before agent attribution existed) keep the old key.
         const featureId = obj.featureId as string | undefined;
-        return featureId ? `${subType}:${featureId}` : subType;
+        const agentId = obj.agentId as string | undefined;
+        let key = subType;
+        if (featureId) key += `:${featureId}`;
+        if (agentId) key += `:${agentId}`;
+        return key;
       }
     }
   }
@@ -131,7 +149,8 @@ export function createThrottledCallback(callback: EventCallback): {
       return;
     }
 
-    // Extract the base sub-type from compound keys like "auto_mode_progress:featureId"
+    // Extract the base sub-type from compound keys like
+    // "auto_mode_progress:featureId" or "auto_mode_progress:featureId:agentId"
     const baseKey = key.includes(':') ? key.split(':')[0] : key;
     const config = DEFAULT_THROTTLE_RULES[baseKey];
     if (!config) {

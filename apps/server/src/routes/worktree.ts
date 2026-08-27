@@ -733,16 +733,92 @@ async function findExistingWorktreeForBranch(
   }
 }
 
+/**
+ * Directory name a branch's worktree gets: git permits characters a directory
+ * name should not carry, so they are flattened. `createCreateHandler` writes it
+ * and `resolveFeatureWorktreePath` reads it back, which is why it is one
+ * function rather than two copies of a regex that can drift apart.
+ */
+function worktreeDirNameForBranch(branchName: string): string {
+  return branchName.replace(/[^a-zA-Z0-9_-]/g, '-');
+}
+
+/**
+ * Where a feature's worktree actually is.
+ *
+ * `.worktrees/<featureId>` was never right. Worktrees are created at
+ * `.worktrees/<sanitised branch name>`, and a feature id like
+ * `26-08-2026-testing_prod_issue_to` shares nothing with its branch
+ * `testing-prod-issue-to-dev-change-agents-67bfafb7` — so the guess missed every
+ * time, and the handlers below quietly answered about the main checkout instead.
+ *
+ * Ask git first, then the directory git may have forgotten (the same gap
+ * `scanWorktreesDirectory` exists to cover), and only then the legacy guess — so
+ * a caller that still sends no `branchName` behaves exactly as it did before.
+ */
+async function resolveFeatureWorktreePath(
+  projectPath: string,
+  featureId: string,
+  branchName?: string
+): Promise<string | null> {
+  const candidates: string[] = [];
+
+  if (branchName) {
+    const tracked = await findExistingWorktreeForBranch(projectPath, branchName);
+    if (tracked) {
+      candidates.push(tracked.path);
+    }
+    candidates.push(path.join(projectPath, '.worktrees', worktreeDirNameForBranch(branchName)));
+  }
+
+  if (featureId) {
+    candidates.push(path.join(projectPath, '.worktrees', featureId));
+  }
+
+  for (const candidate of candidates) {
+    try {
+      await secureFs.access(candidate);
+      return candidate;
+    } catch {
+      // Try the next candidate.
+    }
+  }
+
+  return null;
+}
+
+/**
+ * A miss means whatever is reported next is not the feature's work — the exact
+ * wrong answer that went unnoticed for as long as it did precisely because it
+ * arrived silently under `success: true`. A feature with no worktree is a
+ * legitimate state; not being told about it is not.
+ */
+function logMissingWorktree(
+  projectPath: string,
+  featureId: string,
+  branchName: string | undefined,
+  consequence: string
+): void {
+  if (isMockPath(projectPath)) {
+    return;
+  }
+  const branch = branchName ? `branch "${branchName}"` : 'no branchName supplied';
+  logger.warn(
+    `No worktree for feature "${featureId}" (${branch}) under ${projectPath} — ${consequence}`
+  );
+}
+
 // ============================================================================
 // Route Handler Functions
 // ============================================================================
 
-function createInfoHandler() {
+export function createInfoHandler() {
   return async (req: Request, res: Response): Promise<void> => {
     try {
-      const { projectPath, featureId } = req.body as {
+      const { projectPath, featureId, branchName } = req.body as {
         projectPath: string;
         featureId: string;
+        branchName?: string;
       };
 
       if (!projectPath || !featureId) {
@@ -753,9 +829,15 @@ function createInfoHandler() {
         return;
       }
 
-      const worktreePath = path.join(projectPath, '.worktrees', featureId);
+      const worktreePath = await resolveFeatureWorktreePath(projectPath, featureId, branchName);
+
+      if (!worktreePath) {
+        logMissingWorktree(projectPath, featureId, branchName, 'reporting no worktree.');
+        res.json({ success: true, worktreePath: null, branchName: null });
+        return;
+      }
+
       try {
-        await secureFs.access(worktreePath);
         const { stdout } = await execAsync('git rev-parse --abbrev-ref HEAD', {
           cwd: worktreePath,
         });
@@ -764,7 +846,8 @@ function createInfoHandler() {
           worktreePath: normalizePath(worktreePath),
           branchName: stdout.trim(),
         });
-      } catch {
+      } catch (error) {
+        logWorktreeError(error, `Reading the branch of ${worktreePath} failed`, worktreePath);
         res.json({ success: true, worktreePath: null, branchName: null });
       }
     } catch (error) {
@@ -774,12 +857,13 @@ function createInfoHandler() {
   };
 }
 
-function createStatusHandler() {
+export function createStatusHandler() {
   return async (req: Request, res: Response): Promise<void> => {
     try {
-      const { projectPath, featureId } = req.body as {
+      const { projectPath, featureId, branchName } = req.body as {
         projectPath: string;
         featureId: string;
+        branchName?: string;
       };
 
       if (!projectPath || !featureId) {
@@ -790,10 +874,21 @@ function createStatusHandler() {
         return;
       }
 
-      const worktreePath = path.join(projectPath, '.worktrees', featureId);
+      const worktreePath = await resolveFeatureWorktreePath(projectPath, featureId, branchName);
+
+      if (!worktreePath) {
+        logMissingWorktree(projectPath, featureId, branchName, 'reporting an empty status.');
+        res.json({
+          success: true,
+          modifiedFiles: 0,
+          files: [],
+          diffStat: '',
+          recentCommits: [],
+        });
+        return;
+      }
 
       try {
-        await secureFs.access(worktreePath);
         const { stdout: status } = await execAsync('git status --porcelain', {
           cwd: worktreePath,
         });
@@ -815,7 +910,8 @@ function createStatusHandler() {
           diffStat: diffStat.trim(),
           recentCommits: logOutput.trim().split('\n').filter(Boolean),
         });
-      } catch {
+      } catch (error) {
+        logWorktreeError(error, `Reading status of ${worktreePath} failed`, worktreePath);
         res.json({
           success: true,
           modifiedFiles: 0,
@@ -971,12 +1067,13 @@ function createListHandler() {
   };
 }
 
-function createDiffsHandler() {
+export function createDiffsHandler() {
   return async (req: Request, res: Response): Promise<void> => {
     try {
-      const { projectPath, featureId } = req.body as {
+      const { projectPath, featureId, branchName } = req.body as {
         projectPath: string;
         featureId: string;
+        branchName?: string;
       };
 
       if (!projectPath || !featureId) {
@@ -987,36 +1084,60 @@ function createDiffsHandler() {
         return;
       }
 
-      const worktreePath = path.join(projectPath, '.worktrees', featureId);
+      const worktreePath = await resolveFeatureWorktreePath(projectPath, featureId, branchName);
 
-      try {
-        await secureFs.access(worktreePath);
-
-        const result = await getGitRepositoryDiffs(worktreePath);
-        res.json({
-          success: true,
-          diff: result.diff,
-          files: result.files,
-          hasChanges: result.hasChanges,
-        });
-      } catch (innerError) {
-        const code = (innerError as NodeJS.ErrnoException | undefined)?.code;
-        if (code && code !== 'ENOENT') {
-          logError(innerError, 'Worktree access failed, falling back to main project');
-        }
-
+      if (worktreePath) {
         try {
-          const result = await getGitRepositoryDiffs(projectPath);
+          const result = await getGitRepositoryDiffs(worktreePath);
           res.json({
             success: true,
             diff: result.diff,
             files: result.files,
             hasChanges: result.hasChanges,
+            worktreePath: normalizePath(worktreePath),
+            usedMainCheckout: false,
           });
-        } catch (fallbackError) {
-          logError(fallbackError, 'Fallback to main project also failed');
-          res.json({ success: true, diff: '', files: [], hasChanges: false });
+          return;
+        } catch (innerError) {
+          logWorktreeError(
+            innerError,
+            `Diffing worktree ${worktreePath} failed, falling back to the main checkout`,
+            worktreePath
+          );
         }
+      } else {
+        logMissingWorktree(
+          projectPath,
+          featureId,
+          branchName,
+          "falling back to the main checkout, whose changes are not this feature's."
+        );
+      }
+
+      // The fallback answers with the main checkout's diff, which belongs to
+      // whatever the developer happens to be doing — not to this feature. It is
+      // still better than an error, but it must be labelled: answering the wrong
+      // question under `success: true` is what let this go unnoticed.
+      try {
+        const result = await getGitRepositoryDiffs(projectPath);
+        res.json({
+          success: true,
+          diff: result.diff,
+          files: result.files,
+          hasChanges: result.hasChanges,
+          worktreePath: null,
+          usedMainCheckout: true,
+        });
+      } catch (fallbackError) {
+        logError(fallbackError, 'Fallback to main project also failed');
+        res.json({
+          success: true,
+          diff: '',
+          files: [],
+          hasChanges: false,
+          worktreePath: null,
+          usedMainCheckout: true,
+        });
       }
     } catch (error) {
       logError(error, 'Get worktree diffs failed');
@@ -1025,13 +1146,14 @@ function createDiffsHandler() {
   };
 }
 
-function createFileDiffHandler() {
+export function createFileDiffHandler() {
   return async (req: Request, res: Response): Promise<void> => {
     try {
-      const { projectPath, featureId, filePath } = req.body as {
+      const { projectPath, featureId, filePath, branchName } = req.body as {
         projectPath: string;
         featureId: string;
         filePath: string;
+        branchName?: string;
       };
 
       if (!projectPath || !featureId || !filePath) {
@@ -1042,11 +1164,15 @@ function createFileDiffHandler() {
         return;
       }
 
-      const worktreePath = path.join(projectPath, '.worktrees', featureId);
+      const worktreePath = await resolveFeatureWorktreePath(projectPath, featureId, branchName);
+
+      if (!worktreePath) {
+        logMissingWorktree(projectPath, featureId, branchName, 'reporting an empty diff.');
+        res.json({ success: true, diff: '', filePath });
+        return;
+      }
 
       try {
-        await secureFs.access(worktreePath);
-
         const { stdout: status } = await execAsync(`git status --porcelain -- "${filePath}"`, {
           cwd: worktreePath,
         });
@@ -1066,10 +1192,7 @@ function createFileDiffHandler() {
 
         res.json({ success: true, diff, filePath });
       } catch (innerError) {
-        const code = (innerError as NodeJS.ErrnoException | undefined)?.code;
-        if (code && code !== 'ENOENT') {
-          logError(innerError, 'Worktree file diff failed');
-        }
+        logWorktreeError(innerError, `Diffing ${filePath} in ${worktreePath} failed`, worktreePath);
         res.json({ success: true, diff: '', filePath });
       }
     } catch (error) {
@@ -1206,7 +1329,7 @@ export function createCreateHandler(events: EventEmitter) {
         return;
       }
 
-      const sanitizedName = branchName.replace(/[^a-zA-Z0-9_-]/g, '-');
+      const sanitizedName = worktreeDirNameForBranch(branchName);
       const worktreesDir = path.join(projectPath, '.worktrees');
       const worktreePath = path.join(worktreesDir, sanitizedName);
 

@@ -9,10 +9,14 @@
  * The issue body is written by Haiku — short and readable, not a spec. When the
  * task note is too thin to describe what "done" looks like, the drafter parks a
  * question on the feature instead of inventing requirements; the task view
- * surfaces it and `answerQuestion()` resumes the draft.
+ * surfaces it and `resumeAfterAnswer()` resumes the draft.
+ *
+ * The question itself belongs to AgentQuestionService — numbering, choices and
+ * the answer shape are shared with the planning and implementation agents. What
+ * stays here is drafter policy: how many questions, how many rounds, and when
+ * it is safe to carry on.
  */
 
-import { randomUUID } from 'crypto';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { createLogger } from '@dmaker/utils';
@@ -31,6 +35,7 @@ import { getGitHubSyncService } from './github-sync-service.js';
 import { simpleQuery } from '../providers/simple-query-service.js';
 import { extractJson } from '../lib/json-extractor.js';
 import { getPromptCustomization } from '../lib/settings-helpers.js';
+import { getAgentQuestionService, type AskQuestionChoice } from './agent-question-service.js';
 
 const execFileAsync = promisify(execFile);
 const logger = createLogger('IssueDraft');
@@ -70,10 +75,26 @@ const ISSUE_DRAFT_SCHEMA = {
         type: 'object',
         properties: {
           question: { type: 'string' },
+          header: {
+            type: 'string',
+            description: 'Two or three word label for the question, e.g. "Scope"',
+          },
           options: {
             type: 'array',
-            description: 'Optional suggested answers the user can pick from',
-            items: { type: 'string' },
+            description:
+              'Optional suggested answers the user can pick from. The user is always offered a free-text path as well, so never include an "Other" option.',
+            items: {
+              type: 'object',
+              properties: {
+                label: { type: 'string', description: 'The choice itself, 1-5 words' },
+                description: {
+                  type: 'string',
+                  description: 'What picking this option would mean for the issue',
+                },
+              },
+              required: ['label'],
+              additionalProperties: false,
+            },
           },
         },
         required: ['question'],
@@ -93,11 +114,33 @@ const ISSUE_DRAFT_SCHEMA = {
   additionalProperties: false,
 } as const;
 
+interface IssueDraftQuestion {
+  question: string;
+  header?: string;
+  /**
+   * Objects since the schema widened. Plain strings are still accepted because
+   * the `extractJson` fallback is not schema-enforced, so a model that ignored
+   * the schema must not cost the user their clarification round.
+   */
+  options?: Array<string | { label?: string; description?: string }>;
+}
+
 interface IssueDraftResult {
   needsClarification?: boolean;
-  questions?: Array<{ question: string; options?: string[] }>;
+  questions?: IssueDraftQuestion[];
   title?: string;
   body?: string;
+}
+
+/** Flatten either option shape into what AgentQuestionService takes. */
+function toChoices(options: IssueDraftQuestion['options']): AskQuestionChoice[] {
+  return (options || [])
+    .map((option) =>
+      typeof option === 'string'
+        ? { label: option }
+        : { label: option?.label ?? '', description: option?.description }
+    )
+    .filter((option) => option.label.trim().length > 0);
 }
 
 export interface WaitForIssueResult {
@@ -142,53 +185,25 @@ export class IssueDraftService {
   }
 
   /**
-   * Record the user's answer to an outstanding question and resume drafting.
+   * Carry on drafting now that one of the drafter's questions has been
+   * answered. AgentQuestionService owns recording the answer; what is drafter
+   * policy is *when* it is safe to continue.
    *
-   * @returns The updated feature, or null when the feature or question is gone.
+   * The drafter is restarted rather than resumed — it has no live session to
+   * hand an answer to — so restarting while another of its own questions is
+   * still outstanding would re-ask with half the picture.
+   *
+   * @param questions The feature's questions as they now stand on disk.
+   * @returns Whether drafting was actually restarted.
    */
-  async answerQuestion(
-    projectPath: string,
-    featureId: string,
-    questionId: string,
-    answer: string,
-    options?: { skipped?: boolean }
-  ): Promise<Feature | null> {
-    const feature = await this.featureLoader.get(projectPath, featureId);
-    if (!feature) return null;
-
-    const questions = feature.agentQuestions || [];
-    const target = questions.find((q) => q.id === questionId);
-    if (!target) {
-      logger.warn(`Question ${questionId} not found on feature ${featureId}`);
-      return feature;
-    }
-
-    const answeredAt = new Date().toISOString();
-    const updatedQuestions = questions.map((q) =>
-      q.id === questionId ? { ...q, answer, answeredAt, skipped: options?.skipped } : q
+  resumeAfterAnswer(projectPath: string, featureId: string, questions: AgentQuestion[]): boolean {
+    const stillWaiting = questions.some(
+      (q) => q.source === 'issue-draft' && !q.answeredAt && !q.skipped && !q.expiredAt
     );
+    if (stillWaiting) return false;
 
-    const updated = await this.featureLoader.update(projectPath, featureId, {
-      agentQuestions: updatedQuestions,
-    });
-
-    this.events.emit('feature:question-answered', {
-      projectPath,
-      featureId,
-      questionId,
-      answer,
-      skipped: options?.skipped ?? false,
-    });
-
-    // Resume the draft once nothing from this source is still outstanding.
-    const stillWaiting = updatedQuestions.some(
-      (q) => q.source === target.source && !q.answeredAt && !q.skipped
-    );
-    if (!stillWaiting && target.source === 'issue-draft') {
-      this.start(projectPath, featureId);
-    }
-
-    return updated;
+    this.start(projectPath, featureId);
+    return true;
   }
 
   /**
@@ -424,51 +439,52 @@ export class IssueDraftService {
   private async askQuestions(
     projectPath: string,
     featureId: string,
-    questions: Array<{ question: string; options?: string[] }>,
+    questions: IssueDraftQuestion[],
     round: number
   ): Promise<void> {
-    const askedAt = new Date().toISOString();
-    const feature = await this.featureLoader.get(projectPath, featureId);
-    const existing = feature?.agentQuestions || [];
+    // Two questions is drafter policy, not a global cap: the point is to
+    // unblock a hopeless note, not to interview the user.
+    const askable = questions.filter((q) => q.question?.trim()).slice(0, 2);
 
-    const newQuestions: AgentQuestion[] = questions
-      .filter((q) => q.question?.trim())
-      .slice(0, 2)
-      .map((q) => ({
-        id: randomUUID(),
-        source: 'issue-draft',
-        question: q.question.trim(),
-        ...(q.options?.length ? { options: q.options } : {}),
-        askedAt,
-      }));
-
-    if (newQuestions.length === 0) {
+    if (askable.length === 0) {
       // The model claimed it needed clarification but gave nothing to ask.
       // Write the issue from what we have rather than stalling the task.
+      const feature = await this.featureLoader.get(projectPath, featureId);
       if (!feature) return;
       const draft = await this.draftIssue(projectPath, feature);
       await this.createIssue(projectPath, feature, { ...draft, needsClarification: false });
       return;
     }
 
-    await this.featureLoader.update(projectPath, featureId, {
-      agentQuestions: [...existing, ...newQuestions],
-    });
+    const asked = await getAgentQuestionService(
+      this.events,
+      this.featureLoader,
+      this.settingsService
+    ).ask(
+      projectPath,
+      featureId,
+      'issue-draft',
+      askable.map((q) => ({
+        question: q.question,
+        header: q.header,
+        choices: toChoices(q.options),
+      }))
+    );
+
+    if (asked.length === 0) {
+      // The feature vanished between drafting and asking. Leaving the draft in
+      // 'drafting' would wedge the commit gate, so let the run's catch record
+      // it as failed rather than reporting a wait on questions that do not
+      // exist.
+      throw new Error(`Could not park clarification questions on ${featureId}`);
+    }
 
     await this.setDraft(projectPath, featureId, {
       status: 'awaiting_clarification',
       clarificationRounds: round,
     });
 
-    for (const question of newQuestions) {
-      this.events.emit('feature:question-asked', {
-        projectPath,
-        featureId,
-        question,
-      });
-    }
-
-    logger.info(`Issue draft for ${featureId} is waiting on ${newQuestions.length} question(s)`);
+    logger.info(`Issue draft for ${featureId} is waiting on ${asked.length} question(s)`);
   }
 
   /** File the issue and link it back to the feature. */
@@ -502,7 +518,6 @@ export class IssueDraftService {
     const current = await this.featureLoader.get(projectPath, feature.id);
 
     const updated = await this.featureLoader.update(projectPath, feature.id, {
-      source: 'github',
       githubIssue: {
         number: result.issueNumber,
         url: result.url || '',

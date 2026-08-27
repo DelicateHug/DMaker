@@ -27,9 +27,9 @@ const SERVER_URL = API_BASE_URL;
 
 /** One seeded task per status we render a glyph for. */
 const SEEDED = [
-  { id: 'feat-local', status: 'local', title: 'Local task' },
   { id: 'feat-backlog', status: 'backlog', title: 'Backlog task' },
   { id: 'feat-planning', status: 'planning', title: 'Planning task' },
+  { id: 'feat-building', status: 'building', title: 'Building task' },
   { id: 'feat-in-progress', status: 'in_progress', title: 'In progress task' },
   { id: 'feat-waiting', status: 'waiting_approval', title: 'Waiting task' },
   { id: 'feat-completed', status: 'completed', title: 'Completed task' },

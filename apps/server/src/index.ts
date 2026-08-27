@@ -36,6 +36,7 @@ import { createFsRoutes } from './routes/fs.js';
 import { createHealthRoutes, createDetailedHandler } from './routes/health.js';
 import { createAgentRoutes } from './routes/agent.js';
 import { createSessionsRoutes } from './routes/sessions.js';
+import { createResearchRoutes } from './routes/research.js';
 import { createFeaturesRoutes } from './routes/features.js';
 import { createAutoModeRoutes } from './routes/auto-mode.js';
 import { createEnhancePromptRoutes } from './routes/enhance-prompt.js';
@@ -60,6 +61,7 @@ import { FeatureLoader } from './services/feature-loader.js';
 import { AutoModeService } from './services/auto-mode-service.js';
 import { getTerminalService } from './services/terminal-service.js';
 import { SettingsService } from './services/settings-service.js';
+import { ResearchService } from './services/research-service.js';
 import { createSpecRegenerationRoutes } from './routes/app-spec.js';
 import { createClaudeRoutes } from './routes/claude.js';
 import { ClaudeUsageService } from './services/claude-usage-service.js';
@@ -241,7 +243,8 @@ const events: EventEmitter = createEventEmitter();
 // Create services
 // Note: settingsService is created first so it can be injected into other services
 const settingsService = new SettingsService(DATA_DIR);
-const agentService = new AgentService(DATA_DIR, events, settingsService);
+const researchService = new ResearchService(DATA_DIR);
+const agentService = new AgentService(DATA_DIR, events, settingsService, researchService);
 const featureLoader = new FeatureLoader();
 const autoModeService = new AutoModeService(events, settingsService, featureLoader);
 const claudeUsageService = new ClaudeUsageService();
@@ -341,6 +344,7 @@ app.get('/api/health/detailed', createDetailedHandler());
 app.use('/api/fs', createFsRoutes(events));
 app.use('/api/agent', createAgentRoutes(agentService, events));
 app.use('/api/sessions', createSessionsRoutes(agentService));
+app.use('/api/research', createResearchRoutes(researchService, agentService));
 app.use(
   '/api/features',
   createFeaturesRoutes(featureLoader, settingsService, events, autoModeService)
@@ -352,7 +356,7 @@ app.use('/api/git', createGitRoutes());
 app.use('/api/suggestions', createSuggestionsRoutes(events, settingsService));
 app.use('/api/models', createModelsRoutes());
 app.use('/api/spec-regeneration', createSpecRegenerationRoutes(events, settingsService));
-app.use('/api/running-agents', createRunningAgentsRoutes(autoModeService));
+app.use('/api/running-agents', createRunningAgentsRoutes(autoModeService, featureLoader));
 app.use('/api/workspace', createWorkspaceRoutes());
 app.use('/api/templates', createTemplatesRoutes());
 app.use('/api/terminal', createTerminalRoutes());

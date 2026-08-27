@@ -3,6 +3,7 @@ import { Label } from '@/components/ui/forms';
 import { Switch } from '@/components/ui/forms';
 import { Slider } from '@/components/ui/forms';
 import { FastForward, Bot, Settings2 } from 'lucide-react';
+import { MAX_CONCURRENT_AGENTS } from '@dmaker/types';
 import { useAppStore } from '@/store/app-store';
 
 interface AutoModeSettingsPopoverProps {
@@ -57,15 +58,16 @@ export function AutoModeSettingsPopover({
                 value={[agentMultiplier]}
                 onValueChange={handleMaxAgentsChange}
                 min={1}
-                max={20}
+                max={MAX_CONCURRENT_AGENTS}
                 step={1}
                 className="flex-1"
                 data-testid="concurrency-slider"
               />
-              <span className="text-xs font-medium min-w-[2ch] text-right">{agentMultiplier}</span>
+              <span className="text-xs font-medium min-w-[3ch] text-right">{agentMultiplier}</span>
             </div>
             <p className="text-[10px] text-muted-foreground leading-relaxed">
-              Maximum number of concurrent agents across all projects.
+              Maximum number of concurrent agents across all projects (up to {MAX_CONCURRENT_AGENTS}
+              ).
             </p>
           </div>
 

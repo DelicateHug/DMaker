@@ -46,13 +46,6 @@ interface UseBoardColumnFeaturesProps {
    * @default false
    */
   showAllProjects?: boolean;
-  /**
-   * Optional: Whether GitHub mode is active.
-   * When true, worktree-based filtering is skipped for features with a githubIssue link,
-   * since GitHub issues are repo-scoped, not worktree-specific.
-   * @default false
-   */
-  isGithubMode?: boolean;
 }
 
 export function useBoardColumnFeatures({
@@ -69,13 +62,11 @@ export function useBoardColumnFeatures({
   activeStatusTabs,
   singleColumnMode = false,
   showAllProjects = false,
-  isGithubMode = false,
 }: UseBoardColumnFeaturesProps) {
   // Memoize column features to prevent unnecessary re-renders
   const columnFeaturesMap = useMemo(() => {
     // Use a more flexible type to support dynamic pipeline statuses
     const map: Record<string, Feature[]> = {
-      local: [],
       backlog: [],
       planning: [],
       in_progress: [],
@@ -141,7 +132,7 @@ export function useBoardColumnFeatures({
       if (showAllProjects) {
         // In multi-project mode, show all features regardless of worktree
         matchesWorktree = true;
-      } else if (isGithubMode && f.githubIssue) {
+      } else if (f.githubIssue) {
         // GitHub-linked features are repo-scoped, not worktree-specific
         matchesWorktree = true;
       } else if (!featureBranch) {
@@ -172,8 +163,10 @@ export function useBoardColumnFeatures({
         matchesWorktree = featureBranch === effectiveBranch;
       }
 
-      // Use the feature's status (fallback to backlog for unknown statuses)
-      const status = f.status || 'backlog';
+      // Use the feature's status (fallback to backlog for unknown statuses).
+      // 'local' is a retired status — tasks parked in it read as backlog.
+      const rawStatus = f.status || 'backlog';
+      const status = rawStatus === 'local' ? 'backlog' : rawStatus;
 
       // IMPORTANT:
       // Historically, we forced "running" features into in_progress so they never disappeared
@@ -201,11 +194,7 @@ export function useBoardColumnFeatures({
       // Not running: place by status (and worktree filter)
       // Filter all items by worktree, including backlog
       // This ensures backlog items with a branch assigned only show in that branch
-      if (status === 'local') {
-        if (matchesWorktree) {
-          map.local.push(f);
-        }
-      } else if (status === 'backlog') {
+      if (status === 'backlog') {
         if (matchesWorktree) {
           map.backlog.push(f);
         }
@@ -276,7 +265,6 @@ export function useBoardColumnFeatures({
     currentWorktreeBranch,
     projectPath,
     showAllProjects,
-    isGithubMode,
   ]);
 
   const getColumnFeatures = useCallback(

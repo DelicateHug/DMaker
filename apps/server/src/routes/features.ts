@@ -26,6 +26,7 @@ import { RequestCache } from '../lib/request-cache.js';
 import { simpleQuery } from '../providers/simple-query-service.js';
 import { getPromptCustomization } from '../lib/settings-helpers.js';
 import { getIssueDraftService } from '../services/issue-draft-service.js';
+import { getAgentQuestionService } from '../services/agent-question-service.js';
 import { getGitHubSyncService } from '../services/github-sync-service.js';
 
 // ---------------------------------------------------------------------------
@@ -564,17 +565,20 @@ function createDeleteHandler(featureLoader: FeatureLoader) {
 function createAnswerQuestionHandler(
   featureLoader: FeatureLoader,
   events?: EventEmitter,
-  settingsService?: SettingsService
+  settingsService?: SettingsService,
+  autoModeService?: AutoModeService
 ) {
   return async (req: Request, res: Response): Promise<void> => {
     try {
-      const { projectPath, featureId, questionId, answer, skipped } = req.body as {
-        projectPath: string;
-        featureId: string;
-        questionId: string;
-        answer?: string;
-        skipped?: boolean;
-      };
+      const { projectPath, featureId, questionId, answer, selectedOptionIds, skipped } =
+        req.body as {
+          projectPath: string;
+          featureId: string;
+          questionId: string;
+          answer?: string;
+          selectedOptionIds?: string[];
+          skipped?: boolean;
+        };
 
       if (!projectPath || !featureId || !questionId) {
         res.status(400).json({
@@ -584,9 +588,14 @@ function createAnswerQuestionHandler(
         return;
       }
 
-      // Skipping is how the user says "just write it without that detail", so
-      // it is the one case where an empty answer is legitimate.
-      if (!skipped && !answer?.trim()) {
+      const optionIds = Array.isArray(selectedOptionIds)
+        ? selectedOptionIds.filter((id): id is string => typeof id === 'string' && id.trim() !== '')
+        : [];
+
+      // Picking an option is an answer, and skipping is how the user says
+      // "just decide without that detail", so free text is only required when
+      // neither happened.
+      if (!skipped && !answer?.trim() && optionIds.length === 0) {
         res.status(400).json({ success: false, error: 'answer is required' });
         return;
       }
@@ -596,22 +605,34 @@ function createAnswerQuestionHandler(
         return;
       }
 
-      const service = getIssueDraftService(events, featureLoader, settingsService);
-      const feature = await service.answerQuestion(
-        projectPath,
-        featureId,
-        questionId,
-        answer?.trim() || '',
-        { skipped: skipped === true }
+      // How the answer was given is derived from what was submitted, inside
+      // the service — the body never gets to name its own answerSource.
+      const service = getAgentQuestionService(
+        events,
+        featureLoader,
+        settingsService,
+        autoModeService
       );
+      const result = await service.answer(projectPath, featureId, questionId, {
+        answer,
+        selectedOptionIds: optionIds,
+        skipped: skipped === true,
+      });
 
-      if (!feature) {
+      if (result.status === 'feature-not-found') {
         res.status(404).json({ success: false, error: `Feature ${featureId} not found` });
         return;
       }
 
+      // Only reachable when every submitted option id is unknown to the
+      // question and no free text came with them.
+      if (result.status === 'empty-answer') {
+        res.status(400).json({ success: false, error: 'answer is required' });
+        return;
+      }
+
       invalidateFeaturesCache(projectPath);
-      res.json({ success: true, feature });
+      res.json({ success: true, feature: result.feature });
     } catch (error) {
       logError(error, 'Answer question failed');
       res.status(500).json({ success: false, error: getErrorMessage(error) });
@@ -1176,7 +1197,7 @@ export function createFeaturesRoutes(
   router.post(
     '/answer-question',
     validatePathParams('projectPath'),
-    createAnswerQuestionHandler(featureLoader, events, settingsService)
+    createAnswerQuestionHandler(featureLoader, events, settingsService, autoModeService)
   );
   router.post(
     '/issue-draft',

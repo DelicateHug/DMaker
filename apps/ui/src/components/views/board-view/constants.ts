@@ -23,11 +23,6 @@ export interface EmptyStateConfig {
  * Default empty state configurations per column type
  */
 export const EMPTY_STATE_CONFIGS: Record<string, EmptyStateConfig> = {
-  local: {
-    title: 'No Local Features',
-    description: 'Features start here. Link a GitHub issue to move them to the backlog.',
-    icon: 'lightbulb',
-  },
   backlog: {
     title: 'Ready for Ideas',
     description:
@@ -87,7 +82,6 @@ export interface Column {
 
 // Base columns (start)
 const BASE_COLUMNS: Column[] = [
-  { id: 'local', title: 'Local', colorClass: 'bg-[var(--status-local)]' },
   { id: 'backlog', title: 'Backlog', colorClass: 'bg-[var(--status-backlog)]' },
   { id: 'planning', title: 'Planning', colorClass: 'bg-[var(--status-planning)]' },
   {
@@ -177,7 +171,6 @@ export function getStepIdFromStatus(status: string): string | null {
  * These correspond to the base column IDs, plus special view tabs
  */
 export type StatusTabId =
-  | 'local'
   | 'backlog'
   | 'planning'
   | 'in_progress'
@@ -204,53 +197,46 @@ export interface StatusTabConfig {
  */
 export const STATUS_TAB_CONFIGS: StatusTabConfig[] = [
   {
-    id: 'local',
-    label: 'Local',
-    colorClass: 'bg-[var(--status-local)]',
-    description: 'Local features not yet linked to a GitHub issue',
-    shortcutKey: 'Shift+1',
-  },
-  {
     id: 'backlog',
     label: 'Backlog',
     colorClass: 'bg-[var(--status-backlog)]',
     description: 'Features waiting to be worked on',
-    shortcutKey: 'Shift+2',
+    shortcutKey: 'Shift+1',
   },
   {
     id: 'planning',
     label: 'Planning',
     colorClass: 'bg-[var(--status-planning)]',
     description: 'Features being planned by the AI agent',
-    shortcutKey: 'Shift+3',
+    shortcutKey: 'Shift+2',
   },
   {
     id: 'in_progress',
     label: 'In Progress',
     colorClass: 'bg-[var(--status-in-progress)]',
     description: 'Features currently being implemented',
-    shortcutKey: 'Shift+4',
+    shortcutKey: 'Shift+3',
   },
   {
     id: 'building',
     label: 'Building',
     colorClass: 'bg-[var(--status-building)]',
     description: 'Features undergoing build verification',
-    shortcutKey: 'Shift+5',
+    shortcutKey: 'Shift+4',
   },
   {
     id: 'waiting_approval',
     label: 'Waiting Approval',
     colorClass: 'bg-[var(--status-waiting)]',
     description: 'Features awaiting review and approval',
-    shortcutKey: 'Shift+6',
+    shortcutKey: 'Shift+5',
   },
   {
     id: 'all',
     label: 'All Statuses',
     colorClass: 'bg-[var(--status-all)]',
     description: 'View all features across all statuses',
-    shortcutKey: 'Shift+7',
+    shortcutKey: 'Shift+6',
   },
 ];
 

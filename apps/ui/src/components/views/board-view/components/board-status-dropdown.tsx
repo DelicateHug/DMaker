@@ -23,7 +23,6 @@ import {
 
 /** Base (non-deletable) status IDs */
 const BASE_STATUS_IDS = new Set<string>([
-  'local',
   'backlog',
   'planning',
   'in_progress',
@@ -32,7 +31,7 @@ const BASE_STATUS_IDS = new Set<string>([
 ]);
 
 /** Strict order for default statuses in the dropdown */
-const DEFAULT_STATUS_ORDER = ['local', 'backlog', 'planning', 'in_progress', 'waiting_approval'];
+const DEFAULT_STATUS_ORDER = ['backlog', 'planning', 'in_progress', 'waiting_approval'];
 
 /** Special view tab IDs (shown at top of dropdown) */
 const SPECIAL_TAB_IDS = new Set<string>(['all']);

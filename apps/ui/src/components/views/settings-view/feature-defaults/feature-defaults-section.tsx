@@ -23,6 +23,7 @@ import {
   SelectValue,
 } from '@/components/ui/forms';
 import type { PhaseModelEntry, DeployEnvironment, BuildCommand } from '@dmaker/types';
+import { MAX_CONCURRENT_AGENTS } from '@dmaker/types';
 import { Input } from '@/components/ui/forms';
 import { Button } from '@/components/ui/button';
 import { PhaseModelSelector } from '../model-defaults/phase-model-selector';
@@ -129,23 +130,23 @@ export function FeatureDefaultsSection({
           <div className="flex-1 space-y-2">
             <div className="flex items-center justify-between">
               <Label className="text-foreground font-medium">Global Agent Multiplier</Label>
-              <span className="text-xs font-medium min-w-[2ch] text-right">{agentMultiplier}</span>
+              <span className="text-xs font-medium min-w-[3ch] text-right">{agentMultiplier}</span>
             </div>
             <div className="flex items-center gap-3">
               <Slider
                 value={[agentMultiplier]}
                 onValueChange={(value) => onAgentMultiplierChange(value[0])}
                 min={1}
-                max={10}
+                max={MAX_CONCURRENT_AGENTS}
                 step={1}
                 className="flex-1"
                 data-testid="agent-multiplier-slider"
               />
             </div>
             <p className="text-xs text-muted-foreground/80 leading-relaxed">
-              Base number of concurrent agents for all projects. Each project can add additional
-              agents in Project Settings. Example: If set to 3, all projects get 3 agents.
-              Incrementing by 1 gives all projects +1 agent.
+              Number of concurrent agents ("runners") shared by all projects, up to{' '}
+              {MAX_CONCURRENT_AGENTS}. Runners take the tasks whose dependencies are all complete
+              first, oldest before newest.
             </p>
           </div>
         </div>

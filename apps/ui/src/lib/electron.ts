@@ -230,6 +230,7 @@ import type {
   GitAPI,
   ModelDefinition,
   ProviderStatus,
+  ResearchAPI,
 } from '@/types/electron';
 
 // Import HTTP API client (ES module)
@@ -999,8 +1000,8 @@ export interface ElectronAPI {
       name: string,
       projectPath: string,
       workingDirectory?: string,
-      /** `scratch` makes a throwaway Scratchpad chat: sandboxed, no project */
-      options?: { scratch?: boolean }
+      /** `researchProjectId` puts the chat in a research project, not a repo */
+      options?: { researchProjectId?: string }
     ) => Promise<{
       success: boolean;
       session?: {
@@ -1010,8 +1011,8 @@ export interface ElectronAPI {
         workingDirectory?: string;
         createdAt: string;
         updatedAt: string;
-        /** True when the server actually made this a Scratchpad session */
-        scratch?: boolean;
+        /** Set when the server actually placed this chat in that project */
+        researchProjectId?: string;
       };
       error?: string;
     }>;
@@ -1024,6 +1025,8 @@ export interface ElectronAPI {
     unarchive: (sessionId: string) => Promise<{ success: boolean; error?: string }>;
     delete: (sessionId: string) => Promise<{ success: boolean; error?: string }>;
   };
+  /** Local research projects — the workspaces behind the AI sidebar */
+  research?: ResearchAPI;
   claude?: {
     getUsage: () => Promise<ClaudeUsageResponse>;
   };

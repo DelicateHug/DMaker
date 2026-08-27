@@ -20,6 +20,8 @@ export type {
   AgentDefinition,
   SystemPromptPreset,
   ReasoningEffort,
+  AgentInputMessage,
+  ProviderSessionControl,
 } from './provider.js';
 
 // Provider constants and utilities
@@ -71,6 +73,8 @@ export type {
   DescriptionHistoryEntry,
   SummaryHistoryEntry,
   AgentQuestion,
+  AgentQuestionOption,
+  PipelineStepProgress,
   GitHubIssueDraft,
   GitHubIssueDraftStatus,
   // Summary file API types
@@ -170,6 +174,9 @@ export {
   DEV_SERVER_PORT,
   RUNNER_PORT,
   RESERVED_PORTS,
+  // Agent concurrency
+  MAX_CONCURRENT_AGENTS,
+  DEFAULT_CONCURRENT_AGENTS,
   // Spec schema
   specOutputSchema,
   // Notification constants
@@ -199,6 +206,20 @@ export {
 
 // Event types
 export type { EventType, EventCallback } from './event.js';
+
+// Agent tree types (parent/child sub-agent tracking for a feature run)
+export type {
+  AgentNodeId,
+  AgentNodeStatus,
+  AgentNode,
+  AgentTree,
+  AgentTreeChange,
+  SubagentSummary,
+  AutoModeSubagentStartedEvent,
+  AutoModeSubagentFinishedEvent,
+  AutoModeAgentTreeEvent,
+} from './agent-tree.js';
+export { MASTER_AGENT_ID, MASTER_AGENT_NAME } from './agent-tree.js';
 
 // Settings types and constants
 export type {

@@ -146,6 +146,23 @@ export interface AgentDefinition {
 }
 
 /**
+ * One extra user message pushed into an already-running provider session.
+ */
+export interface AgentInputMessage {
+  content: string | Array<{ type: string; text?: string; source?: object }>;
+}
+
+/**
+ * Live controls over a running provider session. Claude only today; the
+ * CLI-backed providers have no equivalent and simply never call back.
+ */
+export interface ProviderSessionControl {
+  /** Cut the current turn short so a queued message runs sooner. Best effort. */
+  interrupt: () => Promise<void>;
+  setModel?: (model?: string) => Promise<void>;
+}
+
+/**
  * Options for executing a query via a provider
  */
 export interface ExecuteOptions {
@@ -209,6 +226,27 @@ export interface ExecuteOptions {
     type: 'json_schema';
     schema: Record<string, unknown>;
   };
+  /**
+   * MCP servers that run inside this process rather than as a subprocess or
+   * over a URL. The value is the Claude Agent SDK's
+   * `McpSdkServerConfigWithInstance` — it carries a live server instance, which
+   * is why it cannot go in `mcpServers`: `McpServerConfig` is also written into
+   * on-disk config files by the Codex and Cursor providers, and an
+   * instance-bearing object would not survive being serialised.
+   *
+   * Typed as `unknown` so @dmaker/types keeps its no-dependency rule.
+   */
+  inProcessMcpServers?: Record<string, unknown>;
+  /**
+   * Extra user messages to feed into the SAME live session after the initial
+   * prompt. Supplying this switches the Claude SDK into streaming-input mode:
+   * the CLI child process stays alive until this iterable COMPLETES, so the
+   * caller MUST close it or an ~11MB process leaks. Leaving it undefined keeps
+   * the string-prompt path, where the SDK auto-closes stdin on the first result.
+   */
+  followUpInput?: AsyncIterable<AgentInputMessage>;
+  /** Called once, as soon as the session exists, with its live controls. */
+  onSessionControl?: (control: ProviderSessionControl) => void;
 }
 
 /**
@@ -216,12 +254,26 @@ export interface ExecuteOptions {
  */
 export interface ContentBlock {
   type: 'text' | 'tool_use' | 'thinking' | 'tool_result';
+  /**
+   * The block's own id, set by Claude on `tool_use` blocks.
+   *
+   * For a `Task` block this is the id the spawned sub-agent's messages will
+   * carry in their `parent_tool_use_id`, which makes it the primary key of the
+   * whole agent tree — without it a child cannot be linked to its parent.
+   */
+  id?: string;
   text?: string;
   thinking?: string;
   name?: string;
   input?: unknown;
   tool_use_id?: string;
-  content?: string;
+  /**
+   * A `tool_result` block's payload. Claude sends an array of content blocks
+   * here; the CLI-backed providers all send a plain string.
+   */
+  content?: string | Array<{ type: string; text?: string; [key: string]: unknown }>;
+  /** Set on a `tool_result` when the tool failed. */
+  is_error?: boolean;
 }
 
 /**
@@ -237,7 +289,14 @@ export interface ProviderMessage {
   };
   result?: string;
   error?: string;
+  /**
+   * Which agent produced this message: the id of the `Task` tool_use block that
+   * spawned it, or null/absent for the root agent. Populated end-to-end already.
+   */
   parent_tool_use_id?: string | null;
+  uuid?: string;
+  /** A replay of a message already in the conversation, not new activity. */
+  isReplay?: boolean;
   /** Structured output from SDK when using outputFormat */
   structured_output?: Record<string, unknown>;
 }

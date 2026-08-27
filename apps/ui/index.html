@@ -9,20 +9,23 @@
     <script>
       // Prevent theme flash - apply stored theme before React hydrates
       (function () {
+        // Kept in sync with DEFAULT_GLOBAL_SETTINGS.theme in @dmaker/types
+        const DEFAULT_THEME = 'catppuccin';
         try {
+          let theme = DEFAULT_THEME;
           const stored = localStorage.getItem('dmaker-storage');
           if (stored) {
             const data = JSON.parse(stored);
-            const theme = data.state?.theme;
-            if (theme && theme !== 'system' && theme !== 'light') {
-              // Apply the actual theme class (dark, retro, dracula, nord, etc.)
-              document.documentElement.classList.add(theme);
-            } else if (
-              theme === 'system' &&
-              window.matchMedia('(prefers-color-scheme: dark)').matches
-            ) {
-              document.documentElement.classList.add('dark');
-            }
+            if (data.state?.theme) theme = data.state.theme;
+          }
+          if (theme !== 'system' && theme !== 'light') {
+            // Apply the actual theme class (dark, catppuccin, retro, dracula, nord, etc.)
+            document.documentElement.classList.add(theme);
+          } else if (
+            theme === 'system' &&
+            window.matchMedia('(prefers-color-scheme: dark)').matches
+          ) {
+            document.documentElement.classList.add('dark');
           }
         } catch (e) {}
       })();

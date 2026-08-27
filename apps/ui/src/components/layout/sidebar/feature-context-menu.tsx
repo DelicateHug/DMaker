@@ -50,7 +50,6 @@ interface FeatureContextMenuItemsProps {
  * there by hand claims work is under way when nothing is running.
  */
 const MOVABLE_STATUSES = [
-  'local',
   'backlog',
   'in_progress',
   'waiting_approval',

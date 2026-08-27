@@ -28,7 +28,6 @@ import {
   Check,
   ChevronDown,
   ChevronRight,
-  HardDrive,
   CircleDot,
   GitBranch,
   SlidersHorizontal,
@@ -97,8 +96,7 @@ type FeatureData = {
   childDependencies?: string[]; // Feature IDs that should depend on this feature
   waitForDependencies?: boolean; // If true, this feature won't start until all dependencies are completed/verified
   selectedProjectPath?: string; // The project path to add this feature to
-  source: 'local' | 'github'; // Where this feature should be created
-  status?: FeatureStatusWithPipeline; // Status column to land in; omitted means 'local'
+  status?: FeatureStatusWithPipeline; // Status column to land in; omitted means 'backlog'
   branchName?: string; // Existing branch to reuse instead of minting a new one
 };
 
@@ -137,11 +135,6 @@ interface AddFeatureDialogProps {
    */
   showAllProjectsMode?: boolean;
   /**
-   * The currently active board modes. Used to determine the default source
-   * for new features (github if github mode is active, local otherwise).
-   */
-  activeModes?: ('local' | 'github')[];
-  /**
    * Where the "new feature" gesture came from — a sidebar project, branch or
    * status group. Pre-fills the matching fields; the user can clear the branch
    * and status pills to fall back to the defaults.
@@ -169,7 +162,6 @@ export function AddFeatureDialog({
   projects = [],
   selectedProject,
   showAllProjectsMode = false,
-  activeModes = ['local'],
   context = null,
 }: AddFeatureDialogProps) {
   const isSpawnMode = !!parentFeature;
@@ -184,11 +176,6 @@ export function AddFeatureDialog({
   const [skipTests, setSkipTests] = useState(false);
   const [buildRequired, setBuildRequired] = useState(false);
   const [priority, setPriority] = useState(2);
-
-  // Source selection state (local or github)
-  const [source, setSource] = useState<'local' | 'github'>(
-    activeModes.includes('github') ? 'github' : 'local'
-  );
 
   // Model selection state
   const [modelEntry, setModelEntry] = useState<PhaseModelEntry>({ model: 'opus' });
@@ -282,9 +269,6 @@ export function AddFeatureDialog({
       // one, whatever draft was left behind on the last close stays put.
       if (context?.title !== undefined) setTitle(context.title);
       if (context?.description !== undefined) setDescription(context.description);
-
-      // Default source based on active board modes
-      setSource(activeModes.includes('github') ? 'github' : 'local');
     }
   }, [
     open,
@@ -295,7 +279,6 @@ export function AddFeatureDialog({
     parentFeature,
     allFeatures,
     selectedProject,
-    activeModes,
     context,
     projects,
   ]);
@@ -381,7 +364,6 @@ export function AddFeatureDialog({
         finalDependencies && finalDependencies.length > 0 ? waitForDependencies : undefined,
       // Include selected project path for multi-project support
       selectedProjectPath: dialogSelectedProject?.path,
-      source,
       status: contextStatus,
       branchName: contextBranch,
     };
@@ -409,7 +391,6 @@ export function AddFeatureDialog({
     setWaitForDependencies(false);
     setShowDependencies(false);
     setShowOptionals(false);
-    setSource(activeModes.includes('github') ? 'github' : 'local');
     setContextBranch(undefined);
     setContextStatus(undefined);
     onOpenChange(false);
@@ -846,43 +827,6 @@ export function AddFeatureDialog({
                   />
                 </div>
 
-                {/* Source Selector */}
-                <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground">Source</Label>
-                  <div className="flex gap-1">
-                    <button
-                      type="button"
-                      onClick={() => setSource('local')}
-                      data-testid="feature-source-local"
-                      aria-pressed={source === 'local'}
-                      className={cn(
-                        'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors border',
-                        source === 'local'
-                          ? 'bg-foreground text-background border-foreground'
-                          : 'bg-muted/30 text-muted-foreground border-border/50 hover:bg-muted/50'
-                      )}
-                    >
-                      <HardDrive className="w-3.5 h-3.5" />
-                      Local
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setSource('github')}
-                      data-testid="feature-source-github"
-                      aria-pressed={source === 'github'}
-                      className={cn(
-                        'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors border',
-                        source === 'github'
-                          ? 'bg-purple-600 text-white border-purple-600'
-                          : 'bg-muted/30 text-muted-foreground border-border/50 hover:bg-muted/50'
-                      )}
-                    >
-                      <CircleDot className="w-3.5 h-3.5" />
-                      GitHub
-                    </button>
-                  </div>
-                </div>
-
                 {/* Dependencies - nested collapsible, only when not in spawn mode */}
                 {!isSpawnMode && allFeatures.length > 0 && (
                   <div>
@@ -962,7 +906,7 @@ export function AddFeatureDialog({
           <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
             Cancel
           </Button>
-          {onAddAndStart && source !== 'local' && (
+          {onAddAndStart && (
             <Button
               onClick={handleAddAndStart}
               variant="secondary"
@@ -980,7 +924,7 @@ export function AddFeatureDialog({
             disabled={isSubmitting}
             data-testid="confirm-add-feature"
           >
-            {isSpawnMode ? 'Spawn Task' : source === 'local' ? 'Add to Local' : 'Add to Backlog'}
+            {isSpawnMode ? 'Spawn Task' : 'Add to Backlog'}
           </HotkeyButton>
         </DialogFooter>
       </DialogContent>

@@ -27,8 +27,8 @@ const TOOL_IMPORTS: Partial<Record<LayerId, () => Promise<{ default: ComponentTy
     })),
   interview: () =>
     import('@/components/views/interview-view').then((m) => ({ default: m.InterviewView })),
-  scratch: () =>
-    import('@/components/views/scratch-view').then((m) => ({ default: m.ScratchView })),
+  research: () =>
+    import('@/components/views/research-view').then((m) => ({ default: m.ResearchView })),
 };
 
 // Cache lazy components at module level (created once, reused forever)

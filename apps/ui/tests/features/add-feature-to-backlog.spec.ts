@@ -14,7 +14,6 @@ import {
   waitForNetworkIdle,
   clickAddFeature,
   fillAddFeatureDialog,
-  selectFeatureSource,
   confirmAddFeature,
   authenticateForTests,
   handleLoginScreenIfPresent,
@@ -82,15 +81,15 @@ test.describe('Feature Backlog', () => {
     // always on screen. It appears once the feature below is added.
 
     await clickAddFeature(page);
-    await fillAddFeatureDialog(page, featureDescription, { source: 'local' });
+    await fillAddFeatureDialog(page, featureDescription);
     await confirmAddFeature(page);
 
     // Wait for the feature to appear in the backlog
     await expect(async () => {
-      const localGroup = page.locator(
-        '[data-testid^="sidebar-section-status:"][data-testid$=":local"]'
+      const backlogGroup = page.locator(
+        '[data-testid^="sidebar-section-status:"][data-testid$=":backlog"]'
       );
-      const featureCard = localGroup.locator('[data-testid="sidebar-feature-row"]').filter({
+      const featureCard = backlogGroup.locator('[data-testid="sidebar-feature-row"]').filter({
         hasText: featureDescription,
       });
       expect(await featureCard.count()).toBeGreaterThan(0);
@@ -120,10 +119,6 @@ test.describe('Feature Backlog', () => {
 
     await clickAddFeature(page);
 
-    // Local, for the same reason as the test above: the GitHub path needs a
-    // real repository behind the project.
-    await selectFeatureSource(page, 'local');
-
     // Fill only the description
     const descriptionInput = page.locator('[data-testid="add-feature-dialog"] textarea').first();
     await descriptionInput.fill(featureDescription);
@@ -133,10 +128,10 @@ test.describe('Feature Backlog', () => {
 
     // Wait for the feature to appear in the backlog
     await expect(async () => {
-      const localGroup = page.locator(
-        '[data-testid^="sidebar-section-status:"][data-testid$=":local"]'
+      const backlogGroup = page.locator(
+        '[data-testid^="sidebar-section-status:"][data-testid$=":backlog"]'
       );
-      const featureCard = localGroup.locator('[data-testid="sidebar-feature-row"]').filter({
+      const featureCard = backlogGroup.locator('[data-testid="sidebar-feature-row"]').filter({
         hasText: featureDescription,
       });
       expect(await featureCard.count()).toBeGreaterThan(0);

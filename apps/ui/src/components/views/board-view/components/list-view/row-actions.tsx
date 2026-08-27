@@ -320,7 +320,7 @@ export const RowActions = memo(function RowActions({
       )}
 
       {/* GitHub issue icon / Convert to Issue button */}
-      {feature.status === 'local' && !feature.githubIssue && handlers.onConvertToIssue ? (
+      {!feature.githubIssue && handlers.onConvertToIssue ? (
         <Button
           variant="ghost"
           size="icon-sm"
@@ -454,39 +454,20 @@ export const RowActions = memo(function RowActions({
             </>
           )}
 
-          {/* Local actions */}
-          {!isCurrentAutoTask && feature.status === 'local' && (
-            <>
-              <MenuItem icon={Edit} label="Edit" onClick={withClose(handlers.onEdit)} />
-              {handlers.onConvertToIssue && (
-                <MenuItem
-                  icon={Upload}
-                  label="Convert to Issue"
-                  onClick={withClose(handlers.onConvertToIssue)}
-                  variant="primary"
-                />
-              )}
-              {handlers.onSpawnTask && (
-                <MenuItem
-                  icon={GitFork}
-                  label="Spawn Sub-Task"
-                  onClick={withClose(handlers.onSpawnTask)}
-                />
-              )}
-              {handlers.onChat && (
-                <MenuItem icon={MessageCircle} label="Chat" onClick={withClose(handlers.onChat)} />
-              )}
-              <DropdownMenuSeparator />
-              <MenuItem icon={Archive} label="Archive" onClick={withClose(handlers.onDelete)} />
-            </>
-          )}
-
           {/* Backlog actions */}
           {!isCurrentAutoTask && feature.status === 'backlog' && (
             <>
               <MenuItem icon={Edit} label="Edit" onClick={withClose(handlers.onEdit)} />
               {feature.planSpec?.content && handlers.onViewPlan && (
                 <MenuItem icon={Eye} label="View Plan" onClick={withClose(handlers.onViewPlan)} />
+              )}
+              {/* Only when the background drafter never filed one */}
+              {!feature.githubIssue && handlers.onConvertToIssue && (
+                <MenuItem
+                  icon={Upload}
+                  label="Convert to Issue"
+                  onClick={withClose(handlers.onConvertToIssue)}
+                />
               )}
               {handlers.onImplement && (
                 <MenuItem

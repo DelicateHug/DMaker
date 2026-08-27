@@ -118,7 +118,6 @@
   --color-status-error-bg: var(--status-error-bg);
   --color-status-info: var(--status-info);
   --color-status-info-bg: var(--status-info-bg);
-  --color-status-local: var(--status-local);
   --color-status-backlog: var(--status-backlog);
   --color-status-planning: var(--status-planning);
   --color-status-in-progress: var(--status-in-progress);
@@ -199,7 +198,6 @@
   --status-error-bg: oklch(0.55 0.22 25 / 0.15);
   --status-info: oklch(0.55 0.2 230);
   --status-info-bg: oklch(0.55 0.2 230 / 0.15);
-  --status-local: oklch(0.55 0.15 250);
   --status-backlog: oklch(0.5 0 0);
   --status-planning: oklch(0.55 0.18 270);
   --status-in-progress: oklch(0.82 0.15 70);
@@ -301,7 +299,6 @@
     --status-error-bg: oklch(0.65 0.22 25 / 0.2);
     --status-info: oklch(0.65 0.2 230);
     --status-info-bg: oklch(0.65 0.2 230 / 0.2);
-    --status-local: oklch(0.65 0.15 250);
     --status-backlog: oklch(0.6 0 0);
     --status-planning: oklch(0.65 0.18 270);
     --status-in-progress: oklch(0.85 0.15 70);

@@ -4,8 +4,9 @@
  * `start.ps1` runs two of these side by side against one checkout: a read-only
  * dev on 3017 and an executing prod on 3007. Without a marker they are
  * indistinguishable, and "why won't it run anything" becomes a five-minute
- * mystery. The bar names the environment, links to the other one, reports
- * whether the task runner is attached, and — on prod — offers Update Prod.
+ * mystery. The bar names the environment, links to the other one, opens the
+ * task runner's status (what it is working on, how many runners it may use),
+ * and — on prod — offers Update Prod.
  *
  * It renders nothing at all unless the server reports a launcher-managed
  * environment, so the ordinary `npm run dev:web` experience is untouched.
@@ -35,6 +36,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/overlays';
+import { RunnerPopover } from '@/components/layout/runner-popover';
 import {
   fetchEnvironmentInfo,
   startSelfUpdate,
@@ -62,28 +64,6 @@ function EnvBadge({ info }: { info: EnvironmentInfo }) {
       {isDev ? <Eye className="size-3" /> : <Zap className="size-3" />}
       {isDev ? 'Dev · read-only' : 'Prod'}
     </span>
-  );
-}
-
-function RunnerDot({ info }: { info: EnvironmentInfo }) {
-  if (!info.runner.configured) return null;
-  const connected = info.runner.connected;
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <span className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
-          <span
-            className={`size-1.5 rounded-full ${connected ? 'bg-emerald-500' : 'bg-muted-foreground/50'}`}
-          />
-          runner
-        </span>
-      </TooltipTrigger>
-      <TooltipContent>
-        {connected
-          ? `Tasks run in the runner daemon (${info.runner.url}), so restarting this server does not stop them.`
-          : `Runner daemon at ${info.runner.url} is not reachable — tasks would run in this server instead.`}
-      </TooltipContent>
-    </Tooltip>
   );
 }
 
@@ -224,7 +204,7 @@ export function EnvironmentBar() {
         )}
 
         <div className="ml-auto flex items-center gap-2">
-          <RunnerDot info={info} />
+          {info.runner.configured && <RunnerPopover info={info} />}
 
           <Tooltip>
             <TooltipTrigger asChild>

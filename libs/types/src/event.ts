@@ -67,6 +67,8 @@ export type EventType =
   // An agent needs the user to answer something before it can continue
   | 'feature:question-asked'
   | 'feature:question-answered'
+  // The run that asked ended before anyone answered, so the question is dead
+  | 'feature:question-expired'
   // Attach/detach of the standalone task runner daemon that owns execution
   | 'runner:status'
   // Progress of the prod self-update (pull -> rebuild -> restart)

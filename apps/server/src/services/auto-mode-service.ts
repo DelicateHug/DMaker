@@ -12,10 +12,15 @@
 import { ProviderFactory } from '../providers/provider-factory.js';
 import { simpleQuery } from '../providers/simple-query-service.js';
 import type {
+  AgentNodeId,
+  AgentNodeStatus,
+  AgentTree,
+  AgentTreeChange,
   ExecuteOptions,
   Feature,
   ModelProvider,
   PipelineStep,
+  PipelineStepProgress,
   FeatureStatusWithPipeline,
   PipelineConfig,
   ThinkingLevel,
@@ -26,6 +31,7 @@ import {
   isClaudeModel,
   stripProviderPrefix,
   DEFAULT_BUILD_COMMANDS,
+  MASTER_AGENT_ID,
 } from '@dmaker/types';
 import {
   buildPromptWithImages,
@@ -94,6 +100,7 @@ import {
   accumulateFromMessage,
   detectAuthMethod,
 } from '../lib/execution-metrics.js';
+import { AgentTreeTracker } from '../lib/agent-tree.js';
 import { discoverFilesystemAgents, resolveAgentDependencies } from '../lib/agent-discovery.js';
 import { getNotificationService } from './notification-service.js';
 import { invalidateFeaturesCache } from '../routes/features.js';
@@ -102,12 +109,19 @@ import { getIssueDraftService } from './issue-draft-service.js';
 
 const execAsync = promisify(exec);
 
-interface ParsedTask {
+/**
+ * Mirrors `Feature['planSpec']['tasks'][number]` in `@dmaker/types` by hand.
+ * The two are written to the same field of the same file, so a field added
+ * there and not here compiles cleanly and is dropped at runtime.
+ */
+export interface ParsedTask {
   id: string; // e.g., "T001"
   description: string; // e.g., "Create user model"
   filePath?: string; // e.g., "src/models/user.ts"
   phase?: string; // e.g., "Phase 1: Foundation" (for full mode)
   status: 'pending' | 'in_progress' | 'completed' | 'failed';
+  startedAt?: string;
+  completedAt?: string;
 }
 
 interface PlanSpec {
@@ -148,7 +162,7 @@ interface PipelineStatusInfo {
  * Looks for the ```tasks code block and extracts task lines
  * Format: - [ ] T###: Description | File: path/to/file
  */
-function parseTasksFromSpec(specContent: string): ParsedTask[] {
+export function parseTasksFromSpec(specContent: string): ParsedTask[] {
   const tasks: ParsedTask[] = [];
 
   // Extract content within ```tasks ... ``` block
@@ -201,7 +215,7 @@ function parseTasksFromSpec(specContent: string): ParsedTask[] {
  * Parse a single task line
  * Format: - [ ] T###: Description | File: path/to/file
  */
-function parseTaskLine(line: string, currentPhase?: string): ParsedTask | null {
+export function parseTaskLine(line: string, currentPhase?: string): ParsedTask | null {
   // Match pattern: - [ ] T###: Description | File: path
   const taskMatch = line.match(/- \[ \] (T\d{3}):\s*([^|]+)(?:\|\s*File:\s*(.+))?$/);
   if (!taskMatch) {
@@ -227,6 +241,56 @@ function parseTaskLine(line: string, currentPhase?: string): ParsedTask | null {
   };
 }
 
+/**
+ * One `[TASK_START]` / `[TASK_COMPLETE]` / `[PHASE_COMPLETE]` marker the agent
+ * printed into its own prose.
+ */
+export interface ProgressMarker {
+  kind: 'task_start' | 'task_complete' | 'phase_complete';
+  /** `T001` for the task markers, the phase label for `[PHASE_COMPLETE]`. */
+  ref: string;
+  /** The rest of the marker line: a task description or a phase summary. */
+  text: string;
+  /** `kind:ref` — what makes a marker fire exactly once. */
+  key: string;
+}
+
+const PROGRESS_MARKER_PATTERN =
+  /\[(TASK_START|TASK_COMPLETE)\]\s*(T\d{3})\s*:?\s*([^\n]*)|\[PHASE_COMPLETE\]\s*([^\n]*)/g;
+
+/**
+ * Read the progress markers out of agent prose.
+ *
+ * Every planning prompt has instructed the agent to print these since the
+ * markers were introduced, and until now nothing read them: in lite/adaptive
+ * mode — the default — the agent implements inline in the first stream, so the
+ * per-task loop that advances the counter never runs and the board sat at 0/N
+ * for the whole run.
+ *
+ * Pure and cheap on purpose: it is called once per streamed text block, and the
+ * caller dedupes by `key` because the accumulator it scans keeps growing.
+ */
+export function parseProgressMarkers(text: string): ProgressMarker[] {
+  const markers: ProgressMarker[] = [];
+  PROGRESS_MARKER_PATTERN.lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = PROGRESS_MARKER_PATTERN.exec(text)) !== null) {
+    if (match[1]) {
+      const kind = match[1] === 'TASK_START' ? 'task_start' : 'task_complete';
+      const ref = match[2];
+      markers.push({ kind, ref, text: match[3].trim(), key: `${kind}:${ref}` });
+      continue;
+    }
+    // "[PHASE_COMPLETE] Phase 2 complete" — the label is the identity, because
+    // a phase can be named rather than numbered.
+    const label = (match[4] ?? '').trim();
+    if (!label) continue;
+    const ref = label.replace(/\s+complete\.?$/i, '').trim() || label;
+    markers.push({ kind: 'phase_complete', ref, text: label, key: `phase_complete:${ref}` });
+  }
+  return markers;
+}
+
 interface RunningFeature {
   featureId: string;
   projectPath: string;
@@ -240,6 +304,25 @@ interface RunningFeature {
   tasksCompleted?: number;
   tasksTotal?: number;
   currentTaskId?: string;
+  /**
+   * Queue that feeds extra user turns into the live CLI session. Declared here
+   * so the state has one home; nothing writes it until mid-flight injection
+   * ships, and everything reading it must tolerate `undefined`.
+   */
+  inputChannel?: AgentInputChannel;
+  /** Handle for interrupting the current turn, from the same deferred work. */
+  sessionControl?: AgentSessionControl;
+}
+
+/** Placeholder for the injection queue. See {@link RunningFeature.inputChannel}. */
+interface AgentInputChannel {
+  push(message: string): void;
+  close(): void;
+}
+
+/** Placeholder for the SDK's turn-level control. See {@link RunningFeature.sessionControl}. */
+interface AgentSessionControl {
+  interrupt(): Promise<void>;
 }
 
 interface AutoLoopState {
@@ -252,6 +335,24 @@ interface AutoLoopState {
 interface PendingApproval {
   resolve: (result: { approved: boolean; editedPlan?: string; feedback?: string }) => void;
   reject: (error: Error) => void;
+  featureId: string;
+  projectPath: string;
+}
+
+/** The answer a blocked agent is waiting on. */
+export interface QuestionAnswer {
+  answer: string;
+  skipped?: boolean;
+}
+
+/**
+ * A running agent parked on a question. Keyed by question id, not feature id:
+ * one run can raise several questions and each has its own waiter.
+ */
+interface PendingQuestion {
+  resolve: (result: QuestionAnswer) => void;
+  reject: (error: Error) => void;
+  questionId: string;
   featureId: string;
   projectPath: string;
 }
@@ -307,6 +408,8 @@ export class AutoModeService {
   private autoLoopAbortController: AbortController | null = null;
   private config: AutoModeConfig | null = null;
   private pendingApprovals = new Map<string, PendingApproval>();
+  // Questions a running agent is blocked on, keyed by question id
+  private pendingQuestions = new Map<string, PendingQuestion>();
   private settingsService: SettingsService | null = null;
   // Track consecutive failures to detect quota/API issues
   private consecutiveFailures: { timestamp: number; error: string }[] = [];
@@ -314,6 +417,10 @@ export class AutoModeService {
   // In-memory output buffers for running features (featureId -> current responseText)
   // This allows the agent-output endpoint to return the latest content without waiting for disk flush
   private featureOutputBuffers = new Map<string, string>();
+  // Live agent tree per running feature (featureId -> tracker). The sidecar on
+  // disk lags by up to the metrics interval, so the tree endpoint reads this
+  // first for a run in flight.
+  private agentTrees = new Map<string, AgentTreeTracker>();
 
   constructor(
     events: EventEmitter,
@@ -764,6 +871,9 @@ export class AutoModeService {
         // Emit planning mode info
         this.emitAutoModeEvent('planning_started', {
           featureId: feature.id,
+          // Every other auto-mode event carries projectPath; this one did not,
+          // so a client filtering by project dropped the planning notice.
+          projectPath,
           mode: planningStrategy === 'auto' ? 'adaptive' : planningStrategy.replace('always-', ''),
           message:
             planningStrategy === 'auto'
@@ -1016,6 +1126,8 @@ export class AutoModeService {
         projectPath,
       });
 
+      await this.recordPipelineStepProgress(projectPath, featureId, steps, i, 'running');
+
       // Build prompt for this pipeline step
       const prompt = this.buildPipelineStepPrompt(
         step,
@@ -1051,6 +1163,8 @@ export class AutoModeService {
       } catch {
         // No context update
       }
+
+      await this.recordPipelineStepProgress(projectPath, featureId, steps, i, 'completed');
 
       this.emitAutoModeEvent('pipeline_step_complete', {
         featureId,
@@ -2197,6 +2311,76 @@ Format your response as a structured markdown document.`;
   }
 
   /**
+   * Get the live agent tree for a running feature, or null when nothing is
+   * running (the caller should fall back to the logs/agent-tree.json sidecar).
+   * The snapshot is a copy, so it will not tear as the run continues.
+   */
+  getInMemoryAgentTree(featureId: string): AgentTree | null {
+    return this.agentTrees.get(featureId)?.snapshot() ?? null;
+  }
+
+  /**
+   * Park a running agent on a question until the user answers it.
+   *
+   * Mirrors {@link waitForPlanApproval}, including its 30-minute ceiling: an
+   * unbounded await holds a worktree, a concurrency slot and a subprocess, and
+   * under maxConcurrency that deadlocks the queue behind whoever went to lunch.
+   */
+  waitForQuestionAnswer(
+    featureId: string,
+    projectPath: string,
+    questionId: string
+  ): Promise<QuestionAnswer> {
+    const QUESTION_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
+
+    return new Promise<QuestionAnswer>((resolve, reject) => {
+      const timeoutId = setTimeout(() => {
+        if (this.pendingQuestions.delete(questionId)) {
+          logger.warn(`Question ${questionId} for feature ${featureId} timed out after 30 minutes`);
+          reject(new Error('Question timed out after 30 minutes without an answer'));
+        }
+      }, QUESTION_TIMEOUT_MS);
+
+      this.pendingQuestions.set(questionId, {
+        questionId,
+        featureId,
+        projectPath,
+        resolve: (result) => {
+          clearTimeout(timeoutId);
+          resolve(result);
+        },
+        reject: (error) => {
+          clearTimeout(timeoutId);
+          reject(error);
+        },
+      });
+    });
+  }
+
+  /**
+   * Hand an answer to the agent waiting on it.
+   * Returns false when nothing was waiting — the run ended, the question was
+   * asked by another process, or it was never a blocking question at all. The
+   * caller records the answer either way; only the resume is conditional.
+   */
+  resolveQuestionAnswer(featureId: string, questionId: string, result: QuestionAnswer): boolean {
+    const pending = this.pendingQuestions.get(questionId);
+    if (!pending || pending.featureId !== featureId) return false;
+    this.pendingQuestions.delete(questionId);
+    pending.resolve(result);
+    return true;
+  }
+
+  /** Question ids this process has a running agent blocked on, for one feature. */
+  getPendingQuestionIds(featureId: string): string[] {
+    const ids: string[] = [];
+    for (const pending of this.pendingQuestions.values()) {
+      if (pending.featureId === featureId) ids.push(pending.questionId);
+    }
+    return ids;
+  }
+
+  /**
    * Get detailed info about all running agents
    */
   async getRunningAgents(): Promise<
@@ -2802,12 +2986,24 @@ Format your response as a structured markdown document.`;
   }
 
   /**
-   * Update the planSpec of a feature
+   * Update the planSpec of a feature.
+   *
+   * `taskUpdate` is applied in the same read-modify-write as `updates`. Two
+   * separate calls would each re-read feature.json and the second would
+   * overwrite the first: `planSpec.tasks[i].status` has been permanently
+   * 'pending' on disk precisely because nothing ever wrote it after the
+   * initial parse.
    */
   private async updateFeaturePlanSpec(
     projectPath: string,
     featureId: string,
-    updates: Partial<PlanSpec>
+    updates: Partial<PlanSpec>,
+    taskUpdate?: {
+      taskId: string;
+      status: ParsedTask['status'];
+      startedAt?: string;
+      completedAt?: string;
+    }
   ): Promise<void> {
     // Resolve from cache or scan for consistent path resolution
     const resolvedDir = await this.featureLoader.resolveFeatureDir(projectPath, featureId);
@@ -2840,6 +3036,15 @@ Format your response as a structured markdown document.`;
 
       // Apply updates
       Object.assign(feature.planSpec, updates);
+
+      if (taskUpdate) {
+        const task = feature.planSpec.tasks?.find((t) => t.id === taskUpdate.taskId);
+        if (task) {
+          task.status = taskUpdate.status;
+          if (taskUpdate.startedAt) task.startedAt = taskUpdate.startedAt;
+          if (taskUpdate.completedAt) task.completedAt = taskUpdate.completedAt;
+        }
+      }
 
       // If content is being updated and it's a new version, increment version
       if (updates.content && updates.content !== feature.planSpec.content) {
@@ -2883,6 +3088,64 @@ Format your response as a structured markdown document.`;
       await atomicWriteJson(featurePath, feature, { backupCount: DEFAULT_BACKUP_COUNT });
     } catch (error) {
       logger.warn(`Failed to update feature field ${field} for ${featureId}:`, error);
+    }
+  }
+
+  /**
+   * Record what a pipeline step actually did, on the feature itself.
+   *
+   * Without this the UI can only infer a step's outcome from `step.order <
+   * currentStep.order`, which is true only within one uninterrupted sequential
+   * run — resume a feature mid-pipeline and every earlier step reads as done
+   * whether it ran or not.
+   */
+  private async recordPipelineStepProgress(
+    projectPath: string,
+    featureId: string,
+    steps: PipelineStep[],
+    stepIndex: number,
+    status: PipelineStepProgress['status']
+  ): Promise<void> {
+    try {
+      const resolvedDir = await this.featureLoader.resolveFeatureDir(projectPath, featureId);
+      const featureDir = resolvedDir || this.featureLoader.getFeatureDir(projectPath, featureId);
+      const featurePath = path.join(featureDir, 'feature.json');
+
+      const result = await readJsonWithRecovery<Feature | null>(featurePath, null, {
+        maxBackups: DEFAULT_BACKUP_COUNT,
+        autoRestore: true,
+      });
+      const feature = result.data;
+      if (!feature) return;
+
+      // Re-seed whenever the pipeline itself changed shape, so an edited
+      // pipeline never leaves entries pointing at steps that no longer exist.
+      const existing = feature.pipelineProgress;
+      const matchesPipeline =
+        existing?.length === steps.length &&
+        existing.every((entry, index) => entry.stepId === steps[index].id);
+      const progress: PipelineStepProgress[] = matchesPipeline
+        ? existing.map((entry) => ({ ...entry }))
+        : steps.map((step) => ({ stepId: step.id, stepName: step.name, status: 'pending' }));
+
+      const entry = progress[stepIndex];
+      if (!entry) return;
+      entry.status = status;
+      entry.stepName = steps[stepIndex].name;
+      const now = new Date().toISOString();
+      if (status === 'running') {
+        entry.startedAt = now;
+        delete entry.completedAt;
+      } else {
+        entry.completedAt = now;
+      }
+
+      feature.pipelineProgress = progress;
+      feature.updatedAt = now;
+      await atomicWriteJson(featurePath, feature, { backupCount: DEFAULT_BACKUP_COUNT });
+      invalidateFeaturesCache(projectPath);
+    } catch (error) {
+      logger.warn(`Failed to record pipeline progress for ${featureId}:`, error);
     }
   }
 
@@ -3533,6 +3796,62 @@ This mock response was generated because DMAKER_MOCK_AGENT=true was set.
     // Initialize execution metrics accumulator
     const metrics = createMetricsAccumulator(detectAuthMethod());
 
+    // Rebuild the parent/child agent tree from the message stream. One tracker
+    // per runAgent call: a pipeline step is its own CLI session with its own
+    // root, so it gets its own tree rather than being appended to the last one.
+    const agentTree = new AgentTreeTracker(featureId, new Date().toISOString());
+    this.agentTrees.set(featureId, agentTree);
+
+    /**
+     * Turn what the tracker saw into wire events. Emitted before the
+     * `auto_mode_tool` event for the same block, so a client never receives an
+     * agentId it has no node for. A `spawned` change can arrive twice for one
+     * node — once as an inferred placeholder, once when the Task block that
+     * explains it turns up — so the client upserts by id rather than appending.
+     */
+    const emitAgentTreeChanges = (changes: AgentTreeChange[]): void => {
+      for (const change of changes) {
+        if (change.kind === 'spawned') {
+          this.emitAutoModeEvent('auto_mode_subagent_started', {
+            featureId,
+            projectPath,
+            agentId: change.node.id,
+            parentAgentId: change.node.parentId ?? MASTER_AGENT_ID,
+            depth: change.node.depth,
+            index: change.node.index,
+            name: change.node.name,
+            description: change.node.description,
+            prompt: change.node.prompt,
+            model: change.node.model,
+            background: change.node.background,
+          });
+        } else {
+          this.emitAutoModeEvent('auto_mode_subagent_finished', {
+            featureId,
+            projectPath,
+            agentId: change.node.id,
+            status: change.node.status,
+            durationMs: change.durationMs,
+            toolCallCount: change.node.toolCallCount,
+            isError: change.node.isError,
+            result: change.node.result,
+          });
+        }
+      }
+    };
+
+    /**
+     * Fold one streamed message into the tree and return who produced it.
+     * Called at the top of every stream loop, before any event for that
+     * message is emitted — `nameOf` falls back to a placeholder for an id the
+     * tracker has not been told about yet.
+     */
+    const observeMessage = (msg: unknown): { agentId: AgentNodeId; agentName: string } => {
+      emitAgentTreeChanges(agentTree.observe(msg));
+      const agentId = agentTree.agentIdFor(msg);
+      return { agentId, agentName: agentTree.nameOf(agentId) };
+    };
+
     // Emit metrics periodically during execution
     const METRICS_EMIT_INTERVAL_MS = 10_000;
     const metricsInterval = setInterval(() => {
@@ -3540,6 +3859,20 @@ This mock response was generated because DMAKER_MOCK_AGENT=true was set.
         featureId,
         projectPath,
         metrics,
+      });
+
+      // Full-tree resync for anyone who joined mid-run and missed the spawn
+      // events. It rides this timer deliberately: the agent-tree sub-types
+      // bypass throttling entirely, so a snapshot per observed message would go
+      // straight down the wire at stream rate.
+      const tree = agentTree.snapshot();
+      this.emitAutoModeEvent('auto_mode_agent_tree', { featureId, projectPath, tree });
+      // saveAgentTree rejects rather than swallowing, and this is a bare
+      // setInterval callback: an unhandled rejection here would take the
+      // process down the first time a status move renames the directory
+      // mid-write.
+      void this.featureLoader.saveAgentTree(projectPath, featureId, tree).catch((error) => {
+        logger.warn(`Failed to persist the agent tree for ${featureId}:`, error);
       });
     }, METRICS_EMIT_INTERVAL_MS);
 
@@ -3666,6 +3999,157 @@ This mock response was generated because DMAKER_MOCK_AGENT=true was set.
       }, WRITE_DEBOUNCE_MS);
     };
 
+    // Whose prose the transcript is currently in. Master to begin with, which
+    // is why a run with no sub-agents writes exactly the file it wrote before
+    // this existed — and why the parser defaults to master for every file
+    // written before markers existed at all.
+    let transcriptAgentId: AgentNodeId = MASTER_AGENT_ID;
+
+    /**
+     * Mark a change of author in the transcript. One line, only when the owner
+     * actually changes: `[timestamp:<ISO>] [agent:<id>] ▶ <name>`. Everything
+     * after it belongs to that agent until the next marker.
+     */
+    const appendTranscriptMarker = (agentId: AgentNodeId, agentName: string): void => {
+      if (agentId === transcriptAgentId) return;
+      transcriptAgentId = agentId;
+      if (responseText.length > 0 && !responseText.endsWith('\n')) {
+        responseText += '\n';
+      }
+      responseText += `\n[timestamp:${new Date().toISOString()}] [agent:${agentId}] ▶ ${agentName}\n`;
+      scheduleWrite();
+    };
+
+    /**
+     * Progress markers already acted on, keyed `kind:ref`.
+     *
+     * Seeded from whatever the transcript already holds, because a follow-up
+     * run starts with the previous session's transcript in `responseText` and
+     * would otherwise replay every task that session finished.
+     */
+    const seenProgressMarkers = new Set<string>(
+      parseProgressMarkers(responseText).map((marker) => marker.key)
+    );
+    // How far into `responseText` the marker scan has already read. Re-reading
+    // the tail is what lets a marker split across two chunks fire; re-scanning
+    // the whole accumulator on every text block would be quadratic in a
+    // transcript that reaches megabytes.
+    const MARKER_SCAN_OVERLAP = 512;
+    let markerScanFrom = Math.max(0, responseText.length - MARKER_SCAN_OVERLAP);
+
+    // Tasks the lite plan declared, and the progress derived from the markers.
+    // Empty is normal: a trivial lite plan parses to no tasks at all and the
+    // marker stream is then the only account of what the agent did.
+    let markerTasks: ParsedTask[] = [];
+    const markerTaskOrder: string[] = [];
+    let markerTasksCompleted = 0;
+
+    /**
+     * Act on any progress marker the agent has printed since the last scan.
+     *
+     * Lite/adaptive planning — the default — implements inline in this stream,
+     * so the per-task loop that advances the counter never runs. The prompts
+     * have always instructed the agent to print these markers; until now
+     * nothing read them and the board sat at 0/N for the whole run.
+     */
+    const applyProgressMarkers = async (): Promise<void> => {
+      const window = responseText.slice(markerScanFrom);
+      markerScanFrom = Math.max(0, responseText.length - MARKER_SCAN_OVERLAP);
+
+      for (const marker of parseProgressMarkers(window)) {
+        if (seenProgressMarkers.has(marker.key)) continue;
+        seenProgressMarkers.add(marker.key);
+        const now = new Date().toISOString();
+
+        if (marker.kind === 'phase_complete') {
+          // The prompt asks for "Phase N complete", but a phase can be named.
+          // phaseNumber is omitted rather than faked when it is not a number;
+          // the label always goes out so a named phase is not silently lost.
+          const phaseNumber = marker.ref.match(/(\d+)/)?.[1];
+          this.emitAutoModeEvent('auto_mode_phase_complete', {
+            featureId,
+            projectPath,
+            phase: marker.ref,
+            ...(phaseNumber ? { phaseNumber: parseInt(phaseNumber, 10) } : {}),
+          });
+          continue;
+        }
+
+        const taskId = marker.ref;
+        if (!markerTaskOrder.includes(taskId)) markerTaskOrder.push(taskId);
+        const planned = markerTasks.find((task) => task.id === taskId);
+        const tasksTotal = Math.max(markerTasks.length, markerTaskOrder.length);
+
+        if (marker.kind === 'task_start') {
+          this.emitAutoModeEvent('auto_mode_task_started', {
+            featureId,
+            projectPath,
+            taskId,
+            taskDescription: planned?.description || marker.text,
+            taskIndex: markerTaskOrder.indexOf(taskId),
+            tasksTotal,
+          });
+
+          const runningFeature = this.runningFeatures.get(featureId);
+          if (runningFeature) {
+            runningFeature.currentTaskId = taskId;
+            runningFeature.tasksTotal = tasksTotal;
+          }
+
+          await this.updateFeaturePlanSpec(
+            projectPath,
+            featureId,
+            { currentTaskId: taskId, tasksTotal },
+            { taskId, status: 'in_progress', startedAt: now }
+          );
+          continue;
+        }
+
+        markerTasksCompleted++;
+        this.emitAutoModeEvent('auto_mode_task_complete', {
+          featureId,
+          projectPath,
+          taskId,
+          tasksCompleted: markerTasksCompleted,
+          tasksTotal,
+        });
+
+        const runningFeature = this.runningFeatures.get(featureId);
+        if (runningFeature) {
+          runningFeature.tasksCompleted = markerTasksCompleted;
+          runningFeature.tasksTotal = tasksTotal;
+        }
+
+        await this.updateFeaturePlanSpec(
+          projectPath,
+          featureId,
+          { tasksCompleted: markerTasksCompleted, tasksTotal },
+          { taskId, status: 'completed', completedAt: now }
+        );
+      }
+    };
+
+    /**
+     * Close the agent tree exactly once and put the final shape on disk.
+     *
+     * `finalize` has to run before the roll-up is taken: it is what moves a
+     * sub-agent whose `tool_result` never arrived off 'running', and a summary
+     * taken first says 'running' forever.
+     */
+    let agentTreeClosed = false;
+    const closeAgentTree = async (status: Exclude<AgentNodeStatus, 'running'>): Promise<void> => {
+      if (agentTreeClosed) return;
+      agentTreeClosed = true;
+      emitAgentTreeChanges(agentTree.finalize(status));
+      const tree = agentTree.snapshot();
+      this.emitAutoModeEvent('auto_mode_agent_tree', { featureId, projectPath, tree });
+      try {
+        await this.featureLoader.saveAgentTree(projectPath, featureId, tree);
+      } catch (error) {
+        logger.error(`Failed to save the agent tree for ${featureId}:`, error);
+      }
+    };
+
     // Heartbeat logging so "silent" model calls are visible.
     // Some runs can take a while before the first streamed message arrives.
     const streamStartTime = Date.now();
@@ -3685,6 +4169,9 @@ This mock response was generated because DMAKER_MOCK_AGENT=true was set.
         receivedAnyStreamMessage = true;
         // Accumulate execution metrics from every message
         accumulateFromMessage(metrics, msg as unknown as Record<string, unknown>);
+        // Fold into the agent tree before anything is emitted for this message,
+        // so no event carries an agentId the client has no node for.
+        const { agentId, agentName } = observeMessage(msg);
         // Log when result messages arrive for metrics debugging
         if ((msg as unknown as Record<string, unknown>).type === 'result') {
           const resultMsg = msg as unknown as Record<string, unknown>;
@@ -3705,6 +4192,10 @@ This mock response was generated because DMAKER_MOCK_AGENT=true was set.
 
               // Skip empty text
               if (!newText) continue;
+
+              // Name the author before its prose lands, so the transcript can
+              // be split back apart per agent.
+              appendTranscriptMarker(agentId, agentName);
 
               // Note: Cursor-specific dedup (duplicate blocks, accumulated text) is now
               // handled in CursorProvider.deduplicateTextBlocks() for cleaner separation
@@ -3756,6 +4247,9 @@ This mock response was generated because DMAKER_MOCK_AGENT=true was set.
 
                 // Parse any tasks from the lite plan (may have none for trivial features)
                 const parsedTasks = parseTasksFromSpec(planContent);
+                // The [TASK_*] markers the agent prints from here on are matched
+                // against these for their descriptions and their total.
+                markerTasks = parsedTasks;
 
                 logger.info(
                   `[PLAN_GENERATED] detected for feature ${featureId}: ${parsedTasks.length} tasks parsed (lite/adaptive mode, auto-approved)`
@@ -3791,6 +4285,11 @@ This mock response was generated because DMAKER_MOCK_AGENT=true was set.
                 // Agent continues implementing in the same stream after [PLAN_GENERATED].
                 // No second agent call needed — the lite prompt says "proceed immediately".
               }
+
+              // Task/phase progress markers. These only ever fire on the lite
+              // path: [SPEC_GENERATED] hands implementation to the per-task
+              // loop below, which emits the same events from the harness side.
+              await applyProgressMarkers();
 
               // Check for [SPEC_GENERATED] marker in planning modes (spec or full)
               if (
@@ -3953,12 +4452,16 @@ After generating the revised spec, output:
                         let revisionText = '';
                         for await (const msg of revisionStream) {
                           accumulateFromMessage(metrics, msg as unknown as Record<string, unknown>);
+                          const revisionOwner = observeMessage(msg);
                           if (msg.type === 'assistant' && msg.message?.content) {
                             for (const block of msg.message.content) {
                               if (block.type === 'text') {
                                 revisionText += block.text || '';
                                 this.emitAutoModeEvent('auto_mode_progress', {
                                   featureId,
+                                  projectPath,
+                                  agentId: revisionOwner.agentId,
+                                  agentName: revisionOwner.agentName,
                                   content: block.text,
                                 });
                               }
@@ -4096,9 +4599,12 @@ After generating the revised spec, output:
                     }
 
                     // Update planSpec with current task
-                    await this.updateFeaturePlanSpec(projectPath, featureId, {
-                      currentTaskId: task.id,
-                    });
+                    await this.updateFeaturePlanSpec(
+                      projectPath,
+                      featureId,
+                      { currentTaskId: task.id },
+                      { taskId: task.id, status: 'in_progress', startedAt: taskStartTimestamp }
+                    );
 
                     // Build focused prompt for this specific task
                     const taskPrompt = this.buildTaskPrompt(
@@ -4131,23 +4637,37 @@ After generating the revised spec, output:
                     // Process task stream
                     for await (const msg of taskStream) {
                       accumulateFromMessage(metrics, msg as unknown as Record<string, unknown>);
+                      // The per-task loop is where a feature that went through
+                      // plan approval does its implementation. Instrumenting
+                      // only the main loop would leave every approved feature
+                      // with no tree at all.
+                      const taskOwner = observeMessage(msg);
                       if (msg.type === 'assistant' && msg.message?.content) {
                         for (const block of msg.message.content) {
                           if (block.type === 'text') {
                             taskOutput += block.text || '';
+                            appendTranscriptMarker(taskOwner.agentId, taskOwner.agentName);
                             responseText += block.text || '';
                             this.emitAutoModeEvent('auto_mode_progress', {
                               featureId,
+                              projectPath,
+                              agentId: taskOwner.agentId,
+                              agentName: taskOwner.agentName,
                               content: block.text,
                             });
                           } else if (block.type === 'tool_use') {
                             this.emitAutoModeEvent('auto_mode_tool', {
                               featureId,
+                              projectPath,
+                              agentId: taskOwner.agentId,
+                              agentName: taskOwner.agentName,
+                              toolUseId: block.id,
                               tool: block.name,
                               input: block.input,
                             });
 
                             // Persist tool call with timestamp to agent output
+                            appendTranscriptMarker(taskOwner.agentId, taskOwner.agentName);
                             if (responseText.length > 0 && !responseText.endsWith('\n')) {
                               responseText += '\n';
                             }
@@ -4191,9 +4711,16 @@ After generating the revised spec, output:
                     }
 
                     // Update planSpec with progress
-                    await this.updateFeaturePlanSpec(projectPath, featureId, {
-                      tasksCompleted: taskIndex + 1,
-                    });
+                    await this.updateFeaturePlanSpec(
+                      projectPath,
+                      featureId,
+                      { tasksCompleted: taskIndex + 1 },
+                      {
+                        taskId: task.id,
+                        status: 'completed',
+                        completedAt: taskCompleteTimestamp,
+                      }
+                    );
 
                     // Check for phase completion (group tasks by phase)
                     if (task.phase) {
@@ -4258,22 +4785,38 @@ After generating the revised spec, output:
 
                   for await (const msg of continuationStream) {
                     accumulateFromMessage(metrics, msg as unknown as Record<string, unknown>);
+                    const continuationOwner = observeMessage(msg);
                     if (msg.type === 'assistant' && msg.message?.content) {
                       for (const block of msg.message.content) {
                         if (block.type === 'text') {
+                          appendTranscriptMarker(
+                            continuationOwner.agentId,
+                            continuationOwner.agentName
+                          );
                           responseText += block.text || '';
                           this.emitAutoModeEvent('auto_mode_progress', {
                             featureId,
+                            projectPath,
+                            agentId: continuationOwner.agentId,
+                            agentName: continuationOwner.agentName,
                             content: block.text,
                           });
                         } else if (block.type === 'tool_use') {
                           this.emitAutoModeEvent('auto_mode_tool', {
                             featureId,
+                            projectPath,
+                            agentId: continuationOwner.agentId,
+                            agentName: continuationOwner.agentName,
+                            toolUseId: block.id,
                             tool: block.name,
                             input: block.input,
                           });
 
                           // Persist tool call with timestamp to agent output
+                          appendTranscriptMarker(
+                            continuationOwner.agentId,
+                            continuationOwner.agentName
+                          );
                           if (responseText.length > 0 && !responseText.endsWith('\n')) {
                             responseText += '\n';
                           }
@@ -4304,6 +4847,13 @@ After generating the revised spec, output:
                 );
                 this.emitAutoModeEvent('auto_mode_progress', {
                   featureId,
+                  projectPath,
+                  // Top level, and named exactly this: the event throttler keys
+                  // its accumulation buffer off payload.agentId. Nested or
+                  // renamed, it silently falls back to the feature-scoped key
+                  // and splices Master's prose into a sub-agent's.
+                  agentId,
+                  agentName,
                   content: block.text,
                 });
               }
@@ -4311,11 +4861,16 @@ After generating the revised spec, output:
               // Emit event for real-time UI
               this.emitAutoModeEvent('auto_mode_tool', {
                 featureId,
+                projectPath,
+                agentId,
+                agentName,
+                toolUseId: block.id,
                 tool: block.name,
                 input: block.input,
               });
 
               // Also add to file output for persistence
+              appendTranscriptMarker(agentId, agentName);
               if (responseText.length > 0 && !responseText.endsWith('\n')) {
                 responseText += '\n';
               }
@@ -4371,6 +4926,11 @@ After generating the revised spec, output:
         }
       }
 
+      // Close the agent tree before the roll-up is taken — finalize() is what
+      // moves a sub-agent whose tool_result never arrived off 'running'.
+      await closeAgentTree('completed');
+      metrics.subagents = agentTree.toSummaries();
+
       // Save final execution metrics to feature JSON
       try {
         const resolvedDir = await this.featureLoader.resolveFeatureDir(projectPath, featureId);
@@ -4411,9 +4971,65 @@ After generating the revised spec, output:
         clearTimeout(rawWriteTimeout);
         rawWriteTimeout = null;
       }
+      // Only reached un-closed when the run threw or was stopped: the success
+      // path closes the tree as 'completed' before saving its metrics.
+      await closeAgentTree(abortController.signal.aborted ? 'aborted' : 'failed');
+      // Nobody can answer a question whose run has ended, so release the agent
+      // waiting on it and stop it counting against the task.
+      await this.expirePendingQuestions(projectPath, featureId);
       // Clean up in-memory output buffer now that execution is complete
       // (disk file is the source of truth after execution ends)
       this.featureOutputBuffers.delete(featureId);
+      this.agentTrees.delete(featureId);
+    }
+  }
+
+  /**
+   * End every question this process still has an agent parked on for a feature.
+   *
+   * Rejecting the waiter unblocks the run; `expiredAt` is what stops the
+   * question counting as outstanding on a task nobody is working on any more.
+   */
+  private async expirePendingQuestions(projectPath: string, featureId: string): Promise<void> {
+    const expired: string[] = [];
+    for (const pending of [...this.pendingQuestions.values()]) {
+      if (pending.featureId !== featureId) continue;
+      this.pendingQuestions.delete(pending.questionId);
+      expired.push(pending.questionId);
+      pending.reject(new Error('The run ended before the question was answered'));
+    }
+    if (expired.length === 0) return;
+
+    try {
+      const resolvedDir = await this.featureLoader.resolveFeatureDir(projectPath, featureId);
+      const featureDir = resolvedDir || this.featureLoader.getFeatureDir(projectPath, featureId);
+      const featurePath = path.join(featureDir, 'feature.json');
+      const result = await readJsonWithRecovery<Feature | null>(featurePath, null, {
+        maxBackups: DEFAULT_BACKUP_COUNT,
+        autoRestore: true,
+      });
+      const feature = result.data;
+      if (!feature?.agentQuestions?.length) return;
+
+      const now = new Date().toISOString();
+      let changed = false;
+      for (const question of feature.agentQuestions) {
+        if (!expired.includes(question.id) || question.answeredAt || question.expiredAt) continue;
+        question.expiredAt = now;
+        changed = true;
+      }
+      if (!changed) return;
+
+      feature.updatedAt = now;
+      await atomicWriteJson(featurePath, feature, { backupCount: DEFAULT_BACKUP_COUNT });
+      invalidateFeaturesCache(projectPath);
+      this.events.emit('feature:question-expired', {
+        featureId,
+        projectPath,
+        count: expired.length,
+      });
+    } catch (error) {
+      logger.warn(`Failed to expire outstanding questions for ${featureId}:`, error);
     }
   }
 

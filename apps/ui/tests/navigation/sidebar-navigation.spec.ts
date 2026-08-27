@@ -111,16 +111,39 @@ test.describe('Sidebar Navigation', () => {
     });
   }
 
-  test('opens global settings and the scratchpad', async ({ page }) => {
+  test('opens global settings from the sidebar', async ({ page }) => {
     await openBoard(page, projectPath, projectName);
 
     await page.locator('[data-testid="sidebar-global-settings"]').click();
     await expect(page.locator('[data-testid="tool-pane-settings"]')).toBeVisible({
       timeout: 15000,
     });
+  });
 
-    await page.locator('[data-testid="sidebar-tool-scratch"]').click();
-    await expect(page.locator('[data-testid="tool-pane-scratch"]')).toBeVisible({ timeout: 15000 });
+  test('swaps the sidebar for research projects and back', async ({ page }) => {
+    await openBoard(page, projectPath, projectName);
+
+    const toggle = page.locator('[data-testid="sidebar-tool-research"]');
+    const tree = page.locator('[data-testid="sidebar-body"]');
+    const research = page.locator('[data-testid="sidebar-research-body"]');
+
+    await expect(tree).toBeVisible();
+    await expect(research).toHaveCount(0);
+
+    await toggle.click();
+
+    // Research replaces the repository tree rather than sitting beside it.
+    await expect(research).toBeVisible({ timeout: 15000 });
+    await expect(tree).toBeHidden();
+
+    // Isolated is always offered, whether or not any project has been made.
+    await expect(page.locator('[data-testid="sidebar-section-research:isolated"]')).toBeVisible({
+      timeout: 15000,
+    });
+
+    await toggle.click();
+    await expect(tree).toBeVisible();
+    await expect(research).toHaveCount(0);
   });
 
   test('opens the project view from the sidebar', async ({ page }) => {

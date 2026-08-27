@@ -17,6 +17,7 @@ import {
   FolderKanban,
 } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
+import { MAX_CONCURRENT_AGENTS } from '@dmaker/types';
 import { cn, pathsEqual } from '@/lib/utils';
 import { getElectronAPI, type Project } from '@/lib/electron';
 import { useAppStore } from '@/store/app-store';
@@ -39,7 +40,7 @@ interface WorktreeInfo {
 }
 
 /**
- * AgConfigurationSection - Global agent concurrency slider (1-20, default 5)
+ * AgConfigurationSection - Global agent concurrency slider, 1..MAX_CONCURRENT_AGENTS
  */
 function AgConfigurationSection() {
   const agentMultiplier = useAppStore((state) => state.agentMultiplier);
@@ -64,15 +65,15 @@ function AgConfigurationSection() {
           value={[agentMultiplier]}
           onValueChange={handleMaxAgentsChange}
           min={1}
-          max={20}
+          max={MAX_CONCURRENT_AGENTS}
           step={1}
           className="flex-1"
           data-testid="tools-ag-concurrency-slider"
         />
-        <span className="text-xs font-medium min-w-[2ch] text-right">{agentMultiplier}</span>
+        <span className="text-xs font-medium min-w-[3ch] text-right">{agentMultiplier}</span>
       </div>
       <p className="text-[10px] text-muted-foreground leading-relaxed">
-        Maximum number of concurrent agents across all projects.
+        Maximum number of concurrent agents across all projects (up to {MAX_CONCURRENT_AGENTS}).
       </p>
     </div>
   );

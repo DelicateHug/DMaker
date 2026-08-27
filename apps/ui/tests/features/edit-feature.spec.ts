@@ -82,13 +82,13 @@ test.describe('Edit Feature', () => {
 
     // Create a feature first
     await clickAddFeature(page);
-    await fillAddFeatureDialog(page, originalDescription, { source: 'local' });
+    await fillAddFeatureDialog(page, originalDescription);
     await confirmAddFeature(page);
 
     // Wait for the feature to appear in the backlog
     await expect(async () => {
       const backlogColumn = page.locator(
-        '[data-testid^="sidebar-section-status:"][data-testid$=":local"]'
+        '[data-testid^="sidebar-section-status:"][data-testid$=":backlog"]'
       );
       const featureCard = backlogColumn.locator('[data-testid="sidebar-feature-row"]').filter({
         hasText: originalDescription,
@@ -98,7 +98,7 @@ test.describe('Edit Feature', () => {
 
     // Get the feature ID from the card
     const featureCard = page
-      .locator('[data-testid^="sidebar-section-status:"][data-testid$=":local"]')
+      .locator('[data-testid^="sidebar-section-status:"][data-testid$=":backlog"]')
       .locator('[data-testid="sidebar-feature-row"]')
       .filter({ hasText: originalDescription })
       .first();
@@ -137,7 +137,7 @@ test.describe('Edit Feature', () => {
     // Verify the updated description appears in the card
     await expect(async () => {
       const backlogColumn = page.locator(
-        '[data-testid^="sidebar-section-status:"][data-testid$=":local"]'
+        '[data-testid^="sidebar-section-status:"][data-testid$=":backlog"]'
       );
       const updatedCard = backlogColumn.locator('[data-testid="sidebar-feature-row"]').filter({
         hasText: updatedDescription,

@@ -1,0 +1,1086 @@
+<title>DMaker Unit Economics</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link
+  rel="stylesheet"
+  href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..700&family=Public+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap"
+/>
+<style>
+  :root {
+    --bg: #f5f6f4;
+    --surface: #ffffff;
+    --surface-2: #eef1ed;
+    --ink: #212a24;
+    --ink-2: #5f6d64;
+    --muted: #8a968d;
+    --hairline: #dfe4de;
+    --accent: #1a6b4f;
+    --accent-ink: #14543e;
+    --neg: #b23c3c;
+    --chart-surface: #fcfcfb;
+    --grid: #e1e0d9;
+    --axis: #c3c2b7;
+    --s1: #2a78d6; /* blue */
+    --s2: #eb6834; /* orange */
+    --s3: #1baf7a; /* aqua */
+    --tile-num: #14543e;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme='light']) {
+      --bg: #121614;
+      --surface: #1a201c;
+      --surface-2: #222925;
+      --ink: #e8ece8;
+      --ink-2: #96a39a;
+      --muted: #6f7d74;
+      --hairline: #2a322c;
+      --accent: #52c79a;
+      --accent-ink: #6ad3aa;
+      --neg: #e07070;
+      --chart-surface: #1a1a19;
+      --grid: #2c2c2a;
+      --axis: #383835;
+      --s1: #3987e5;
+      --s2: #d95926;
+      --s3: #199e70;
+      --tile-num: #6ad3aa;
+    }
+  }
+  :root[data-theme='dark'] {
+    --bg: #121614;
+    --surface: #1a201c;
+    --surface-2: #222925;
+    --ink: #e8ece8;
+    --ink-2: #96a39a;
+    --muted: #6f7d74;
+    --hairline: #2a322c;
+    --accent: #52c79a;
+    --accent-ink: #6ad3aa;
+    --neg: #e07070;
+    --chart-surface: #1a1a19;
+    --grid: #2c2c2a;
+    --axis: #383835;
+    --s1: #3987e5;
+    --s2: #d95926;
+    --s3: #199e70;
+    --tile-num: #6ad3aa;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Public Sans', 'Segoe UI', system-ui, sans-serif;
+    font-size: 15.5px;
+    line-height: 1.62;
+    margin: 0;
+  }
+  .wrap {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 56px 28px 96px;
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: 'Bricolage Grotesque', 'Public Sans', system-ui, sans-serif;
+    text-wrap: balance;
+    line-height: 1.15;
+  }
+  h1 {
+    font-size: 2.35rem;
+    font-weight: 700;
+    margin: 10px 0 14px;
+    letter-spacing: -0.01em;
+  }
+  h2 {
+    font-size: 1.42rem;
+    font-weight: 650;
+    margin: 0 0 16px;
+  }
+  h3 {
+    font-size: 1.05rem;
+    font-weight: 600;
+    margin: 26px 0 8px;
+  }
+  p {
+    max-width: 68ch;
+    margin: 0 0 14px;
+  }
+  section {
+    margin-top: 64px;
+  }
+  header p.lede {
+    font-size: 1.06rem;
+    color: var(--ink-2);
+    max-width: 62ch;
+  }
+
+  .eyebrow {
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+  .secnum {
+    color: var(--muted);
+    font-weight: 500;
+    margin-right: 6px;
+  }
+
+  /* stat tiles */
+  .tiles {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 14px;
+    margin: 30px 0 8px;
+  }
+  .tile {
+    background: var(--surface);
+    border: 1px solid var(--hairline);
+    border-radius: 8px;
+    padding: 18px 20px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .tile .label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ink-2);
+  }
+  .tile .num {
+    font-family: 'Bricolage Grotesque', system-ui, sans-serif;
+    font-size: 2.1rem;
+    font-weight: 700;
+    color: var(--tile-num);
+    line-height: 1.1;
+    margin-top: 6px;
+  }
+  .tile .sub {
+    font-size: 0.86rem;
+    color: var(--ink-2);
+  }
+
+  /* tables */
+  .tablewrap {
+    overflow-x: auto;
+    border: 1px solid var(--hairline);
+    border-radius: 8px;
+    background: var(--surface);
+    margin: 18px 0;
+  }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 0.885rem;
+    min-width: 640px;
+  }
+  th,
+  td {
+    text-align: left;
+    padding: 9px 14px;
+    vertical-align: top;
+    border-top: 1px solid var(--hairline);
+  }
+  thead th {
+    border-top: none;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-2);
+    background: var(--surface-2);
+    white-space: nowrap;
+  }
+  td.num,
+  th.num {
+    font-family: 'IBM Plex Mono', ui-monospace, monospace;
+    font-variant-numeric: tabular-nums;
+    font-size: 0.84rem;
+    white-space: nowrap;
+  }
+  td strong {
+    font-weight: 600;
+  }
+  .prod {
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .neg {
+    color: var(--neg);
+    font-weight: 600;
+  }
+  .pos {
+    color: var(--accent-ink);
+    font-weight: 600;
+  }
+
+  /* the three-lever rows */
+  .levers {
+    display: grid;
+    gap: 14px;
+    margin: 20px 0;
+  }
+  .lever {
+    display: grid;
+    grid-template-columns: 150px 1fr;
+    gap: 4px 22px;
+    background: var(--surface);
+    border: 1px solid var(--hairline);
+    border-radius: 8px;
+    padding: 16px 20px;
+  }
+  .lever .name {
+    font-family: 'Bricolage Grotesque', system-ui, sans-serif;
+    font-weight: 650;
+    font-size: 1.02rem;
+  }
+  .lever .cost {
+    font-family: 'IBM Plex Mono', ui-monospace, monospace;
+    font-size: 0.8rem;
+    color: var(--ink-2);
+  }
+  .lever .verdict {
+    font-size: 0.92rem;
+  }
+  .lever .verdict p {
+    margin: 0 0 6px;
+    max-width: none;
+  }
+  @media (max-width: 620px) {
+    .lever {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  /* chart */
+  .chartcard {
+    background: var(--chart-surface);
+    border: 1px solid var(--hairline);
+    border-radius: 8px;
+    padding: 20px 20px 12px;
+    margin: 20px 0 8px;
+  }
+  .chartcard h3 {
+    margin: 0 0 2px;
+  }
+  .chartcard .chartsub {
+    font-size: 0.85rem;
+    color: var(--ink-2);
+    margin: 0 0 12px;
+  }
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    font-size: 0.82rem;
+    color: var(--ink-2);
+    margin: 4px 0 10px;
+  }
+  .legend .key {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+  }
+  .legend .swatch {
+    width: 14px;
+    height: 3px;
+    border-radius: 2px;
+    display: inline-block;
+  }
+  #chart {
+    width: 100%;
+    height: auto;
+    display: block;
+    touch-action: pan-y;
+  }
+  #tooltip {
+    position: fixed;
+    pointer-events: none;
+    z-index: 10;
+    display: none;
+    background: var(--surface);
+    color: var(--ink);
+    border: 1px solid var(--hairline);
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-size: 0.8rem;
+    line-height: 1.5;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+    min-width: 190px;
+  }
+  #tooltip .tt-title {
+    font-weight: 600;
+    margin-bottom: 2px;
+  }
+  #tooltip .tt-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 14px;
+  }
+  #tooltip .tt-row .v {
+    font-family: 'IBM Plex Mono', ui-monospace, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+  .chart-note {
+    font-size: 0.82rem;
+    color: var(--ink-2);
+    margin-top: 10px;
+  }
+
+  ul {
+    padding-left: 20px;
+    max-width: 70ch;
+  }
+  li {
+    margin-bottom: 9px;
+  }
+  li::marker {
+    color: var(--accent);
+  }
+
+  .callout {
+    border-left: 3px solid var(--accent);
+    background: var(--surface);
+    border-radius: 0 8px 8px 0;
+    padding: 14px 20px;
+    margin: 20px 0;
+    max-width: 74ch;
+  }
+  .callout p {
+    margin: 0;
+    max-width: none;
+  }
+
+  .foot {
+    margin-top: 72px;
+    padding-top: 18px;
+    border-top: 1px solid var(--hairline);
+    font-size: 0.8rem;
+    color: var(--muted);
+    max-width: 74ch;
+  }
+  .foot p {
+    margin: 0 0 8px;
+    max-width: none;
+  }
+  a {
+    color: var(--accent-ink);
+  }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Market research · August 2026</div>
+    <h1>DMaker Unit Economics</h1>
+    <p class="lede">
+      Competitor pricing across the autonomous coding-agent market, what tenant / seat / usage each
+      contribute to cost and price, and the break-even math for DMaker Cloud — built on the cost
+      model in the SaaS architecture plan.
+    </p>
+
+    <div class="tiles">
+      <div class="tile">
+        <span class="label">Break-even</span>
+        <span class="num">≈ 9 users</span>
+        <span class="sub"
+          >paying users at plan pricing ($30 seat + credits at cost +15%); range 6–12 across the
+          fixed-floor spread</span
+        >
+      </div>
+      <div class="tile">
+        <span class="label">Profit per user after</span>
+        <span class="num">$32–72<span style="font-size: 1.1rem; font-weight: 600">/mo</span></span>
+        <span class="sub"
+          >contribution by usage profile; ≈ $44 for a medium user. Fixed costs are already covered
+          past break-even.</span
+        >
+      </div>
+      <div class="tile">
+        <span class="label">Your cost per medium user</span>
+        <span class="num">≈ $92<span style="font-size: 1.1rem; font-weight: 600">/mo</span></span>
+        <span class="sub"
+          >92% of it is LLM tokens — which is why the whole market now bills usage, not seats</span
+        >
+      </div>
+    </div>
+  </header>
+
+  <section>
+    <h2><span class="secnum">1</span>Your cost base (from the plan)</h2>
+    <p>
+      Cost lives almost entirely at the <strong>user × usage</strong> level. Tenants are free; seats
+      are nearly free; tokens are the product.
+    </p>
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Cost driver</th>
+            <th class="num">Amount / mo</th>
+            <th>Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Fixed platform floor</td>
+            <td class="num">$250–450</td>
+            <td>
+              Aurora, Redis, 8–9 Fargate services, NAT, endpoints. Drifts to $350–550 at 20+ active
+              users.
+            </td>
+          </tr>
+          <tr>
+            <td>New tenant (org)</td>
+            <td class="num">≈ $0</td>
+            <td>
+              Pooled architecture — a tenant adds no fixed cost. The floor amortizes to noise beyond
+              ~10 tenants.
+            </td>
+          </tr>
+          <tr>
+            <td>Light user (platform-billed)</td>
+            <td class="num">≈ $12</td>
+            <td>30 runs/mo. ~$1 sandbox + ~$11 LLM.</td>
+          </tr>
+          <tr>
+            <td>Medium user (platform-billed)</td>
+            <td class="num">≈ $92</td>
+            <td>
+              170 runs/mo. ~$7 sandbox + ~$85 LLM —
+              <em>assumes working prompt caching; 3–5× without it.</em>
+            </td>
+          </tr>
+          <tr>
+            <td>Heavy user (platform-billed)</td>
+            <td class="num">≈ $280</td>
+            <td>400 runs/mo. ~$20 sandbox + ~$260 LLM.</td>
+          </tr>
+          <tr>
+            <td>BYOK user</td>
+            <td class="num">≈ $7</td>
+            <td>Sandbox only; they pay their own tokens. Plus BYOK fee revenue.</td>
+          </tr>
+          <tr>
+            <td>Hybrid-runner / BYOC user</td>
+            <td class="num">&lt; $1</td>
+            <td>Control plane only. Nearly pure margin on any seat price.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="secnum">2</span>Direct competitors — autonomous coding agents</h2>
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Product</th>
+            <th>Individual tiers</th>
+            <th>Team / org</th>
+            <th>Billing unit</th>
+            <th>Overage</th>
+            <th>BYOK</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="prod">Devin (Cognition)</td>
+            <td class="num">$0 / $20 / $200</td>
+            <td class="num">$80 base + $40/seat</td>
+            <td>Subscription + refreshing usage quotas; ACUs enterprise-only now</td>
+            <td>On-demand credits at API pricing</td>
+            <td>No</td>
+          </tr>
+          <tr>
+            <td class="prod">Cursor</td>
+            <td class="num">$20 / $60 / $200</td>
+            <td class="num">$40/seat</td>
+            <td>Seat + included model-usage pool at API prices</td>
+            <td>API rates, billed in arrears</td>
+            <td>Chat-only; agent blocked</td>
+          </tr>
+          <tr>
+            <td class="prod">GitHub Copilot</td>
+            <td class="num">$10 / $39 / $100</td>
+            <td class="num">$19–39/seat</td>
+            <td>
+              Seat + AI Credits ($0.01 ea) at API token rates — replaced premium requests Jun 2026
+            </td>
+            <td>Opt-in budgeted credits</td>
+            <td>No</td>
+          </tr>
+          <tr>
+            <td class="prod">OpenAI Codex</td>
+            <td class="num">$8 / $20 / $100 / $200 (ChatGPT)</td>
+            <td class="num">$20/seat</td>
+            <td>Plan + rolling 5-hour / weekly windows, token-based credit burn</td>
+            <td>$40 per 1,000 credits</td>
+            <td>Yes — plain API key</td>
+          </tr>
+          <tr>
+            <td class="prod">Google Jules</td>
+            <td class="num">bundled: $19.99 AI Pro; $100–200 Ultra</td>
+            <td class="num">—</td>
+            <td>Task-count quotas per day (15 free / 100 Pro / 300 Ultra)</td>
+            <td>None — hard limits</td>
+            <td>No</td>
+          </tr>
+          <tr>
+            <td class="prod">Factory (Droids)</td>
+            <td class="num">$20 / $100 / $200</td>
+            <td class="num">Custom</td>
+            <td>Subscription + rolling windows (5h / 7d / 30d)</td>
+            <td>Prepaid credits, $10 min, no expiry</td>
+            <td>Yes, all plans</td>
+          </tr>
+          <tr>
+            <td class="prod">Codegen</td>
+            <td class="num">$9.99</td>
+            <td class="num">$199 flat / org</td>
+            <td>Flat "unlimited runs" with soft model caps</td>
+            <td>Escape via BYOK, not metering</td>
+            <td>Yes, no fee</td>
+          </tr>
+          <tr>
+            <td class="prod">Claude Code (Anthropic)</td>
+            <td class="num">$20 / $100 / $200</td>
+            <td class="num">$100–125 premium seat; Ent. $20/seat + API usage</td>
+            <td>Seat + 5-hour session and weekly limits</td>
+            <td>Extra usage at API rates</td>
+            <td>De-facto — API key mode</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="secnum">3</span>Adjacent platforms — AI app builders</h2>
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Product</th>
+            <th>Tiers</th>
+            <th>Billing unit</th>
+            <th>Multi-user model</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="prod">Replit</td>
+            <td class="num">$0 / $20 / $100</td>
+            <td>Effort-based checkpoints (≈$0.25 simple) + pay-as-you-go</td>
+            <td>Workspace credits pooled; Pro covers 15 builders — not per-seat</td>
+          </tr>
+          <tr>
+            <td class="prod">Lovable</td>
+            <td class="num">$0 / $25 / $50</td>
+            <td>Credits per message (0.5–1.7); Cloud + AI usage billed separately</td>
+            <td>Unlimited members, shared credit pool — explicitly seat-free</td>
+          </tr>
+          <tr>
+            <td class="prod">Bolt.new</td>
+            <td class="num">$0 / $25 / $30 per seat</td>
+            <td>Token buckets (10M/mo Pro)</td>
+            <td>Pure per-seat; tokens not shared</td>
+          </tr>
+          <tr>
+            <td class="prod">v0 (Vercel)</td>
+            <td class="num">$0 / $30 / $100 per user</td>
+            <td>Dollar credits burned at published per-model token rates</td>
+            <td>Per-user sub; purchased credits shareable</td>
+          </tr>
+          <tr>
+            <td class="prod">Windsurf → Devin Desktop</td>
+            <td class="num">$0 / $20 / $200</td>
+            <td class="num" style="white-space: normal">
+              Seat + refreshing quotas — credits abolished Mar 2026; overage at raw API rates
+            </td>
+            <td>$40/seat Teams</td>
+          </tr>
+          <tr>
+            <td class="prod">Base44 (Wix)</td>
+            <td class="num">$20 → $200</td>
+            <td>Dual credits: build messages + integration ops</td>
+            <td>No seat plan below Enterprise</td>
+          </tr>
+          <tr>
+            <td class="prod">Emergent</td>
+            <td class="num">$0 / $20 / $200</td>
+            <td>Credits (100 / 750)</td>
+            <td>—</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout">
+      <p>
+        <strong>The market converged in mid-2026.</strong> GitHub (June 1), Cognition (June) and
+        OpenAI (April) all moved off opaque units onto dollar-denominated, API-rate-pegged usage
+        billing within three months of each other. The converged shape:
+        <strong>$0 → $20 → $100 → $200</strong> individual ladder, <strong>$19–40/seat</strong> team
+        tier, custom enterprise, overage at raw API token rates. Sector margins forced it: Cursor
+        ran negative gross margins through 2025, Replit sat below 10% (dipping negative) until its
+        usage repricing, and inference eats ~23% of revenue at scaling AI SaaS — roughly 30 points
+        below the classic SaaS baseline.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="secnum">4</span>Tenant vs. seat vs. usage — what each is for</h2>
+    <div class="levers">
+      <div class="lever">
+        <div>
+          <div class="name">Tenant</div>
+          <div class="cost">costs you ≈ $0</div>
+        </div>
+        <div class="verdict">
+          <p>
+            Not a cost-recovery lever — a <strong>packaging</strong> lever. Use an org base fee
+            (Devin charges $80/mo minimum; Codegen $199 flat) to cover the fixed floor while tenant
+            count is small and to gate team features (SSO, pooled credits, admin). Beyond ~10
+            tenants the floor is noise and the base fee is pure margin.
+          </p>
+        </div>
+      </div>
+      <div class="lever">
+        <div>
+          <div class="name">Seat</div>
+          <div class="cost">costs you &lt;$1–7</div>
+        </div>
+        <div class="verdict">
+          <p>
+            Nearly pure margin, and the market will bear <strong>$19–40/seat</strong> for team plans
+            ($100+ for premium seats à la Claude Team). Seats are your margin engine precisely where
+            DMaker is differentiated:
+            <strong>hybrid-runner (BYO-compute) teams cost you &lt;$1/user</strong> — a $40 seat
+            there is a ~97% margin, which no platform-billed competitor can match on their cloud
+            offering.
+          </p>
+        </div>
+      </div>
+      <div class="lever">
+        <div>
+          <div class="name">Usage</div>
+          <div class="cost">costs you 92%+ of everything</div>
+        </div>
+        <div class="verdict">
+          <p>
+            Where the cost lives, so it must be metered and passed through with margin —
+            <strong>never unlimited</strong> (flat-rate gets arbitraged 10× by heavy agents; every
+            survivor now rate-limits or meters). Your plan's 10–20% credit markup matches sector
+            norms (Cursor $0.25/M even on BYOK, OpenRouter 5.5%, Devin $2+/ACU). The caching spread
+            — bill standard rates, pay 0.1× cache reads — is the hidden second margin.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div class="callout">
+      <p>
+        <strong>The price ceiling is set by your suppliers.</strong> Your medium user costs you
+        ~$92/mo — and Anthropic sells that same person Claude Max for $100. Platform-billed prices
+        are anchored to ~$100–150 all-in for a medium user, so platform-billed margin is
+        structurally thin at market anchors. The profit is in seats on BYO-compute, org minimums,
+        credit markup, and the caching spread — not in reselling tokens at flat tiers.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="secnum">5</span>Break-even</h2>
+
+    <div class="chartcard">
+      <h3>Monthly profit vs. paying users</h3>
+      <p class="chartsub">
+        Contribution per user × users, minus the fixed floor ($350/mo, stepping to $450 at 20+
+        users). Break-even is where each line crosses zero.
+      </p>
+      <div class="legend" id="legend"></div>
+      <svg
+        id="chart"
+        viewBox="0 0 840 400"
+        role="img"
+        aria-label="Line chart of monthly profit against number of paying users for three pricing scenarios. Plan pricing breaks even near 9 users; cache-spread pricing near 6; flat-tier copycat pricing near 45."
+      ></svg>
+      <p class="chart-note">
+        Flat-tier copycat = selling $20/$100 tiers with no usage markup or quota discipline — the
+        strategy that put Cursor and Replit underwater. It stays below zero across this whole range.
+      </p>
+    </div>
+    <div id="tooltip"></div>
+
+    <h3>Scenarios in numbers</h3>
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Pricing scenario</th>
+            <th class="num">Contribution / user / mo</th>
+            <th class="num">Break-even users</th>
+            <th class="num">Profit / user after</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>P1 seats-only, $20 seat</strong> — users bring compute</td>
+            <td class="num">$19</td>
+            <td class="num">19 <span style="color: var(--muted)">(14–24)</span></td>
+            <td class="num pos">≈ $19</td>
+          </tr>
+          <tr>
+            <td><strong>P1 seats-only, $40 seat</strong> — hybrid-runner teams</td>
+            <td class="num">$39</td>
+            <td class="num">9 <span style="color: var(--muted)">(7–12)</span></td>
+            <td class="num pos">≈ $39</td>
+          </tr>
+          <tr>
+            <td>
+              <strong>Plan pricing</strong> — $30 seat + credits at cost +15%, mixed usage (60%
+              light / 30% med / 10% heavy)
+            </td>
+            <td class="num">$39</td>
+            <td class="num">9 <span style="color: var(--muted)">(6–12)</span></td>
+            <td class="num pos">$32–72 by profile</td>
+          </tr>
+          <tr>
+            <td><strong>Cache-spread capture</strong> — same seat, ~40% effective usage margin</td>
+            <td class="num">$55–70</td>
+            <td class="num">6 <span style="color: var(--muted)">(4–8)</span></td>
+            <td class="num pos">$55–115</td>
+          </tr>
+          <tr>
+            <td>
+              <strong>Flat-tier copycat</strong> — $20/$100 tiers, no markup, no quota discipline
+            </td>
+            <td class="num">≈ $10</td>
+            <td class="num">≈ 45</td>
+            <td class="num neg">−$180/mo per heavy user on a $100 tier</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>
+      Two readings of that table. First,
+      <strong>break-even is small — a single-digit team</strong> — under any pricing that charges a
+      real seat and marks up usage, because tenants and seats cost you almost nothing. Second, the
+      copycat row shows the trap: the market's $20/$100/$200 ladder only works for the incumbents
+      because their <em>quotas</em> quietly cap how much a tier can consume. If you sell flat tiers,
+      the quota is the product's margin, not the price.
+    </p>
+  </section>
+
+  <section>
+    <h2><span class="secnum">6</span>What this implies for DMaker's pricing</h2>
+    <ul>
+      <li>
+        <strong>Ship the converged ladder, keep the plan's mechanics.</strong> Free (local edition)
+        → Pro ~$20–25 → Team $40/seat with an $80–100 org minimum → Enterprise custom. Familiar
+        shape, no buyer education needed — but usage always flows through the credit wallet at cost
+        +10–20%, never bundled "unlimited".
+      </li>
+      <li>
+        <strong>Lead with hybrid-runner seats.</strong> Your P1 revenue (seats, users bring compute)
+        is also your best unit economics — ~$39 of $40 per seat is margin. Competitors can't follow
+        without cannibalizing their platform-billed cloud.
+      </li>
+      <li>
+        <strong>Quota every flat tier.</strong> Refreshing windows (the Windsurf/Factory/Claude
+        pattern) on anything not billed per-credit, so a heavy user hits overage instead of eating
+        $280 of tokens on a $100 plan.
+      </li>
+      <li>
+        <strong>Price BYOK like Cursor prices it.</strong> ~$0.25/M or ~5% platform fee on user
+        keys; the user costs you $7 and anchors your best conversion path from the free local
+        edition.
+      </li>
+      <li>
+        <strong>Verify caching before promising margin.</strong> The whole cost model assumes
+        cache-read-dominated sessions; without working cache passthrough the $92 medium user becomes
+        $280–460 and every number above breaks. The plan's end-to-end cache verification gate is a
+        commercial requirement, not a technical nicety.
+      </li>
+    </ul>
+  </section>
+
+  <div class="foot">
+    <p>
+      <strong>Sources &amp; caveats.</strong> Cost figures from the DMaker SaaS architecture plan's
+      rough cost model (order-of-magnitude planning numbers; the P2 metering pipeline replaces them
+      with measured ones). Competitor pricing from official pricing pages August 2026 where
+      reachable; Devin/Windsurf figures cross-confirmed from third-party trackers (devin.ai
+      rate-limited direct fetches). Margin commentary: PitchBook (Cursor), Sacra (Replit), TechTimes
+      "token tax" sector report, valueaddvc.com (Cognition ARR).
+    </p>
+    <p>
+      Break-even model: profit(n) = contribution × n − fixed(n); fixed = $350/mo below 20 users,
+      $450/mo at 20+ (midpoints of the plan's $250–450 / $350–550 ranges).
+    </p>
+  </div>
+</div>
+
+<script>
+  (function () {
+    var svg = document.getElementById('chart');
+    var tooltip = document.getElementById('tooltip');
+    var legendEl = document.getElementById('legend');
+    var NS = 'http://www.w3.org/2000/svg';
+
+    function v(name) {
+      return 'var(' + name + ')';
+    }
+
+    var series = [
+      {
+        name: 'Plan pricing ($30 seat + credits +15%)',
+        short: 'Plan pricing',
+        c: 39.4,
+        color: '--s1',
+        be: 9,
+      },
+      { name: 'Cache-spread capture', short: 'Cache-spread', c: 62, color: '--s3', be: 6 },
+      { name: 'Flat-tier copycat', short: 'Flat-tier copycat', c: 10, color: '--s2', be: 45 },
+    ];
+    function fixed(n) {
+      return n >= 20 ? 450 : 350;
+    }
+    function profit(s, n) {
+      return s.c * n - fixed(n);
+    }
+
+    var W = 840,
+      H = 400,
+      mL = 64,
+      mR = 130,
+      mT = 18,
+      mB = 44;
+    var xMax = 40,
+      yMin = -600,
+      yMax = 2200;
+    function X(n) {
+      return mL + (n / xMax) * (W - mL - mR);
+    }
+    function Y(p) {
+      return mT + ((yMax - p) / (yMax - yMin)) * (H - mT - mB);
+    }
+
+    function el(tag, attrs, parent) {
+      var e = document.createElementNS(NS, tag);
+      for (var k in attrs) {
+        // var() is not valid in SVG presentation attributes — paint goes through style
+        if (k === 'stroke' || k === 'fill') e.style[k] = attrs[k];
+        else e.setAttribute(k, attrs[k]);
+      }
+      (parent || svg).appendChild(e);
+      return e;
+    }
+
+    // gridlines + y labels
+    [-500, 0, 500, 1000, 1500, 2000].forEach(function (p) {
+      var zero = p === 0;
+      el('line', {
+        x1: mL,
+        x2: W - mR,
+        y1: Y(p),
+        y2: Y(p),
+        stroke: zero ? v('--axis') : v('--grid'),
+        'stroke-width': zero ? 1.5 : 1,
+      });
+      el('text', {
+        x: mL - 10,
+        y: Y(p) + 4,
+        'text-anchor': 'end',
+        'font-size': 11.5,
+        fill: v('--muted'),
+        'font-family': '"Public Sans", sans-serif',
+      }).textContent =
+        p === 0 ? '$0' : p < 0 ? '−$' + Math.abs(p) : '$' + (p >= 1000 ? p / 1000 + 'k' : p);
+    });
+    // x ticks
+    [0, 10, 20, 30, 40].forEach(function (n) {
+      el('text', {
+        x: X(n),
+        y: H - mB + 20,
+        'text-anchor': 'middle',
+        'font-size': 11.5,
+        fill: v('--muted'),
+        'font-family': '"Public Sans", sans-serif',
+      }).textContent = n;
+    });
+    el('text', {
+      x: (mL + W - mR) / 2,
+      y: H - 6,
+      'text-anchor': 'middle',
+      'font-size': 11.5,
+      fill: v('--muted'),
+      'font-family': '"Public Sans", sans-serif',
+    }).textContent = 'paying users';
+
+    // series lines (draw copycat first so leaders sit on top)
+    series
+      .slice()
+      .reverse()
+      .forEach(function (s) {
+        var d = '';
+        for (var n = 0; n <= xMax; n++) {
+          // draw the fixed-cost step honestly: two points at n=20
+          if (n === 20) d += ' L ' + X(20) + ' ' + Y(s.c * 20 - 350);
+          d += (n === 0 ? 'M ' : ' L ') + X(n) + ' ' + Y(profit(s, n));
+        }
+        el('path', {
+          d: d,
+          fill: 'none',
+          stroke: v(s.color),
+          'stroke-width': 2,
+          'stroke-linejoin': 'round',
+          'stroke-linecap': 'round',
+        });
+        // direct label at line end
+        el('text', {
+          x: X(xMax) + 8,
+          y: Y(profit(s, xMax)) + 4,
+          'font-size': 11.5,
+          'font-weight': 600,
+          fill: v('--ink-2'),
+          'font-family': '"Public Sans", sans-serif',
+        }).textContent = s.short;
+      });
+
+    // break-even markers
+    series.forEach(function (s) {
+      if (s.be > xMax) return;
+      el('circle', {
+        cx: X(s.be),
+        cy: Y(0),
+        r: 5,
+        fill: v(s.color),
+        stroke: v('--chart-surface'),
+        'stroke-width': 2,
+      });
+      el('text', {
+        x: X(s.be),
+        y: Y(0) - 10,
+        'text-anchor': 'middle',
+        'font-size': 11,
+        'font-weight': 600,
+        fill: v('--ink-2'),
+        'font-family': '"Public Sans", sans-serif',
+      }).textContent = '≈' + s.be;
+    });
+
+    // legend
+    series.forEach(function (s) {
+      var span = document.createElement('span');
+      span.className = 'key';
+      var sw = document.createElement('span');
+      sw.className = 'swatch';
+      sw.style.background = v(s.color);
+      span.appendChild(sw);
+      span.appendChild(
+        document.createTextNode(s.name + (s.be > xMax ? ' (break-even ≈ 45, off chart)' : ''))
+      );
+      legendEl.appendChild(span);
+    });
+
+    // crosshair + tooltip
+    var cross = el('line', {
+      y1: mT,
+      y2: H - mB,
+      stroke: v('--axis'),
+      'stroke-width': 1,
+      opacity: 0,
+    });
+    var dots = series.map(function (s) {
+      return el('circle', {
+        r: 4,
+        fill: v(s.color),
+        stroke: v('--chart-surface'),
+        'stroke-width': 2,
+        opacity: 0,
+      });
+    });
+
+    function fmt(p) {
+      var r = Math.round(p);
+      return (r < 0 ? '−$' : '$') + Math.abs(r).toLocaleString();
+    }
+    function move(clientX, clientY) {
+      var rect = svg.getBoundingClientRect();
+      var n = Math.round(((((clientX - rect.left) / rect.width) * W - mL) / (W - mL - mR)) * xMax);
+      if (n < 0 || n > xMax) {
+        leave();
+        return;
+      }
+      cross.setAttribute('x1', X(n));
+      cross.setAttribute('x2', X(n));
+      cross.setAttribute('opacity', 1);
+      var html =
+        '<div class="tt-title">' +
+        n +
+        ' paying user' +
+        (n === 1 ? '' : 's') +
+        ' <span style="color:var(--muted);font-weight:400">· fixed $' +
+        fixed(n) +
+        '</span></div>';
+      series.forEach(function (s, i) {
+        var p = profit(s, n);
+        dots[i].setAttribute('cx', X(n));
+        dots[i].setAttribute('cy', Y(p));
+        dots[i].setAttribute('opacity', 1);
+        html +=
+          '<div class="tt-row"><span>' +
+          s.short +
+          '</span><span class="v" style="color:' +
+          (p < 0 ? 'var(--neg)' : 'var(--accent-ink)') +
+          '">' +
+          fmt(p) +
+          '</span></div>';
+      });
+      tooltip.innerHTML = html;
+      tooltip.style.display = 'block';
+      var tx = clientX + 16,
+        ty = clientY + 12;
+      var tw = tooltip.offsetWidth,
+        th = tooltip.offsetHeight;
+      if (tx + tw > window.innerWidth - 8) tx = clientX - tw - 16;
+      if (ty + th > window.innerHeight - 8) ty = clientY - th - 12;
+      tooltip.style.left = tx + 'px';
+      tooltip.style.top = ty + 'px';
+    }
+    function leave() {
+      cross.setAttribute('opacity', 0);
+      dots.forEach(function (d) {
+        d.setAttribute('opacity', 0);
+      });
+      tooltip.style.display = 'none';
+    }
+    svg.addEventListener('mousemove', function (e) {
+      move(e.clientX, e.clientY);
+    });
+    svg.addEventListener('mouseleave', leave);
+    svg.addEventListener(
+      'touchstart',
+      function (e) {
+        move(e.touches[0].clientX, e.touches[0].clientY);
+      },
+      { passive: true }
+    );
+    svg.addEventListener(
+      'touchmove',
+      function (e) {
+        move(e.touches[0].clientX, e.touches[0].clientY);
+      },
+      { passive: true }
+    );
+  })();
+</script>

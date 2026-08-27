@@ -44,6 +44,10 @@ const NEW_ID_RE = /^\d{2}-(\d{2})-(\d{4})-.+$/;
  * Features are organized under features/{status}/{featureId}/.
  */
 const STATUS_DIR_NAMES = new Set([
+  // Retired status. Every task is a GitHub issue now, so nothing is written
+  // here any more — but existing checkouts still have a features/local/
+  // directory, and dropping the name would make the loader guess at it. Its
+  // features read back as backlog and leave on their next status change.
   'local',
   'backlog',
   'planning',

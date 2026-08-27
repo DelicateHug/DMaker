@@ -5,7 +5,7 @@ import { useMessageQueue } from './utilities';
 import type { ImageAttachment, TextFileAttachment } from '@/store/app-store';
 import { getElectronAPI } from '@/lib/electron';
 import { useAppStore } from '@/store/app-store';
-import { useScratchStore } from '@/store/scratch-store';
+import { useResearchStore } from '@/store/research-store';
 import { sanitizeFilename } from '@/lib/image-utils';
 import { createLogger } from '@dmaker/utils/logger';
 
@@ -438,7 +438,7 @@ export function useElectronAgent({
           // critical path — so the rename can land at any point. Nudge the
           // lists that show session names so the new one appears on its own.
           useAppStore.getState().bumpSessionListVersion();
-          void useScratchStore.getState().refresh();
+          void useResearchStore.getState().refresh();
           break;
 
         case 'queue_updated':

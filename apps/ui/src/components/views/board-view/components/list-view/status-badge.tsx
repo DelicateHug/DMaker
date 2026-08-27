@@ -17,12 +17,6 @@ interface StatusDisplay {
  * Base status display configurations using CSS variables
  */
 const BASE_STATUS_DISPLAY: Record<string, StatusDisplay> = {
-  local: {
-    label: 'Local',
-    colorClass: 'text-[var(--status-local)]',
-    bgClass: 'bg-[var(--status-local)]/15',
-    borderClass: 'border-[var(--status-local)]/30',
-  },
   backlog: {
     label: 'Backlog',
     colorClass: 'text-[var(--status-backlog)]',

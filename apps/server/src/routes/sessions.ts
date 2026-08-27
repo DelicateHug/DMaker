@@ -49,7 +49,9 @@ function createIndexHandler(agentService: AgentService) {
             tags: s.tags || [],
             messageCount: messages.length,
             preview,
-            scratch: s.scratch || false,
+            // A chat written before research projects existed carries `scratch`
+            // instead; that is the Isolated project under its old name.
+            researchProjectId: s.researchProjectId || (s.scratch ? 'isolated' : undefined),
           };
         })
       );
@@ -69,13 +71,17 @@ function createIndexHandler(agentService: AgentService) {
 function createCreateHandler(agentService: AgentService) {
   return async (req: Request, res: Response): Promise<void> => {
     try {
-      const { name, projectPath, workingDirectory, model, scratch } = req.body as {
+      const { name, projectPath, workingDirectory, model, researchProjectId } = req.body as {
         name: string;
         projectPath?: string;
         workingDirectory?: string;
         model?: string;
-        /** Throwaway scratchpad chat — sandboxed, no project, global skills only */
-        scratch?: boolean;
+        /**
+         * Research chat — the project it belongs to. `isolated` is sandboxed
+         * with global skills only; any other id runs in that project's
+         * directory with its own `.claude` skills and memory as well.
+         */
+        researchProjectId?: string;
       };
 
       if (!name) {
@@ -88,7 +94,7 @@ function createCreateHandler(agentService: AgentService) {
         projectPath,
         workingDirectory,
         model,
-        scratch === true
+        researchProjectId
       );
       res.json({ success: true, session });
     } catch (error) {

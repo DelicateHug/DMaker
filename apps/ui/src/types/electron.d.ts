@@ -69,8 +69,48 @@ export interface SessionListItem {
   isDirty?: boolean; // Indicates session has completed work that needs review
   tags: string[];
   preview: string;
-  /** Throwaway Scratchpad chat — sandboxed, no project, global skills only */
-  scratch?: boolean;
+  /**
+   * Research chat — the research project it belongs to. `isolated` means a
+   * throwaway sandbox with global skills only; any other id means that
+   * project's directory, with its own `.claude` skills and memory as well.
+   */
+  researchProjectId?: string;
+}
+
+/** A local research project — a workspace for AI chats with no repository. */
+export interface ResearchProjectInfo {
+  id: string;
+  name: string;
+  path: string;
+  isolated: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ResearchAPI {
+  list: () => Promise<{
+    success: boolean;
+    projects?: ResearchProjectInfo[];
+    error?: string;
+  }>;
+
+  create: (name: string) => Promise<{
+    success: boolean;
+    project?: ResearchProjectInfo;
+    error?: string;
+  }>;
+
+  rename: (
+    projectId: string,
+    name: string
+  ) => Promise<{
+    success: boolean;
+    project?: ResearchProjectInfo;
+    error?: string;
+  }>;
+
+  /** Deletes the project directory and every chat that ran in it */
+  delete: (projectId: string) => Promise<{ success: boolean; error?: string }>;
 }
 
 export interface AgentAPI {
@@ -127,7 +167,7 @@ export interface SessionsAPI {
     name: string,
     projectPath: string,
     workingDirectory?: string,
-    options?: { scratch?: boolean }
+    options?: { researchProjectId?: string }
   ) => Promise<{
     success: boolean;
     sessionId?: string;

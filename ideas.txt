@@ -1,0 +1,12 @@
+make it SAAS
+Allow mobile view
+Allow design skills for tasks and repo
+Agents
+Tenant
+E2E SAASSecurity Documents
+Intent Cache
+Non technical add and branches
+Rag
+MCP for personal account
+add Rag
+add ai Cache

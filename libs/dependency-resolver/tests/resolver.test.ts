@@ -6,6 +6,8 @@ import {
   wouldCreateCircularDependency,
   dependencyExists,
   shouldBlockOnDependencies,
+  getIncompleteDependencies,
+  orderFeaturesForExecution,
 } from '../src/resolver';
 import type { Feature } from '@dmaker/types';
 
@@ -17,6 +19,7 @@ function createFeature(
     status?: string;
     priority?: number;
     waitForDependencies?: boolean;
+    updatedAt?: string;
   } = {}
 ): Feature {
   return {
@@ -27,6 +30,7 @@ function createFeature(
     status: options.status || 'pending',
     priority: options.priority,
     waitForDependencies: options.waitForDependencies,
+    updatedAt: options.updatedAt,
   };
 }
 
@@ -743,6 +747,110 @@ describe('resolver.ts', () => {
       const features = [createFeature('A'), createFeature('B', { dependencies: [] })];
 
       expect(dependencyExists(features, 'A', 'B')).toBe(false);
+    });
+  });
+  describe('getIncompleteDependencies', () => {
+    it('ignores waitForDependencies, unlike getBlockingDependencies', () => {
+      const parent = createFeature('parent', { status: 'pending' });
+      const child = createFeature('child', {
+        dependencies: ['parent'],
+        waitForDependencies: false,
+      });
+
+      expect(getBlockingDependencies(child, [parent, child])).toEqual([]);
+      expect(getIncompleteDependencies(child, [parent, child])).toEqual(['parent']);
+    });
+
+    it('treats completed and verified parents as done', () => {
+      const features = [
+        createFeature('done', { status: 'completed' }),
+        createFeature('checked', { status: 'verified' }),
+        createFeature('child', { dependencies: ['done', 'checked'] }),
+      ];
+
+      expect(getIncompleteDependencies(features[2], features)).toEqual([]);
+    });
+
+    it('ignores dependencies on features that no longer exist', () => {
+      const child = createFeature('child', { dependencies: ['deleted'] });
+
+      expect(getIncompleteDependencies(child, [child])).toEqual([]);
+    });
+  });
+
+  describe('orderFeaturesForExecution', () => {
+    it('puts tasks with no incomplete parents first', () => {
+      const parent = createFeature('parent', { status: 'pending' });
+      const blocked = createFeature('blocked', { dependencies: ['parent'] });
+      const free = createFeature('free');
+
+      const ordered = orderFeaturesForExecution([blocked, free], [parent, blocked, free]);
+
+      expect(ordered.map((f) => f.id)).toEqual(['free', 'blocked']);
+    });
+
+    it('beats staleness with an explicit priority', () => {
+      const stale = createFeature('stale', { updatedAt: '2020-01-01T00:00:00.000Z' });
+      const urgent = createFeature('urgent', {
+        priority: 1,
+        updatedAt: '2026-01-01T00:00:00.000Z',
+      });
+
+      const ordered = orderFeaturesForExecution([stale, urgent], [stale, urgent]);
+
+      expect(ordered.map((f) => f.id)).toEqual(['urgent', 'stale']);
+    });
+
+    it('prefers the least recently updated when priorities match', () => {
+      const recent = createFeature('recent', { updatedAt: '2026-06-01T00:00:00.000Z' });
+      const older = createFeature('older', { updatedAt: '2026-01-01T00:00:00.000Z' });
+
+      const ordered = orderFeaturesForExecution([recent, older], [recent, older]);
+
+      expect(ordered.map((f) => f.id)).toEqual(['older', 'recent']);
+    });
+
+    it('treats a missing updatedAt as maximally stale', () => {
+      const dated = createFeature('dated', { updatedAt: '2020-01-01T00:00:00.000Z' });
+      const undatedFeature = createFeature('undated');
+
+      const ordered = orderFeaturesForExecution([dated, undatedFeature], [dated, undatedFeature]);
+
+      expect(ordered.map((f) => f.id)).toEqual(['undated', 'dated']);
+    });
+
+    it('blocked-ness outranks priority', () => {
+      const parent = createFeature('parent', { status: 'in_progress' });
+      const blockedUrgent = createFeature('blockedUrgent', {
+        dependencies: ['parent'],
+        priority: 1,
+      });
+      const freeLow = createFeature('freeLow', { priority: 3 });
+
+      const ordered = orderFeaturesForExecution(
+        [blockedUrgent, freeLow],
+        [parent, blockedUrgent, freeLow]
+      );
+
+      expect(ordered.map((f) => f.id)).toEqual(['freeLow', 'blockedUrgent']);
+    });
+
+    it('does not mutate the input array', () => {
+      const a = createFeature('a', { priority: 3 });
+      const b = createFeature('b', { priority: 1 });
+      const input = [a, b];
+
+      orderFeaturesForExecution(input, input);
+
+      expect(input.map((f) => f.id)).toEqual(['a', 'b']);
+    });
+
+    it('is stable for otherwise identical tasks', () => {
+      const features = [createFeature('c'), createFeature('a'), createFeature('b')];
+
+      const ordered = orderFeaturesForExecution(features, features);
+
+      expect(ordered.map((f) => f.id)).toEqual(['a', 'b', 'c']);
     });
   });
 });

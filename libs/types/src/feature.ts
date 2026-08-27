@@ -4,6 +4,7 @@
 
 import type { ThinkingLevel } from './settings.js';
 import type { ReasoningEffort } from './provider.js';
+import type { SubagentSummary } from './agent-tree.js';
 
 /**
  * Git user identity for feature ownership tracking
@@ -147,11 +148,31 @@ export interface ExecutionMetrics {
   >;
   skillsUsed: string[];
   subagentsSpawned: number;
+  /**
+   * Spawn-ordered roll-up of the run's sub-agents, so a completed feature can
+   * show its tree shape without reading the logs/agent-tree.json sidecar.
+   * Master is not included; `subagentsSpawned` remains the count of every Task
+   * block at any depth and is what the board still renders.
+   */
+  subagents?: SubagentSummary[];
   skillsLoaded: string[];
   agentsLoaded: string[];
   updatedAt: string;
   /** Whether the execution used an API key or CLI subscription login */
   authMethod?: 'cli' | 'api_key' | 'unknown';
+}
+
+/**
+ * One choice offered for an AgentQuestion, recorded verbatim at ask time so
+ * the resolved question can still show what the alternatives were.
+ */
+export interface AgentQuestionOption {
+  /** Stable within the question. The answer records ids, not labels. */
+  id: string;
+  /** Display text, 1-5 words. */
+  label: string;
+  /** What picking this option means or implies. */
+  description?: string;
 }
 
 /**
@@ -167,17 +188,51 @@ export interface AgentQuestion {
   id: string;
   /** Which agent asked. Used to route the answer back. */
   source: 'issue-draft' | 'planning' | 'implementation' | string;
+  /**
+   * 1-based, monotonic per feature and never reused, so the UI can say
+   * "Question 3" and mean it.
+   *
+   * Optional because every question already on disk predates it; the UI falls
+   * back to the askedAt-ordered index + 1.
+   */
+  number?: number;
   question: string;
-  /** Suggested answers the UI can offer as one-click chips. */
+  /** Very short chip label, max 12 chars. Mirrors the SDK's AskUserQuestion `header`. */
+  header?: string;
+  /**
+   * Legacy plain-string suggestions. Kept because feature.json files on disk
+   * carry it; read it as `choices` when `choices` is absent.
+   */
   options?: string[];
+  /** The choices actually offered, recorded at ask time. Supersedes `options`. */
+  choices?: AgentQuestionOption[];
+  /**
+   * Whether an "Other…" free-text path was offered. Defaults to true — the user
+   * always gets one, which is why the asking agent must never invent its own.
+   */
+  allowCustomAnswer?: boolean;
+  /** Whether more than one choice could be picked. */
+  multiSelect?: boolean;
   /** ISO timestamp when the question was raised */
   askedAt: string;
   /** The user's answer. Absent while the question is still outstanding. */
   answer?: string;
+  /**
+   * How the answer was given. Derived server-side from what was submitted —
+   * never taken from the client.
+   */
+  answerSource?: 'option' | 'custom' | 'skipped';
+  /** Populated only when `answerSource === 'option'`. */
+  selectedOptionIds?: string[];
   /** ISO timestamp when the user answered */
   answeredAt?: string;
   /** Set when the question was dismissed instead of answered */
   skipped?: boolean;
+  /**
+   * Stamped when the run that asked ended without an answer, so a question
+   * nobody can act on any more stops counting as outstanding.
+   */
+  expiredAt?: string;
 }
 
 /** Lifecycle of the background "file a GitHub issue for this task" job. */
@@ -208,6 +263,15 @@ export interface GitHubIssueDraft {
   skipReason?: string;
   /** How many times the drafter has asked for clarification */
   clarificationRounds?: number;
+}
+
+/** Recorded outcome of one pipeline step for one feature. */
+export interface PipelineStepProgress {
+  stepId: string;
+  stepName: string;
+  status: 'pending' | 'running' | 'completed' | 'failed';
+  startedAt?: string;
+  completedAt?: string;
 }
 
 export interface Feature {
@@ -257,8 +321,18 @@ export interface Feature {
       filePath?: string;
       phase?: string;
       status: 'pending' | 'in_progress' | 'completed' | 'failed';
+      startedAt?: string;
+      completedAt?: string;
     }>;
   };
+  /**
+   * Per-step record of a pipeline run.
+   *
+   * Without this, completion is inferred from `step.order < currentStep.order`,
+   * which is only true within one uninterrupted sequential run — anything that
+   * resumes or reorders reports steps as done that never executed.
+   */
+  pipelineProgress?: PipelineStepProgress[];
   error?: string;
   summary?: string;
   summaryHistory?: SummaryHistoryEntry[]; // History of summaries with timestamps for dropdown display
@@ -292,8 +366,6 @@ export interface Feature {
   // Archiving — deleting a task archives it instead of removing it from disk
   archivedAt?: string; // ISO timestamp when the feature was archived
   archivedFrom?: string; // The status the feature held before it was archived
-  // Source tracking for board mode filtering
-  source?: 'local' | 'github'; // Where this feature originated from
   // Adaptive planning
   complexity?: ComplexityLevel; // Assessed complexity level (auto-detected or manual override)
   planningMode?: PlanningMode; // Which planning mode was used/is active (can escalate mid-execution)
@@ -350,8 +422,6 @@ export interface FeatureListSummary {
   };
   claimedBy?: string;
   claimedAt?: string;
-  // Source tracking for board mode filtering
-  source?: 'local' | 'github';
 }
 
 /**

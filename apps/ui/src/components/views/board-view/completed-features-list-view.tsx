@@ -311,7 +311,6 @@ function issueToFeature(issue: ClosedIssueWithProject): Feature {
     description: issue.body || '',
     category: 'GitHub Issue',
     status: 'completed',
-    source: 'github',
     steps: [],
     model: 'sonnet',
     thinkingLevel: 'none',

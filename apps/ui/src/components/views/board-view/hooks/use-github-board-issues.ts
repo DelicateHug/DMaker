@@ -108,7 +108,6 @@ function issueToFeature(
     description: issue.body || '',
     category: 'GitHub Issue',
     status,
-    source: 'github',
     steps: [],
     model: 'sonnet',
     thinkingLevel: 'none',

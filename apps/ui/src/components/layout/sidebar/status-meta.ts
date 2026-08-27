@@ -1,7 +1,6 @@
 import {
   BadgeCheck,
   CircleCheck,
-  CircleDashed,
   CircleEllipsis,
   CirclePause,
   CirclePlay,
@@ -37,8 +36,6 @@ export interface StatusMeta {
 }
 
 const STATUS_META: Record<string, StatusMeta> = {
-  // Local-only: no GitHub issue behind it yet, hence the open/dashed ring.
-  local: { label: 'Local', dotColor: 'var(--status-local)', Icon: CircleDashed, isWorking: false },
   backlog: { label: 'Backlog', dotColor: 'var(--status-backlog)', Icon: Inbox, isWorking: false },
   planning: {
     label: 'Planning',

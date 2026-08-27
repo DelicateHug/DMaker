@@ -116,6 +116,19 @@ export const RUNNER_PORT = 3029;
  * the backend port for some time, so the guard protected a port nothing used
  * while leaving the live server (3009/3019) and the dev UI (3017) fair game.
  */
+/**
+ * Hard ceiling on how many agents ("runners") may work at once.
+ *
+ * Every max-agents control in the UI shares this number. They used to disagree
+ * — 10 in Settings, 20 in the board and launcher popovers — which meant a value
+ * chosen on one slider rendered off-scale on another and snapped back the
+ * moment it was touched.
+ */
+export const MAX_CONCURRENT_AGENTS = 50;
+
+/** Default number of concurrent agents when nothing has been chosen. */
+export const DEFAULT_CONCURRENT_AGENTS = 5;
+
 export const RESERVED_PORTS = [
   STATIC_PORT,
   SERVER_PORT,
@@ -303,7 +316,10 @@ export type NotificationType =
   | 'feature_waiting_approval'
   | 'feature_verified'
   | 'spec_regeneration_complete'
-  | 'agent_complete';
+  | 'agent_complete'
+  // An agent is blocked on a question, which stalls the task the same way
+  // waiting for approval does
+  | 'feature_question_asked';
 
 /**
  * Notification - A single notification entry

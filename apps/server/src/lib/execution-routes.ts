@@ -29,6 +29,9 @@
 export const RUNNER_PROXY_PREFIXES = [
   '/api/agent',
   '/api/sessions',
+  // Mostly disk, but deleting a research project stops and deletes its chats —
+  // and only the process running them can stop them. It follows `/api/sessions`.
+  '/api/research',
   '/api/auto-mode',
   '/api/running-agents',
   '/api/suggestions',
@@ -43,7 +46,15 @@ export const RUNNER_PROXY_PREFIXES = [
  * Individual endpoints proxied to the runner even though the rest of their
  * router stays local.
  */
-export const RUNNER_PROXY_PATHS = ['/api/features/running'] as const;
+export const RUNNER_PROXY_PATHS = [
+  '/api/features/running',
+  // Answering a question resumes the agent that asked it, and that agent lives
+  // in the runner. Served locally, the answer is written to disk and the resume
+  // fires in the wrong process — the waiting agent never hears it, and the draft
+  // it restarts runs outside the one process that tracks in-flight work. Local
+  // dev never reproduces it: with no runner there is only one process.
+  '/api/features/answer-question',
+] as const;
 
 /** Endpoints that stay local despite matching a proxied prefix. */
 export const RUNNER_PROXY_EXCLUDE_PATHS = [
@@ -88,6 +99,14 @@ export const READ_ONLY_BLOCKED: ReadOnlyRule[] = [
     what: 'Resuming interrupted features',
   },
   { methods: ['POST'], path: '/api/auto-mode/analyze-project', what: 'Analyzing the project' },
+  // Reserved for the message-injection endpoint, to be added with it:
+  //   { methods: ['POST'], path: '/api/auto-mode/inject-message', what: 'Messaging a running agent' }
+  // A rule for a route that doesn't exist yet would refuse a 404 with a
+  // "read-only" message, which reads as a permissions bug rather than a typo.
+  //
+  // `/api/features/answer-question` is deliberately absent: it is proxied to the
+  // runner instead. Blocking it would stop the dev half answering a question
+  // about work the runner is doing, which is exactly what dev is for.
 
   // --- agent-backed generation ---------------------------------------------
   { methods: ['POST'], path: '/api/suggestions/generate', what: 'Generating suggestions' },

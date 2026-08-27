@@ -30,6 +30,7 @@ import {
   getCustomSubagents,
 } from '../lib/settings-helpers.js';
 import { simpleQuery } from '../providers/simple-query-service.js';
+import { ResearchService, ISOLATED_PROJECT_ID } from './research-service.js';
 import { resolveModelString } from '@dmaker/model-resolver';
 
 interface Message {
@@ -60,10 +61,13 @@ interface Session {
   abortController: AbortController | null;
   workingDirectory: string;
   /**
-   * Scratchpad chat: runs in its own throwaway sandbox instead of a repo, and
-   * sees only global (`~/.claude`) skills and settings. See `isScratchSession`.
+   * Research chat: runs in a research project's directory rather than a repo.
+   *
+   * `isolated` means a throwaway sandbox of its own and global (`~/.claude`)
+   * skills only; any other id means the project's shared directory, which adds
+   * that project's own `.claude` skills and memory on top of the globals.
    */
-  isScratch?: boolean;
+  researchProjectId?: string;
   model?: string;
   thinkingLevel?: ThinkingLevel; // Thinking level for Claude models
   reasoningEffort?: ReasoningEffort; // Reasoning effort for Codex models
@@ -82,8 +86,29 @@ interface SessionMetadata {
   tags?: string[];
   model?: string;
   sdkSessionId?: string; // Claude SDK session ID for conversation continuity
-  /** Throwaway scratchpad chat — sandboxed working directory, global skills only */
+  /**
+   * Research chat — the id of the research project it belongs to.
+   * `isolated` is the sandboxed, global-skills-only project.
+   */
+  researchProjectId?: string;
+  /**
+   * Legacy Scratchpad flag, read on load and mapped to the Isolated project.
+   * Written by versions before research projects existed; never written now.
+   */
   scratch?: boolean;
+}
+
+/**
+ * The research project a stored session belongs to, or undefined for an
+ * ordinary repo-backed chat.
+ *
+ * Sessions written before research projects existed carry `scratch: true`
+ * instead — those were sandboxed, global-skills-only chats, which is exactly
+ * what the Isolated project is, so they land there.
+ */
+function researchProjectOf(metadata?: SessionMetadata): string | undefined {
+  if (metadata?.researchProjectId) return metadata.researchProjectId;
+  return metadata?.scratch === true ? ISOLATED_PROJECT_ID : undefined;
 }
 
 /**
@@ -245,15 +270,20 @@ export class AgentService {
   private sessions = new Map<string, Session>();
   private stateDir: string;
   private metadataFile: string;
-  private scratchRoot: string;
+  private research: ResearchService;
   private events: EventEmitter;
   private settingsService: SettingsService | null = null;
   private logger = createLogger('AgentService');
 
-  constructor(dataDir: string, events: EventEmitter, settingsService?: SettingsService) {
+  constructor(
+    dataDir: string,
+    events: EventEmitter,
+    settingsService?: SettingsService,
+    researchService?: ResearchService
+  ) {
     this.stateDir = path.join(dataDir, 'agent-sessions');
     this.metadataFile = path.join(dataDir, 'sessions-metadata.json');
-    this.scratchRoot = path.join(dataDir, 'scratchpad');
+    this.research = researchService ?? new ResearchService(dataDir);
     this.events = events;
     this.settingsService = settingsService ?? null;
   }
@@ -263,20 +293,15 @@ export class AgentService {
   }
 
   /**
-   * Sandbox directory for one scratchpad chat.
+   * Working directory for one research chat.
    *
-   * Lives under DATA_DIR — which `isPathAllowed` always permits — so a scratch
-   * chat has somewhere real to write without touching any repository.
+   * Lives under DATA_DIR — which `isPathAllowed` always permits — so a research
+   * chat has somewhere real to write without touching any repository. An
+   * isolated chat gets a directory to itself; every other project shares one,
+   * which is what lets its `.claude/memory/` accumulate across chats.
    */
-  private getScratchWorkspace(sessionId: string): string {
-    return path.join(this.scratchRoot, sessionId);
-  }
-
-  /** Create a scratch chat's sandbox, so the agent starts in a real directory. */
-  private async ensureScratchWorkspace(sessionId: string): Promise<string> {
-    const workspace = this.getScratchWorkspace(sessionId);
-    await secureFs.mkdir(workspace, { recursive: true });
-    return workspace;
+  private getResearchWorkspace(projectId: string, sessionId: string): string {
+    return this.research.getChatWorkspace(projectId, sessionId);
   }
 
   /**
@@ -294,14 +319,16 @@ export class AgentService {
       const metadata = await this.loadMetadata();
       const sessionMetadata = metadata[sessionId];
 
-      // A scratch chat ignores whatever directory the client offers — it always
-      // runs in its own sandbox, which is the point of it being throwaway.
-      const isScratch = sessionMetadata?.scratch === true;
-      if (isScratch) await this.ensureScratchWorkspace(sessionId);
+      // A research chat ignores whatever directory the client offers — it runs
+      // in its project, which is the whole point of it belonging to one.
+      const researchProjectId = researchProjectOf(sessionMetadata);
+      if (researchProjectId) {
+        await this.research.ensureChatWorkspace(researchProjectId, sessionId);
+      }
 
       // Determine the effective working directory
-      const effectiveWorkingDirectory = isScratch
-        ? this.getScratchWorkspace(sessionId)
+      const effectiveWorkingDirectory = researchProjectId
+        ? this.getResearchWorkspace(researchProjectId, sessionId)
         : workingDirectory || process.cwd();
       const resolvedWorkingDirectory = path.resolve(effectiveWorkingDirectory);
 
@@ -316,7 +343,7 @@ export class AgentService {
         isRunning: false,
         abortController: null,
         workingDirectory: resolvedWorkingDirectory,
-        isScratch,
+        researchProjectId,
         sdkSessionId: sessionMetadata?.sdkSessionId, // Load persisted SDK session ID
         promptQueue,
       });
@@ -453,16 +480,18 @@ export class AgentService {
 
     try {
       // Determine the effective working directory for context loading.
-      // A scratch chat is pinned to its sandbox — no caller can point it at a repo.
-      const isScratch = session.isScratch === true;
-      const effectiveWorkDir = isScratch
+      // A research chat is pinned to its project — no caller can point it at a repo.
+      const researchProjectId = session.researchProjectId;
+      const isIsolated = !!researchProjectId && this.research.isIsolated(researchProjectId);
+      const effectiveWorkDir = researchProjectId
         ? session.workingDirectory
         : workingDirectory || session.workingDirectory;
 
       // Load autoLoadClaudeMd setting (project setting takes precedence over global).
-      // Scratch chats never auto-load a project CLAUDE.md — they have no project.
-      const autoLoadClaudeMd = isScratch
-        ? false
+      // An isolated chat has no CLAUDE.md to load; a research project has one of
+      // its own, written when the project was created, and always wants it.
+      const autoLoadClaudeMd = researchProjectId
+        ? !isIsolated
         : await getAutoLoadClaudeMdSetting(
             effectiveWorkDir,
             this.settingsService,
@@ -473,16 +502,19 @@ export class AgentService {
       const mcpServers = await getMCPServersFromSettings(this.settingsService, '[AgentService]');
 
       // Get Skills configuration from settings.
-      // A scratch chat is restricted to global (~/.claude) skills — project
-      // skills would tie it to a repository it deliberately has no part in.
+      //
+      // An isolated chat is restricted to global (~/.claude) skills — project
+      // skills would tie it to a directory it deliberately leaves nothing in.
+      // Every other research project adds its own `.claude/skills` on top of
+      // those globals, which is what makes it a project rather than a sandbox.
       const loadedSkillsConfig = this.settingsService
         ? await getSkillsConfiguration(this.settingsService)
         : { enabled: false, sources: [] as Array<'user' | 'project'>, shouldIncludeInTools: false };
       const skillsConfig =
-        isScratch && loadedSkillsConfig.enabled
+        researchProjectId && loadedSkillsConfig.enabled
           ? {
               enabled: true,
-              sources: ['user'] as Array<'user' | 'project'>,
+              sources: (isIsolated ? ['user'] : ['user', 'project']) as Array<'user' | 'project'>,
               shouldIncludeInTools: true,
             }
           : loadedSkillsConfig;
@@ -493,16 +525,23 @@ export class AgentService {
         : { enabled: false, sources: [] as Array<'user' | 'project'>, shouldIncludeInTools: false };
 
       // Get custom subagents from settings (merge global + project-level) only if
-      // enabled. A scratch chat asks for no project path, so it gets globals only.
+      // enabled. An isolated chat asks for no project path, so it gets globals
+      // only; a research project offers its own directory like any other.
       const customSubagents =
         this.settingsService && subagentsConfig.enabled
-          ? await getCustomSubagents(this.settingsService, isScratch ? undefined : effectiveWorkDir)
+          ? await getCustomSubagents(
+              this.settingsService,
+              isIsolated ? undefined : effectiveWorkDir
+            )
           : undefined;
 
       // Load project context files (CLAUDE.md, CODE_QUALITY.md, etc.) and memory files
       // Use the user's message as task context for smart memory selection.
-      // Scratch chats skip this entirely — they carry no project context by design.
-      const contextResult = isScratch
+      //
+      // Research chats skip this: an isolated one carries no context by design,
+      // and a research project keeps its memory in its own `.claude/memory/`
+      // rather than in the `.dmaker/` layout this loader expects.
+      const contextResult = researchProjectId
         ? null
         : await loadContextFiles({
             projectPath: effectiveWorkDir,
@@ -958,18 +997,19 @@ export class AgentService {
     projectPath?: string,
     workingDirectory?: string,
     model?: string,
-    scratch?: boolean
+    researchProjectId?: string
   ): Promise<SessionMetadata> {
     const sessionId = this.generateId();
     const metadata = await this.loadMetadata();
 
-    // A scratch chat belongs to no project: it gets a fresh sandbox of its own
-    // and drops whatever project path or directory the caller suggested.
-    const effectiveProjectPath = scratch ? undefined : projectPath;
+    // A research chat belongs to a research project, not a repository: it runs
+    // in that project's directory and drops whatever project path or working
+    // directory the caller suggested.
+    const effectiveProjectPath = researchProjectId ? undefined : projectPath;
 
     // Determine the effective working directory
-    const effectiveWorkingDirectory = scratch
-      ? await this.ensureScratchWorkspace(sessionId)
+    const effectiveWorkingDirectory = researchProjectId
+      ? await this.research.ensureChatWorkspace(researchProjectId, sessionId)
       : workingDirectory || projectPath || process.cwd();
     const resolvedWorkingDirectory = path.resolve(effectiveWorkingDirectory);
 
@@ -989,7 +1029,7 @@ export class AgentService {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       model,
-      ...(scratch ? { scratch: true } : {}),
+      ...(researchProjectId ? { researchProjectId } : {}),
     };
 
     metadata[sessionId] = session;
@@ -1039,7 +1079,7 @@ export class AgentService {
     const metadata = await this.loadMetadata();
     if (!metadata[sessionId]) return false;
 
-    const wasScratch = metadata[sessionId].scratch === true;
+    const researchProjectId = researchProjectOf(metadata[sessionId]);
 
     delete metadata[sessionId];
     await this.saveMetadata(metadata);
@@ -1052,16 +1092,11 @@ export class AgentService {
       // File may not exist
     }
 
-    // A scratch chat is throwaway: its sandbox goes with it.
-    if (wasScratch) {
-      try {
-        await secureFs.rm(this.getScratchWorkspace(sessionId), {
-          recursive: true,
-          force: true,
-        });
-      } catch (error) {
-        this.logger.warn(`Failed to remove scratch workspace for ${sessionId}:`, error);
-      }
+    // An isolated chat is throwaway: its sandbox goes with it. A chat in a
+    // named research project shares that project's directory, so its files,
+    // memory and skills outlive it — deleting one chat must not empty them.
+    if (researchProjectId) {
+      await this.research.removeChatWorkspace(researchProjectId, sessionId);
     }
 
     // Clear from memory

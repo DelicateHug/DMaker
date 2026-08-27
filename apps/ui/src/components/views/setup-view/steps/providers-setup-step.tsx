@@ -1471,7 +1471,7 @@ export function ProvidersSetupStep({ onNext, onBack }: ProvidersSetupStepProps) 
                 data-testid={`provider-tab-${provider.id}`}
                 className={cn(
                   'relative flex flex-col items-center gap-1 py-3 px-2',
-                  'data-[state=active]:bg-muted'
+                  'data-[state=active]:bg-background data-[state=active]:text-foreground'
                 )}
               >
                 <div className="relative">

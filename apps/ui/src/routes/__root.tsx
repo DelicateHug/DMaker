@@ -9,7 +9,7 @@ import {
   setGlobalFileBrowser,
 } from '@/contexts/file-browser-context';
 import { useShallow } from 'zustand/react/shallow';
-import { useAppStore, getStoredTheme, type ThemeMode } from '@/store/app-store';
+import { useAppStore, getStoredTheme, DEFAULT_THEME, type ThemeMode } from '@/store/app-store';
 import { useSetupStore } from '@/store/setup-store';
 import { useAuthStore } from '@/store/auth-store';
 import { getElectronAPI, isElectron } from '@/lib/electron';
@@ -105,7 +105,8 @@ type AutoOpenStatus = (typeof AUTO_OPEN_STATUS)[keyof typeof AUTO_OPEN_STATUS];
 // Apply stored theme immediately on page load (before React hydration)
 // This prevents flash of default theme on setup pages
 function applyStoredTheme(): void {
-  const storedTheme = getStoredTheme();
+  // Fall back to the shipped default so a fresh install doesn't flash light
+  const storedTheme = getStoredTheme() || DEFAULT_THEME;
   if (storedTheme) {
     const root = document.documentElement;
     // Remove all theme classes (themeOptions doesn't include 'system' which is only in ThemeMode)

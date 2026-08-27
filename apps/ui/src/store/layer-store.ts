@@ -1,10 +1,10 @@
 import {
+  Bot,
   Brain,
   FileText,
   GitPullRequest,
   Lightbulb,
   Settings,
-  Sparkles,
   Terminal,
   Wand2,
   type LucideIcon,
@@ -37,7 +37,7 @@ export type LayerId =
   | 'github-prs'
   | 'project-settings'
   | 'interview'
-  | 'scratch';
+  | 'research';
 
 export const LAYER_TITLES: Record<LayerId, string> = {
   settings: 'Settings',
@@ -48,7 +48,7 @@ export const LAYER_TITLES: Record<LayerId, string> = {
   'github-prs': 'GitHub Pull Requests',
   'project-settings': 'Project Settings',
   interview: 'Interview',
-  scratch: 'Scratchpad',
+  research: 'Research',
 };
 
 /** Short labels for the tab strip, where horizontal space is scarce. */
@@ -67,7 +67,7 @@ export const LAYER_ICONS: Record<LayerId, LucideIcon> = {
   'github-prs': GitPullRequest,
   'project-settings': Settings,
   interview: Wand2,
-  scratch: Sparkles,
+  research: Bot,
 };
 
 /** Open a tool in the centre, adding a tab for it if it has none. */

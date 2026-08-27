@@ -55,7 +55,8 @@ export type SidebarSectionId =
   | 'workspaces'
   | 'sessions'
   | 'tools'
-  | 'scratchpad'
+  /** One section per research project, e.g. `research:isolated` */
+  | `research:${string}`
   /** One section per feature status, e.g. `status:in_progress` */
   | `status:${string}`
   /** One section per project, e.g. `project:C:/code/dmaker` */
@@ -126,6 +127,7 @@ interface PersistedShape {
   pinGroups: PinGroup[];
   projectGroups: ProjectGroup[];
   branchGroups: BranchGroup[];
+  researchMode: boolean;
 }
 
 function clampWidth(width: number): number {
@@ -264,6 +266,15 @@ interface WorkbenchState {
   /** Sections the user has folded shut */
   collapsedSections: Set<SidebarSectionId>;
 
+  /**
+   * The sidebar is showing research projects instead of the repository tree.
+   *
+   * A mode rather than another section: research work has nothing to do with
+   * any repo, so it gets the whole sidebar rather than competing for room with
+   * projects, branches and tasks.
+   */
+  researchMode: boolean;
+
   /** Pane shown inside the workbench, shared by every open task */
   activeTab: WorkbenchTabId;
 
@@ -288,6 +299,10 @@ interface WorkbenchActions {
   setSidebarWidth: (width: number) => void;
 
   toggleSection: (id: SidebarSectionId) => void;
+
+  /** Swap the sidebar between the repository tree and research projects */
+  setResearchMode: (on: boolean) => void;
+  toggleResearchMode: () => void;
 
   /** Open a task as a centre tab (optionally on a specific pane) */
   openWorkbench: (featureId: string, tab?: WorkbenchTabId) => void;
@@ -348,6 +363,7 @@ const initialState: WorkbenchState = {
   sidebarCollapsed: persisted.sidebarCollapsed ?? false,
   sidebarWidth: clampWidth(persisted.sidebarWidth ?? SIDEBAR_DEFAULT_WIDTH),
   collapsedSections: new Set(persisted.collapsedSections ?? []),
+  researchMode: persisted.researchMode === true,
   activeTab:
     persisted.activeTab && isWorkbenchTabId(persisted.activeTab)
       ? persisted.activeTab
@@ -373,6 +389,7 @@ export const useWorkbenchStore = create<WorkbenchState & WorkbenchActions>()((se
       pinGroups: next.pinGroups,
       projectGroups: next.projectGroups,
       branchGroups: next.branchGroups,
+      researchMode: next.researchMode,
     };
     setItem(STORAGE_KEY, JSON.stringify(payload));
   };
@@ -393,6 +410,9 @@ export const useWorkbenchStore = create<WorkbenchState & WorkbenchActions>()((se
       }
       setAndPersist({ collapsedSections: next });
     },
+
+    setResearchMode: (on) => setAndPersist({ researchMode: on }),
+    toggleResearchMode: () => setAndPersist({ researchMode: !get().researchMode }),
 
     openWorkbench: (featureId, tab) => {
       // Picking a task adds a tab for it rather than displacing whatever the

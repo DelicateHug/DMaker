@@ -108,6 +108,30 @@ describe('feature-loader.ts', () => {
     });
   });
 
+  describe('getAgentTreePath', () => {
+    it('should return agent-tree.json path inside logs/ subdirectory', () => {
+      const result = loader.getAgentTreePath(testProjectPath, 'feature-123');
+      expect(result).toContain('features');
+      expect(result).toContain('feature-123');
+      expect(result).toContain('logs');
+      expect(result).toContain('agent-tree.json');
+    });
+
+    it('should follow a feature that moved status directories mid-run', () => {
+      const before = loader.getAgentTreePath(testProjectPath, 'feature-123');
+
+      // What a status change does: the directory is renamed and the cache updated.
+      (loader as unknown as { featureDirCache: Map<string, string> }).featureDirCache.set(
+        'feature-123',
+        path.join(testProjectPath, '.dmaker', 'features', 'in_progress', 'feature-123')
+      );
+
+      const after = loader.getAgentTreePath(testProjectPath, 'feature-123');
+      expect(after).not.toBe(before);
+      expect(after).toContain(path.join('in_progress', 'feature-123'));
+    });
+  });
+
   describe('generateFeatureId', () => {
     it('should generate unique feature ID with dd-MM-YYYY-random format when no description', () => {
       const id1 = loader.generateFeatureId();
@@ -811,6 +835,96 @@ describe('feature-loader.ts', () => {
       await expect(loader.deleteAgentOutput(testProjectPath, 'feature-123')).rejects.toThrow(
         'Permission denied'
       );
+    });
+  });
+
+  describe('getAgentTree', () => {
+    const tree = {
+      featureId: 'feature-123',
+      nodes: {
+        master: {
+          id: 'master',
+          parentId: null,
+          depth: 0,
+          name: 'Master',
+          status: 'completed',
+          startedAt: '2026-08-27T10:00:00.000Z',
+          toolCallCount: 3,
+          index: 0,
+        },
+      },
+      order: ['master'],
+      updatedAt: '2026-08-27T10:05:00.000Z',
+    };
+
+    it('should return the parsed agent tree', async () => {
+      vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify(tree));
+
+      const result = await loader.getAgentTree(testProjectPath, 'feature-123');
+
+      expect(result).toEqual(tree);
+    });
+
+    it("should return null when file doesn't exist", async () => {
+      const error: any = new Error('File not found');
+      error.code = 'ENOENT';
+      vi.mocked(fs.readFile).mockRejectedValue(error);
+
+      const result = await loader.getAgentTree(testProjectPath, 'feature-123');
+
+      expect(result).toBeNull();
+    });
+
+    it('should return null on a corrupt sidecar rather than throwing', async () => {
+      vi.mocked(fs.readFile).mockResolvedValue('{"featureId": "feature-123", "nodes":');
+
+      const result = await loader.getAgentTree(testProjectPath, 'feature-123');
+
+      expect(result).toBeNull();
+    });
+
+    it('should throw on other errors', async () => {
+      vi.mocked(fs.readFile).mockRejectedValue(new Error('Permission denied'));
+
+      await expect(loader.getAgentTree(testProjectPath, 'feature-123')).rejects.toThrow(
+        'Permission denied'
+      );
+    });
+  });
+
+  describe('saveAgentTree', () => {
+    const tree = {
+      featureId: 'feature-123',
+      nodes: {
+        master: {
+          id: 'master',
+          parentId: null,
+          depth: 0,
+          name: 'Master',
+          status: 'running',
+          startedAt: '2026-08-27T10:00:00.000Z',
+          toolCallCount: 0,
+          index: 0,
+        },
+      },
+      order: ['master'],
+      updatedAt: '2026-08-27T10:00:00.000Z',
+    };
+
+    it('should create logs directory and write the tree atomically', async () => {
+      vi.mocked(fs.mkdir).mockResolvedValue(undefined);
+      vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+      vi.mocked(fs.rename).mockResolvedValue(undefined);
+
+      await loader.saveAgentTree(testProjectPath, 'feature-123', tree as any);
+
+      expect(fs.mkdir).toHaveBeenCalledWith(expect.stringContaining('logs'), { recursive: true });
+
+      // atomicWriteJson writes a temp file and renames it into place.
+      const [tempPath, written] = vi.mocked(fs.writeFile).mock.calls[0] as [string, string];
+      expect(tempPath).toContain('agent-tree.json');
+      expect(JSON.parse(written)).toEqual(tree);
+      expect(fs.rename).toHaveBeenCalledWith(tempPath, expect.stringContaining('agent-tree.json'));
     });
   });
 

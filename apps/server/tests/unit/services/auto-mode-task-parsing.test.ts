@@ -1,93 +1,11 @@
 import { describe, it, expect } from 'vitest';
+import { parseTaskLine, parseTasksFromSpec } from '@/services/auto-mode-service.js';
 
 /**
- * Test the task parsing logic by reimplementing the parsing functions
- * These mirror the logic in auto-mode-service.ts parseTasksFromSpec and parseTaskLine
+ * These tests used to carry their own copy of parseTaskLine/parseTasksFromSpec
+ * and assert against that, which meant the suite stayed green no matter what
+ * the service did. They run against the real exports now.
  */
-
-interface ParsedTask {
-  id: string;
-  description: string;
-  filePath?: string;
-  phase?: string;
-  status: 'pending' | 'in_progress' | 'completed';
-}
-
-function parseTaskLine(line: string, currentPhase?: string): ParsedTask | null {
-  // Match pattern: - [ ] T###: Description | File: path
-  const taskMatch = line.match(/- \[ \] (T\d{3}):\s*([^|]+)(?:\|\s*File:\s*(.+))?$/);
-  if (!taskMatch) {
-    // Try simpler pattern without file
-    const simpleMatch = line.match(/- \[ \] (T\d{3}):\s*(.+)$/);
-    if (simpleMatch) {
-      return {
-        id: simpleMatch[1],
-        description: simpleMatch[2].trim(),
-        phase: currentPhase,
-        status: 'pending',
-      };
-    }
-    return null;
-  }
-
-  return {
-    id: taskMatch[1],
-    description: taskMatch[2].trim(),
-    filePath: taskMatch[3]?.trim(),
-    phase: currentPhase,
-    status: 'pending',
-  };
-}
-
-function parseTasksFromSpec(specContent: string): ParsedTask[] {
-  const tasks: ParsedTask[] = [];
-
-  // Extract content within ```tasks ... ``` block
-  const tasksBlockMatch = specContent.match(/```tasks\s*([\s\S]*?)```/);
-  if (!tasksBlockMatch) {
-    // Try fallback: look for task lines anywhere in content
-    const taskLines = specContent.match(/- \[ \] T\d{3}:.*$/gm);
-    if (!taskLines) {
-      return tasks;
-    }
-    // Parse fallback task lines
-    let currentPhase: string | undefined;
-    for (const line of taskLines) {
-      const parsed = parseTaskLine(line, currentPhase);
-      if (parsed) {
-        tasks.push(parsed);
-      }
-    }
-    return tasks;
-  }
-
-  const tasksContent = tasksBlockMatch[1];
-  const lines = tasksContent.split('\n');
-
-  let currentPhase: string | undefined;
-
-  for (const line of lines) {
-    const trimmedLine = line.trim();
-
-    // Check for phase header (e.g., "## Phase 1: Foundation")
-    const phaseMatch = trimmedLine.match(/^##\s*(.+)$/);
-    if (phaseMatch) {
-      currentPhase = phaseMatch[1].trim();
-      continue;
-    }
-
-    // Check for task line
-    if (trimmedLine.startsWith('- [ ]')) {
-      const parsed = parseTaskLine(trimmedLine, currentPhase);
-      if (parsed) {
-        tasks.push(parsed);
-      }
-    }
-  }
-
-  return tasks;
-}
-
 describe('Task Parsing', () => {
   describe('parseTaskLine', () => {
     it('should parse task with file path', () => {
@@ -136,6 +54,13 @@ describe('Task Parsing', () => {
       const result = parseTaskLine(line);
       expect(result?.description).toBe('Create API endpoint');
       expect(result?.filePath).toBe('src/routes/api.ts');
+    });
+
+    it('parses a task as pending with no timestamps — the run fills those in', () => {
+      const result = parseTaskLine('- [ ] T006: Something');
+      expect(result?.status).toBe('pending');
+      expect(result?.startedAt).toBeUndefined();
+      expect(result?.completedAt).toBeUndefined();
     });
   });
 
@@ -257,8 +182,13 @@ Some other text
     });
   });
 
-  describe('spec content generation patterns', () => {
-    it('should match the expected lite mode output format', () => {
+  /**
+   * The output the planning prompts actually ask for, parsed by the real
+   * function. These used to assert that a string literal contained a substring
+   * it obviously contained.
+   */
+  describe('the planning prompts’ own output formats', () => {
+    it('a lite plan carries no ```tasks fence and parses to no tasks', () => {
       const liteModeOutput = `
 1. **Goal**: Implement user registration
 2. **Approach**: Create form component, add validation, connect to API
@@ -271,57 +201,28 @@ Some other text
 
 [PLAN_GENERATED] Planning outline complete.
 `;
-      expect(liteModeOutput).toContain('[PLAN_GENERATED]');
-      expect(liteModeOutput).toContain('Goal');
-      expect(liteModeOutput).toContain('Approach');
+      // Not a defect: a lite plan is prose, and the run's progress then comes
+      // from the [TASK_*] markers rather than from a parsed task list.
+      expect(parseTasksFromSpec(liteModeOutput)).toEqual([]);
     });
 
-    it('should match the expected spec mode output format', () => {
+    it('a spec-mode plan parses its fenced tasks', () => {
       const specModeOutput = `
-1. **Problem**: Users cannot register for accounts
-
-2. **Solution**: Implement registration form with email/password validation
-
-3. **Acceptance Criteria**:
-   - GIVEN a new user, WHEN they fill in valid details, THEN account is created
-
-4. **Files to Modify**:
-   | File | Purpose | Action |
-   |------|---------|--------|
-   | src/Register.tsx | Registration form | create |
-
 5. **Implementation Tasks**:
 \`\`\`tasks
 - [ ] T001: Create registration component | File: src/Register.tsx
 - [ ] T002: Add form validation | File: src/Register.tsx
 \`\`\`
 
-6. **Verification**: Manual testing of registration flow
-
 [SPEC_GENERATED] Please review the specification above.
 `;
-      expect(specModeOutput).toContain('[SPEC_GENERATED]');
-      expect(specModeOutput).toContain('```tasks');
-      expect(specModeOutput).toContain('T001');
+      const tasks = parseTasksFromSpec(specModeOutput);
+      expect(tasks.map((t) => t.id)).toEqual(['T001', 'T002']);
+      expect(tasks[0].filePath).toBe('src/Register.tsx');
     });
 
-    it('should match the expected full mode output format', () => {
+    it('a full-mode plan keeps each task under its phase heading', () => {
       const fullModeOutput = `
-1. **Problem Statement**: Users need ability to create accounts
-
-2. **User Story**: As a new user, I want to register, so that I can access the app
-
-3. **Acceptance Criteria**:
-   - **Happy Path**: GIVEN valid email, WHEN registering, THEN account created
-   - **Edge Cases**: GIVEN existing email, WHEN registering, THEN error shown
-
-4. **Technical Context**:
-   | Aspect | Value |
-   |--------|-------|
-   | Affected Files | src/Register.tsx |
-
-5. **Non-Goals**: Social login, password recovery
-
 6. **Implementation Tasks**:
 \`\`\`tasks
 ## Phase 1: Foundation
@@ -336,10 +237,12 @@ Some other text
 
 [SPEC_GENERATED] Please review the comprehensive specification above.
 `;
-      expect(fullModeOutput).toContain('Phase 1');
-      expect(fullModeOutput).toContain('Phase 2');
-      expect(fullModeOutput).toContain('Phase 3');
-      expect(fullModeOutput).toContain('[SPEC_GENERATED]');
+      const tasks = parseTasksFromSpec(fullModeOutput);
+      expect(tasks.map((t) => t.phase)).toEqual([
+        'Phase 1: Foundation',
+        'Phase 2: Core Implementation',
+        'Phase 3: Integration & Testing',
+      ]);
     });
   });
 });

@@ -9,7 +9,11 @@ import { isConnectionError, handleServerOffline } from '@/lib/http-api-client';
 import { toast } from 'sonner';
 import { useAutoMode } from '@/hooks/use-auto-mode';
 import { truncateDescription } from '@/lib/utils';
-import { getBlockingDependencies, shouldBlockOnDependencies } from '@dmaker/dependency-resolver';
+import {
+  getBlockingDependencies,
+  orderFeaturesForExecution,
+  shouldBlockOnDependencies,
+} from '@dmaker/dependency-resolver';
 import { createLogger } from '@dmaker/utils/logger';
 import { createFeatureIssue } from '../shared/create-feature-issue';
 import { getStatusMeta } from '@/components/layout/sidebar/status-meta';
@@ -170,8 +174,7 @@ export function useBoardActions({
       dependencies?: string[];
       childDependencies?: string[]; // Feature IDs that should depend on this feature
       selectedProjectPath?: string; // Optional project path for multi-project support
-      source?: 'local' | 'github'; // Where this feature should be created
-      status?: FeatureStatusWithPipeline; // Status column to land in; defaults to 'local'
+      status?: FeatureStatusWithPipeline; // Status column to land in; defaults to 'backlog'
       branchName?: string; // Existing branch to reuse instead of minting a new one
     }) => {
       // Use the selected project path if provided (for multi-project mode),
@@ -238,13 +241,11 @@ export function useBoardActions({
         ...featureData,
         title: featureData.title,
         titleGenerating: needsTitleGeneration,
-        status: featureData.status ?? ('local' as const),
+        status: featureData.status ?? ('backlog' as const),
         branchName: finalBranchName,
         dependencies: featureData.dependencies || [],
         // Add project path for multi-project support
         projectPath: targetProjectPath,
-        // Source tracking
-        source: featureData.source || 'local',
       };
       const createdFeature = addFeature(newFeatureData);
       // Must await to ensure feature exists on server before user can drag it
@@ -623,9 +624,16 @@ export function useBoardActions({
 
   const handleStartImplementation = useCallback(
     async (feature: Feature) => {
-      // Features in 'local' status need a GitHub issue before they can run.
-      // Create one on the fly rather than making the user convert by hand.
-      if (feature.status === 'local' && !feature.githubIssue) {
+      // Every task runs against a GitHub issue. One is filed in the background
+      // the moment the task is added, and the task is free to plan and branch
+      // while that runs — only its commit waits on the issue. So step in here
+      // only when nothing is going to produce an issue on its own: no draft job
+      // at all (a task predating background drafting), or one that gave up.
+      const draftStatus = feature.githubIssueDraft?.status;
+      const draftWillFinish =
+        !!draftStatus && draftStatus !== 'failed' && draftStatus !== 'skipped';
+
+      if (!feature.githubIssue && !draftWillFinish) {
         const issueProjectPath = getFeatureProjectPath(feature, currentProject);
         if (!issueProjectPath) {
           toast.error('Cannot start feature', {
@@ -1461,25 +1469,9 @@ export function useBoardActions({
       return;
     }
 
-    // Sort by priority (lower number = higher priority, priority 1 is highest)
-    // Features with blocking dependencies are sorted to the end
-    const sortedBacklog = [...backlogFeatures].sort((a, b) => {
-      const aBlocked =
-        enableDependencyBlocking && !skipVerificationInAutoMode
-          ? getBlockingDependencies(a, features).length > 0
-          : false;
-      const bBlocked =
-        enableDependencyBlocking && !skipVerificationInAutoMode
-          ? getBlockingDependencies(b, features).length > 0
-          : false;
-
-      // Blocked features go to the end
-      if (aBlocked && !bBlocked) return 1;
-      if (!aBlocked && bBlocked) return -1;
-
-      // Within same blocked/unblocked group, sort by priority
-      return (a.priority || 999) - (b.priority || 999);
-    });
+    // Same pickup order the auto-mode loop uses: tasks whose parents are all
+    // done first, then explicit priority, then the least recently touched.
+    const sortedBacklog = orderFeaturesForExecution(backlogFeatures, features);
 
     // Find the first feature without blocking dependencies
     const featureToStart = sortedBacklog.find((f) => {

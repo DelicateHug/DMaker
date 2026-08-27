@@ -33,6 +33,48 @@ export interface EnvironmentInfo {
   };
 }
 
+/**
+ * One task the runner daemon currently has in flight.
+ *
+ * Shape mirrors `GET /api/running-agents`. On prod that request is proxied to
+ * the runner, so this is the runner's own view of its work rather than
+ * anything the UI inferred from feature files on disk.
+ */
+export interface RunnerAgent {
+  featureId: string;
+  projectPath: string;
+  projectName: string;
+  isAutoMode: boolean;
+  title?: string;
+  description?: string;
+  model?: string;
+  tasksCompleted?: number;
+  tasksTotal?: number;
+  currentTaskId?: string;
+}
+
+/**
+ * Ask the runner what it is working on.
+ *
+ * Returns `null` rather than throwing when the endpoint is missing or the
+ * runner is down — the popover then says "not reachable" instead of erroring.
+ */
+export async function fetchRunnerAgents(): Promise<RunnerAgent[] | null> {
+  try {
+    const res = await fetch(`${getServerUrlSync()}/api/running-agents`, {
+      credentials: 'include',
+      cache: 'no-store',
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { success?: boolean; runningAgents?: RunnerAgent[] };
+    if (!data?.success || !Array.isArray(data.runningAgents)) return null;
+    return data.runningAgents;
+  } catch (error) {
+    logger.warn('Could not read running agents:', error);
+    return null;
+  }
+}
+
 export type SelfUpdatePhase =
   | 'preflight'
   | 'stash'

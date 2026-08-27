@@ -21,6 +21,9 @@ npm run dev:full            # Server + web UI together (dev pair only)
 ./start.ps1 -SkipBuild      # Same, but serve the last prod build as-is
 ./stop.ps1                  # Stop the whole set by exact PID/port
 
+# Start Menu / desktop launch (what the DMaker shortcut runs)
+./scripts/Launch-DMaker.ps1  # start.ps1, plus: open the browser, refuse to double-start
+
 # Building
 npm run build               # Build web application
 npm run build:packages      # Build all shared packages (required before other builds)
@@ -125,7 +128,13 @@ data/
 ├── settings.json          # Global settings, profiles, shortcuts
 ├── credentials.json       # API keys
 ├── sessions-metadata.json # Chat session metadata
-└── agent-sessions/        # Conversation histories
+├── agent-sessions/        # Conversation histories
+└── research/              # Research projects (see below)
+    ├── isolated/sessions/{sessionId}/   # One throwaway sandbox per chat
+    └── {projectId}/                     # Shared by all of its chats
+        ├── project.json
+        ├── CLAUDE.md
+        └── .claude/{skills,memory}/
 ```
 
 ## Import Conventions
@@ -215,6 +224,37 @@ settings page uses:
 The wizard itself still lives at `/setup` and can be visited deliberately.
 This matters most for the dev/prod pair: two data directories on one machine
 used to mean two identical wizards for one set of credentials.
+
+### Research Projects
+
+The AI icon in the sidebar footer enters **research mode**, which replaces the
+repository tree with local research projects — AI chats that belong to no repo.
+There is no Scratchpad any more; **Isolated** is what it became.
+
+Each project is a real directory under `DATA_DIR/research/`, and the difference
+between them is what the agent can see:
+
+- **Isolated** - every chat gets a sandbox of its own under
+  `research/isolated/sessions/{sessionId}`, sees only global (`~/.claude`)
+  skills, loads no CLAUDE.md, and takes its sandbox with it when deleted. It is
+  synthesised rather than stored, so it is always offered and cannot be renamed
+  or deleted.
+- **Every other project** - all of its chats share the one project directory, so
+  what one chat writes the next one reads. On top of the globals it gets its own
+  `.claude/skills/` and `.claude/memory/`, via `settingSources: ['user',
+'project']` with the cwd set to the project. A starter `CLAUDE.md` names both
+  paths, because an agent that is not told it has a memory directory will not
+  use one.
+
+Chats are ordinary agent sessions carrying `researchProjectId`
+(`services/research-service.ts`, `routes/research.ts`). Sessions predating this
+carry `scratch: true` and are read as belonging to Isolated. Research chats skip
+`loadContextFiles()` entirely — that loader expects the `.dmaker/` layout, and a
+research project keeps its memory in `.claude/memory/` instead.
+
+`/api/research` is proxied to the runner alongside `/api/sessions`: deleting a
+project stops and deletes its chats, and only the process running them can stop
+them.
 
 ### Context Files
 

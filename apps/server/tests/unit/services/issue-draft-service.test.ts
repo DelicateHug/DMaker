@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { IssueDraftService } from '@/services/issue-draft-service.js';
-import type { Feature } from '@dmaker/types';
+import type { AgentQuestion, Feature } from '@dmaker/types';
 
 /**
  * The commit gate is the part of issue drafting that can wedge real work, so
@@ -150,50 +150,73 @@ describe('issue-draft-service.ts', () => {
     });
   });
 
-  describe('answerQuestion', () => {
-    it('records the answer and stamps when it was given', async () => {
-      const stored = feature({
-        githubIssueDraft: { status: 'awaiting_clarification' },
-        agentQuestions: [
-          {
-            id: 'q1',
-            source: 'issue-draft',
-            question: 'Which screen?',
-            askedAt: '2026-08-25T00:00:00.000Z',
-          },
-        ],
-      });
-      featureLoader.get.mockResolvedValue(stored);
-      featureLoader.update.mockImplementation(
-        async (_p: string, _id: string, updates: Partial<Feature>) => ({ ...stored, ...updates })
-      );
-
-      const result = await service.answerQuestion(projectPath, featureId, 'q1', 'The board');
-
-      const answered = result?.agentQuestions?.[0];
-      expect(answered?.answer).toBe('The board');
-      expect(answered?.answeredAt).toBeTruthy();
-      expect(events.emit).toHaveBeenCalledWith(
-        'feature:question-answered',
-        expect.objectContaining({ featureId, questionId: 'q1', answer: 'The board' })
-      );
+  /**
+   * Recording an answer belongs to AgentQuestionService now; what is still the
+   * drafter's own is deciding when it may carry on. It restarts rather than
+   * resumes, so a restart with one of its questions still open re-asks with
+   * half the picture.
+   */
+  describe('resumeAfterAnswer', () => {
+    const question = (overrides: Partial<AgentQuestion>): AgentQuestion => ({
+      id: 'q1',
+      source: 'issue-draft',
+      question: 'Which screen?',
+      askedAt: '2026-08-25T00:00:00.000Z',
+      ...overrides,
     });
 
-    it('leaves the feature alone when the question is unknown', async () => {
-      featureLoader.get.mockResolvedValue(feature({ agentQuestions: [] }));
+    let started: ReturnType<typeof vi.fn>;
 
-      const result = await service.answerQuestion(projectPath, featureId, 'nope', 'x');
-
-      expect(result?.id).toBe(featureId);
-      expect(featureLoader.update).not.toHaveBeenCalled();
+    beforeEach(() => {
+      started = vi.fn();
+      vi.spyOn(service, 'start').mockImplementation(started);
     });
 
-    it('returns null when the feature is gone', async () => {
-      featureLoader.get.mockResolvedValue(null);
+    it('restarts drafting once nothing of its own is outstanding', () => {
+      const resumed = service.resumeAfterAnswer(projectPath, featureId, [
+        question({ answer: 'The board', answeredAt: '2026-08-25T00:01:00.000Z' }),
+      ]);
 
-      const result = await service.answerQuestion(projectPath, featureId, 'q1', 'x');
+      expect(resumed).toBe(true);
+      expect(started).toHaveBeenCalledWith(projectPath, featureId);
+    });
 
-      expect(result).toBeNull();
+    it('waits while another of its own questions is still unanswered', () => {
+      const resumed = service.resumeAfterAnswer(projectPath, featureId, [
+        question({ answer: 'The board', answeredAt: '2026-08-25T00:01:00.000Z' }),
+        question({ id: 'q2' }),
+      ]);
+
+      expect(resumed).toBe(false);
+      expect(started).not.toHaveBeenCalled();
+    });
+
+    it('counts a skipped question as no longer outstanding', () => {
+      const resumed = service.resumeAfterAnswer(projectPath, featureId, [
+        question({ answer: '', answeredAt: '2026-08-25T00:01:00.000Z', skipped: true }),
+      ]);
+
+      expect(resumed).toBe(true);
+    });
+
+    it('is not held up by a question whose run ended without an answer', () => {
+      // Nobody can answer an expired question, so leaving it counted would
+      // wedge the draft for good.
+      const resumed = service.resumeAfterAnswer(projectPath, featureId, [
+        question({ answer: 'The board', answeredAt: '2026-08-25T00:01:00.000Z' }),
+        question({ id: 'q2', expiredAt: '2026-08-25T00:02:00.000Z' }),
+      ]);
+
+      expect(resumed).toBe(true);
+    });
+
+    it('ignores outstanding questions belonging to another agent', () => {
+      const resumed = service.resumeAfterAnswer(projectPath, featureId, [
+        question({ answer: 'The board', answeredAt: '2026-08-25T00:01:00.000Z' }),
+        question({ id: 'q2', source: 'implementation' }),
+      ]);
+
+      expect(resumed).toBe(true);
     });
   });
 });

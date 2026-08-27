@@ -19,7 +19,6 @@ export interface FeatureIssueInput {
 /** Feature updates that link the created issue and move the card to the backlog. */
 export interface FeatureIssueUpdates {
   status: 'backlog';
-  source: 'github';
   githubIssue: {
     number: number;
     url: string;
@@ -113,7 +112,6 @@ export async function createFeatureIssue(
     success: true,
     updates: {
       status: 'backlog',
-      source: 'github',
       githubIssue: {
         number: result.issueNumber,
         url: result.url || '',

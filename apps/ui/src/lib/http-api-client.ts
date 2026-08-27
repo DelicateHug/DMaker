@@ -35,7 +35,7 @@ import type {
   ConvertToFeatureOptions,
   NotificationsAPI,
 } from './electron';
-import type { Message, SessionListItem } from '@/types/electron';
+import type { Message, SessionListItem, ResearchProjectInfo } from '@/types/electron';
 import type { Feature, ClaudeUsageResponse, CodexUsageResponse } from '@/store/app-store';
 import type { WorktreeAPI, GitAPI, ModelDefinition, ProviderStatus } from '@/types/electron';
 import type { ModelId, ThinkingLevel, ReasoningEffort } from '@dmaker/types';
@@ -2274,7 +2274,7 @@ export class HttpApiClient implements ElectronAPI {
       name: string,
       projectPath: string,
       workingDirectory?: string,
-      options?: { scratch?: boolean }
+      options?: { researchProjectId?: string }
     ): Promise<{
       success: boolean;
       session?: {
@@ -2284,8 +2284,8 @@ export class HttpApiClient implements ElectronAPI {
         workingDirectory?: string;
         createdAt: string;
         updatedAt: string;
-        /** True when the server actually made this a Scratchpad session */
-        scratch?: boolean;
+        /** Set when the server actually placed this chat in that project */
+        researchProjectId?: string;
       };
       error?: string;
     }> =>
@@ -2293,7 +2293,7 @@ export class HttpApiClient implements ElectronAPI {
         name,
         projectPath,
         workingDirectory,
-        ...(options?.scratch ? { scratch: true } : {}),
+        ...(options?.researchProjectId ? { researchProjectId: options.researchProjectId } : {}),
       }),
 
     update: (
@@ -2311,6 +2311,29 @@ export class HttpApiClient implements ElectronAPI {
 
     delete: (sessionId: string): Promise<{ success: boolean; error?: string }> =>
       this.httpDelete(`/api/sessions/${sessionId}`),
+  };
+
+  // Research API — the local projects the AI sidebar lists
+  research = {
+    list: (): Promise<{
+      success: boolean;
+      projects?: ResearchProjectInfo[];
+      error?: string;
+    }> => this.get('/api/research'),
+
+    create: (
+      name: string
+    ): Promise<{ success: boolean; project?: ResearchProjectInfo; error?: string }> =>
+      this.post('/api/research', { name }),
+
+    rename: (
+      projectId: string,
+      name: string
+    ): Promise<{ success: boolean; project?: ResearchProjectInfo; error?: string }> =>
+      this.put(`/api/research/${projectId}`, { name }),
+
+    delete: (projectId: string): Promise<{ success: boolean; error?: string }> =>
+      this.httpDelete(`/api/research/${projectId}`),
   };
 
   // Claude API

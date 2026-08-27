@@ -463,3 +463,98 @@ export function formatAncestorContextForPrompt(
 
   return sections.join('\n\n---\n\n');
 }
+
+// ============================================================================
+// Runner pickup order
+// ============================================================================
+
+/** A feature is "done" for parent-completion purposes once it reaches these. */
+const COMPLETED_STATUSES = new Set(['completed', 'verified']);
+
+/**
+ * The little a feature needs to expose to be ranked or to count as a parent.
+ *
+ * Deliberately structural rather than `Feature`: the board ranks
+ * `FeatureListSummary` objects loaded by the fast list endpoint, and the server
+ * ranks full `Feature` records. Both satisfy this.
+ */
+export interface RankableFeature {
+  id: string;
+  status?: string;
+  priority?: number;
+  updatedAt?: string;
+  dependencies?: string[];
+}
+
+/**
+ * Parents of `feature` that have not finished yet.
+ *
+ * Unlike {@link getBlockingDependencies} this ignores the per-feature
+ * `waitForDependencies` flag. That flag answers "may this run?"; this answers
+ * "would running it now be premature?" — a ranking question, not a gate. A task
+ * allowed to run ahead of its parents should still be picked up after the ones
+ * with nothing left to wait for.
+ */
+export function getIncompleteDependencies(
+  feature: RankableFeature,
+  allFeatures: RankableFeature[]
+): string[] {
+  if (!feature.dependencies?.length) return [];
+  return feature.dependencies.filter((depId: string) => {
+    const dep = allFeatures.find((f) => f.id === depId);
+    // A dependency that no longer exists cannot be waited on.
+    return dep !== undefined && !COMPLETED_STATUSES.has(dep.status ?? '');
+  });
+}
+
+/**
+ * Milliseconds since the epoch for the last time anything touched a feature.
+ *
+ * A feature with no `updatedAt` at all is the oldest thing there is — it
+ * predates the field, so it has been sitting untouched the longest.
+ */
+function lastTouched(feature: RankableFeature): number {
+  if (!feature.updatedAt) return 0;
+  const parsed = Date.parse(feature.updatedAt);
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+/**
+ * Order candidate features the way a runner should pick them up.
+ *
+ * The keys, in order:
+ *
+ *  1. **No incomplete parents first.** Starting a child while its parent is
+ *     still being written means the child reads code that is about to change.
+ *  2. **Explicit priority.** The user's deliberate signal; 1 beats 3. Unset
+ *     counts as 2, matching {@link resolveDependencies}.
+ *  3. **Stalest first.** Least recently updated wins, so a task nothing has
+ *     touched in weeks cannot be starved forever by newer arrivals. Most
+ *     features never get a priority set, so in practice this is what decides.
+ *  4. **Id**, purely so the order is stable between calls.
+ *
+ * `allFeatures` must be the whole project rather than just the candidates —
+ * parents have usually left the pending set by the time their children are up.
+ */
+export function orderFeaturesForExecution<T extends RankableFeature>(
+  candidates: T[],
+  allFeatures: RankableFeature[]
+): T[] {
+  const blocked = new Map<string, boolean>(
+    candidates.map((f) => [f.id, getIncompleteDependencies(f, allFeatures).length > 0])
+  );
+
+  return [...candidates].sort((a, b) => {
+    const aBlocked = blocked.get(a.id) ? 1 : 0;
+    const bBlocked = blocked.get(b.id) ? 1 : 0;
+    if (aBlocked !== bBlocked) return aBlocked - bBlocked;
+
+    const priorityDelta = (a.priority ?? 2) - (b.priority ?? 2);
+    if (priorityDelta !== 0) return priorityDelta;
+
+    const staleDelta = lastTouched(a) - lastTouched(b);
+    if (staleDelta !== 0) return staleDelta;
+
+    return a.id.localeCompare(b.id);
+  });
+}

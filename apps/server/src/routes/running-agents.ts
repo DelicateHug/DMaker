@@ -7,6 +7,7 @@ import type { Request, Response } from 'express';
 import path from 'path';
 import { createLogger } from '@dmaker/utils';
 import type { AutoModeService } from '../services/auto-mode-service.js';
+import type { FeatureLoader } from '../services/feature-loader.js';
 import { getBacklogPlanStatus, getRunningDetails } from './backlog-plan.js';
 import { getAllRunningGenerations } from './app-spec.js';
 
@@ -89,13 +90,58 @@ export function createIndexHandler(autoModeService: AutoModeService) {
 }
 
 // ---------------------------------------------------------------------------
+// POST /tree - Get the parent/child agent tree for one feature
+// ---------------------------------------------------------------------------
+
+/**
+ * The live tracker wins over the sidecar: the sidecar is only rewritten on the
+ * 10s metrics interval and at teardown, so mid-run it is up to ten seconds
+ * stale and can be missing a sub-agent the UI has already been told about.
+ *
+ * `tree: null` is a normal answer, not a failure - every run recorded before
+ * the tree was tracked has no sidecar, and the client synthesises a one-node
+ * tree over the flat transcript for those.
+ */
+export function createTreeHandler(autoModeService: AutoModeService, featureLoader: FeatureLoader) {
+  return async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { projectPath, featureId } = req.body as {
+        projectPath: string;
+        featureId: string;
+      };
+
+      if (!projectPath || !featureId) {
+        res.status(400).json({
+          success: false,
+          error: 'projectPath and featureId are required',
+        });
+        return;
+      }
+
+      const tree =
+        autoModeService.getInMemoryAgentTree(featureId) ??
+        (await featureLoader.getAgentTree(projectPath, featureId));
+
+      res.json({ success: true, tree });
+    } catch (error) {
+      logError(error, 'Get agent tree failed');
+      res.status(500).json({ success: false, error: getErrorMessage(error) });
+    }
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Router
 // ---------------------------------------------------------------------------
 
-export function createRunningAgentsRoutes(autoModeService: AutoModeService): Router {
+export function createRunningAgentsRoutes(
+  autoModeService: AutoModeService,
+  featureLoader: FeatureLoader
+): Router {
   const router = Router();
 
   router.get('/', createIndexHandler(autoModeService));
+  router.post('/tree', createTreeHandler(autoModeService, featureLoader));
 
   return router;
 }

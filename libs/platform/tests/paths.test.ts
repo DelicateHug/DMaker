@@ -272,12 +272,17 @@ describe('paths.ts', () => {
 
   describe('isStatusDir', () => {
     it('should return true for valid status directory names', () => {
-      expect(isStatusDir('local')).toBe(true);
       expect(isStatusDir('backlog')).toBe(true);
       expect(isStatusDir('planning')).toBe(true);
       expect(isStatusDir('in_progress')).toBe(true);
       expect(isStatusDir('waiting_approval')).toBe(true);
       expect(isStatusDir('completed')).toBe(true);
+    });
+
+    it('should still recognise the retired local directory', () => {
+      // Nothing is written there any more, but existing checkouts have one and
+      // its features still have to load.
+      expect(isStatusDir('local')).toBe(true);
     });
 
     it('should return true for pipeline step directories', () => {
