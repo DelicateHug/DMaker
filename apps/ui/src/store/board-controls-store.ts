@@ -27,7 +27,7 @@ export interface AddFeatureContext {
    * branch's worktree instead of having a fresh one minted for it.
    */
   branchName?: string;
-  /** Status column the feature lands in. Defaults to 'local'. */
+  /** Status column the feature lands in. Defaults to 'backlog'. */
   status?: FeatureStatusWithPipeline;
   /**
    * Pre-filled title for the dialog. Set when the gesture already knows what
@@ -123,10 +123,6 @@ export interface BoardControlsState {
   selectedProjectIds: string[];
   onProjectSelectionChange: ((projectIds: string[]) => void) | null;
 
-  // Mode filter props
-  activeModes: ('local' | 'github')[];
-  onModeChange: ((modes: ('local' | 'github')[]) => void) | null;
-
   // Board actions expanded states
   expandedBoardActions: Set<string>;
 
@@ -176,8 +172,6 @@ export interface BoardControlsActions {
   // Project filter
   setProjects: (projects: Project[]) => void;
   setSelectedProjectIds: (ids: string[]) => void;
-  // Mode filter
-  setActiveModes: (modes: ('local' | 'github')[]) => void;
   // Board actions
   toggleBoardAction: (actionId: string) => void;
   setExpandedBoardAction: (actionId: string, expanded: boolean) => void;
@@ -211,9 +205,9 @@ const initialState: BoardControlsState = {
   hasPendingPlan: false,
   onOpenPendingPlan: null,
 
-  // Status filter
-  activeStatusTab: 'waiting_approval' as StatusTabId,
-  activeStatusTabs: ['waiting_approval'] as StatusTabId[],
+  // Status filter — every status until the user narrows it themselves
+  activeStatusTab: 'all' as StatusTabId,
+  activeStatusTabs: ['all'] as StatusTabId[],
   onStatusTabChange: null,
   onStatusTabToggle: null,
   onStatusTabsCommit: null,
@@ -234,10 +228,6 @@ const initialState: BoardControlsState = {
   projects: [],
   selectedProjectIds: ['__all_projects__'],
   onProjectSelectionChange: null,
-
-  // Mode filter
-  activeModes: ['local'] as ('local' | 'github')[],
-  onModeChange: null,
 
   // Board actions
   expandedBoardActions: new Set<string>(),
@@ -293,7 +283,6 @@ export const useBoardControlsStore = create<BoardControlsState & BoardControlsAc
   setSelectedProjectIds: (ids) => set({ selectedProjectIds: ids }),
 
   // Mode filter
-  setActiveModes: (modes) => set({ activeModes: modes }),
 
   toggleBoardAction: (actionId) =>
     set((state) => {
@@ -363,9 +352,6 @@ export function getBoardControlsForTopNav(state: BoardControlsState): {
   projects: Project[];
   selectedProjectIds: string[];
   onProjectSelectionChange?: (projectIds: string[]) => void;
-  // Mode filter props
-  activeModes: ('local' | 'github')[];
-  onModeChange?: (modes: ('local' | 'github')[]) => void;
   // Deploy panel props
   isDeployPanelCollapsed: boolean;
   onToggleDeployPanel?: () => void;
@@ -424,9 +410,6 @@ export function getBoardControlsForTopNav(state: BoardControlsState): {
     projects: state.projects,
     selectedProjectIds: state.selectedProjectIds,
     onProjectSelectionChange: state.onProjectSelectionChange || undefined,
-    // Mode filter
-    activeModes: state.activeModes,
-    onModeChange: state.onModeChange || undefined,
     // Deploy panel
     isDeployPanelCollapsed: state.isDeployPanelCollapsed,
     onToggleDeployPanel: state.onToggleDeployPanel || undefined,

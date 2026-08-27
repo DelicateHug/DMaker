@@ -51,6 +51,7 @@ import { resolveModelString, resolvePhaseModel, DEFAULT_MODELS } from '@dmaker/m
 import {
   resolveDependencies,
   areDependenciesSatisfied,
+  orderFeaturesForExecution,
   shouldBlockOnDependencies,
 } from '@dmaker/dependency-resolver';
 import {
@@ -1611,7 +1612,9 @@ Complete the pipeline step instructions above. Review the previous work and appl
     }
 
     // Load previous agent output if it exists
-    const featureDir = this.featureLoader.getFeatureDir(projectPath, featureId);
+    const resolvedFollowUpDir = await this.featureLoader.resolveFeatureDir(projectPath, featureId);
+    const featureDir =
+      resolvedFollowUpDir || this.featureLoader.getFeatureDir(projectPath, featureId);
     const contextPath = path.join(featureDir, 'logs', 'agent-output.md');
     let previousContext = '';
     try {
@@ -2976,8 +2979,14 @@ Format your response as a structured markdown document.`;
         }
       }
 
-      // Apply dependency-aware ordering
+      // resolveDependencies is still run for its cycle and missing-dependency
+      // analysis, and it seeds a parents-before-children order. The pickup rank
+      // is then applied on top: no incomplete parents first (which preserves
+      // parents-before-children for anything still pending), then explicit
+      // priority, then the stalest — so an old task cannot be starved by a
+      // steady stream of new ones.
       const { orderedFeatures } = resolveDependencies(pendingFeatures);
+      const rankedFeatures = orderFeaturesForExecution(orderedFeatures, allFeatures);
 
       // Get global settings for dependency blocking
       const settings = await this.settingsService?.getGlobalSettings();
@@ -2989,7 +2998,7 @@ Format your response as a structured markdown document.`;
 
       // Filter to only features with satisfied dependencies
       // Uses shouldBlockOnDependencies to combine global and per-feature settings
-      const readyFeatures = orderedFeatures.filter((feature: Feature) => {
+      const readyFeatures = rankedFeatures.filter((feature: Feature) => {
         // Check if this feature should block on dependencies based on global + per-feature settings
         if (!shouldBlockOnDependencies(feature, { enableDependencyBlocking })) {
           // Feature doesn't need to wait for dependencies (either global blocking is off,
@@ -3222,7 +3231,9 @@ You can use the Read tool to view these images at any time during implementation
       await this.sleep(200);
 
       // Save mock agent output
-      const featureDirForOutput = this.featureLoader.getFeatureDir(projectPath, featureId);
+      const resolvedMockDir = await this.featureLoader.resolveFeatureDir(projectPath, featureId);
+      const featureDirForOutput =
+        resolvedMockDir || this.featureLoader.getFeatureDir(projectPath, featureId);
       const outputPath = path.join(featureDirForOutput, 'logs', 'agent-output.md');
 
       const mockOutput = `# Mock Agent Output
@@ -3573,9 +3584,21 @@ This mock response was generated because DMAKER_MOCK_AGENT=true was set.
 
     // Agent output goes to .dmaker directory
     // Note: We use projectPath here, not workDir, because workDir might be a worktree path
-    const featureDirForOutput = this.featureLoader.getFeatureDir(projectPath, featureId);
-    const outputPath = path.join(featureDirForOutput, 'logs', 'agent-output.md');
-    const rawOutputPath = path.join(featureDirForOutput, 'logs', 'raw-output.jsonl');
+    //
+    // Resolved per write, never captured up front. A feature moves between
+    // status directories *during* this stream (planning -> in_progress ->
+    // waiting_approval), and each move renames the directory on disk. A path
+    // captured here would keep pointing at the status the run started in, so
+    // every write after the first move recreated that directory and put the
+    // output in it. The board's next refresh then saw one feature in two
+    // status directories, kept the real one, and deleted the shadow — taking
+    // the only copy of the agent output with it. The task read as "completed"
+    // with nothing to show.
+    const logFilePath = async (name: string): Promise<string> => {
+      const resolved = await this.featureLoader.resolveFeatureDir(projectPath, featureId);
+      const featureDir = resolved || this.featureLoader.getFeatureDir(projectPath, featureId);
+      return path.join(featureDir, 'logs', name);
+    };
 
     // Raw output logging is configurable via environment variable
     // Set DMAKER_DEBUG_RAW_OUTPUT=true to enable raw stream event logging
@@ -3605,6 +3628,7 @@ This mock response was generated because DMAKER_MOCK_AGENT=true was set.
         }
         rawWriteTimeout = setTimeout(async () => {
           try {
+            const rawOutputPath = await logFilePath('raw-output.jsonl');
             await secureFs.mkdir(path.dirname(rawOutputPath), { recursive: true });
             await secureFs.appendFile(rawOutputPath, rawOutputLines.join('\n') + '\n');
             rawOutputLines = []; // Clear after writing
@@ -3620,6 +3644,7 @@ This mock response was generated because DMAKER_MOCK_AGENT=true was set.
     // Helper to write current responseText to file
     const writeToFile = async (): Promise<void> => {
       try {
+        const outputPath = await logFilePath('agent-output.md');
         await secureFs.mkdir(path.dirname(outputPath), { recursive: true });
         await secureFs.writeFile(outputPath, responseText);
       } catch (error) {
@@ -4338,6 +4363,7 @@ After generating the revised spec, output:
       // Flush remaining raw output (only if enabled, on success path)
       if (enableRawOutput && rawOutputLines.length > 0) {
         try {
+          const rawOutputPath = await logFilePath('raw-output.jsonl');
           await secureFs.mkdir(path.dirname(rawOutputPath), { recursive: true });
           await secureFs.appendFile(rawOutputPath, rawOutputLines.join('\n') + '\n');
         } catch (error) {

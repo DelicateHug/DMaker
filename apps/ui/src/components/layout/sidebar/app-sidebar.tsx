@@ -1,4 +1,12 @@
-import { useCallback, useMemo, useRef, useState, type DragEvent, type MouseEvent } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type DragEvent,
+  type MouseEvent,
+} from 'react';
 import {
   Search,
   Plus,
@@ -17,7 +25,7 @@ import {
   Wand2,
   LayoutPanelLeft,
   RefreshCw,
-  Sparkles,
+  Bot,
   Trash2,
   CloudDownload,
   Check,
@@ -35,7 +43,7 @@ import {
   type RemoteBranchInfo,
 } from '@/lib/http-api-client';
 import { useAppStore, type Feature } from '@/store/app-store';
-import { toggleLayer, type LayerId } from '@/store/layer-store';
+import { openLayer, toggleLayer, type LayerId } from '@/store/layer-store';
 import { showBoardTab, toolTabKey, useActiveFeatureId, useCenterStore } from '@/store/center-store';
 import {
   openProjectView,
@@ -90,7 +98,7 @@ import { RemoteBranchAdoptRow, formatBranchAge } from './remote-branch-row';
 import { BranchSyncIndicator } from './branch-sync-indicator';
 import { buildBranchFixTask } from './branch-sync-task';
 import { PinnedSection } from './pinned-section';
-import { ScratchpadSection } from './scratchpad-section';
+import { ResearchSidebar } from './research-sidebar';
 import { FeatureContextMenuItems } from './feature-context-menu';
 import { DeleteBranchDialog, type BranchDeleteTarget } from './delete-branch-dialog';
 import {
@@ -120,14 +128,7 @@ const TOOL_ITEMS: Array<{ id: LayerId; label: string; icon: typeof Lightbulb }> 
  * Fallback ordering for status groups when the board has not published its
  * status tabs yet (or a feature carries a status no tab covers).
  */
-const STATUS_ORDER = [
-  'local',
-  'backlog',
-  'planning',
-  'in_progress',
-  'building',
-  'waiting_approval',
-];
+const STATUS_ORDER = ['backlog', 'planning', 'in_progress', 'building', 'waiting_approval'];
 
 /** 'my_custom_status' -> 'My Custom Status', for statuses with no tab. */
 function prettifyStatus(status: string): string {
@@ -404,8 +405,25 @@ export function AppSidebar({ onCreateFeature, onCreateWorktree }: AppSidebarProp
   const [renamingGroupId, setRenamingGroupId] = useState<string | null>(null);
   const isSettingsOpen = isLayerOpen('settings');
   const isSettingsShowing = isLayerShowing('settings');
-  const isScratchOpen = isLayerOpen('scratch');
-  const isScratchShowing = isLayerShowing('scratch');
+  /**
+   * Research mode: the sidebar shows local research projects instead of the
+   * repository tree. It is a mode rather than another section because research
+   * work has no repo behind it — it would only compete for room with projects,
+   * branches and tasks that have nothing to do with it.
+   */
+  const researchMode = useWorkbenchStore((state) => state.researchMode);
+  const setResearchMode = useWorkbenchStore((state) => state.setResearchMode);
+
+  /**
+   * One control, one destination: entering research mode swaps the sidebar and
+   * shows the Research view, so the icon lands you somewhere rather than
+   * rearranging the sidebar and leaving the centre on the board.
+   */
+  const handleToggleResearch = useCallback(() => {
+    const entering = !researchMode;
+    setResearchMode(entering);
+    if (entering) openLayer('research');
+  }, [researchMode, setResearchMode]);
 
   /** Features whose agent is running right now — drives the row spinner. */
   const runningFeatureIds = useRunningFeatureIds();
@@ -647,6 +665,48 @@ export function AppSidebar({ onCreateFeature, onCreateWorktree }: AppSidebarProp
     () => visibleFeatures.filter((feature) => isPinned(feature)),
     [visibleFeatures]
   );
+
+  /** Which branches each project's tasks claim to be on, as a comparable key. */
+  const featureBranchesByProject = useMemo(() => {
+    const byProject = new Map<string, Set<string>>();
+    for (const feature of features) {
+      const projectPath = getProjectPath(feature);
+      const branchName = getBranchName(feature);
+      if (!projectPath || !branchName) continue;
+      const branches = byProject.get(projectPath);
+      if (branches) branches.add(branchName);
+      else byProject.set(projectPath, new Set([branchName]));
+    }
+    return new Map(
+      Array.from(byProject, ([projectPath, branches]): [string, string] => [
+        projectPath,
+        Array.from(branches).sort().join('\n'),
+      ])
+    );
+  }, [features]);
+
+  /**
+   * Creating a task on a branch re-reads that project's branches immediately.
+   *
+   * The branch listing is what draws the groups, and on its own it only polls.
+   * A task created on a branch the listing has not seen yet — a worktree minted
+   * for it, or the first task on a branch made in a terminal — otherwise has
+   * nowhere to be drawn until the next poll comes round, which reads as the
+   * task not having been created at all.
+   *
+   * Keyed on the branch names the tasks claim, so it fires when that set
+   * changes and not otherwise. Deliberately not keyed on the listing itself:
+   * a task naming a branch that no longer exists would then refresh forever.
+   */
+  const lastFeatureBranchesRef = useRef(new Map<string, string>());
+  useEffect(() => {
+    const seen = lastFeatureBranchesRef.current;
+    for (const [projectPath, branchKey] of featureBranchesByProject) {
+      if (seen.get(projectPath) === branchKey) continue;
+      seen.set(projectPath, branchKey);
+      void refreshLocalBranches(projectPath);
+    }
+  }, [featureBranchesByProject, refreshLocalBranches]);
 
   /**
    * Primary (checked-out) branch per project, used to bucket features that
@@ -1841,31 +1901,46 @@ export function AppSidebar({ onCreateFeature, onCreateWorktree }: AppSidebarProp
         </Button>
       </div>
 
-      {/* New feature — sits directly under the toolbar row */}
-      <div className="px-2 pb-2 shrink-0">
-        <button
-          type="button"
-          onClick={() => onCreateFeature()}
-          className={cn(
-            'flex w-full items-center gap-2 rounded-md border border-border/60 px-2 py-1.5',
-            'text-[12px] font-medium cursor-pointer',
-            'hover:bg-accent/40 hover:border-border transition-colors duration-100'
-          )}
-          data-testid="sidebar-new-feature"
-        >
-          <Plus className="size-3.5 shrink-0 text-brand-500" />
-          <span className="flex-1 text-left">New feature</span>
-          <kbd className="shrink-0 rounded border border-border/60 px-1 text-[10px] font-mono text-muted-foreground">
-            {isMac ? '⌘N' : 'Ctrl N'}
-          </kbd>
-        </button>
-      </div>
+      {/* New feature — sits directly under the toolbar row. Hidden in research
+          mode, which has no board to add a feature to. */}
+      {!researchMode && (
+        <div className="px-2 pb-2 shrink-0">
+          <button
+            type="button"
+            onClick={() => onCreateFeature()}
+            className={cn(
+              'flex w-full items-center gap-2 rounded-md border border-border/60 px-2 py-1.5',
+              'text-[12px] font-medium cursor-pointer',
+              'hover:bg-accent/40 hover:border-border transition-colors duration-100'
+            )}
+            data-testid="sidebar-new-feature"
+          >
+            <Plus className="size-3.5 shrink-0 text-brand-500" />
+            <span className="flex-1 text-left">New feature</span>
+            <kbd className="shrink-0 rounded border border-border/60 px-1 text-[10px] font-mono text-muted-foreground">
+              {isMac ? '⌘N' : 'Ctrl N'}
+            </kbd>
+          </button>
+        </div>
+      )}
+
+      {/* Research mode takes the whole body — projects, their chats, nothing
+          about any repository. */}
+      {researchMode && (
+        <div className="min-h-0 flex-1 overflow-y-auto px-1" data-testid="sidebar-research-body">
+          <ResearchSidebar />
+        </div>
+      )}
 
       {/* Scrollable body. Right-clicking anywhere that is not a feature row
-          (rows stop propagation) offers the blank-space actions. */}
+          (rows stop propagation) offers the blank-space actions.
+
+          Hidden rather than unmounted in research mode: coming back to the tree
+          should land where you left it, not scrolled to the top. */}
       <div
         className={cn(
           'min-h-0 flex-1 overflow-y-auto px-1',
+          researchMode && 'hidden',
           projectDropTarget?.kind === 'root' && 'bg-brand-500/5'
         )}
         onContextMenu={(event) => blankMenu.openAt(event, 'blank')}
@@ -1886,9 +1961,6 @@ export function AppSidebar({ onCreateFeature, onCreateWorktree }: AppSidebarProp
           renamingGroupId={renamingGroupId}
           setRenamingGroupId={setRenamingGroupId}
         />
-
-        {/* Scratchpad: throwaway chats that belong to no project at all */}
-        <ScratchpadSection />
 
         {/* Tasks: every project, each grouped by branch, then by status.
             The '+' on any header creates a feature already scoped to it. */}
@@ -2029,21 +2101,23 @@ export function AppSidebar({ onCreateFeature, onCreateWorktree }: AppSidebarProp
             <Settings className={cn('size-4', !isSettingsShowing && 'text-muted-foreground')} />
           </Button>
 
-          {/* Scratchpad — a throwaway chat with no project attached. Last in the
-              grid because it is the one tool that is not about this workspace. */}
+          {/* Research — swaps this whole sidebar for the local research
+              projects. Last in the grid because it is the one control that is
+              not about this workspace at all. */}
           <Button
             variant="ghost"
             size="sm"
-            className={cn(
-              'size-8 p-0',
-              isScratchShowing ? 'bg-brand-500/10 text-brand-500' : isScratchOpen && 'bg-muted'
-            )}
-            onClick={() => toggleLayer('scratch')}
-            title="Scratchpad — throwaway chat, no repo, global skills only"
-            data-testid="sidebar-tool-scratch"
-            aria-pressed={isScratchShowing}
+            className={cn('size-8 p-0', researchMode && 'bg-brand-500/10 text-brand-500')}
+            onClick={handleToggleResearch}
+            title={
+              researchMode
+                ? 'Back to projects and tasks'
+                : 'Research — local AI projects, no repository'
+            }
+            data-testid="sidebar-tool-research"
+            aria-pressed={researchMode}
           >
-            <Sparkles className={cn('size-4', !isScratchShowing && 'text-muted-foreground')} />
+            <Bot className={cn('size-4', !researchMode && 'text-muted-foreground')} />
           </Button>
         </div>
 

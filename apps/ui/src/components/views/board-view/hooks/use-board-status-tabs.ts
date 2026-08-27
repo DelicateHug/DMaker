@@ -7,7 +7,6 @@ import type { Column } from '../constants';
  * These correspond to the base column IDs from constants.ts, plus special view tabs
  */
 export type StatusTabId =
-  | 'local'
   | 'backlog'
   | 'planning'
   | 'in_progress'
@@ -24,29 +23,32 @@ export interface StatusTab {
   colorClass: string;
 }
 
-/** Storage key for persisting active tab preference */
-const STORAGE_KEY = 'dmaker:board-status-tab';
-
-/** Default status tab IDs (base columns without pipeline, plus all) */
-const DEFAULT_TAB_IDS: StatusTabId[] = [
-  'local',
-  'backlog',
-  'planning',
-  'in_progress',
-  'waiting_approval',
-  'all',
-];
-
-/** Default active tab (used as ultimate fallback) */
-const DEFAULT_ACTIVE_TAB: StatusTabId = 'waiting_approval';
+/**
+ * Storage key for persisting active tab preference.
+ *
+ * Bumped to v2 to discard selections written by the old "smart" default. That
+ * default picked whichever status happened to hold the most work and then
+ * persisted it, so a great many installs were silently filtered to a single
+ * status they never chose — and every task that finished and moved on vanished
+ * from both the board and the sidebar. Those stored values are not preferences,
+ * so they are not worth carrying forward.
+ */
+const STORAGE_KEY = 'dmaker:board-status-tab:v2';
 
 /**
- * Smart default tab priority order.
- * When smart defaulting is enabled (featureCounts provided), the hook will
- * select the first tab in this list that has features (count > 0).
- * Falls back to the first available tab if none have features.
+ * Default selection: every status.
+ *
+ * A filter is something the user turns on. Defaulting to any single status
+ * hides work by default, and the only sign of it is a funnel icon — which
+ * reads as "my tasks are gone", not "a filter is on".
  */
-const SMART_DEFAULT_PRIORITY: StatusTabId[] = ['waiting_approval', 'in_progress', 'planning'];
+const DEFAULT_ACTIVE_TAB: StatusTabId = 'all';
+
+/** The default selection, preferring 'all' but honouring whatever tabs exist. */
+function defaultTabs(availableTabs: StatusTab[]): StatusTabId[] {
+  if (availableTabs.some((tab) => tab.id === DEFAULT_ACTIVE_TAB)) return [DEFAULT_ACTIVE_TAB];
+  return [availableTabs[0]?.id ?? DEFAULT_ACTIVE_TAB];
+}
 
 /**
  * Validates that a tab ID exists in the available tabs
@@ -55,13 +57,12 @@ function validateTabId(tabId: unknown, availableTabs: StatusTab[]): StatusTabId 
   if (typeof tabId === 'string' && availableTabs.some((tab) => tab.id === tabId)) {
     return tabId as StatusTabId;
   }
-  // Fallback to first available tab or default
-  return availableTabs[0]?.id ?? DEFAULT_ACTIVE_TAB;
+  return defaultTabs(availableTabs)[0];
 }
 
 /**
  * Validates an array of tab IDs against available tabs.
- * Returns only valid tab IDs. Falls back to [DEFAULT_ACTIVE_TAB] if none are valid.
+ * Returns only valid tab IDs. Falls back to the default when none are valid.
  * Also handles backward compatibility with old single-string localStorage format.
  */
 function validateTabIds(tabIds: unknown, availableTabs: StatusTab[]): StatusTabId[] {
@@ -76,43 +77,7 @@ function validateTabIds(tabIds: unknown, availableTabs: StatusTab[]): StatusTabI
   if (typeof tabIds === 'string' && availableTabs.some((tab) => tab.id === tabIds)) {
     return [tabIds as StatusTabId];
   }
-  return [availableTabs[0]?.id ?? DEFAULT_ACTIVE_TAB];
-}
-
-/**
- * Determine the best default tab based on feature counts.
- * Prefers 'waiting_approval' if it has features, then 'in_progress', then 'completed',
- * then first available tab.
- */
-function getSmartDefaultTab(
-  featureCounts: Record<string, number>,
-  availableTabs: StatusTab[]
-): StatusTabId {
-  // Try each priority tab in order
-  for (const tabId of SMART_DEFAULT_PRIORITY) {
-    if ((featureCounts[tabId] ?? 0) > 0 && availableTabs.some((t) => t.id === tabId)) {
-      return tabId;
-    }
-  }
-  // Fallback: first tab with features, or first tab overall
-  for (const tab of availableTabs) {
-    if (tab.id !== 'all' && (featureCounts[tab.id] ?? 0) > 0) {
-      return tab.id;
-    }
-  }
-
-  // Nothing to go on. Falling through to the first tab picks a single status -
-  // 'Local' - and quietly hides every task that is not in it, which reads as
-  // "my tasks are gone" rather than "a filter is on". With no counts to be
-  // smart about, show everything.
-  if (availableTabs.some((tab) => tab.id === 'all')) return 'all';
-  return availableTabs[0]?.id ?? DEFAULT_ACTIVE_TAB;
-}
-
-/** Whether the counts describe any task at all, or are just not loaded yet. */
-function hasAnyFeatures(featureCounts: Record<string, number> | undefined): boolean {
-  if (!featureCounts) return false;
-  return Object.values(featureCounts).some((count) => count > 0);
+  return defaultTabs(availableTabs);
 }
 
 /** Special view tabs appended after column-based tabs */
@@ -169,14 +134,6 @@ export interface UseBoardStatusTabsOptions {
    * Initial active tab (overrides persisted value if provided)
    */
   initialTab?: StatusTabId;
-  /**
-   * Feature counts per column (e.g., { backlog: 3, in_progress: 1, completed: 5 }).
-   * When provided, enables smart defaulting: the hook will prefer 'waiting_approval'
-   * if it has features, fallback to 'in_progress', then 'completed', then
-   * first tab with features.
-   * Only used for initial tab selection when no persisted/explicit tab is set.
-   */
-  featureCounts?: Record<string, number>;
 }
 
 export interface UseBoardStatusTabsReturn {
@@ -243,7 +200,7 @@ export interface UseBoardStatusTabsReturn {
  * - Multi-select tab state with activeTabs array
  * - Backward-compatible activeTab alias for single-select consumers
  * - "All" deselection logic for intuitive multi-select behavior
- * - Smart defaulting: prefers waiting_approval → in_progress → completed → first tab with features
+ * - Defaults to every status; a narrower selection is only ever the user's own
  * - Optional localStorage persistence
  * - Navigation helpers (next/previous)
  * - Dynamic tab generation from Column definitions
@@ -254,7 +211,6 @@ export interface UseBoardStatusTabsReturn {
  * // Multi-select usage
  * const { activeTabs, toggleTab, tabs, isActiveTab, isAllMode } = useBoardStatusTabs({
  *   columns: getColumnsWithPipeline(pipelineConfig),
- *   featureCounts: columnCounts,
  * });
  *
  * // Render multi-select tab buttons
@@ -277,7 +233,7 @@ export interface UseBoardStatusTabsReturn {
 export function useBoardStatusTabs(
   options: UseBoardStatusTabsOptions = {}
 ): UseBoardStatusTabsReturn {
-  const { columns, persist = true, initialTab, featureCounts } = options;
+  const { columns, persist = true, initialTab } = options;
 
   // Generate tabs from columns or use defaults
   const tabs = useMemo<StatusTab[]>(() => {
@@ -286,7 +242,6 @@ export function useBoardStatusTabs(
     }
     // Default tabs when no columns provided
     return [
-      { id: 'local', label: 'Local', colorClass: 'bg-[var(--status-local)]' },
       { id: 'backlog', label: 'Backlog', colorClass: 'bg-[var(--status-backlog)]' },
       { id: 'planning', label: 'Planning', colorClass: 'bg-[var(--status-planning)]' },
       { id: 'in_progress', label: 'In Progress', colorClass: 'bg-[var(--status-in-progress)]' },
@@ -300,7 +255,12 @@ export function useBoardStatusTabs(
   }, [columns]);
 
   // Initialize active tabs state (multi-select: array of StatusTabId)
-  // Priority: initialTab > persisted > smart default (featureCounts) > first tab > default
+  // Priority: initialTab > persisted > every status
+  //
+  // There is deliberately no counts-based "smart" default here. Choosing a
+  // narrower default from whatever happens to hold work means the app filters
+  // itself, persists that choice, and then hides every task that moves out of
+  // the chosen status.
   const [activeTabs, setActiveTabsState] = useState<StatusTabId[]>(() => {
     if (initialTab && tabs.some((t) => t.id === initialTab)) {
       return [initialTab];
@@ -312,48 +272,14 @@ export function useBoardStatusTabs(
         if (validated.length > 0) return validated;
       }
     }
-    // Smart defaulting: prefer waiting_approval, then in_progress, then completed, based on feature counts
-    if (featureCounts) {
-      return [getSmartDefaultTab(featureCounts, tabs)];
-    }
-    return [tabs[0]?.id ?? DEFAULT_ACTIVE_TAB];
+    return defaultTabs(tabs);
   });
-
-  // Track whether smart defaulting has been applied (only on first mount with counts)
-  const [hasAppliedSmartDefault, setHasAppliedSmartDefault] = useState(false);
-
-  // Apply smart default when featureCounts become available after initial render
-  // This handles the case where featureCounts are loaded asynchronously
-  useEffect(() => {
-    // Features load asynchronously, so on the first render the counts are an
-    // empty object - truthy, but describing nothing. Latching the "smart"
-    // default then picks a status at random and never reconsiders once the real
-    // counts arrive, leaving the board filtered to something nothing is in.
-    // Wait for counts that actually describe a task.
-    if (hasAnyFeatures(featureCounts) && !hasAppliedSmartDefault && !initialTab) {
-      // Only apply smart default if no explicit/persisted tab was set
-      if (persist) {
-        const persisted = loadPersistedTabs();
-        if (persisted) {
-          const validated = validateTabIds(persisted, tabs);
-          if (validated.length > 0) {
-            // User has a persisted preference, respect it
-            setHasAppliedSmartDefault(true);
-            return;
-          }
-        }
-      }
-      const smartTab = getSmartDefaultTab(featureCounts ?? {}, tabs);
-      setActiveTabsState([smartTab]);
-      setHasAppliedSmartDefault(true);
-    }
-  }, [featureCounts, hasAppliedSmartDefault, initialTab, persist, tabs]);
 
   // Ensure active tabs are valid when tabs change (e.g., pipeline config changes)
   useEffect(() => {
     const validTabs = activeTabs.filter((id) => tabs.some((t) => t.id === id));
     if (validTabs.length === 0) {
-      setActiveTabsState([tabs[0]?.id ?? DEFAULT_ACTIVE_TAB]);
+      setActiveTabsState(defaultTabs(tabs));
     } else if (validTabs.length !== activeTabs.length) {
       setActiveTabsState(validTabs);
     }

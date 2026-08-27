@@ -9,7 +9,7 @@ import type { AutoModeEvent } from '@/types/electron';
 import type { ModelAlias, CursorModelId, BacklogPlanResult } from '@dmaker/types';
 import { pathsEqual, cn } from '@/lib/utils';
 import { toast } from 'sonner';
-import { getBlockingDependencies } from '@dmaker/dependency-resolver';
+import { getBlockingDependencies, orderFeaturesForExecution } from '@dmaker/dependency-resolver';
 import { BoardBackgroundModal } from '@/components/dialogs';
 import { Button } from '@/components/ui/button';
 import { Activity, PanelRight, GripVertical, LayoutGrid, Rocket, Layers } from 'lucide-react';
@@ -96,11 +96,6 @@ import { createFeatureIssue } from '@/components/views/board-view/shared/create-
 // Stable empty array to avoid infinite loop in selector
 const EMPTY_WORKTREES: ReturnType<ReturnType<typeof useAppStore.getState>['getWorktrees']> = [];
 
-/**
- * Fixed board modes. GitHub is the source of truth for work; local features are
- * the backlog. Users no longer pick a mode, so this is a constant.
- */
-const BOARD_MODES: ('local' | 'github')[] = ['local', 'github'];
 const logger = createLogger('Board');
 
 export function BoardView() {
@@ -344,11 +339,6 @@ export function BoardView() {
   // null means "all projects" (no filtering), otherwise contains specific project IDs
   const [multiSelectedProjectIds, setMultiSelectedProjectIds] = useState<string[] | null>(null);
 
-  // Board modes are no longer user-selectable. The model is GitHub-first with
-  // local features acting as the backlog, which is exactly the old hybrid mode:
-  // local features plus any GitHub issue that has no local counterpart.
-  const activeModes = BOARD_MODES;
-
   // Handle project selection from dropdown
   // Uses board-scoped state instead of global state to allow browsing
   // features from different projects without affecting agent sessions
@@ -455,18 +445,6 @@ export function BoardView() {
     return hookFeatures.filter((f) => f.projectPath && selectedPaths.has(f.projectPath));
   }, [hookFeatures, multiSelectedProjectIds, projects]);
 
-  // Compute lightweight feature counts by status for smart tab defaulting.
-  // This runs before useBoardStatusTabs so the hook can prefer in_progress → completed
-  // as the initial tab when no persisted preference exists.
-  const featureCountsByStatus = useMemo(() => {
-    const counts: Record<string, number> = {};
-    for (const f of projectFilteredFeatures) {
-      const status = f.status || 'backlog';
-      counts[status] = (counts[status] || 0) + 1;
-    }
-    return counts;
-  }, [projectFilteredFeatures]);
-
   // Board status tabs state for single-column mode
   // Note: We initialize with columns after pipelineConfig is loaded below
   const {
@@ -484,7 +462,6 @@ export function BoardView() {
       pipelineConfigByProject[boardSelectedProject?.path ?? ''] || null
     ),
     persist: true,
-    featureCounts: featureCountsByStatus,
   });
 
   // Consume pending board status tab signal (e.g. from clicking a running agent)
@@ -1545,10 +1522,10 @@ export function BoardView() {
           return;
         }
 
-        // Sort by priority (lower number = higher priority, priority 1 is highest)
-        const sortedBacklog = [...backlogFeatures].sort(
-          (a, b) => (a.priority || 999) - (b.priority || 999)
-        );
+        // Runner pickup order: tasks whose parents are all complete first, then
+        // explicit priority, then the stalest — so nothing sits in the backlog
+        // forever just because newer tasks keep arriving.
+        const sortedBacklog = orderFeaturesForExecution(backlogFeatures, currentFeatures);
 
         // Filter out features with blocking dependencies if dependency blocking is enabled
         // NOTE: skipVerificationInAutoMode means "ignore unmet dependency verification" so we
@@ -1671,10 +1648,6 @@ export function BoardView() {
     ? pipelineConfigByProject[boardSelectedProject.path] || null
     : null;
 
-  // Fetch GitHub issues when GitHub mode is active
-  const isGithubModeActive = activeModes.includes('github');
-  const isLocalModeActive = activeModes.includes('local');
-
   // Compute project infos for GitHub issue fetching
   // In multi-project mode, fetch from all selected projects
   const githubProjectInfos = useMemo(() => {
@@ -1690,54 +1663,40 @@ export function BoardView() {
   }, [multiSelectedProjectIds, showAllProjectsInBoard, projects]);
 
   const { githubFeatures, isLoading: isGithubLoading } = useGithubBoardIssues({
-    enabled: isGithubModeActive,
+    enabled: true,
     projectPath: boardSelectedProject?.path || currentProject?.path || null,
     projectInfos: githubProjectInfos.length > 0 ? githubProjectInfos : undefined,
     statusTabs,
   });
 
-  // Merge features based on active modes
-  // Local features with linked githubIssue are preferred over virtual synced features
-  // so that Make/Run works (virtual features don't exist on disk).
-  const modeFilteredFeatures = useMemo(() => {
-    if (!isGithubModeActive) {
-      // Local only mode (default)
-      return projectFilteredFeatures;
-    }
-
-    // Build a set of GitHub issue numbers that have local features linked
-    const localLinkedIssueNumbers = new Set<number>();
+  // The board is this project's tasks plus any GitHub issue that has no task
+  // behind it yet. A task that is already linked to an issue wins over the
+  // virtual card synced for that issue — the virtual ones exist only in memory,
+  // so Make/Run would have nothing on disk to work with.
+  const mergedFeatures = useMemo(() => {
+    const linkedIssueNumbers = new Set<number>();
     for (const f of projectFilteredFeatures) {
       if (f.githubIssue?.number) {
-        localLinkedIssueNumbers.add(f.githubIssue.number);
+        linkedIssueNumbers.add(f.githubIssue.number);
       }
     }
 
-    // Filter out virtual GitHub features that already have a local counterpart
-    const uniqueGithubFeatures = githubFeatures.filter(
-      (gf) => !gf.githubIssue?.number || !localLinkedIssueNumbers.has(gf.githubIssue.number)
+    const unmatchedGithubFeatures = githubFeatures.filter(
+      (gf) => !gf.githubIssue?.number || !linkedIssueNumbers.has(gf.githubIssue.number)
     );
 
-    if (isLocalModeActive) {
-      // Hybrid mode: local features + unmatched GitHub issues
-      return [...projectFilteredFeatures, ...uniqueGithubFeatures];
-    }
-
-    // GitHub only mode: local features with GitHub links + unmatched synced issues
-    const localGithubFeatures = projectFilteredFeatures.filter((f) => f.githubIssue);
-    return [...localGithubFeatures, ...uniqueGithubFeatures];
-  }, [projectFilteredFeatures, githubFeatures, isLocalModeActive, isGithubModeActive]);
+    return [...projectFilteredFeatures, ...unmatchedGithubFeatures];
+  }, [projectFilteredFeatures, githubFeatures]);
 
   // View-layer "never go blank" guard: cache the last non-empty features list.
   // If the data layer momentarily returns an empty array (race conditions during
   // status changes, server cache misses, etc.), the view keeps showing the last
   // known good state instead of blanking the board.
-  const lastGoodFeaturesRef = useRef<Feature[]>(modeFilteredFeatures);
-  if (modeFilteredFeatures.length > 0) {
-    lastGoodFeaturesRef.current = modeFilteredFeatures;
+  const lastGoodFeaturesRef = useRef<Feature[]>(mergedFeatures);
+  if (mergedFeatures.length > 0) {
+    lastGoodFeaturesRef.current = mergedFeatures;
   }
-  const displayFeatures =
-    modeFilteredFeatures.length > 0 ? modeFilteredFeatures : lastGoodFeaturesRef.current;
+  const displayFeatures = mergedFeatures.length > 0 ? mergedFeatures : lastGoodFeaturesRef.current;
 
   // Who tasks can be filtered by. `gh` names the account this machine acts as,
   // which is what lets the filter offer a meaningful "Me"; the rest of the
@@ -1766,7 +1725,6 @@ export function BoardView() {
     activeStatusTabs,
     singleColumnMode: !isAllStatusMode,
     showAllProjects: showAllProjectsInBoard,
-    isGithubMode: isGithubModeActive,
   });
 
   // Use background hook
@@ -1811,9 +1769,6 @@ export function BoardView() {
         model: model ?? ('opus' as const),
         thinkingLevel: thinkingLevel ?? ('none' as const),
         priority: 2,
-        // Local is the backlog: quick-added work starts local and is promoted
-        // to a GitHub issue explicitly.
-        source: 'local' as const,
       };
 
       if (startImmediately) {
@@ -1908,10 +1863,6 @@ export function BoardView() {
       currentGithubUser,
       onAssigneeFilterChange: setAssigneeFilter,
 
-      // Mode filter — fixed, no longer user-selectable
-      activeModes,
-      onModeChange: null,
-
       // Deploy — opens the project view's Deploy pane
       isDeployPanelCollapsed: !isDeployPaneOpen,
       onToggleDeployPanel: () => toggleProjectView('scripts'),
@@ -1978,8 +1929,6 @@ export function BoardView() {
     assigneeFilter,
     assigneeOptions,
     currentGithubUser,
-    // Mode filter deps
-    activeModes,
     // Deploy panel deps
     isDeployPaneOpen,
     // Refresh deps
@@ -2253,8 +2202,6 @@ export function BoardView() {
           projects,
           selectedProject: boardSelectedProject,
           showAllProjectsMode: showAllProjectsInBoard,
-          // Pass active modes so dialog can default source selection
-          activeModes,
           // Sidebar project/branch/status the '+' or "Add task" came from
           context: addFeatureContext,
         }}

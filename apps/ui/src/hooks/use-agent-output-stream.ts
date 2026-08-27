@@ -94,7 +94,29 @@ export function useAgentOutputStream(
         const result = await api.features.getAgentOutput(projectPath, featureId);
         if (cancelled) return;
 
-        const historical = result.success ? result.content || '' : '';
+        let historical = result.success ? result.content || '' : '';
+
+        // No transcript on disk — fall back to whatever summaries the run left
+        // behind. A finished task with nothing to show reads as "the agent did
+        // nothing", when in fact it may simply have no transcript: runs from
+        // before the output-path fix wrote theirs into the status directory
+        // they started in and lost it on the next board refresh. The summary is
+        // written through a freshly resolved path, so it usually survived.
+        if (!historical && api.features.getSummaryFiles) {
+          const summaryResult = await api.features.getSummaryFiles(projectPath, featureId);
+          if (cancelled) return;
+          const summaries = ('summaries' in summaryResult && summaryResult.summaries) || [];
+          if (summaries.length > 0) {
+            historical = [
+              '_No agent transcript was saved for this run — showing the summaries it left behind._',
+              ...summaries
+                .slice()
+                .sort((a, b) => a.timestamp.localeCompare(b.timestamp))
+                .map((entry) => `\n---\n\n### ${entry.timestamp}\n\n${entry.summary}`),
+            ].join('\n');
+          }
+        }
+
         setOutput(historical + streamBufferRef.current);
         streamBufferRef.current = '';
       } catch (loadError) {

@@ -41,6 +41,24 @@ const DEFAULT_STATUS = 'backlog';
 /** Status/directory that deleted-from-the-board features are parked under. */
 const ARCHIVED_STATUS = 'archived';
 
+/**
+ * Statuses that no longer exist, and what they read back as.
+ *
+ * `local` was the staging column for a task that had not been filed as a GitHub
+ * issue yet. Every task is a GitHub issue now, so tasks left in that column read
+ * back as backlog. The on-disk `features/local/` directory is still recognised
+ * (see STATUS_DIR_NAMES) so those features load; the next status change moves
+ * them out of it.
+ */
+const RETIRED_STATUSES: Record<string, string> = {
+  local: 'backlog',
+};
+
+/** Map a retired status onto its replacement, leaving every other status alone. */
+function normalizeStatus<T extends string | undefined>(status: T): T {
+  return (status && RETIRED_STATUSES[status] ? RETIRED_STATUSES[status] : status) as T;
+}
+
 /** Does this path exist? Used to tell a feature directory from a status bucket. */
 async function pathExists(target: string): Promise<boolean> {
   try {
@@ -64,6 +82,30 @@ async function readStatusFromDisk(featureDir: string): Promise<string | null> {
   } catch {
     return null;
   }
+}
+
+/**
+ * Does this directory tree hold any file at all?
+ *
+ * Gates the cleanup of duplicate feature directories. An empty shadow left
+ * behind by an interrupted status change is safe to remove; one that still
+ * holds files is somebody's data — agent output, images, summaries — and the
+ * loser of a duplicate-directory contest is not a good enough reason to
+ * destroy it. Returns true on an unreadable directory, so "cannot tell" never
+ * means "delete it".
+ */
+async function holdsAnyFile(dirPath: string): Promise<boolean> {
+  let entries: any[];
+  try {
+    entries = (await secureFs.readdir(dirPath, { withFileTypes: true })) as any[];
+  } catch {
+    return true;
+  }
+  for (const entry of entries) {
+    if (!entry.isDirectory()) return true;
+    if (await holdsAnyFile(path.join(dirPath, entry.name))) return true;
+  }
+  return false;
 }
 
 /**
@@ -270,14 +312,29 @@ export class FeatureLoader {
         );
 
         // Clean up the stale duplicate in the background — but never a
-        // directory that still holds a feature.json the keeper lacks.
+        // directory that still holds a feature.json the keeper lacks, and
+        // never one that still holds files of any kind.
+        //
+        // This used to delete the loser outright, which made a *listing* of
+        // the board destroy data: a run whose agent output landed in the
+        // status directory it started in left a shadow holding the only copy
+        // of that output, and the next refresh removed it. Only an empty
+        // shell is safe to remove.
         if (!ranking.get(index)?.hasFeatureJson || ranking.get(winner)?.hasFeatureJson) {
-          secureFs.rm(result[index].featureDir, { recursive: true, force: true }).catch((err) => {
-            logger.warn(
-              `Failed to clean up stale duplicate directory ${result[index].featureDir}:`,
-              err
-            );
-          });
+          const staleDir = result[index].featureDir;
+          holdsAnyFile(staleDir)
+            .then((occupied) => {
+              if (occupied) {
+                logger.warn(
+                  `Leaving stale duplicate directory ${staleDir} in place — it still holds files.`
+                );
+                return;
+              }
+              return secureFs.rm(staleDir, { recursive: true, force: true });
+            })
+            .catch((err) => {
+              logger.warn(`Failed to clean up stale duplicate directory ${staleDir}:`, err);
+            });
         }
       }
     }
@@ -811,6 +868,7 @@ export class FeatureLoader {
         if (knownStatus && (!feature.status || feature.status !== knownStatus)) {
           feature.status = knownStatus;
         }
+        feature.status = normalizeStatus(feature.status);
 
         return feature;
       });
@@ -973,7 +1031,7 @@ export class FeatureLoader {
         // Extract only lightweight summary fields
         // Always clear titleGenerating — it's a transient state that doesn't survive restarts
         // Use directory-derived status when available (faster than reading JSON)
-        const effectiveStatus = knownStatus || feature.status;
+        const effectiveStatus = normalizeStatus(knownStatus || feature.status);
         const summary: FeatureListSummary = {
           id: feature.id,
           title: feature.title,
@@ -1162,6 +1220,10 @@ export class FeatureLoader {
 
     logRecoveryWarning(result, `Feature ${featureId}`, logger);
 
+    if (result.data) {
+      result.data.status = normalizeStatus(result.data.status);
+    }
+
     return result.data;
   }
 
@@ -1170,7 +1232,7 @@ export class FeatureLoader {
    */
   async create(projectPath: string, featureData: Partial<Feature>): Promise<Feature> {
     const featureId = featureData.id || this.generateFeatureId(featureData.description);
-    const status = (featureData.status as string) || DEFAULT_STATUS;
+    const status = normalizeStatus(featureData.status as string) || DEFAULT_STATUS;
 
     // Place the new feature directly in the status-based directory
     const featureDir = getFeatureStatusDir(projectPath, status, featureId);
