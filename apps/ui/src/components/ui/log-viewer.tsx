@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo, useEffect, useRef, useCallback, memo } from 'react';
 import {
   ChevronDown,
   ChevronRight,
@@ -25,10 +25,13 @@ import {
   Loader2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Markdown } from '@/components/ui/markdown';
 import {
   parseLogOutput,
   getLogTypeColors,
   shouldCollapseByDefault,
+  isMarkdownEntryType,
+  splitHtmlComments,
   type LogEntry,
   type LogEntryType,
   type ToolCategory,
@@ -222,14 +225,48 @@ function TodoListRenderer({ todos }: { todos: TodoItem[] }) {
   );
 }
 
+/**
+ * Markdown styling for agent prose inside a transcript entry.
+ *
+ * `font-sans` has to come first: `agent-output-modal.tsx` renders LogViewer
+ * inside a `font-mono text-xs` container, so prose inherits monospace without it.
+ * Everything else is a `[&_x]:` arbitrary variant because `@tailwindcss/typography`
+ * is not installed — every `prose-*` class in this repo is inert, including the
+ * ones `markdown-renderer.tsx` sets. `list-disc`/`list-decimal` are needed for the
+ * same reason: Tailwind's preflight strips list markers and nothing restores them.
+ *
+ * These land after `markdown-renderer.tsx`'s own classes in its `cn()` call, so
+ * tailwind-merge resolves the overlapping variants in favour of these.
+ */
+const LOG_MARKDOWN_CLASS = cn(
+  'font-sans text-xs leading-relaxed',
+  // A transcript entry is a paragraph, not a document: everything is a size and
+  // a margin tighter than the renderer's standalone defaults.
+  '[&_h1]:text-sm [&_h1]:mt-2 [&_h1]:mb-1',
+  '[&_h2]:text-sm [&_h2]:mt-2 [&_h2]:mb-1',
+  '[&_h3]:text-xs [&_h3]:mt-1.5 [&_h3]:mb-0.5',
+  '[&_h4]:text-xs [&_h4]:mt-1.5 [&_h4]:mb-0.5',
+  '[&_p]:text-xs [&_p]:my-1',
+  '[&_ul]:my-1 [&_ul]:list-disc [&_ol]:my-1 [&_ol]:list-decimal',
+  '[&_li]:text-xs [&_li]:my-0',
+  '[&_code]:text-[11px] [&_code]:font-mono',
+  '[&_pre]:my-1 [&_pre]:p-2 [&_pre]:text-[11px]',
+  '[&_blockquote]:my-1',
+  '[&_hr]:my-2',
+  // GFM tables — agent summaries lean on them heavily.
+  '[&_table]:my-1 [&_table]:w-full [&_table]:border-collapse [&_table]:text-[11px]',
+  '[&_th]:border [&_th]:border-border [&_th]:px-1.5 [&_th]:py-0.5 [&_th]:text-left',
+  '[&_td]:border [&_td]:border-border [&_td]:px-1.5 [&_td]:py-0.5 [&_td]:align-top'
+);
+
 interface LogEntryItemProps {
   entry: LogEntry;
   isExpanded: boolean;
-  onToggle: () => void;
+  onToggle: (id: string, isExpanded: boolean) => void;
   isEven?: boolean;
 }
 
-function LogEntryItem({ entry, isExpanded, onToggle, isEven = false }: LogEntryItemProps) {
+function LogEntryItemImpl({ entry, isExpanded, onToggle, isEven = false }: LogEntryItemProps) {
   const colors = getLogTypeColors(entry.type);
   const hasContent = entry.content.length > 100;
 
@@ -275,8 +312,12 @@ function LogEntryItem({ entry, isExpanded, onToggle, isEven = false }: LogEntryI
     return entry.content.slice(0, 80) + (entry.content.length > 80 ? '...' : '');
   }, [isExpanded, entry.metadata?.summary, entry.content, isToolCall, summaryText]);
 
-  // Format content - detect and highlight JSON
-  const formattedContent = useMemo(() => {
+  // Agent prose renders as markdown; tool calls, results, stack traces and raw
+  // JSON stay monospaced, because markdown would mangle them.
+  const renderAsMarkdown = isMarkdownEntryType(entry.type) && !isToolCall;
+
+  // Content with the redundant header prefixes stripped, shared by both arms
+  const displayContent = useMemo(() => {
     let content = entry.content;
 
     // For tool_call entries, remove redundant "Tool: X" and "Input:" prefixes
@@ -296,19 +337,48 @@ function LogEntryItem({ entry, isExpanded, onToggle, isEven = false }: LogEntryI
       content = content.trim();
     }
 
+    return content;
+  }, [entry.content, entry.title, isToolCall]);
+
+  // HTML comments have to be pulled out before <Markdown> sees them: react-markdown
+  // does not render hast comment nodes and rehype-sanitize drops them, so the
+  // agent configuration debug header — one `info` entry of nothing but comments —
+  // would render as a badge above an empty body.
+  const markdownSegments = useMemo(
+    () => (renderAsMarkdown ? splitHtmlComments(displayContent) : []),
+    [renderAsMarkdown, displayContent]
+  );
+
+  // Format content - detect and highlight JSON
+  const formattedContent = useMemo(() => {
+    // The JSON splitter below is non-greedy, so on prose it splits `[text](url)`
+    // at `[text]`, `- [x]` at `[x]`, and tears a fenced block containing braces
+    // out to re-emit it as pretty-printed JSON. Markdown never goes through it.
+    if (renderAsMarkdown) return [];
+
+    const content = displayContent;
+
     // Try to find and format JSON blocks
     const jsonRegex = /(\{[\s\S]*?\}|\[[\s\S]*?\])/g;
     let lastIndex = 0;
     const parts: { type: 'text' | 'json'; content: string }[] = [];
 
+    // A failed JSON.parse re-emits its match as text; appending it to an open
+    // text part keeps one <pre> instead of fragmenting the entry into several.
+    const pushText = (text: string) => {
+      const previous = parts[parts.length - 1];
+      if (previous?.type === 'text') {
+        previous.content += text;
+        return;
+      }
+      parts.push({ type: 'text', content: text });
+    };
+
     let match;
     while ((match = jsonRegex.exec(content)) !== null) {
       // Add text before JSON
       if (match.index > lastIndex) {
-        parts.push({
-          type: 'text',
-          content: content.slice(lastIndex, match.index),
-        });
+        pushText(content.slice(lastIndex, match.index));
       }
 
       // Try to parse and format JSON
@@ -320,7 +390,7 @@ function LogEntryItem({ entry, isExpanded, onToggle, isEven = false }: LogEntryI
         });
       } catch {
         // Not valid JSON, treat as text
-        parts.push({ type: 'text', content: match[1] });
+        pushText(match[1]);
       }
 
       lastIndex = match.index + match[1].length;
@@ -328,11 +398,11 @@ function LogEntryItem({ entry, isExpanded, onToggle, isEven = false }: LogEntryI
 
     // Add remaining text
     if (lastIndex < content.length) {
-      parts.push({ type: 'text', content: content.slice(lastIndex) });
+      pushText(content.slice(lastIndex));
     }
 
     return parts.length > 0 ? parts : [{ type: 'text' as const, content }];
-  }, [entry.content, entry.title, isToolCall]);
+  }, [displayContent, renderAsMarkdown]);
 
   // Get colors - use tool category colors for tool_call entries
   const colorParts = toolCategoryColors.split(' ');
@@ -353,7 +423,7 @@ function LogEntryItem({ entry, isExpanded, onToggle, isEven = false }: LogEntryI
       data-testid={`log-entry-${entry.type}`}
     >
       <button
-        onClick={onToggle}
+        onClick={() => onToggle(entry.id, isExpanded)}
         className="w-full px-2.5 py-1.5 flex items-center gap-1.5 text-left"
         data-testid={`log-entry-toggle-${entry.id}`}
       >
@@ -437,6 +507,26 @@ function LogEntryItem({ entry, isExpanded, onToggle, isEven = false }: LogEntryI
           {/* Render TodoWrite entries with special formatting */}
           {parsedTodos ? (
             <TodoListRenderer todos={parsedTodos} />
+          ) : renderAsMarkdown ? (
+            <div className="space-y-1" data-testid="log-entry-markdown">
+              {markdownSegments.map((segment, index) =>
+                segment.kind === 'comment' ? (
+                  // Delimiters kept verbatim: the debug header is deliberately
+                  // written as HTML comments and reads as such.
+                  <pre
+                    key={index}
+                    className="whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed text-muted-foreground/60"
+                    data-testid="log-entry-comment"
+                  >
+                    {segment.text}
+                  </pre>
+                ) : (
+                  <Markdown key={index} className={LOG_MARKDOWN_CLASS}>
+                    {segment.text}
+                  </Markdown>
+                )
+              )}
+            </div>
           ) : (
             <div className="font-mono text-xs space-y-0.5">
               {formattedContent.map((part, index) => (
@@ -461,6 +551,32 @@ function LogEntryItem({ entry, isExpanded, onToggle, isEven = false }: LogEntryI
     </div>
   );
 }
+
+/**
+ * `parseLogOutput` re-runs on every streamed token, so an entry that has not
+ * changed still arrives as a freshly built object and the default shallow
+ * compare never hits — each item would re-parse its markdown per token.
+ * Entry ids are deterministic over content + start line, so comparing the
+ * fields the render actually reads is a sound identity test.
+ */
+function areLogEntryPropsEqual(prev: LogEntryItemProps, next: LogEntryItemProps): boolean {
+  return (
+    prev.isExpanded === next.isExpanded &&
+    prev.isEven === next.isEven &&
+    prev.onToggle === next.onToggle &&
+    prev.entry.id === next.entry.id &&
+    prev.entry.type === next.entry.type &&
+    prev.entry.title === next.entry.title &&
+    prev.entry.content === next.entry.content &&
+    prev.entry.timestamp === next.entry.timestamp &&
+    prev.entry.metadata?.toolName === next.entry.metadata?.toolName &&
+    prev.entry.metadata?.toolCategory === next.entry.metadata?.toolCategory &&
+    prev.entry.metadata?.filePath === next.entry.metadata?.filePath &&
+    prev.entry.metadata?.summary === next.entry.metadata?.summary
+  );
+}
+
+const LogEntryItem = memo(LogEntryItemImpl, areLogEntryPropsEqual);
 
 interface ToolCategoryStats {
   read: number;
@@ -587,9 +703,12 @@ export function LogViewer({ output, className, scrollContainerRef }: LogViewerPr
     });
   }, [entries, hiddenTypes, hiddenCategories, searchQuery]);
 
-  const toggleEntry = (id: string) => {
+  // Stable identity: LogEntryItem is memoized and a fresh handler per render
+  // would defeat it. `wasExpanded` is the item's own `isExpanded` prop, which is
+  // exactly `effectiveExpandedIds.has(id)`, so nothing has to be closed over.
+  const toggleEntry = useCallback((id: string, wasExpanded: boolean) => {
     // When user manually collapses an entry, turn off expand all mode
-    if (effectiveExpandedIds.has(id)) {
+    if (wasExpanded) {
       setExpandAllMode(false);
     }
     setExpandedIds((prev) => {
@@ -601,7 +720,7 @@ export function LogViewer({ output, className, scrollContainerRef }: LogViewerPr
       }
       return next;
     });
-  };
+  }, []);
 
   const expandAll = () => {
     // Enable expand all mode so new entries will also be expanded
@@ -646,6 +765,14 @@ export function LogViewer({ output, className, scrollContainerRef }: LogViewerPr
   };
 
   const hasActiveFilters = searchQuery || hiddenTypes.size > 0 || hiddenCategories.size > 0;
+
+  // --- Markdown chunk prefetch ---
+  // Every <Markdown> mounts its own <Suspense>. Without one fetch up front the
+  // first paint of a transcript shows a pulsing skeleton per prose entry and
+  // settles a frame later, which fights the auto-scroll below.
+  useEffect(() => {
+    void import('./markdown-renderer');
+  }, []);
 
   // --- Auto-scroll: monitor scroll position on the external scroll container ---
   useEffect(() => {
@@ -897,7 +1024,7 @@ export function LogViewer({ output, className, scrollContainerRef }: LogViewerPr
               key={entry.id}
               entry={entry}
               isExpanded={effectiveExpandedIds.has(entry.id)}
-              onToggle={() => toggleEntry(entry.id)}
+              onToggle={toggleEntry}
               isEven={index % 2 === 0}
             />
           ))

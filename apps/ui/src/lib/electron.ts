@@ -36,6 +36,8 @@ import type {
   DetectedGitHubRemote,
   EffectiveGitHubSettings,
   GitHubSettingSources,
+  AgentTree,
+  AgentQuestion,
 } from '@dmaker/types';
 import { GITHUB_SETTINGS_DEFAULTS } from '@dmaker/types';
 import { getJSON, setJSON, removeItem } from './storage';
@@ -259,8 +261,26 @@ export interface RunningAgentsResult {
   error?: string;
 }
 
+export interface AgentTreeResult {
+  success: boolean;
+  /**
+   * `null` is the NORMAL answer, not an error: every run recorded before
+   * agent-tree tracking landed has no tree, and so does any run by a provider
+   * that never sets `parent_tool_use_id`. Callers synthesise a one-node
+   * "Master" tree over the flat transcript in that case.
+   */
+  tree: AgentTree | null;
+  error?: string;
+}
+
 export interface RunningAgentsAPI {
   getAll: () => Promise<RunningAgentsResult>;
+  /**
+   * The parent/child agent tree for one feature run. Served from the live
+   * tracker when the run is in flight, else from the `logs/agent-tree.json`
+   * sidecar. Never cache this — it changes while an agent runs.
+   */
+  getTree: (projectPath: string, featureId: string) => Promise<AgentTreeResult>;
 }
 
 // GitHub types
@@ -622,6 +642,42 @@ export interface StatusFilterOptions {
   includeStatuses?: string[];
 }
 
+export interface QuestionAskedPayload {
+  projectPath: string;
+  featureId: string;
+  question: AgentQuestion;
+}
+
+export interface QuestionAnsweredPayload {
+  projectPath: string;
+  featureId: string;
+  questionId: string;
+  answer?: string;
+  skipped: boolean;
+  /** Derived server-side, never from the client. */
+  answerSource?: 'option' | 'custom' | 'skipped';
+  /** Present only when `answerSource === 'option'`. */
+  selectedOptionIds?: string[];
+}
+
+export interface QuestionExpiredPayload {
+  projectPath: string;
+  featureId: string;
+  count: number;
+}
+
+/**
+ * The three question-lifecycle events, folded into one discriminated stream the
+ * way `onDevServerLogEvent` folds its three. They arrive on separate WebSocket
+ * channels but a questions surface always wants all three, and the raw socket
+ * frame carries the payload only — the `type` here is added by the client.
+ */
+export type FeatureQuestionEvent =
+  | { type: 'feature:question-asked'; payload: QuestionAskedPayload }
+  | { type: 'feature:question-answered'; payload: QuestionAnsweredPayload }
+  /** A run ended with questions still outstanding; they can never be answered. */
+  | { type: 'feature:question-expired'; payload: QuestionExpiredPayload };
+
 export interface FeaturesAPI {
   getAll: (
     projectPath: string,
@@ -688,19 +744,37 @@ export interface FeaturesAPI {
   listArchived: (
     projectPath: string
   ) => Promise<{ success: boolean; features?: Feature[]; error?: string }>;
-  /** Answer (or skip) a question an agent parked on a feature */
+  /**
+   * Answer (or skip) a question an agent parked on a feature.
+   *
+   * Pass `selectedOptionIds` when the user picked from the offered choices —
+   * sending the option's LABEL as `answer` instead makes the server record the
+   * reply as free text (`answerSource: 'custom'`), so the resolved card can no
+   * longer show which choice was taken. A legacy question that carries only
+   * `options: string[]` accepts the positional ids `opt-1`, `opt-2`, …
+   *
+   * There is deliberately no `answerSource` argument: the server derives it and
+   * ignores anything a client sends.
+   */
   answerQuestion: (
     projectPath: string,
     featureId: string,
     questionId: string,
     answer: string,
-    skipped?: boolean
+    skipped?: boolean,
+    selectedOptionIds?: string[]
   ) => Promise<{ success: boolean; feature?: Feature; error?: string }>;
   /** Start or retry background GitHub issue creation for a feature */
   startIssueDraft: (
     projectPath: string,
     featureId: string
   ) => Promise<{ success: boolean; error?: string }>;
+  /**
+   * Subscribe to the question lifecycle. Returns an unsubscribe function.
+   * Without this, a questions surface has no push channel and can only poll —
+   * `subscribeToEvent` is private to the HTTP client.
+   */
+  onQuestionEvent: (callback: (event: FeatureQuestionEvent) => void) => () => void;
 }
 
 export interface AutoModeAPI {
@@ -756,6 +830,13 @@ export interface AutoModeAPI {
   analyzeProject: (
     projectPath: string
   ) => Promise<{ success: boolean; message?: string; error?: string }>;
+  /**
+   * Four arguments, not five. The old trailing `worktreePath` was removed when
+   * the server started deriving workDir from `feature.branchName`, and
+   * `/api/auto-mode/follow-up-feature` reads only these four fields — a fifth
+   * argument goes nowhere. `use-board-actions.ts:1130` still passes one; it is
+   * invisible only because that file opens with `// @ts-nocheck`.
+   */
   followUpFeature: (
     projectPath: string,
     featureId: string,
@@ -3649,7 +3730,8 @@ function createMockFeaturesAPI(): FeaturesAPI {
       featureId: string,
       questionId: string,
       answer: string,
-      skipped?: boolean
+      skipped?: boolean,
+      selectedOptionIds?: string[]
     ) => {
       console.log('[Mock] Answering question:', { projectPath, featureId, questionId });
       const featurePath = `${projectPath}/.dmaker/features/${featureId}/feature.json`;
@@ -3658,9 +3740,50 @@ function createMockFeaturesAPI(): FeaturesAPI {
       const feature = JSON.parse(raw) as Feature;
       const updated: Feature = {
         ...feature,
-        agentQuestions: (feature.agentQuestions || []).map((q) =>
-          q.id === questionId ? { ...q, answer, answeredAt: new Date().toISOString(), skipped } : q
-        ),
+        agentQuestions: (feature.agentQuestions || []).map((q) => {
+          if (q.id !== questionId) return q;
+
+          // Mirror the server's derivation (agent-question-service.ts): the
+          // client never supplies answerSource and anything it sent would be
+          // ignored. A legacy question carrying only `options: string[]` is
+          // read as the positional ids opt-1..opt-N, which is what lets an old
+          // question be answered by option rather than forced to free text.
+          const choices =
+            q.choices ?? (q.options ?? []).map((label, i) => ({ id: `opt-${i + 1}`, label }));
+          const picked = (selectedOptionIds ?? []).filter((id) => choices.some((c) => c.id === id));
+
+          if (skipped) {
+            return {
+              ...q,
+              answer: '',
+              answeredAt: new Date().toISOString(),
+              skipped: true,
+              answerSource: 'skipped' as const,
+              selectedOptionIds: undefined,
+            };
+          }
+          if (picked.length > 0) {
+            return {
+              ...q,
+              answer: picked
+                .map((id) => choices.find((c) => c.id === id)?.label ?? '')
+                .filter(Boolean)
+                .join(', '),
+              answeredAt: new Date().toISOString(),
+              skipped: undefined,
+              answerSource: 'option' as const,
+              selectedOptionIds: picked,
+            };
+          }
+          return {
+            ...q,
+            answer,
+            answeredAt: new Date().toISOString(),
+            skipped: undefined,
+            answerSource: 'custom' as const,
+            selectedOptionIds: undefined,
+          };
+        }),
       };
       mockFileSystem[featurePath] = JSON.stringify(updated);
       return { success: true, feature: updated };
@@ -3670,11 +3793,20 @@ function createMockFeaturesAPI(): FeaturesAPI {
       console.log('[Mock] Starting issue draft:', { projectPath, featureId });
       return { success: true };
     },
+
+    onQuestionEvent: () => {
+      // Mock mode has no WebSocket, so nothing ever pushes. A questions surface
+      // must therefore keep a polling safety net rather than relying on this,
+      // or it will look dead in the entire Playwright suite.
+      return () => {};
+    },
   };
 }
 
 // Mock Running Agents API implementation
-function createMockRunningAgentsAPI(): RunningAgentsAPI {
+// Exported so tests-unit can pin the mock's contract; nothing in src imports it
+// directly (the whole mock surface is reached through getMockElectronAPI).
+export function createMockRunningAgentsAPI(): RunningAgentsAPI {
   return {
     getAll: async () => {
       console.log('[Mock] Getting all running agents');
@@ -3692,6 +3824,14 @@ function createMockRunningAgentsAPI(): RunningAgentsAPI {
         runningAgents,
         totalCount: runningAgents.length,
       };
+    },
+
+    getTree: async (projectPath: string, featureId: string) => {
+      console.log('[Mock] Getting agent tree:', { projectPath, featureId });
+      // `null` is the real server's answer for any run with no tracked tree,
+      // so the mock exercises the caller's synthesised-fallback path — which is
+      // also the path every pre-existing run takes in production.
+      return { success: true, tree: null };
     },
   };
 }

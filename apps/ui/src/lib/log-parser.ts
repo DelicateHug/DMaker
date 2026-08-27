@@ -3,7 +3,9 @@
  * Parses agent output into structured sections for display
  */
 
+import { MASTER_AGENT_ID, MASTER_AGENT_NAME } from '@dmaker/types';
 import type {
+  AgentNodeId,
   CursorStreamEvent,
   CursorSystemEvent,
   CursorAssistantEvent,
@@ -90,6 +92,21 @@ export function extractInlineTimestamp(line: string): {
 }
 
 /**
+ * Regex for the change-of-author marker the server writes into the transcript
+ * immediately after the timestamp marker: `[timestamp:<ISO>] [agent:<id>] ▶ <name>`.
+ *
+ * Only ever matched against a line whose timestamp marker has already been
+ * stripped. Unanchored, model prose that literally opens with "[agent:foo]"
+ * would be read as a handover and every following entry misattributed.
+ */
+const AGENT_MARKER_REGEX = /^\[agent:([^\]]+)\]\s*/;
+
+/**
+ * The display name trailing an agent marker, e.g. "▶ code-reviewer".
+ */
+const AGENT_MARKER_NAME_REGEX = /^▶\s*(.+)$/;
+
+/**
  * Strips timestamp markers from a line for pattern matching
  * Returns the content without the [timestamp:...] prefix
  */
@@ -117,6 +134,103 @@ export type LogEntryType =
   | 'debug'
   | 'warning'
   | 'thinking';
+
+/**
+ * Entry types whose content is agent prose and should render as markdown.
+ * Everything else (tool calls, results, raw JSON, stack traces) stays
+ * monospaced — markdown would mangle it.
+ */
+const MARKDOWN_ENTRY_TYPES: ReadonlySet<LogEntryType> = new Set<LogEntryType>([
+  'info',
+  'success',
+  'prompt',
+]);
+
+/**
+ * Whether an entry of this type should have its content rendered as markdown.
+ */
+export function isMarkdownEntryType(type: LogEntryType): boolean {
+  return MARKDOWN_ENTRY_TYPES.has(type);
+}
+
+/**
+ * One run of entry content, split by whether it is prose or an HTML comment.
+ */
+export interface LogContentSegment {
+  kind: 'markdown' | 'comment';
+  text: string;
+}
+
+/**
+ * Matches an HTML comment, tolerating an unterminated one at end of input:
+ * the transcript is written while it streams, so a half-written
+ * `<!-- Agent Configuration Debug` is a real intermediate state and must not
+ * fall through to the markdown renderer, which would erase it.
+ */
+const HTML_COMMENT_REGEX = /<!--[\s\S]*?(?:-->|$)/g;
+
+/**
+ * Splits entry content into markdown and HTML-comment segments, in source order.
+ *
+ * Markdown renderers drop comments: react-markdown does not render hast comment
+ * nodes and rehype-sanitize's `allowComments` defaults to false. The agent
+ * configuration debug header the server writes is entirely HTML comments and is
+ * classified `info`, so rendering it as markdown would produce an entry with a
+ * badge and an empty body. Callers render `comment` segments themselves.
+ *
+ * Consecutive comments (the debug header is one per line) coalesce into a single
+ * segment so they render as one block, and whitespace-only prose is dropped.
+ */
+export function splitHtmlComments(text: string): LogContentSegment[] {
+  const segments: LogContentSegment[] = [];
+  if (!text) return segments;
+
+  const raw: LogContentSegment[] = [];
+  HTML_COMMENT_REGEX.lastIndex = 0;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = HTML_COMMENT_REGEX.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      raw.push({ kind: 'markdown', text: text.slice(lastIndex, match.index) });
+    }
+    raw.push({ kind: 'comment', text: match[0] });
+    lastIndex = match.index + match[0].length;
+    // A zero-length match cannot advance lastIndex and would spin forever
+    if (match[0].length === 0) HTML_COMMENT_REGEX.lastIndex++;
+  }
+
+  if (lastIndex < text.length) {
+    raw.push({ kind: 'markdown', text: text.slice(lastIndex) });
+  }
+
+  // Whitespace sitting between two comments is the join inside one block, not
+  // prose; carried forward so the coalesced comment keeps its line breaks.
+  let pendingGap = '';
+
+  for (const segment of raw) {
+    if (segment.kind === 'comment') {
+      const previous = segments[segments.length - 1];
+      if (previous?.kind === 'comment') {
+        previous.text += pendingGap + segment.text;
+      } else {
+        segments.push({ kind: 'comment', text: segment.text });
+      }
+      pendingGap = '';
+      continue;
+    }
+
+    if (!segment.text.trim()) {
+      pendingGap = segment.text;
+      continue;
+    }
+
+    pendingGap = '';
+    segments.push({ kind: 'markdown', text: segment.text });
+  }
+
+  return segments;
+}
 
 export type ToolCategory =
   | 'read'
@@ -160,6 +274,10 @@ export interface LogEntryMetadata {
   filePath?: string;
   summary?: string;
   phase?: string;
+  /** Which agent authored this entry. `MASTER_AGENT_ID` unless a marker said otherwise. */
+  agentId?: AgentNodeId;
+  /** Display name for `agentId`, taken from the marker that introduced it. */
+  agentName?: string;
 }
 
 export interface LogEntry {
@@ -1044,6 +1162,12 @@ export function parseLogOutput(rawOutput: string): LogEntry[] {
   // Summary tag accumulation state
   let inSummaryAccumulation = false;
 
+  // Whose prose we are currently reading. Master until a marker says otherwise,
+  // which is what makes transcripts written before markers existed parse exactly
+  // as they did before — the first author never gets one.
+  let currentAgentId: AgentNodeId = MASTER_AGENT_ID;
+  let currentAgentName = MASTER_AGENT_NAME;
+
   const finalizeEntry = () => {
     if (currentEntry && currentContent.length > 0) {
       // Join content and strip any remaining inline timestamp markers for clean display
@@ -1100,7 +1224,17 @@ export function parseLogOutput(rawOutput: string): LogEntry[] {
           finalizeEntry();
           const cursorEntry = normalizeCursorEvent(parsed);
           if (cursorEntry) {
-            entries.push(cursorEntry);
+            // Attributed like every other entry, so consumers never have to
+            // treat a missing agentId as a special case. Cursor emits no
+            // markers, so this is always master.
+            entries.push({
+              ...cursorEntry,
+              metadata: {
+                ...cursorEntry.metadata,
+                agentId: currentAgentId,
+                agentName: currentAgentName,
+              },
+            });
           }
           lineIndex++;
           continue;
@@ -1156,10 +1290,29 @@ export function parseLogOutput(rawOutput: string): LogEntry[] {
     const { timestamp: embeddedTimestamp, content: strippedLine } =
       extractTimestampMarker(trimmedLine);
     // Use the stripped line (without timestamp prefix) for pattern detection
-    const detectLine = strippedLine || trimmedLine;
+    let detectLine = strippedLine || trimmedLine;
 
-    // Detect if this line starts a new entry
-    const lineType = detectEntryType(trimmedLine);
+    // A change of author is only ever announced immediately after a timestamp
+    // marker the server wrote, so the match is anchored there. The id itself is
+    // dropped from the content — the "▶ <name>" that follows it is the readable
+    // divider; a raw tool_use id is not.
+    let isAgentMarkerLine = false;
+    if (embeddedTimestamp) {
+      const agentMarker = strippedLine.match(AGENT_MARKER_REGEX);
+      if (agentMarker) {
+        isAgentMarkerLine = true;
+        currentAgentId = agentMarker[1];
+        detectLine = strippedLine.slice(agentMarker[0].length);
+        currentAgentName = detectLine.match(AGENT_MARKER_NAME_REGEX)?.[1]?.trim() || currentAgentId;
+      }
+    }
+
+    // Detect if this line starts a new entry.
+    // A marker line is typed by what survives the marker, not by the raw line:
+    // every line opening with "[" falls through to `debug`, and the sub-agent
+    // prose that continues this entry would then be monospaced while master's
+    // identical prose renders as markdown.
+    const lineType = detectEntryType(isAgentMarkerLine ? detectLine : trimmedLine);
     const isNewEntry =
       detectLine.startsWith('🔧') ||
       detectLine.startsWith('📋') ||
@@ -1211,6 +1364,8 @@ export function parseLogOutput(rawOutput: string): LogEntry[] {
         metadata: {
           toolName: extractToolName(detectLine),
           phase: extractPhase(detectLine),
+          agentId: currentAgentId,
+          agentName: currentAgentName,
         },
       };
       // Store the content without the timestamp prefix for cleaner display
@@ -1283,6 +1438,10 @@ export function parseLogOutput(rawOutput: string): LogEntry[] {
         title: 'Info',
         content: '',
         ...(inlineTs ? { timestamp: inlineTs } : {}),
+        metadata: {
+          agentId: currentAgentId,
+          agentName: currentAgentName,
+        },
       };
       // Push cleaned content (with timestamp markers stripped) for cleaner display
       currentContent.push(inlineTs ? cleanedLine : line);
@@ -1313,7 +1472,10 @@ function mergeConsecutiveEntries(entries: LogEntry[]): LogEntry[] {
     if (
       current &&
       (current.type === 'debug' || current.type === 'info') &&
-      current.type === entry.type
+      current.type === entry.type &&
+      // Never merge across a change of author: the merged entry keeps the first
+      // one's metadata, so this would file a sub-agent's prose under master.
+      current.metadata?.agentId === entry.metadata?.agentId
     ) {
       // Merge into current - regenerate ID based on merged content
       current.content += '\n\n' + entry.content;

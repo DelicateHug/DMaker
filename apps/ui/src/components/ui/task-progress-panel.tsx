@@ -11,7 +11,7 @@ import type { AutoModeEvent } from '@/types/electron';
 import { Badge } from '@/components/ui/layout';
 import { parseAgentContext } from '@/lib/agent-context-parser';
 
-interface TaskInfo {
+export interface TaskInfo {
   id: string;
   description: string;
   status: 'pending' | 'in_progress' | 'completed';
@@ -45,8 +45,14 @@ interface TaskProgressPanelProps {
 
 /**
  * Converts planSpec data to TaskInfo array with proper status assignment.
+ *
+ * Exported so there is exactly one derivation of per-task status in the UI.
+ * The stored `tasks[i].status` cannot stand in for it: every feature written
+ * before the server began recording task status still reads `'pending'` for
+ * every task, so a surface that trusts the field renders a finished plan as
+ * not-started.
  */
-function planSpecToTasks(
+export function planSpecToTasks(
   planSpec: NonNullable<TaskProgressPanelProps['initialFeature']>['planSpec']
 ): { tasks: TaskInfo[]; currentTaskId: string | null } {
   if (!planSpec?.tasks || planSpec.tasks.length === 0) {

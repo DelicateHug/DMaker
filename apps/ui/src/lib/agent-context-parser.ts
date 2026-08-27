@@ -10,6 +10,8 @@ export interface AgentTaskInfo {
   todos: {
     content: string;
     status: 'pending' | 'in_progress' | 'completed';
+    /** TodoWrite's present-continuous label ("Running the tests"), when it sent one. */
+    activeForm?: string;
   }[];
 
   // Progress stats
@@ -131,13 +133,24 @@ function extractJsonObject(str: string, startIdx: number): string | null {
   return null;
 }
 
+export interface ParseAgentContextOptions {
+  /**
+   * Skip the `- [ ]` markdown scrape when the caller already has the plan's
+   * own task list to show. The scrape reads every checkbox in the transcript,
+   * the plan's own ```tasks fence included, so a surface that renders both
+   * ends up with a second, permanently-pending copy of the plan beside the
+   * real one.
+   */
+  suppressMarkdownTodoFallback?: boolean;
+}
+
 /**
  * Extracts todos from the context content
  * Looks for TodoWrite tool calls in the format:
  * 🔧 Tool: TodoWrite
- * Input: {"todos": [{"content": "...", "status": "..."}]}
+ * Input: {"todos": [{"content": "...", "status": "...", "activeForm": "..."}]}
  */
-function extractTodos(content: string): AgentTaskInfo['todos'] {
+function extractTodos(content: string, options?: ParseAgentContextOptions): AgentTaskInfo['todos'] {
   const todos: AgentTaskInfo['todos'] = [];
 
   // Find all occurrences of TodoWrite tool calls
@@ -167,7 +180,7 @@ function extractTodos(content: string): AgentTaskInfo['todos'] {
     if (jsonStr) {
       try {
         const parsed = JSON.parse(jsonStr) as {
-          todos?: Array<{ content: string; status: string }>;
+          todos?: Array<{ content: string; status: string; activeForm?: string }>;
         };
         if (parsed.todos && Array.isArray(parsed.todos)) {
           // Clear previous todos - we want the latest state
@@ -177,6 +190,7 @@ function extractTodos(content: string): AgentTaskInfo['todos'] {
               todos.push({
                 content: item.content,
                 status: item.status as 'pending' | 'in_progress' | 'completed',
+                activeForm: item.activeForm,
               });
             }
           }
@@ -190,7 +204,7 @@ function extractTodos(content: string): AgentTaskInfo['todos'] {
   }
 
   // Also try to extract from markdown task lists as fallback
-  if (todos.length === 0) {
+  if (todos.length === 0 && !options?.suppressMarkdownTodoFallback) {
     const markdownTodos = content.matchAll(/- \[([ xX])\] (.+)/g);
     for (const match of markdownTodos) {
       const isCompleted = match[1].toLowerCase() === 'x';
@@ -349,7 +363,10 @@ function calculateProgress(
 /**
  * Parses agent context content and extracts useful information
  */
-export function parseAgentContext(content: string): AgentTaskInfo {
+export function parseAgentContext(
+  content: string,
+  options?: ParseAgentContextOptions
+): AgentTaskInfo {
   if (!content || !content.trim()) {
     return {
       todos: [],
@@ -358,7 +375,7 @@ export function parseAgentContext(content: string): AgentTaskInfo {
     };
   }
 
-  const todos = extractTodos(content);
+  const todos = extractTodos(content, options);
   const toolCallCount = countToolCalls(content);
   const lastToolUsed = getLastToolUsed(content);
   const currentPhase = getCurrentPhase(content);

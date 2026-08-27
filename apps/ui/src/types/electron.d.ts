@@ -226,6 +226,13 @@ export type AutoModeEvent = AutoModeEventBase &
         projectId?: string;
         projectPath?: string;
         content: string;
+        /**
+         * Which agent produced this. OPTIONAL on purpose: pipeline steps, spec
+         * regeneration and every session recorded before agent-tree tracking
+         * landed emit none, and those must attribute to the root, not vanish.
+         */
+        agentId?: string;
+        agentName?: string;
       }
     | {
         type: 'auto_mode_tool';
@@ -234,6 +241,11 @@ export type AutoModeEvent = AutoModeEventBase &
         projectPath?: string;
         tool: string;
         input: unknown;
+        /** Optional for the same reason as on `auto_mode_progress`. */
+        agentId?: string;
+        agentName?: string;
+        /** The SDK `tool_use` block id. For a `Task` block it is the child's node id. */
+        toolUseId?: string;
       }
     | {
         type: 'auto_mode_feature_complete';
@@ -299,7 +311,17 @@ export type AutoModeEvent = AutoModeEventBase &
         type: 'plan_auto_approved';
         featureId: string;
         projectPath?: string;
-        planContent: string;
+        /**
+         * Only the full-plan approval path carries the plan. The lite/adaptive
+         * path — the default — sends `mode`/`tasksCount`/`message` and no
+         * `planContent` at all, so declaring it required was a lie about the
+         * wire that any consumer reading it would have tripped over.
+         */
+        planContent?: string;
+        /** Lite planning is the only depth that auto-approves without a plan body. */
+        mode?: 'lite';
+        tasksCount?: number;
+        message?: string;
       }
     | {
         type: 'plan_approved';
@@ -325,7 +347,12 @@ export type AutoModeEvent = AutoModeEventBase &
     | {
         type: 'planning_started';
         featureId: string;
-        mode: 'lite' | 'spec' | 'full';
+        projectPath?: string;
+        /**
+         * `'adaptive'` is what the default `planningStrategy: 'auto'` emits and
+         * was missing here; a client narrowing on this union never saw it.
+         */
+        mode: 'lite' | 'spec' | 'full' | 'adaptive';
         message: string;
       }
     | {
@@ -349,7 +376,14 @@ export type AutoModeEvent = AutoModeEventBase &
         type: 'auto_mode_phase_complete';
         featureId: string;
         projectPath?: string;
-        phaseNumber: number;
+        /** The raw phase label, e.g. 'Phase 1' or 'Foundation'. */
+        phase?: string;
+        /**
+         * Omitted when the label has no digits. A phase named 'Foundation' used
+         * to emit no event at all; it now emits one with no number, so this can
+         * no longer be required.
+         */
+        phaseNumber?: number;
       }
     | {
         type: 'auto_mode_resuming_features';
@@ -368,6 +402,18 @@ export type AutoModeEvent = AutoModeEventBase &
         projectPath?: string;
         metrics: import('@dmaker/types').ExecutionMetrics;
       }
+    // The agent-tree trio. Imported rather than re-declared: the server emits
+    // straight from these same interfaces, so a hand-copy here could only ever
+    // drift. All three ride inside the existing 'auto-mode:event' envelope —
+    // there are no new EventType names.
+    //
+    // `auto_mode_subagent_started` can arrive TWICE for one agentId: once as an
+    // inferred placeholder, once when the Task block explaining it turns up.
+    // Upsert by agentId, never append. `auto_mode_agent_tree` is the late-join
+    // resync and replaces the tree wholesale.
+    | import('@dmaker/types').AutoModeSubagentStartedEvent
+    | import('@dmaker/types').AutoModeSubagentFinishedEvent
+    | import('@dmaker/types').AutoModeAgentTreeEvent
   );
 
 export type SpecRegenerationEvent =
@@ -732,6 +778,19 @@ export interface FileDiffsResult {
   files?: FileStatus[];
   hasChanges?: boolean;
   error?: string;
+  /**
+   * Worktree these diffs actually came from, or `null` when the request fell
+   * back to the main checkout. Only `/api/worktree/diffs` sets these two;
+   * `/api/git/diffs` leaves them absent because it is always given a path.
+   */
+  worktreePath?: string | null;
+  /**
+   * The feature's worktree could not be resolved and the MAIN CHECKOUT's
+   * changes were returned instead. This used to be a silent `success: true`,
+   * which is why the Diff tab had never once shown a feature's own worktree.
+   * Anything rendering these diffs must say so when this is true.
+   */
+  usedMainCheckout?: boolean;
 }
 
 export interface FileDiffResult {
@@ -787,9 +846,15 @@ export interface WorktreeAPI {
   }>;
 
   // Get worktree info for a feature
+  //
+  // `branchName` is optional but strongly wanted: worktree directories are named
+  // after the SANITISED BRANCH, never the feature id, so resolving by featureId
+  // alone misses for every real feature and silently reports the main checkout.
+  // Pass `feature.branchName` and the server resolves through git first.
   getInfo: (
     projectPath: string,
-    featureId: string
+    featureId: string,
+    branchName?: string
   ) => Promise<{
     success: boolean;
     worktreePath?: string;
@@ -799,7 +864,11 @@ export interface WorktreeAPI {
   }>;
 
   // Get worktree status (changed files, commits)
-  getStatus: (projectPath: string, featureId: string) => Promise<WorktreeStatus>;
+  getStatus: (
+    projectPath: string,
+    featureId: string,
+    branchName?: string
+  ) => Promise<WorktreeStatus>;
 
   // List all feature worktrees
   list: (projectPath: string) => Promise<{
@@ -964,14 +1033,19 @@ export interface WorktreeAPI {
     error?: string;
   }>;
 
-  // Get file diffs for a feature worktree
-  getDiffs: (projectPath: string, featureId: string) => Promise<FileDiffsResult>;
+  // Get file diffs for a feature worktree. See `getInfo` on why branchName matters.
+  getDiffs: (
+    projectPath: string,
+    featureId: string,
+    branchName?: string
+  ) => Promise<FileDiffsResult>;
 
   // Get diff for a specific file in a worktree
   getFileDiff: (
     projectPath: string,
     featureId: string,
-    filePath: string
+    filePath: string,
+    branchName?: string
   ) => Promise<FileDiffResult>;
 
   // Pull latest changes from remote

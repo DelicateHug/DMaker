@@ -1,4 +1,5 @@
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 import rehypeSanitize from 'rehype-sanitize';
 import { cn } from '@/lib/utils';
@@ -48,7 +49,12 @@ export function MarkdownRenderer({ children, className }: MarkdownRendererProps)
         className
       )}
     >
-      <ReactMarkdown rehypePlugins={[rehypeRaw, rehypeSanitize]}>{children}</ReactMarkdown>
+      {/* react-markdown is CommonMark-only: without remark-gfm the pipe tables,
+          task lists, strikethrough and bare URLs that agent summaries are full of
+          all render as literal text. */}
+      <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw, rehypeSanitize]}>
+        {children}
+      </ReactMarkdown>
     </div>
   );
 }

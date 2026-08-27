@@ -34,6 +34,11 @@ import type {
   UpdateIdeaInput,
   ConvertToFeatureOptions,
   NotificationsAPI,
+  FeatureQuestionEvent,
+  QuestionAskedPayload,
+  QuestionAnsweredPayload,
+  QuestionExpiredPayload,
+  RunningAgentsAPI,
 } from './electron';
 import type { Message, SessionListItem, ResearchProjectInfo } from '@/types/electron';
 import type { Feature, ClaudeUsageResponse, CodexUsageResponse } from '@/store/app-store';
@@ -183,6 +188,12 @@ type EventType =
   | 'agent:stream'
   | 'auto-mode:event'
   | 'feature:status-changed'
+  // The server has emitted these three since the question lifecycle landed, but
+  // they were missing here, so `subscribeToEvent` could not be called with them
+  // at all — a silent no-op that reads as "the events don't fire".
+  | 'feature:question-asked'
+  | 'feature:question-answered'
+  | 'feature:question-expired'
   | 'session:state-changed'
   | 'usage:updated'
   | 'suggestions:event'
@@ -1436,17 +1447,37 @@ export class HttpApiClient implements ElectronAPI {
       featureId: string,
       questionId: string,
       answer: string,
-      skipped?: boolean
+      skipped?: boolean,
+      selectedOptionIds?: string[]
     ) =>
+      // No answerSource here on purpose — the server derives it and ignores
+      // anything the client sends.
       this.post('/api/features/answer-question', {
         projectPath,
         featureId,
         questionId,
         answer,
         skipped,
+        selectedOptionIds,
       }),
     startIssueDraft: (projectPath: string, featureId: string) =>
       this.post('/api/features/issue-draft', { projectPath, featureId }),
+    onQuestionEvent: (callback: (event: FeatureQuestionEvent) => void) => {
+      const unsubAsked = this.subscribeToEvent('feature:question-asked', (payload) =>
+        callback({ type: 'feature:question-asked', payload: payload as QuestionAskedPayload })
+      );
+      const unsubAnswered = this.subscribeToEvent('feature:question-answered', (payload) =>
+        callback({ type: 'feature:question-answered', payload: payload as QuestionAnsweredPayload })
+      );
+      const unsubExpired = this.subscribeToEvent('feature:question-expired', (payload) =>
+        callback({ type: 'feature:question-expired', payload: payload as QuestionExpiredPayload })
+      );
+      return () => {
+        unsubAsked();
+        unsubAnswered();
+        unsubExpired();
+      };
+    },
   };
 
   // Auto Mode API
@@ -1542,10 +1573,10 @@ export class HttpApiClient implements ElectronAPI {
       worktreePath: string,
       options?: object
     ) => this.post('/api/worktree/merge', { projectPath, branchName, worktreePath, options }),
-    getInfo: (projectPath: string, featureId: string) =>
-      this.post('/api/worktree/info', { projectPath, featureId }),
-    getStatus: (projectPath: string, featureId: string) =>
-      this.post('/api/worktree/status', { projectPath, featureId }),
+    getInfo: (projectPath: string, featureId: string, branchName?: string) =>
+      this.post('/api/worktree/info', { projectPath, featureId, branchName }),
+    getStatus: (projectPath: string, featureId: string, branchName?: string) =>
+      this.post('/api/worktree/status', { projectPath, featureId, branchName }),
     list: (projectPath: string) => this.post('/api/worktree/list', { projectPath }),
     listAll: (projectPath: string, includeDetails?: boolean, forceRefreshGitHub?: boolean) =>
       this.post('/api/worktree/list', { projectPath, includeDetails, forceRefreshGitHub }),
@@ -1582,13 +1613,14 @@ export class HttpApiClient implements ElectronAPI {
       this.post('/api/worktree/push', { worktreePath, force }),
     createPR: (worktreePath: string, options?: any) =>
       this.post('/api/worktree/create-pr', { worktreePath, ...options }),
-    getDiffs: (projectPath: string, featureId: string) =>
-      this.post('/api/worktree/diffs', { projectPath, featureId }),
-    getFileDiff: (projectPath: string, featureId: string, filePath: string) =>
+    getDiffs: (projectPath: string, featureId: string, branchName?: string) =>
+      this.post('/api/worktree/diffs', { projectPath, featureId, branchName }),
+    getFileDiff: (projectPath: string, featureId: string, filePath: string, branchName?: string) =>
       this.post('/api/worktree/file-diff', {
         projectPath,
         featureId,
         filePath,
+        branchName,
       }),
     pull: (worktreePath: string) => this.post('/api/worktree/pull', { worktreePath }),
     checkoutBranch: (worktreePath: string, branchName: string) =>
@@ -1762,18 +1794,14 @@ export class HttpApiClient implements ElectronAPI {
   };
 
   // Running Agents API
-  runningAgents = {
-    getAll: (): Promise<{
-      success: boolean;
-      runningAgents?: Array<{
-        featureId: string;
-        projectPath: string;
-        projectName: string;
-        isAutoMode: boolean;
-      }>;
-      totalCount?: number;
-      error?: string;
-    }> => this.get('/api/running-agents'),
+  runningAgents: RunningAgentsAPI = {
+    getAll: () => this.get('/api/running-agents'),
+    // Deliberately `post`, not `cachedPost`: the tree grows while an agent runs,
+    // and '/api/running-agents' is already a runner-proxy prefix, so under
+    // start.ps1 this reaches the process that actually holds the live tracker
+    // rather than the app server's up-to-10s-stale sidecar.
+    getTree: (projectPath: string, featureId: string) =>
+      this.post('/api/running-agents/tree', { projectPath, featureId }),
   };
 
   // GitHub API
