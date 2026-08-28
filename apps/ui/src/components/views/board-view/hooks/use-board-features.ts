@@ -96,8 +96,12 @@ interface UseBoardFeaturesProps {
  * Convert a lightweight FeatureListSummary into a Feature-compatible object.
  * Placeholder values are used for heavy fields (description, steps, etc.)
  * so the board can render immediately with titles and statuses.
+ *
+ * Exported for unit test only — every field dropped here is a field the board
+ * cannot show until Phase 2 lands, and that is exactly the class of bug this
+ * function keeps growing.
  */
-function summaryToFeature(
+export function summaryToFeature(
   summary: FeatureListSummary,
   projectPath?: string,
   projectName?: string
@@ -120,6 +124,12 @@ function summaryToFeature(
     branchName: summary.branchName,
     error: summary.error,
     startedAt: summary.startedAt,
+    // How many agent questions are still unanswered. The server computes this
+    // in the summary (feature-loader.ts) precisely so the board can flag a
+    // task blocked on a human during this fast first render — dropping it here
+    // meant the badge could not appear until the slow Phase 2 load landed and
+    // brought `agentQuestions` with it.
+    pendingQuestionCount: summary.pendingQuestionCount,
     // GitHub collaboration fields
     githubIssue: summary.githubIssue,
     claimedBy: summary.claimedBy,

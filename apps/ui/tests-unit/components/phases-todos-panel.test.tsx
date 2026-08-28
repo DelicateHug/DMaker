@@ -132,7 +132,17 @@ describe('PhasesTodosPanel phases', () => {
     // parsed tasks is the expected outcome for a perfectly good plan.
     await renderPanel(
       makeFeature({
-        planSpec: { content: '1. Add the table\n2. Wire the route', tasks: [] },
+        // Spelled out in full, unlike the looser fixtures above: an empty
+        // `tasks` widens to never[], which is comparable to nothing, so the
+        // Partial<Feature> assertion stops covering for the missing PlanSpec
+        // fields the moment the list is empty.
+        planSpec: {
+          status: 'generated',
+          version: 1,
+          reviewedByUser: false,
+          content: '1. Add the table\n2. Wire the route',
+          tasks: [],
+        },
       } as Partial<Feature>)
     );
 

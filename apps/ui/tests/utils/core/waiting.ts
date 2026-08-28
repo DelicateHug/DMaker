@@ -68,7 +68,11 @@ export async function waitForSplashScreenToDisappear(page: Page, timeout = 5000)
         }
 
         // Check for splash screen element by looking for fixed inset-0 with high z-index
-        const allDivs = document.querySelectorAll('div');
+        //
+        // Array.from rather than iterating the NodeList directly: tsconfig's
+        // `lib` is ["dom", "ESNext"] with no "dom.iterable", so NodeListOf has
+        // no [Symbol.iterator] as far as the compiler is concerned.
+        const allDivs = Array.from(document.querySelectorAll('div'));
         for (const div of allDivs) {
           const style = window.getComputedStyle(div);
           const classes = div.className || '';

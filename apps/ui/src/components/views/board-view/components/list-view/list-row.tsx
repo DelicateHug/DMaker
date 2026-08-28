@@ -15,6 +15,7 @@ import {
   Star,
   User,
   Clock,
+  MessageCircleQuestion,
 } from 'lucide-react';
 import type { Feature } from '@/store/app-store';
 import { RowActions, type RowActionHandlers } from './row-actions';
@@ -192,6 +193,73 @@ const IndicatorBadges = memo(function IndicatorBadges({
         ))}
       </TooltipProvider>
     </div>
+  );
+});
+
+/**
+ * How many agent questions this feature is still waiting on a human for.
+ *
+ * Two sources, in order, because the board renders in two phases:
+ *
+ * 1. `pendingQuestionCount` — computed server-side and carried on the list
+ *    summary, so a blocked task is flagged during the fast Phase 1 render,
+ *    before any `agentQuestions` array exists on the client.
+ * 2. `agentQuestions` — the full feature from Phase 2, which carries the
+ *    questions themselves but *not* the summary's precomputed count.
+ *
+ * `expiredAt` counts as resolved here, matching agent-output-modal's tab badge:
+ * the run that asked has ended, so nobody can answer it any more, and counting
+ * it left the badge permanently lit on a finished task. The server's summary
+ * count predates `expiredAt` and does not subtract it — a Phase 1 board can
+ * therefore briefly over-count an expired question until Phase 2 lands.
+ */
+export function getPendingQuestionCount(feature: Feature): number {
+  const summaryCount = feature.pendingQuestionCount;
+  if (typeof summaryCount === 'number') return summaryCount;
+
+  const questions = feature.agentQuestions;
+  if (!Array.isArray(questions)) return 0;
+  return questions.filter((q) => q && !q.answeredAt && !q.skipped && !q.expiredAt).length;
+}
+
+/**
+ * QuestionBadge flags a task that is blocked on a human answer.
+ *
+ * Amber rather than one of the `--status-*` tokens: this is not an error and
+ * not a warning about the work, it is "your turn". It sits in the badge row so
+ * the block is visible on the board itself rather than only after opening the
+ * task and finding the Questions tab.
+ */
+const QuestionBadge = memo(function QuestionBadge({ feature }: { feature: Feature }) {
+  const count = getPendingQuestionCount(feature);
+  if (count <= 0) return null;
+
+  return (
+    <TooltipProvider delayDuration={200}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <div
+            className={cn(
+              'inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px]',
+              'bg-amber-500/10 text-amber-600 dark:text-amber-400',
+              'border border-amber-500/20'
+            )}
+            data-testid={`list-row-questions-${feature.id}`}
+            data-question-count={count}
+          >
+            <MessageCircleQuestion className="w-3 h-3" />
+            <span className="font-medium">{count}</span>
+          </div>
+        </TooltipTrigger>
+        <TooltipContent side="top" className="text-xs">
+          <p>
+            {count === 1
+              ? 'Waiting on you: 1 unanswered question'
+              : `Waiting on you: ${count} unanswered questions`}
+          </p>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 });
 
@@ -615,6 +683,7 @@ export const ListRow = memo(function ListRow({
           blockingDependencies={blockingDependencies}
           isCurrentAutoTask={isCurrentAutoTask}
         />
+        <QuestionBadge feature={feature} />
         <ModelBadge feature={feature} />
         <CostBadge feature={feature} />
         <ProjectBadge feature={feature} showAllProjects={showAllProjects} />

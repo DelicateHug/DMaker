@@ -196,6 +196,12 @@ interface AgentOutputModalProps {
     agentQuestions?: AgentQuestion[];
     githubIssue?: { number: number };
     githubIssueDraft?: GitHubIssueDraft;
+    /**
+     * Needed by the Changes view: worktrees live at `.worktrees/<branchName>`,
+     * so without it GitDiffPanel is served the main checkout's diff instead of
+     * the feature's own.
+     */
+    branchName?: string;
   };
 }
 
@@ -849,6 +855,7 @@ export function AgentOutputModal({
               <GitDiffPanel
                 projectPath={projectPath}
                 featureId={featureId}
+                branchName={featureProp?.branchName}
                 compact={false}
                 useWorktrees={true}
                 className="border-0 rounded-lg"

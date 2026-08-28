@@ -58,12 +58,18 @@ test.describe('Settings startup sync race', () => {
   }) => {
     // Gate the real settings request so we can assert file contents before allowing hydration.
     let requestCount = 0;
-    let allowSettingsRequestResolve: (() => void) | null = null;
+
+    // Declared with `!` rather than `= null`: a Promise executor runs
+    // synchronously, so both are assigned before the next line, but the
+    // compiler cannot see that. Initialising them to null instead left the
+    // narrowed type at `null` by the time the test calls them, so
+    // `allowSettingsRequestResolve?.()` below was a call on `never`.
+    let allowSettingsRequestResolve!: () => void;
     const allowSettingsRequest = new Promise<void>((resolve) => {
       allowSettingsRequestResolve = resolve;
     });
 
-    let sawThreeFailuresResolve: (() => void) | null = null;
+    let sawThreeFailuresResolve!: () => void;
     const sawThreeFailures = new Promise<void>((resolve) => {
       sawThreeFailuresResolve = resolve;
     });
@@ -72,7 +78,7 @@ test.describe('Settings startup sync race', () => {
       requestCount++;
       if (requestCount <= 3) {
         if (requestCount === 3) {
-          sawThreeFailuresResolve?.();
+          sawThreeFailuresResolve();
         }
         await route.abort('failed');
         return;
@@ -97,7 +103,7 @@ test.describe('Settings startup sync race', () => {
     expect(settingsAfterFailures.projects?.[0]?.path).toBe(FIXTURE_PROJECT_PATH);
 
     // Allow the settings request to succeed so the app can hydrate and proceed.
-    allowSettingsRequestResolve?.();
+    allowSettingsRequestResolve();
 
     // App should eventually render a main view after settings hydration.
     await page

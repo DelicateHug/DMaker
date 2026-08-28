@@ -1,0 +1,19 @@
+{
+  // tsconfig.json includes only src/, so nothing ever typechecked the test
+  // suites: a spec could call a helper that does not exist and only fail at
+  // runtime, after Playwright had booted a server. This config is what
+  // `npm run typecheck:tests` points at.
+  //
+  // Covers both suites at once — tests/ (Playwright) and tests-unit/ (vitest).
+  // src/ stays out of `include` because `npm run typecheck` already checks it;
+  // the src files these tests import are still pulled into the program and
+  // checked as dependencies.
+  //
+  // src/**/*.d.ts is the exception: ambient declarations are reached by no
+  // import, so without them every src file this program pulls in loses
+  // `import.meta.env` (src/vite-env.d.ts) and the '*.css' module shim
+  // (src/types/css.d.ts), and reports errors that `npm run typecheck` does not.
+  "extends": "./tsconfig.json",
+  "include": ["tests/**/*", "tests-unit/**/*", "src/**/*.d.ts"],
+  "exclude": ["node_modules", "dist", "dist-electron"]
+}

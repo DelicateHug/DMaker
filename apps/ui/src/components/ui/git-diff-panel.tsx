@@ -29,6 +29,16 @@ interface GitDiffPanelProps {
   compact?: boolean;
   /** Whether worktrees are enabled - if false, shows diffs from main project */
   useWorktrees?: boolean;
+  /**
+   * The feature's git branch, when it has one.
+   *
+   * Worktrees are created at `.worktrees/<sanitised branchName>`, not
+   * `.worktrees/<featureId>`, so without this the server cannot find the
+   * worktree, silently falls back to the main checkout and returns *its*
+   * changes with `success: true`. Passing it is the difference between showing
+   * the feature's work and showing whatever is uncommitted on main.
+   */
+  branchName?: string;
 }
 
 function FileDiffSection({
@@ -110,6 +120,7 @@ export function GitDiffPanel({
   className,
   compact = true,
   useWorktrees = true,
+  branchName,
 }: GitDiffPanelProps) {
   const [isExpanded, setIsExpanded] = useState(!compact);
   const [isLoading, setIsLoading] = useState(false);
@@ -129,7 +140,10 @@ export function GitDiffPanel({
         if (!api?.worktree?.getDiffs) {
           throw new Error('Worktree API not available');
         }
-        const result = await api.worktree.getDiffs(projectPath, featureId);
+        // branchName is what lets the server locate the worktree; without it
+        // it resolves `.worktrees/<featureId>`, misses, and falls back to the
+        // main checkout's diff without reporting that it did so.
+        const result = await api.worktree.getDiffs(projectPath, featureId, branchName);
         if (result.success) {
           setFiles(result.files || []);
           setDiffContent(result.diff || '');
@@ -154,7 +168,7 @@ export function GitDiffPanel({
     } finally {
       setIsLoading(false);
     }
-  }, [projectPath, featureId, useWorktrees]);
+  }, [projectPath, featureId, useWorktrees, branchName]);
 
   // Load diffs when expanded
   useEffect(() => {
