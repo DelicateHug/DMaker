@@ -99,10 +99,10 @@ export const READ_ONLY_BLOCKED: ReadOnlyRule[] = [
     what: 'Resuming interrupted features',
   },
   { methods: ['POST'], path: '/api/auto-mode/analyze-project', what: 'Analyzing the project' },
-  // Reserved for the message-injection endpoint, to be added with it:
-  //   { methods: ['POST'], path: '/api/auto-mode/inject-message', what: 'Messaging a running agent' }
-  // A rule for a route that doesn't exist yet would refuse a 404 with a
-  // "read-only" message, which reads as a permissions bug rather than a typo.
+  // Dev and prod share one runner, so an ungated inject-message would let the
+  // read-only half steer prod's live agents — and its fallback branch starts a
+  // whole follow-up run. Blocked with the route, in the same commit.
+  { methods: ['POST'], path: '/api/auto-mode/inject-message', what: 'Messaging a running agent' },
   //
   // `/api/features/answer-question` is deliberately absent: it is proxied to the
   // runner instead. Blocking it would stop the dev half answering a question

@@ -315,4 +315,141 @@ describe('auto-mode-service.ts', () => {
       expect(duration).toBeLessThan(200);
     });
   });
+
+  describe('injectMessage', () => {
+    /**
+     * A running feature, as `runAgent` leaves it: the channel and the session
+     * controls are only ever attached to a Claude run on the main stream loop.
+     */
+    const addRunningFeature = (
+      svc: AutoModeService,
+      featureId: string,
+      extra: Record<string, unknown> = {}
+    ) => {
+      const map = (svc as any).runningFeatures as Map<string, Record<string, unknown>>;
+      map.set(featureId, {
+        featureId,
+        projectPath: '/test/project',
+        worktreePath: null,
+        branchName: null,
+        abortController: new AbortController(),
+        isAutoMode: false,
+        startTime: Date.now(),
+        ...extra,
+      });
+      return map.get(featureId)!;
+    };
+
+    const fakeChannel = (accepts = true) => ({
+      push: vi.fn().mockReturnValue(accepts),
+      close: vi.fn(),
+    });
+
+    it('reports not_running when nothing is running for the feature', async () => {
+      const result = await service.injectMessage('nobody-home', 'hello');
+
+      expect(result).toEqual({ status: 'not_running', interrupted: false });
+    });
+
+    it('reports unsupported_provider when the run has no channel', async () => {
+      // Every non-Claude provider, a pipeline step and a nested run land here.
+      addRunningFeature(service, 'codex-run');
+
+      const result = await service.injectMessage('codex-run', 'hello');
+
+      expect(result).toEqual({ status: 'unsupported_provider', interrupted: false });
+    });
+
+    it('delivers the message to the live session', async () => {
+      const channel = fakeChannel();
+      addRunningFeature(service, 'claude-run', { inputChannel: channel });
+
+      const result = await service.injectMessage('claude-run', 'also update the README');
+
+      expect(channel.push).toHaveBeenCalledWith('also update the README');
+      expect(result).toEqual({ status: 'delivered', interrupted: false });
+    });
+
+    it('reports run_finished when the session has already settled', async () => {
+      // The window between the UI reading "running" and this call is real: the
+      // channel closes itself on the last result.
+      const channel = fakeChannel(false);
+      addRunningFeature(service, 'claude-run', { inputChannel: channel });
+
+      const result = await service.injectMessage('claude-run', 'too late');
+
+      expect(result).toEqual({ status: 'run_finished', interrupted: false });
+    });
+
+    it('interrupts only after the message is queued', async () => {
+      const order: string[] = [];
+      const channel = {
+        push: vi.fn(() => {
+          order.push('push');
+          return true;
+        }),
+        close: vi.fn(),
+      };
+      const sessionControl = {
+        interrupt: vi.fn(async () => {
+          order.push('interrupt');
+        }),
+      };
+      addRunningFeature(service, 'claude-run', { inputChannel: channel, sessionControl });
+
+      const result = await service.injectMessage('claude-run', 'stop and read this', {
+        interrupt: true,
+      });
+
+      // Interrupting first would end the turn with nothing behind it and leave
+      // the CLI idle.
+      expect(order).toEqual(['push', 'interrupt']);
+      expect(result).toEqual({ status: 'delivered', interrupted: true });
+    });
+
+    it('keeps the delivery when the interrupt rejects', async () => {
+      const channel = fakeChannel();
+      const sessionControl = { interrupt: vi.fn().mockRejectedValue(new Error('no transport')) };
+      addRunningFeature(service, 'claude-run', { inputChannel: channel, sessionControl });
+
+      const result = await service.injectMessage('claude-run', 'carry on', { interrupt: true });
+
+      // The message is queued and runs when the current turn ends on its own.
+      expect(result).toEqual({ status: 'delivered', interrupted: false });
+    });
+
+    it('does not ask for an interrupt the provider never offered', async () => {
+      const channel = fakeChannel();
+      addRunningFeature(service, 'claude-run', { inputChannel: channel });
+
+      const result = await service.injectMessage('claude-run', 'carry on', { interrupt: true });
+
+      expect(result).toEqual({ status: 'delivered', interrupted: false });
+    });
+  });
+
+  describe('stopFeature', () => {
+    it('closes the input channel as well as aborting', async () => {
+      const close = vi.fn();
+      const map = (service as any).runningFeatures as Map<string, Record<string, unknown>>;
+      const abortController = new AbortController();
+      map.set('claude-run', {
+        featureId: 'claude-run',
+        projectPath: '/test/project',
+        abortController,
+        isAutoMode: false,
+        startTime: Date.now(),
+        inputChannel: { push: vi.fn(), close },
+      });
+
+      const stopped = await service.stopFeature('claude-run');
+
+      // The entry is about to be deleted, so the only other reference to the
+      // channel lives inside a stream loop that has just been aborted.
+      expect(stopped).toBe(true);
+      expect(abortController.signal.aborted).toBe(true);
+      expect(close).toHaveBeenCalledTimes(1);
+      expect(map.has('claude-run')).toBe(false);
+    });
+  });
 });

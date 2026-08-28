@@ -61,6 +61,14 @@ describe('execution-routes.ts', () => {
       expect(findReadOnlyRule('POST', '/api/features/answer-question')).toBeNull();
     });
 
+    // Dev and prod share one runner, so an ungated inject-message would let the
+    // read-only half steer prod's live agents — and its fallback branch starts
+    // a whole follow-up run.
+    it('blocks messaging a running agent', () => {
+      expect(findReadOnlyRule('POST', '/api/auto-mode/inject-message')).not.toBeNull();
+      expect(findReadOnlyRule('POST', '/api/auto-mode/inject-message')?.what).toContain('agent');
+    });
+
     it('allows stopping something that is already running', () => {
       expect(findReadOnlyRule('POST', '/api/auto-mode/stop-feature')).toBeNull();
       expect(findReadOnlyRule('POST', '/api/agent/stop')).toBeNull();
@@ -100,6 +108,12 @@ describe('execution-routes.ts', () => {
 
     it('proxies the running-features read that pairs with them', () => {
       expect(shouldProxyToRunner('/api/features/running')).toBe(true);
+    });
+
+    // The input channel only exists in the process running the agent, so an
+    // injection served anywhere else reaches no session at all.
+    it('proxies messaging a running agent, via the auto-mode prefix', () => {
+      expect(shouldProxyToRunner('/api/auto-mode/inject-message')).toBe(true);
     });
 
     // The agent waiting on the answer lives in the runner; answering anywhere

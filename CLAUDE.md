@@ -256,6 +256,41 @@ research project keeps its memory in `.claude/memory/` instead.
 project stops and deletes its chats, and only the process running them can stop
 them.
 
+### Asking the User
+
+A running implementation agent can park on a decision it cannot make from the
+repository. `apps/server/src/lib/ask-user-tool.ts` builds an **in-process MCP
+server** (`createSdkMcpServer` + `tool()`) exposing `mcp__dmaker_ask__ask_user`,
+whose input mirrors the SDK's own `AskUserQuestion` shape field for field -
+that is the shape the model is trained on. The model must never offer an
+"Other" option: the panel always renders its own free-text path, so an invented
+one is a visible duplicate (`normaliseAskQuestion` strips it anyway).
+
+Four things about it are load-bearing:
+
+- **It is not `canUseTool`.** Intercepting the SDK's built-in AskUserQuestion
+  works, but `canUseTool` is per-run and global - taking it would make DMaker
+  the permission handler for every tool call, against the bypassPermissions
+  stance. The MCP channel copies the shape instead of hijacking the tool.
+- **The call blocks, with a 30-minute ceiling.** It reuses
+  `AutoModeService.waitForQuestionAnswer` (the plan-approval waiter) and
+  `AgentQuestionService`, so numbering, choices, `answerSource` and the
+  `feature:question-*` events are the same lifecycle the panel already drives.
+  Unbounded would hold a worktree, a concurrency slot and a subprocess, and
+  under `maxConcurrency` it deadlocks the queue behind whoever went to lunch.
+  A wait that ends unanswered stamps `expiredAt`, or the question sits
+  outstanding on the board for ever.
+- **It survives a read-only run.** `createAutoModeOptions` drops every MCP
+  server when `readOnly` is set; the ask server is exempted explicitly, because
+  it writes a question and blocks and so cannot touch the tree. Dropping it
+  would remove the tool on exactly the unowned tasks most likely to need a
+  human.
+- **It is Claude-only and budgeted.** Only `ClaudeProvider` has an in-process
+  MCP transport (`ExecuteOptions.inProcessMcpServers`), and a run may call it
+  at most three times. `DEFAULT_ASK_USER_INSTRUCTIONS` in `libs/prompts` ships
+  with the server or not at all - without the prompt text the tool is simply
+  never called - and a unit test pins the two together.
+
 ### Context Files
 
 Project-specific rules are stored in `.dmaker/context/` and automatically loaded into agent prompts via `loadContextFiles()` from `@dmaker/utils`.
@@ -281,6 +316,8 @@ Use `resolveModelString()` from `@dmaker/model-resolver` to convert model aliase
   printed in the boot log.
 - `ALLOWED_ROOT_DIRECTORY` - Restrict file operations to specific directory
 - `DMAKER_MOCK_AGENT=true` - Enable mock agent mode for CI testing
+- `DMAKER_DISABLE_ASK_USER=true` - Kill switch for the `ask_user` channel. Agents
+  stop being able to block on a human decision (see "Asking the user" below)
 - `VITE_HOSTNAME` - Hostname for frontend API URLs (default: localhost)
 
 ### Dev/prod pair (set by `start.ps1`)

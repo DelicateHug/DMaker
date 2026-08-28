@@ -23,6 +23,7 @@ import type {
   PipelineStepProgress,
   FeatureStatusWithPipeline,
   PipelineConfig,
+  ProviderSessionControl,
   ThinkingLevel,
   BuildCommand,
 } from '@dmaker/types';
@@ -32,6 +33,7 @@ import {
   stripProviderPrefix,
   DEFAULT_BUILD_COMMANDS,
   MASTER_AGENT_ID,
+  MASTER_AGENT_NAME,
 } from '@dmaker/types';
 import {
   buildPromptWithImages,
@@ -76,6 +78,7 @@ import type { EventEmitter } from '../lib/events.js';
 import {
   createAutoModeOptions,
   createCustomOptions,
+  getModelForUseCase,
   validateWorkingDirectory,
 } from '../lib/sdk-options.js';
 import { FeatureLoader } from './feature-loader.js';
@@ -101,6 +104,17 @@ import {
   detectAuthMethod,
 } from '../lib/execution-metrics.js';
 import { AgentTreeTracker } from '../lib/agent-tree.js';
+import {
+  AgentInputChannel,
+  agentInputMessageText,
+  messageInjectionEnabled,
+} from '../lib/agent-input-channel.js';
+import {
+  createAskUserMcpServer,
+  isAskUserDisabled,
+  ASK_USER_MCP_SERVER_NAME,
+} from '../lib/ask-user-tool.js';
+import { getAgentQuestionService } from './agent-question-service.js';
 import { discoverFilesystemAgents, resolveAgentDependencies } from '../lib/agent-discovery.js';
 import { getNotificationService } from './notification-service.js';
 import { invalidateFeaturesCache } from '../routes/features.js';
@@ -305,24 +319,32 @@ interface RunningFeature {
   tasksTotal?: number;
   currentTaskId?: string;
   /**
-   * Queue that feeds extra user turns into the live CLI session. Declared here
-   * so the state has one home; nothing writes it until mid-flight injection
-   * ships, and everything reading it must tolerate `undefined`.
+   * Queue that feeds extra user turns into the live CLI session, and the object
+   * that decides when that session's child process dies. Present only for a
+   * Claude run on the main stream loop; everything reading it must tolerate
+   * `undefined` (a pipeline step, a nested run and every other provider have
+   * none).
    */
   inputChannel?: AgentInputChannel;
-  /** Handle for interrupting the current turn, from the same deferred work. */
-  sessionControl?: AgentSessionControl;
+  /** The live session's controls — `interrupt()` shortens the current turn. */
+  sessionControl?: ProviderSessionControl;
 }
 
-/** Placeholder for the injection queue. See {@link RunningFeature.inputChannel}. */
-interface AgentInputChannel {
-  push(message: string): void;
-  close(): void;
-}
+/** What {@link AutoModeService.injectMessage} did with a message. */
+export type InjectMessageStatus =
+  /** Queued against the live session; it runs as the next turn. */
+  | 'delivered'
+  /** Nothing is running for this feature — the caller should follow up instead. */
+  | 'not_running'
+  /** Running, but with no channel: another provider, a nested run, mock mode. */
+  | 'unsupported_provider'
+  /** Running, but the session has already settled and stdin is closed. */
+  | 'run_finished';
 
-/** Placeholder for the SDK's turn-level control. See {@link RunningFeature.sessionControl}. */
-interface AgentSessionControl {
-  interrupt(): Promise<void>;
+export interface InjectMessageResult {
+  status: InjectMessageStatus;
+  /** True when the current turn was actually interrupted for this message. */
+  interrupted: boolean;
 }
 
 interface AutoLoopState {
@@ -1371,12 +1393,70 @@ Complete the pipeline step instructions above. Review the previous work and appl
     this.cancelPlanApproval(featureId);
 
     running.abortController.abort();
+    // Belt to runAgent's braces. The run's `finally` is what guarantees the
+    // channel closes, but this entry is about to be deleted, so close it here
+    // too rather than rely on the only remaining reference living inside a
+    // stream loop that has just been aborted.
+    running.inputChannel?.close();
 
     // Remove from running features immediately to allow resume
     // The abort signal will still propagate to stop any ongoing execution
     this.runningFeatures.delete(featureId);
 
     return true;
+  }
+
+  /**
+   * Send a message to a feature's live agent session.
+   *
+   * The message runs as the NEXT full turn of the same conversation — the SDK
+   * queues an incoming user message and only picks it up when the current turn
+   * ends. `interrupt: true` shortens that wait by ending the current turn; it
+   * is not mid-sentence steering, and nothing in the SDK offers that.
+   *
+   * Only a Claude run on the main stream loop has a channel. A pipeline step, a
+   * nested run (plan revision, per-task, continuation) and every non-Claude
+   * provider open their own CLI processes with no channel, so a message sent
+   * during those phases would queue against an idle process — this reports
+   * `unsupported_provider` instead of pretending otherwise.
+   */
+  async injectMessage(
+    featureId: string,
+    message: string,
+    options?: { interrupt?: boolean }
+  ): Promise<InjectMessageResult> {
+    const running = this.runningFeatures.get(featureId);
+    if (!running) return { status: 'not_running', interrupted: false };
+
+    const channel = running.inputChannel;
+    if (!channel) return { status: 'unsupported_provider', interrupted: false };
+
+    if (!channel.push(message)) {
+      // The session settled between the UI reading "running" and this call.
+      return { status: 'run_finished', interrupted: false };
+    }
+
+    let interrupted = false;
+    if (options?.interrupt && running.sessionControl) {
+      // AFTER the push, never before: interrupting an empty queue ends the turn
+      // with nothing behind it and leaves the CLI idle. A rejection here is
+      // tolerated — the message is already queued and will run when the current
+      // turn ends on its own.
+      try {
+        await running.sessionControl.interrupt();
+        interrupted = true;
+      } catch (error) {
+        logger.warn(
+          `Interrupt failed for feature ${featureId}; the message is still queued:`,
+          error
+        );
+      }
+    }
+
+    logger.info(
+      `Injected a message into the live session for ${featureId} (interrupted: ${interrupted})`
+    );
+    return { status: 'delivered', interrupted };
   }
 
   /**
@@ -3528,6 +3608,56 @@ This mock response was generated because DMAKER_MOCK_AGENT=true was set.
     // Load MCP servers from settings (global setting only)
     const mcpServers = await getMCPServersFromSettings(this.settingsService, '[AutoMode]');
 
+    // The ask_user channel: an in-process MCP server that lets this run park on
+    // a decision it cannot make from the repository. One per run, because the
+    // handler closes over this feature's identity.
+    //
+    // It is deliberately built from the SAME `projectPath` the teardown's
+    // expirePendingQuestions uses. Writing the question under one path and
+    // expiring it under another would leave a ghost question outstanding on a
+    // task nobody is working on.
+    //
+    // Claude-only, and gated before anything is built. Only the Claude SDK has
+    // an in-process MCP transport; a Codex or Cursor run would be handed the
+    // tool NAME in its allowed-tools list and the prompt text telling it to use
+    // the tool, with nothing behind either - so it would try, fail, and burn
+    // turns. The model is resolved the same way createAutoModeOptions resolves
+    // it, by name only, because getProviderForModel throws on a disconnected
+    // CLI and this decision must never be able to fail a run.
+    const askChannelSupported =
+      ProviderFactory.getProviderForModelName(getModelForUseCase('auto', model)) === 'claude';
+
+    const askUserServer =
+      !askChannelSupported || isAskUserDisabled()
+        ? undefined
+        : createAskUserMcpServer({
+            ask: async (questions) =>
+              getAgentQuestionService(
+                this.events,
+                this.featureLoader,
+                this.settingsService ?? undefined,
+                this
+              ).ask(projectPath, featureId, 'implementation', questions),
+            // The 30-minute ceiling lives here, shared with plan approval: an
+            // unbounded await holds a worktree, a concurrency slot and a
+            // subprocess, and under maxConcurrency it deadlocks the queue behind
+            // whoever went to lunch.
+            waitForAnswer: (questionId) =>
+              this.waitForQuestionAnswer(featureId, projectPath, questionId),
+            expire: (questionIds) =>
+              getAgentQuestionService(
+                this.events,
+                this.featureLoader,
+                this.settingsService ?? undefined,
+                this
+              ).expire(projectPath, featureId, questionIds),
+          });
+    // Only the Claude provider has an in-process MCP transport; the CLI-backed
+    // providers ignore this field, which is why the channel is Claude-only.
+    const inProcessMcpServers = askUserServer
+      ? { [ASK_USER_MCP_SERVER_NAME]: askUserServer }
+      : undefined;
+
     // Load skills configuration
     const skillsConfig = this.settingsService
       ? await getSkillsConfiguration(this.settingsService)
@@ -3683,6 +3813,9 @@ This mock response was generated because DMAKER_MOCK_AGENT=true was set.
       agents: featureEnableSubagents ? filteredSubagents : undefined,
       agentSystemPrompt: ownershipSystemPrompt,
       readOnly,
+      // Turns on the tool, its allowedTools entry and the prompt text that
+      // makes the model use it, all three together.
+      askUserServer,
     });
 
     // Extract model, maxTurns, and allowedTools from SDK options
@@ -3789,6 +3922,7 @@ This mock response was generated because DMAKER_MOCK_AGENT=true was set.
       systemPrompt: sdkOptions.systemPrompt,
       settingSources: sdkOptions.settingSources,
       mcpServers: Object.keys(mcpServers).length > 0 ? mcpServers : undefined,
+      inProcessMcpServers,
       thinkingLevel: options?.thinkingLevel,
       agents: featureEnableSubagents ? filteredSubagents : undefined,
     };
@@ -3903,6 +4037,56 @@ This mock response was generated because DMAKER_MOCK_AGENT=true was set.
         : `string, ${(sdkOptions.systemPrompt as string)?.length ?? 0} chars`;
     agentDebugLines.push(`<!-- SDK System Prompt: ${spPreview} -->`);
     agentDebugLines.push('');
+
+    // Mid-flight steering. Opening a channel switches the SDK into
+    // streaming-input mode: the only mode that accepts extra user turns, and
+    // the only one where `interrupt()` works. It also removes the SDK's own
+    // "close stdin on the first result" safety net, so from here the channel
+    // owns the child process's lifetime and MUST be closed at every exit — the
+    // result handler, the `break streamLoop`, and the `finally`. Only Claude
+    // has the mechanism; every other provider keeps the plain string prompt and
+    // answers `unsupported_provider` to an injection.
+    //
+    // The callbacks below run only when the SDK pulls from the channel, which
+    // cannot happen before the stream loop starts, so the transcript state they
+    // close over (declared just after this) is always initialised by then.
+    const inputChannel =
+      provider.getName() === 'claude' && messageInjectionEnabled()
+        ? new AgentInputChannel({
+            onDeliver: (message) => {
+              const text = agentInputMessageText(message).trim();
+              if (!text) return;
+              // An injected turn belongs to the conversation's root, not to
+              // whichever sub-agent happened to be talking last.
+              appendTranscriptMarker(MASTER_AGENT_ID, agentTree.nameOf(MASTER_AGENT_ID));
+              if (responseText.length > 0 && !responseText.endsWith('\n')) {
+                responseText += '\n';
+              }
+              responseText += `\n[timestamp:${new Date().toISOString()}] 💬 Message from you\n${text}\n`;
+              scheduleWrite();
+              this.emitAutoModeEvent('auto_mode_progress', {
+                featureId,
+                projectPath,
+                agentId: MASTER_AGENT_ID,
+                agentName: MASTER_AGENT_NAME,
+                content: `\n💬 ${text}\n`,
+              });
+            },
+            onClose: (reason) => {
+              logger.info(`Input channel closed for feature ${featureId} (${reason})`);
+            },
+          })
+        : null;
+
+    if (inputChannel) {
+      executeOptions.followUpInput = inputChannel;
+      executeOptions.onSessionControl = (control) => {
+        const current = this.runningFeatures.get(featureId);
+        if (current) current.sessionControl = control;
+      };
+      const runningForChannel = this.runningFeatures.get(featureId);
+      if (runningForChannel) runningForChannel.inputChannel = inputChannel;
+    }
 
     logger.info(`Starting stream for feature ${featureId}...`);
     const stream = provider.executeQuery(executeOptions);
@@ -4180,6 +4364,13 @@ This mock response was generated because DMAKER_MOCK_AGENT=true was set.
             numTurns: resultMsg.num_turns,
             durationMs: resultMsg.duration_ms,
           });
+          // CLOSE SITE 1 of 3. Deliberately here, above the subtype checks:
+          // `error_max_turns` and `error_during_execution` end the session
+          // exactly as `success` does, and a channel that only counted
+          // successes would hold an ~11MB CLI process open forever after a run
+          // that hit its turn cap. The channel closes itself only once every
+          // submitted turn has produced its result and nothing is queued.
+          inputChannel?.noteResult();
         }
         // Log raw stream event for debugging
         appendRawEvent(msg);
@@ -4447,6 +4638,7 @@ After generating the revised spec, output:
                           allowedTools: allowedTools,
                           abortController,
                           mcpServers: Object.keys(mcpServers).length > 0 ? mcpServers : undefined,
+                          inProcessMcpServers,
                         });
 
                         let revisionText = '';
@@ -4630,6 +4822,7 @@ After generating the revised spec, output:
                       settingSources: sdkOptions.settingSources,
                       thinkingLevel: executeOptions.thinkingLevel,
                       mcpServers: Object.keys(mcpServers).length > 0 ? mcpServers : undefined,
+                      inProcessMcpServers,
                     });
 
                     let taskOutput = '';
@@ -4781,6 +4974,7 @@ After generating the revised spec, output:
                     settingSources: sdkOptions.settingSources,
                     thinkingLevel: executeOptions.thinkingLevel,
                     mcpServers: Object.keys(mcpServers).length > 0 ? mcpServers : undefined,
+                    inProcessMcpServers,
                   });
 
                   for await (const msg of continuationStream) {
@@ -4836,6 +5030,11 @@ After generating the revised spec, output:
                 }
 
                 logger.info(`Implementation completed for feature ${featureId}`);
+                // CLOSE SITE 2 of 3. This branch leaves the main stream without
+                // ever seeing its `result`, so nothing else would ever close
+                // the channel before the `finally` — and the session it feeds
+                // is finished with either way.
+                inputChannel?.close();
                 // Exit the original stream loop since continuation is done
                 break streamLoop;
               }
@@ -4959,6 +5158,12 @@ After generating the revised spec, output:
         metrics,
       });
     } finally {
+      // CLOSE SITE 3 of 3, and FIRST here on purpose. Everything below can
+      // throw or await; an input channel left open holds the CLI child process
+      // alive with nothing reading its output, which is a leaked ~11MB process
+      // per run. Closing is idempotent, so the two sites above are the normal
+      // path and this is the guarantee.
+      inputChannel?.close();
       clearInterval(metricsInterval);
       clearInterval(streamHeartbeat);
       // ALWAYS clear pending timeouts to prevent memory leaks

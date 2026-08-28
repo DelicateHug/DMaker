@@ -82,6 +82,70 @@ describe('claude-provider.ts', () => {
       });
     });
 
+    describe('MCP servers', () => {
+      function mockOneMessage() {
+        vi.mocked(sdk.query).mockReturnValue(
+          (async function* () {
+            yield { type: 'text', text: 'test' };
+          })()
+        );
+      }
+
+      function optionsPassedToSdk(): Record<string, unknown> {
+        const call = vi.mocked(sdk.query).mock.calls[0][0] as { options: Record<string, unknown> };
+        return call.options;
+      }
+
+      it('merges in-process servers with the configured ones', async () => {
+        // In-process entries carry a live server instance and cannot travel in
+        // `mcpServers` - the Codex and Cursor providers serialise that field
+        // into config files on disk. This is the one place the two meet.
+        mockOneMessage();
+        const instance = { type: 'sdk', name: 'dmaker_ask', instance: {} };
+
+        await collectAsyncGenerator(
+          provider.executeQuery({
+            prompt: 'Test',
+            model: 'claude-opus-4-6',
+            cwd: '/test',
+            mcpServers: { other: { type: 'stdio', command: 'node', args: ['s.js'] } },
+            inProcessMcpServers: { dmaker_ask: instance },
+          })
+        );
+
+        expect(optionsPassedToSdk().mcpServers).toEqual({
+          other: { type: 'stdio', command: 'node', args: ['s.js'] },
+          dmaker_ask: instance,
+        });
+      });
+
+      it('passes an in-process server through on its own', async () => {
+        mockOneMessage();
+        const instance = { type: 'sdk', name: 'dmaker_ask', instance: {} };
+
+        await collectAsyncGenerator(
+          provider.executeQuery({
+            prompt: 'Test',
+            model: 'claude-opus-4-6',
+            cwd: '/test',
+            inProcessMcpServers: { dmaker_ask: instance },
+          })
+        );
+
+        expect(optionsPassedToSdk().mcpServers).toEqual({ dmaker_ask: instance });
+      });
+
+      it('omits mcpServers entirely when neither kind is supplied', async () => {
+        mockOneMessage();
+
+        await collectAsyncGenerator(
+          provider.executeQuery({ prompt: 'Test', model: 'claude-opus-4-6', cwd: '/test' })
+        );
+
+        expect(optionsPassedToSdk()).not.toHaveProperty('mcpServers');
+      });
+    });
+
     it('should not include allowedTools when not specified (caller decides via sdk-options)', async () => {
       vi.mocked(sdk.query).mockReturnValue(
         (async function* () {
@@ -207,6 +271,160 @@ describe('claude-provider.ts', () => {
         options: expect.objectContaining({
           maxTurns: 20,
         }),
+      });
+    });
+
+    describe('mid-flight input (streaming-input mode)', () => {
+      /** Drain whatever the provider handed the SDK as its prompt. */
+      async function collectPrompt(): Promise<unknown[]> {
+        const prompt = vi.mocked(sdk.query).mock.calls[0][0].prompt;
+        const collected: unknown[] = [];
+        for await (const message of prompt as AsyncIterable<unknown>) {
+          collected.push(message);
+        }
+        return collected;
+      }
+
+      it('keeps a plain string prompt when no followUpInput is supplied', async () => {
+        // Load-bearing: a string keeps the SDK's `isSingleUserTurn` true, which
+        // is what auto-closes stdin on the first result. Switching every run to
+        // a generator would take that safety net away from runs that never
+        // wanted steering.
+        vi.mocked(sdk.query).mockReturnValue(
+          (async function* () {
+            yield { type: 'text', text: 'test' };
+          })()
+        );
+
+        const generator = provider.executeQuery({
+          prompt: 'Test',
+          model: 'claude-opus-4-6',
+          cwd: '/test',
+        });
+        await collectAsyncGenerator(generator);
+
+        expect(typeof vi.mocked(sdk.query).mock.calls[0][0].prompt).toBe('string');
+        expect(vi.mocked(sdk.query).mock.calls[0][0].prompt).toBe('Test');
+      });
+
+      it('passes a non-string prompt and forwards later messages in order', async () => {
+        vi.mocked(sdk.query).mockReturnValue(
+          (async function* () {
+            yield { type: 'text', text: 'test' };
+          })()
+        );
+
+        const generator = provider.executeQuery({
+          prompt: 'Do the thing',
+          model: 'claude-opus-4-6',
+          cwd: '/test',
+          followUpInput: (async function* () {
+            yield { content: 'actually, also this' };
+            yield { content: 'and this' };
+          })(),
+        });
+        await collectAsyncGenerator(generator);
+
+        const promptArg = vi.mocked(sdk.query).mock.calls[0][0].prompt;
+        expect(typeof promptArg).not.toBe('string');
+
+        const messages = await collectPrompt();
+        expect(messages).toEqual([
+          {
+            type: 'user',
+            session_id: '',
+            message: { role: 'user', content: 'Do the thing' },
+            parent_tool_use_id: null,
+          },
+          {
+            type: 'user',
+            session_id: '',
+            message: { role: 'user', content: 'actually, also this' },
+            parent_tool_use_id: null,
+          },
+          {
+            type: 'user',
+            session_id: '',
+            message: { role: 'user', content: 'and this' },
+            parent_tool_use_id: null,
+          },
+        ]);
+      });
+
+      it('still sends the image prompt first when steering is on', async () => {
+        vi.mocked(sdk.query).mockReturnValue(
+          (async function* () {
+            yield { type: 'text', text: 'test' };
+          })()
+        );
+
+        const arrayPrompt = [
+          { type: 'text', text: 'Describe this' },
+          { type: 'image', source: { type: 'base64', data: '...' } },
+        ];
+
+        const generator = provider.executeQuery({
+          prompt: arrayPrompt as any,
+          model: 'claude-opus-4-6',
+          cwd: '/test',
+          followUpInput: (async function* () {
+            yield { content: 'follow-up' };
+          })(),
+        });
+        await collectAsyncGenerator(generator);
+
+        const messages = (await collectPrompt()) as Array<{ message: { content: unknown } }>;
+        expect(messages).toHaveLength(2);
+        expect(messages[0].message.content).toEqual(arrayPrompt);
+      });
+
+      it('hands back session controls only when the SDK offers them', async () => {
+        // The control methods exist only in streaming-input mode. Every mock in
+        // this file is a bare async generator with none of them, which is
+        // exactly why the provider feature-detects instead of assuming.
+        const interrupt = vi.fn().mockResolvedValue(undefined);
+        const streamWithControls = Object.assign(
+          (async function* () {
+            yield { type: 'text', text: 'test' };
+          })(),
+          { interrupt }
+        );
+        vi.mocked(sdk.query).mockReturnValue(streamWithControls as any);
+
+        const onSessionControl = vi.fn();
+        await collectAsyncGenerator(
+          provider.executeQuery({
+            prompt: 'Test',
+            model: 'claude-opus-4-6',
+            cwd: '/test',
+            onSessionControl,
+          })
+        );
+
+        expect(onSessionControl).toHaveBeenCalledTimes(1);
+        await onSessionControl.mock.calls[0][0].interrupt();
+        expect(interrupt).toHaveBeenCalledTimes(1);
+      });
+
+      it('does not call back, or crash, when the stream has no controls', async () => {
+        vi.mocked(sdk.query).mockReturnValue(
+          (async function* () {
+            yield { type: 'text', text: 'test' };
+          })()
+        );
+
+        const onSessionControl = vi.fn();
+        const results = await collectAsyncGenerator(
+          provider.executeQuery({
+            prompt: 'Test',
+            model: 'claude-opus-4-6',
+            cwd: '/test',
+            onSessionControl,
+          })
+        );
+
+        expect(onSessionControl).not.toHaveBeenCalled();
+        expect(results).toHaveLength(1);
       });
     });
 

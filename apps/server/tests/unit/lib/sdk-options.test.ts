@@ -244,6 +244,104 @@ describe('sdk-options.ts', () => {
 
       expect(options.abortController).toBe(abortController);
     });
+
+    describe('the ask_user channel', () => {
+      async function buildAskServer() {
+        const { createAskUserMcpServer } = await import('@/lib/ask-user-tool.js');
+        return createAskUserMcpServer({
+          ask: async () => [],
+          waitForAnswer: async () => ({ answer: '' }),
+        });
+      }
+
+      it('ships the server, the allowedTools entry and the prompt text together', async () => {
+        const { createAutoModeOptions } = await import('@/lib/sdk-options.js');
+        const { ASK_USER_MCP_SERVER_NAME, ASK_USER_TOOL_NAME } =
+          await import('@/lib/ask-user-tool.js');
+        const { DEFAULT_ASK_USER_INSTRUCTIONS } = await import('@dmaker/prompts');
+
+        const askUserServer = await buildAskServer();
+        const options = createAutoModeOptions({ cwd: '/test/path', askUserServer });
+
+        expect(options.allowedTools).toContain(ASK_USER_TOOL_NAME);
+        expect(options.mcpServers?.[ASK_USER_MCP_SERVER_NAME]).toBe(askUserServer);
+        // Without the prompt text the tool is simply never called.
+        expect(options.systemPrompt).toContain(DEFAULT_ASK_USER_INSTRUCTIONS);
+      });
+
+      it('changes nothing when no server is supplied', async () => {
+        const { createAutoModeOptions, TOOL_PRESETS } = await import('@/lib/sdk-options.js');
+
+        const options = createAutoModeOptions({ cwd: '/test/path' });
+
+        expect(options.allowedTools).toEqual([...TOOL_PRESETS.fullAccess]);
+        expect(options.mcpServers).toBeUndefined();
+        expect(options.systemPrompt).toBeUndefined();
+      });
+
+      it('survives a read-only run, unlike every other MCP server', async () => {
+        // A read-only run drops all MCP servers because nothing here can tell
+        // which of them write. ask_user is exempt on purpose: it writes a
+        // question and blocks, so keeping it cannot weaken the guarantee - and
+        // an unowned task is exactly the kind that needs a human decision.
+        const { createAutoModeOptions } = await import('@/lib/sdk-options.js');
+        const { ASK_USER_MCP_SERVER_NAME, ASK_USER_TOOL_NAME } =
+          await import('@/lib/ask-user-tool.js');
+
+        const askUserServer = await buildAskServer();
+        const options = createAutoModeOptions({
+          cwd: '/test/path',
+          readOnly: true,
+          askUserServer,
+          mcpServers: {
+            other: { type: 'stdio', command: 'node', args: ['server.js'] },
+          },
+        });
+
+        expect(Object.keys(options.mcpServers ?? {})).toEqual([ASK_USER_MCP_SERVER_NAME]);
+        expect(options.allowedTools).toContain(ASK_USER_TOOL_NAME);
+        expect(options.allowedTools).not.toContain('Write');
+        expect(options.allowedTools).not.toContain('Bash');
+      });
+
+      it('keeps the settings-configured servers alongside it on a normal run', async () => {
+        const { createAutoModeOptions } = await import('@/lib/sdk-options.js');
+        const { ASK_USER_MCP_SERVER_NAME } = await import('@/lib/ask-user-tool.js');
+
+        const askUserServer = await buildAskServer();
+        const options = createAutoModeOptions({
+          cwd: '/test/path',
+          askUserServer,
+          mcpServers: {
+            other: { type: 'stdio', command: 'node', args: ['server.js'] },
+          },
+        });
+
+        expect(Object.keys(options.mcpServers ?? {}).sort()).toEqual(
+          [ASK_USER_MCP_SERVER_NAME, 'other'].sort()
+        );
+      });
+
+      it('appends its instructions after the agent instructions, not instead of them', async () => {
+        const { createAutoModeOptions } = await import('@/lib/sdk-options.js');
+        const { DEFAULT_ASK_USER_INSTRUCTIONS } = await import('@dmaker/prompts');
+
+        const askUserServer = await buildAskServer();
+        const options = createAutoModeOptions({
+          cwd: '/test/path',
+          askUserServer,
+          systemPrompt: 'CONTEXT FILES',
+          agentSystemPrompt: 'AGENT RULES',
+        });
+
+        const prompt = options.systemPrompt as string;
+        expect(prompt).toContain('CONTEXT FILES');
+        expect(prompt).toContain('AGENT RULES');
+        expect(prompt.indexOf('AGENT RULES')).toBeLessThan(
+          prompt.indexOf(DEFAULT_ASK_USER_INSTRUCTIONS)
+        );
+      });
+    });
   });
 
   describe('createCustomOptions', () => {

@@ -46,6 +46,28 @@ function buildEnv(): Record<string, string | undefined> {
   return env;
 }
 
+/**
+ * Wrap prompt content in the `SDKUserMessage` envelope streaming-input mode
+ * requires. `content` is a plain string or a block array; the SDK accepts both
+ * as an Anthropic user-message body.
+ */
+function toUserMessage(content: unknown): {
+  type: 'user';
+  session_id: string;
+  message: { role: 'user'; content: any };
+  parent_tool_use_id: null;
+} {
+  return {
+    type: 'user' as const,
+    session_id: '',
+    message: {
+      role: 'user' as const,
+      content: content as any,
+    },
+    parent_tool_use_id: null,
+  };
+}
+
 export class ClaudeProvider extends BaseProvider {
   getName(): string {
     return 'claude';
@@ -75,6 +97,23 @@ export class ClaudeProvider extends BaseProvider {
     // Convert thinking level to token budget
     const maxThinkingTokens = getThinkingTokenBudget(thinkingLevel);
 
+    // The SDK is the only consumer that can take both kinds of MCP server, so
+    // this is the one place they are merged.
+    //
+    // `inProcessMcpServers` carries live `McpSdkServerConfigWithInstance`
+    // values (today: the ask_user channel). They cannot travel in `mcpServers`
+    // because the Codex and Cursor providers write that same field into on-disk
+    // config files, and an object holding a server instance does not survive
+    // being serialised. In-process entries win a name collision — a live
+    // instance is not something a settings-file entry should be able to shadow.
+    const mergedMcpServers: Options['mcpServers'] | undefined =
+      options.mcpServers || options.inProcessMcpServers
+        ? {
+            ...(options.mcpServers ?? {}),
+            ...((options.inProcessMcpServers ?? {}) as NonNullable<Options['mcpServers']>),
+          }
+        : undefined;
+
     // Build Claude SDK options
     const sdkOptions: Options = {
       model,
@@ -95,8 +134,8 @@ export class ClaudeProvider extends BaseProvider {
         : {}),
       // Forward settingSources for CLAUDE.md file loading
       ...(options.settingSources && { settingSources: options.settingSources }),
-      // Forward MCP servers configuration
-      ...(options.mcpServers && { mcpServers: options.mcpServers }),
+      // Forward MCP servers configuration (subprocess/URL plus in-process)
+      ...(mergedMcpServers && { mcpServers: mergedMcpServers }),
       // Extended thinking configuration
       ...(maxThinkingTokens && { maxThinkingTokens }),
       // Subagents configuration for specialized task delegation
@@ -108,7 +147,22 @@ export class ClaudeProvider extends BaseProvider {
     // Build prompt payload
     let promptPayload: string | AsyncIterable<any>;
 
-    if (Array.isArray(prompt)) {
+    const followUpInput = options.followUpInput;
+
+    if (followUpInput) {
+      // STREAMING-INPUT MODE. The only mode the SDK accepts extra user turns in
+      // (and the only one where interrupt/setModel work) — but also the mode
+      // where `isSingleUserTurn` is false, so the SDK no longer closes the
+      // child's stdin on the first result. The caller's channel owns the
+      // process lifetime from here; if it never completes, an ~11MB CLI process
+      // leaks. Never take this branch on the caller's behalf.
+      promptPayload = (async function* () {
+        yield toUserMessage(prompt);
+        for await (const message of followUpInput) {
+          yield toUserMessage(message.content);
+        }
+      })();
+    } else if (Array.isArray(prompt)) {
       // Multi-part prompt (with images)
       promptPayload = (async function* () {
         const multiPartPrompt = {
@@ -123,13 +177,31 @@ export class ClaudeProvider extends BaseProvider {
         yield multiPartPrompt;
       })();
     } else {
-      // Simple text prompt
+      // Simple text prompt. Left exactly as it was: a plain string keeps
+      // `isSingleUserTurn` true, so the SDK auto-closes stdin on the first
+      // result and no run without `followUpInput` changes behaviour.
       promptPayload = prompt;
     }
 
     // Execute via Claude Agent SDK
     try {
       const stream = query({ prompt: promptPayload, options: sdkOptions });
+
+      // Hand the caller the session's live controls. Feature-detected on
+      // purpose: these methods only exist in streaming-input mode, and the unit
+      // tests mock `query()` with a bare async generator that has none of them —
+      // an unguarded reference breaks every one of them.
+      if (options.onSessionControl) {
+        const controls = stream as Partial<typeof stream>;
+        if (typeof controls.interrupt === 'function') {
+          options.onSessionControl({
+            interrupt: () => stream.interrupt(),
+            ...(typeof controls.setModel === 'function'
+              ? { setModel: (nextModel?: string) => stream.setModel(nextModel) }
+              : {}),
+          });
+        }
+      }
 
       // Stream messages directly - they're already in the correct format
       for await (const msg of stream) {

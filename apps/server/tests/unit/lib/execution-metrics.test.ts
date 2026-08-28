@@ -8,8 +8,9 @@ import {
 /**
  * The accumulator is fed every message of every stream loop, and each field it
  * touches is rendered somewhere in the UI (`metrics-panel.tsx`, `list-row.tsx`).
- * These cases pin the arithmetic - additive across SDK calls, never a
- * replacement - and the exact block shapes it keys on.
+ * These cases pin the arithmetic - additive ACROSS SDK sessions, last-write-wins
+ * WITHIN one (every figure on a `result` is already session-cumulative) - and
+ * the exact block shapes it keys on.
  */
 function assistantWithBlocks(content: Array<Record<string, unknown>>) {
   return { type: 'assistant', message: { role: 'assistant', content } };
@@ -144,9 +145,12 @@ describe('execution-metrics.ts', () => {
     it('sums cost, turns and durations across several SDK calls', () => {
       const metrics = createMetricsAccumulator();
 
+      // One feature run makes several SDK calls (plan revision, per-task,
+      // continuation), and each is its own session. Those really do add up.
       accumulateFromMessage(
         metrics,
         resultMessage({
+          session_id: 'session-a',
           total_cost_usd: 0.25,
           num_turns: 4,
           duration_ms: 1000,
@@ -156,6 +160,7 @@ describe('execution-metrics.ts', () => {
       accumulateFromMessage(
         metrics,
         resultMessage({
+          session_id: 'session-b',
           total_cost_usd: 0.5,
           num_turns: 3,
           duration_ms: 2000,
@@ -167,6 +172,85 @@ describe('execution-metrics.ts', () => {
       expect(metrics.numTurns).toBe(7);
       expect(metrics.durationMs).toBe(3000);
       expect(metrics.durationApiMs).toBe(2300);
+    });
+
+    it('takes the last figure within one session instead of adding it twice', () => {
+      const metrics = createMetricsAccumulator();
+
+      // Mid-flight message injection produces N results in ONE session, and
+      // every number the CLI puts on a result is already cumulative for that
+      // whole session. Adding them would bill the first turn twice.
+      accumulateFromMessage(
+        metrics,
+        resultMessage({
+          session_id: 'session-a',
+          total_cost_usd: 0.25,
+          num_turns: 4,
+          duration_ms: 1000,
+          duration_api_ms: 800,
+          usage: { input_tokens: 100, output_tokens: 20 },
+          modelUsage: { 'claude-opus-4-6': { inputTokens: 100, costUSD: 0.25 } },
+        })
+      );
+      accumulateFromMessage(
+        metrics,
+        resultMessage({
+          session_id: 'session-a',
+          total_cost_usd: 0.4,
+          num_turns: 9,
+          duration_ms: 2500,
+          duration_api_ms: 1900,
+          usage: { input_tokens: 260, output_tokens: 55 },
+          modelUsage: { 'claude-opus-4-6': { inputTokens: 260, costUSD: 0.4 } },
+        })
+      );
+
+      expect(metrics.totalCostUSD).toBeCloseTo(0.4, 10);
+      expect(metrics.numTurns).toBe(9);
+      expect(metrics.durationMs).toBe(2500);
+      expect(metrics.durationApiMs).toBe(1900);
+      expect(metrics.inputTokens).toBe(260);
+      expect(metrics.outputTokens).toBe(55);
+      expect(metrics.modelUsage['claude-opus-4-6'].inputTokens).toBe(260);
+      expect(metrics.modelUsage['claude-opus-4-6'].costUSD).toBeCloseTo(0.4, 10);
+    });
+
+    it('treats a session whose counters restarted as a fresh contribution', () => {
+      const metrics = createMetricsAccumulator();
+
+      // `resume` gives a new CLI process the same session id, and its counters
+      // start again at zero. Subtracting the old baseline would drive the
+      // totals backwards, so a figure that went DOWN is added in full.
+      accumulateFromMessage(
+        metrics,
+        resultMessage({ session_id: 'session-a', total_cost_usd: 0.6, duration_ms: 5000 })
+      );
+      accumulateFromMessage(
+        metrics,
+        resultMessage({ session_id: 'session-a', total_cost_usd: 0.1, duration_ms: 900 })
+      );
+
+      expect(metrics.totalCostUSD).toBeCloseTo(0.7, 10);
+      expect(metrics.durationMs).toBe(5900);
+    });
+
+    it('keeps two accumulators independent', () => {
+      const first = createMetricsAccumulator();
+      const second = createMetricsAccumulator();
+
+      accumulateFromMessage(
+        first,
+        resultMessage({ session_id: 'session-a', total_cost_usd: 0.25 })
+      );
+      accumulateFromMessage(
+        second,
+        resultMessage({ session_id: 'session-a', total_cost_usd: 0.25 })
+      );
+
+      // The per-session baseline is keyed by accumulator, so one run's figures
+      // can never be netted off against another run that shares a session id.
+      expect(first.totalCostUSD).toBeCloseTo(0.25, 10);
+      expect(second.totalCostUSD).toBeCloseTo(0.25, 10);
     });
 
     it('sums the four token counts, treating a missing one as zero', () => {

@@ -389,6 +389,94 @@ function createFollowUpFeatureHandler(autoModeService: AutoModeService) {
 }
 
 // ---------------------------------------------------------------------------
+// POST /inject-message - Message a running agent, or fall back to a follow-up
+// ---------------------------------------------------------------------------
+
+/**
+ * Two different things wear one button here, so the response always says which
+ * one happened:
+ *
+ *  - `mode: 'injected'` — the text went into the LIVE session as its next turn.
+ *    Same process, same conversation, no re-prompt.
+ *  - `mode: 'follow-up'` — nothing was running, so this started a fresh run
+ *    carrying the previous transcript as context. That is a new CLI process and
+ *    a new session; it is not steering.
+ *
+ * Exported for the route test. None of the other factories in this file are,
+ * which is why none of them have one.
+ */
+export function createInjectMessageHandler(autoModeService: AutoModeService) {
+  return async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { projectPath, featureId, message, interrupt } = req.body as {
+        projectPath: string;
+        featureId: string;
+        message: string;
+        interrupt?: boolean;
+      };
+
+      if (!projectPath || !featureId || !message || !message.trim()) {
+        res.status(400).json({
+          success: false,
+          error: 'projectPath, featureId, and a non-empty message are required',
+        });
+        return;
+      }
+
+      const result = await autoModeService.injectMessage(featureId, message.trim(), {
+        interrupt: interrupt === true,
+      });
+
+      if (result.status === 'delivered') {
+        res.json({
+          success: true,
+          mode: 'injected',
+          status: result.status,
+          interrupted: result.interrupted,
+          message: result.interrupted
+            ? 'Sent to the running agent; the current turn was interrupted so it is picked up now.'
+            : 'Sent to the running agent; it runs as the next turn.',
+        });
+        return;
+      }
+
+      if (result.status === 'not_running') {
+        // Nothing to steer — start a follow-up run instead, exactly as
+        // /follow-up-feature does (fire-and-forget; it reports through events).
+        autoModeService.followUpFeature(projectPath, featureId, message.trim()).catch((error) => {
+          logger.error(`[AutoMode] Follow up feature ${featureId} error:`, error);
+        });
+        res.json({
+          success: true,
+          mode: 'follow-up',
+          status: result.status,
+          interrupted: false,
+          message: 'Nothing was running, so this started a follow-up run instead.',
+        });
+        return;
+      }
+
+      // Running, but not steerable. A follow-up is not available either —
+      // followUpFeature refuses while the feature is running — so say what is
+      // true rather than silently doing nothing.
+      res.json({
+        success: false,
+        mode: 'none',
+        status: result.status,
+        interrupted: false,
+        error:
+          result.status === 'run_finished'
+            ? 'That run has already finished its last turn. Wait for it to stop, then send a follow-up.'
+            : 'This run cannot take messages: only the main Claude agent can. Wait for it to finish, then send a follow-up.',
+      });
+    } catch (error) {
+      logError(error, 'Inject message failed');
+      res.status(500).json({ success: false, error: getErrorMessage(error) });
+    }
+  };
+}
+
+// ---------------------------------------------------------------------------
 // POST /commit-feature - Commit feature changes
 // ---------------------------------------------------------------------------
 
@@ -577,6 +665,11 @@ export function createAutoModeRoutes(autoModeService: AutoModeService): Router {
     '/follow-up-feature',
     validatePathParams('projectPath', 'imagePaths[]'),
     createFollowUpFeatureHandler(autoModeService)
+  );
+  router.post(
+    '/inject-message',
+    validatePathParams('projectPath'),
+    createInjectMessageHandler(autoModeService)
   );
   router.post(
     '/commit-feature',

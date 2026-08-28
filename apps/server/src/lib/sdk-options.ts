@@ -29,6 +29,12 @@ import {
   getThinkingTokenBudget,
 } from '@dmaker/types';
 import { isPathAllowed, PathNotAllowedError, getAllowedRootDirectory } from '@dmaker/platform';
+import { DEFAULT_ASK_USER_INSTRUCTIONS } from '@dmaker/prompts';
+import {
+  ASK_USER_MCP_SERVER_NAME,
+  ASK_USER_TOOL_NAME,
+  type AskUserMcpServer,
+} from './ask-user-tool.js';
 
 /**
  * Result of sandbox compatibility check
@@ -389,6 +395,17 @@ export interface CreateSdkOptionsConfig {
    * and Task, which would otherwise hand a subagent the tools we just removed.
    */
   readOnly?: boolean;
+
+  /**
+   * The run's in-process ask_user server, from `createAskUserMcpServer` in
+   * `lib/ask-user-tool.ts`.
+   *
+   * Supplying it is what turns the channel on: the server, the entry in
+   * `allowedTools` and the prompt text that makes the model reach for it are
+   * all derived from this one field, so none of the three can ship without
+   * the other two. Only `createAutoModeOptions` honours it.
+   */
+  askUserServer?: AskUserMcpServer;
 }
 
 // Re-export MCP types from @dmaker/types for convenience
@@ -551,8 +568,24 @@ export function createAutoModeOptions(config: CreateSdkOptionsConfig): Options {
   // Validate working directory before creating options
   validateWorkingDirectory(config.cwd);
 
-  // Build CLAUDE.md auto-loading options if enabled
-  const claudeMdOptions = buildClaudeMdOptions(config);
+  // Build CLAUDE.md auto-loading options if enabled.
+  //
+  // When the ask channel is attached, its instructions ride in on
+  // agentSystemPrompt rather than being appended to the finished prompt: that
+  // slot is the one place the two possible shapes (a plain string, or the
+  // claude_code preset with an `append`) are already reconciled. A tool
+  // description on its own does not get called - an agent told to work
+  // autonomously needs to be told that stopping to ask is allowed.
+  const claudeMdOptions = buildClaudeMdOptions(
+    config.askUserServer
+      ? {
+          ...config,
+          agentSystemPrompt: [config.agentSystemPrompt, DEFAULT_ASK_USER_INSTRUCTIONS]
+            .filter(Boolean)
+            .join('\n\n'),
+        }
+      : config
+  );
 
   // Build MCP-related options
   const mcpOptions = buildMcpOptions(config);
@@ -574,6 +607,13 @@ export function createAutoModeOptions(config: CreateSdkOptionsConfig): Options {
   if (!config.readOnly && config.includeSubagents) {
     allowedTools.push('Task');
   }
+  // Deliberately NOT gated on readOnly. ask_user writes a question onto the
+  // feature record and blocks; it cannot touch the working tree, so it is the
+  // one tool a read-only run can keep without weakening the claim - and an
+  // unowned task is exactly the kind most likely to need a human decision.
+  if (config.askUserServer) {
+    allowedTools.push(ASK_USER_TOOL_NAME);
+  }
 
   // Merge skill sources into settingSources for SDK skill discovery
   let settingSources: Array<'user' | 'project'> | undefined;
@@ -585,6 +625,21 @@ export function createAutoModeOptions(config: CreateSdkOptionsConfig): Options {
     settingSources = [...merged];
   }
 
+  // MCP servers ship their own tools, and nothing here can tell which of them
+  // write. A read-only run does without them.
+  //
+  // The ask server is exempted explicitly rather than by accident: it is
+  // genuinely read-only (one question written to the feature record, then a
+  // bounded wait), so keeping it does not weaken the guarantee that a
+  // read-only run cannot change the tree. Fold it in AFTER the readOnly drop
+  // so that drop can never take it with it.
+  const configuredMcpServers = config.readOnly
+    ? undefined
+    : (mcpOptions.mcpServerOptions.mcpServers as Options['mcpServers'] | undefined);
+  const mcpServers: Options['mcpServers'] | undefined = config.askUserServer
+    ? { ...(configuredMcpServers ?? {}), [ASK_USER_MCP_SERVER_NAME]: config.askUserServer }
+    : configuredMcpServers;
+
   return {
     ...getBaseOptions(),
     model: getModelForUseCase('auto', config.model),
@@ -595,9 +650,7 @@ export function createAutoModeOptions(config: CreateSdkOptionsConfig): Options {
     ...(settingSources && { settingSources }),
     ...thinkingOptions,
     ...(config.abortController && { abortController: config.abortController }),
-    // MCP servers ship their own tools, and nothing here can tell which of
-    // them write. A read-only run does without them.
-    ...(config.readOnly ? {} : mcpOptions.mcpServerOptions),
+    ...(mcpServers && { mcpServers }),
     ...(!config.readOnly && config.agents && { agents: config.agents }),
   };
 }

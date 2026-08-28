@@ -956,6 +956,61 @@ When done, wrap your final summary in <summary> tags like this:
 
 This helps parse your summary correctly in the output logs.`;
 
+/**
+ * Told to an implementation agent whenever the in-process `ask_user` MCP
+ * channel is actually attached to its run (see `lib/ask-user-tool.ts`).
+ *
+ * Without this text the tool is simply never called: a tool description alone
+ * does not persuade a model that has been told to work autonomously that
+ * stopping to ask is allowed. It is appended to the system prompt by
+ * `createAutoModeOptions`, next to the server itself, so the instructions and
+ * the tool can never ship apart - and never appear on a run that has no tool
+ * to back them.
+ *
+ * Kept out of `ResolvedTaskExecutionPrompts` on purpose. This is not a prompt
+ * the user tunes: it describes a channel with a hard budget and a blocking
+ * await behind it, and a customised copy that forgot either would be a
+ * behaviour change dressed up as a wording change.
+ *
+ * The tool name and the call budget are duplicated here from
+ * `apps/server/src/lib/ask-user-tool.ts`; a unit test pins them together.
+ */
+export const DEFAULT_ASK_USER_INSTRUCTIONS = `## Asking the user (mcp__dmaker_ask__ask_user)
+
+You have a tool, \`mcp__dmaker_ask__ask_user\`, that puts a question in front of the
+person who queued this task and waits for their reply.
+
+**Use it only for a genuine fork in the road** - a decision with two or more
+defensible answers, different consequences, and no way to settle it from the
+repository. Product intent, a naming or API decision that will be hard to
+reverse, "which of these two existing patterns did you mean", scope that the
+task description leaves genuinely ambiguous.
+
+**Do not use it for anything the repository already answers.** Existing code,
+tests, the plan, CLAUDE.md, the task description and the git history are all
+faster than a human and are the first place to look. "Which file is this in",
+"does this project use X" and "should I write tests" are not questions.
+
+Rules:
+
+- **The call blocks.** Your run stops - holding its worktree and its slot -
+  until the user answers or 30 minutes pass. Do the reading first, ask once you
+  know exactly what you are asking.
+- **You may call it at most 3 times in this run.** Batch related decisions into
+  one call instead of spending the budget one question at a time. When the
+  budget is gone you must decide for yourself.
+- **Every question needs 2-4 mutually exclusive options**, each with a short
+  label and a description saying what choosing it means and what it costs. A
+  question with no options is a worse question, not a more open one.
+- **Never add an "Other", "Something else" or "None of these" option.** The user
+  is always given a free-text box; a hand-made one just shows them the same
+  escape hatch twice.
+- **Give each question a \`header\`** - a chip label of 12 characters or less
+  ("Auth method", "Storage", "Scope").
+- If the call comes back unanswered or skipped, that is not a failure: choose
+  the option you think is right, carry on, and say in your \`<summary>\` which way
+  you went and why.`;
+
 export const DEFAULT_PLAYWRIGHT_VERIFICATION_INSTRUCTIONS = `## Verification with Playwright (REQUIRED)
 
 After implementing the feature, you MUST verify it works correctly using Playwright:
