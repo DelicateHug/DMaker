@@ -2,7 +2,23 @@ import { defineConfig, devices } from '@playwright/test';
 import * as os from 'os';
 import * as path from 'path';
 
-const port = process.env.TEST_PORT || 3007;
+/**
+ * Ports the suite serves itself on.
+ *
+ * Deliberately outside the 3007/3009/3017/3019/3029 block `start.ps1` uses, so
+ * a test run does not fight the developer's running app for a port — and, more
+ * to the point, so it cannot silently attach to it.
+ *
+ * TEST_PORT is passed down to the Vite webServer below rather than left to
+ * defaults. It has to be: `vite.config.mts` reads the same variable but falls
+ * back to 3017, while this file used to fall back to 3007, so with the variable
+ * unset the two disagreed and Playwright waited out its full timeout on a port
+ * Vite was never going to listen on. The whole suite was unrunnable that way.
+ */
+const port = process.env.TEST_PORT || 3107;
+// Keep this default in step with tests/utils/core/constants.ts, which resolves
+// the backend URL the same way. The specs talk to it directly, so a mismatch
+// here fails them with ECONNREFUSED rather than anything that names the cause.
 const serverPort = process.env.TEST_SERVER_PORT || 3008;
 const reuseServer = process.env.TEST_REUSE_SERVER === 'true';
 const useExternalBackend = !!process.env.VITE_SERVER_URL;
@@ -84,6 +100,10 @@ export default defineConfig({
               VITE_SKIP_SETUP: 'true',
               // Always skip electron plugin during tests - prevents duplicate server spawning
               VITE_SKIP_ELECTRON: 'true',
+              // vite.config.mts reads TEST_PORT too, and defaults to 3017 when
+              // it is unset. Pass the resolved port down so both halves agree
+              // on one number instead of each picking its own default.
+              TEST_PORT: String(port),
               // Point the UI at the backend this config just started. Without
               // it the UI falls back to its dev default (port 3019) and talks
               // to nothing, so every spec fails on an app that never loads.

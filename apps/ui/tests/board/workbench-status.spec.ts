@@ -33,6 +33,13 @@ const SEEDED = [
   { id: 'feat-in-progress', status: 'in_progress', title: 'In progress task' },
   { id: 'feat-waiting', status: 'waiting_approval', title: 'Waiting task' },
   { id: 'feat-completed', status: 'completed', title: 'Completed task' },
+  // The one the spinner test starts an agent on, kept separate on purpose.
+  // A mock run finishes on its own and moves its feature to `verified`, and it
+  // does so after the test that started it has returned - so pointing that test
+  // at `feat-backlog` let a completion land after the next test had already
+  // re-seeded, and the pane test then opened a task it expected to be backlog
+  // and found verified.
+  { id: 'feat-runnable', status: 'backlog', title: 'Runnable task' },
 ] as const;
 
 /**
@@ -178,7 +185,7 @@ test.describe('Workbench and sidebar status', () => {
   });
 
   test('an agent running on a task spins that row, and only that row', async ({ page }) => {
-    const target = 'feat-backlog';
+    const target = 'feat-runnable';
     await expect(row(page, target)).toBeVisible({ timeout: 10000 });
 
     // Start a real run against the mock agent. The spinner then has to survive
