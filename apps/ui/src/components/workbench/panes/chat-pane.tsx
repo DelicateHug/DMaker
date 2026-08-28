@@ -16,47 +16,80 @@ const logger = createLogger('ChatPane');
 /**
  * What a message actually does, said plainly rather than implied.
  *
- * `follow-up-feature` re-enters the SAME feature: same agent session, same
- * worktree, the whole previous transcript as context. What it is not is text
- * handed to a model mid-sentence — it is a fresh turn, and a fresh turn cannot
- * begin while one is already running.
+ * There are two constants because there are genuinely two behaviours, and
+ * which one you get depends on whether an agent is running at the moment you
+ * press send:
+ *
+ * Idle — nothing to steer, so this starts a follow-up run. Same agent session,
+ * same worktree, the whole previous transcript as context, but a new process
+ * and a fresh turn.
+ *
+ * Running — the text goes into the LIVE session. The SDK reads a queued user
+ * message only at a turn boundary, so the agent picks it up as its NEXT turn.
+ * That is real steering, and it is still not mid-sentence — nothing in the SDK
+ * reaches a model mid-thought, and this pane must not imply that it does.
  */
 const IDLE_HINT =
   'Continues this task in a new agent turn — same session, same worktree. It does not reach an agent mid-run.';
 const RUNNING_HINT =
-  'The agent is still working. A follow-up runs as its own turn, so it can only start once this one finishes.';
+  'Goes to the running agent, which picks it up at its next turn boundary — not mid-sentence.';
 
-/**
- * No attachment affordance in this composer yet, so every send carries the same
- * empty list. Hoisted rather than built per call because it is a constant, and
- * an empty array is handled identically to omitting it the whole way down —
- * `auto-mode-service.ts:1833` and `prompt-builder.ts:48` both test `.length`.
- */
-const NO_ATTACHMENTS: string[] = [];
+/** What a send actually did, for copy that has to tell the truth afterwards. */
+interface SendOutcome {
+  /** 'injected' reached the live agent; 'follow-up' started a new run. */
+  mode: 'injected' | 'follow-up';
+  /** The current turn was cut short, so the message runs now rather than later. */
+  interrupted: boolean;
+  /** The server's own account of what happened, preferred over ours. */
+  detail?: string;
+}
 
 /**
  * Hand a composed message to the agent.
  *
- * The only place in this pane that knows how a message is delivered. Real
- * steering of a live agent replaces this function's body and nothing else —
- * the composer, the transcript and the running-state rules above it are
- * written against the call, not against follow-ups.
+ * The only place in this pane that knows how a message is delivered — the
+ * composer, the transcript and the running-state rules above it are written
+ * against this call, not against any one endpoint.
  *
- * `followUpFeature` takes exactly four parameters — (projectPath, featureId,
- * prompt, imagePaths) — and there is no fifth. `use-board-actions.ts:1130`
- * passes one anyway; it survives only because that file opens with
- * `// @ts-nocheck`, and the server never sees it.
+ * `/inject-message` covers both cases behind a single request: it pushes into
+ * the live session when there is one and starts a follow-up run when there is
+ * not, then answers with which it did. That answer is the whole point. The
+ * caller must not infer it from `isRunning`, which is a WebSocket-fed cache and
+ * is routinely a beat behind the server's own view of what is running.
+ *
+ * `interrupt` is deliberately not passed. It ends the agent's current turn to
+ * make room for this message, discarding whatever it was part-way through; that
+ * is a destructive act and a plain composer is the wrong place to do it without
+ * asking first. The client contract carries the option for a surface that does.
  */
-async function sendToAgent(projectPath: string, featureId: string, message: string): Promise<void> {
-  const followUpFeature = getElectronAPI().autoMode?.followUpFeature;
-  if (!followUpFeature) {
-    throw new Error('Follow-ups are not available in this build.');
+async function sendToAgent(
+  projectPath: string,
+  featureId: string,
+  message: string
+): Promise<SendOutcome> {
+  const injectMessage = getElectronAPI().autoMode?.injectMessage;
+  if (!injectMessage) {
+    throw new Error('Messaging an agent is not available in this build.');
   }
 
-  const result = await followUpFeature(projectPath, featureId, message, NO_ATTACHMENTS);
+  const result = await injectMessage(projectPath, featureId, message);
+
   if (!result.success) {
-    throw new Error(result.error || 'The server refused the follow-up.');
+    // `unsupported_provider` and `run_finished` both land here: running, but
+    // unreachable. The server writes a specific reason for each — only the main
+    // Claude stream loop has an input channel, and a settled session has closed
+    // stdin — and it says more than this pane could reconstruct from `status`.
+    throw new Error(result.error || 'The server refused the message.');
   }
+
+  return {
+    // A successful response is always one of the two. Anything else is a server
+    // newer than this build, and 'follow-up' is the safer thing to claim: it
+    // promises the user less than "your message reached the running agent".
+    mode: result.mode === 'injected' ? 'injected' : 'follow-up',
+    interrupted: result.interrupted === true,
+    detail: result.message,
+  };
 }
 
 interface ChatPaneProps {
@@ -68,13 +101,13 @@ interface ChatPaneProps {
  * Reply to the agent working this task.
  *
  * The transcript on top is the same agent output the run writes; the composer
- * underneath starts the next turn on it. Enter sends, Shift+Enter breaks a
- * line.
+ * underneath talks to it. Enter sends, Shift+Enter breaks a line.
  *
- * Composing stays enabled while the agent runs — writing the next instruction
- * while watching the current turn is the normal way to use this — but sending
- * does not, because a second turn cannot start on a feature that is already
- * running.
+ * Sending stays enabled while the agent runs — steering a run in flight is the
+ * point of this pane, not an edge case. Which of the two things a send does is
+ * decided by the server rather than here: the hint under the composer sets the
+ * expectation from `isRunning`, and the toast afterwards reports what actually
+ * happened, because those two can disagree.
  */
 export function ChatPane({ feature, projectPath }: ChatPaneProps) {
   const { output, isLoading, error, refresh } = useAgentOutputStream(projectPath, feature.id);
@@ -109,34 +142,48 @@ export function ChatPane({ feature, projectPath }: ChatPaneProps) {
 
   const handleSend = useCallback(async () => {
     const message = draft.trim();
-    if (!message || isRunning || isSending) return;
+    if (!message || isSending) return;
 
     setIsSending(true);
     try {
-      await sendToAgent(projectPath, feature.id, message);
+      const outcome = await sendToAgent(projectPath, feature.id, message);
 
       // Clearing the draft is what closes the double-send window. The route
-      // answers before it has registered the run, so `isRunning` stays false
-      // for a beat afterwards; a second Enter in that beat would be rejected
-      // server-side as "already running" and the rejection never comes back to
-      // us. An empty draft cannot be sent, so the window closes itself.
+      // answers before any run it started has registered, so `isRunning` stays
+      // false for a beat afterwards; a second Enter in that beat would find
+      // nothing running again and start a SECOND follow-up, which the service
+      // then rejects in the background where nothing surfaces it. An empty
+      // draft cannot be sent, so the window closes itself.
       setDraft('');
 
-      // "Queued", not "started": the endpoint responds the moment it accepts
-      // the request, before the agent has been spawned.
-      toast.success('Follow-up queued', {
-        description: 'The agent picks this up as its next turn.',
-      });
+      if (outcome.mode === 'injected') {
+        toast.success('Sent to the running agent', {
+          description:
+            outcome.detail ??
+            (outcome.interrupted
+              ? 'The current turn was cut short, so it starts on this now.'
+              : 'It picks this up at its next turn boundary — not mid-sentence.'),
+        });
+      } else {
+        // Nothing was running, so this started a new run rather than steering
+        // one — a materially different thing, and the toast has to say so.
+        // "Queued", not "started": the endpoint responds the moment it accepts
+        // the request, before the agent has been spawned.
+        toast.success('Follow-up queued', {
+          description:
+            outcome.detail ?? 'Nothing was running, so this starts a new turn on this task.',
+        });
+      }
     } catch (sendError) {
       // The draft is deliberately left intact so the message can be retried.
-      logger.error('Failed to start follow-up:', sendError);
-      toast.error('Could not start the follow-up', {
+      logger.error('Failed to send the message:', sendError);
+      toast.error('Could not send the message', {
         description: sendError instanceof Error ? sendError.message : 'Please try again.',
       });
     } finally {
       setIsSending(false);
     }
-  }, [draft, feature.id, isRunning, isSending, projectPath]);
+  }, [draft, feature.id, isSending, projectPath]);
 
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key !== 'Enter' || event.shiftKey) return;
@@ -147,7 +194,10 @@ export function ChatPane({ feature, projectPath }: ChatPaneProps) {
   };
 
   const hint = isRunning ? RUNNING_HINT : IDLE_HINT;
-  const canSend = draft.trim().length > 0 && !isRunning && !isSending;
+  // `isRunning` no longer gates sending — it only picks the wording. A run in
+  // flight is the case injection exists for, and the one case where the old
+  // disabled button was actively wrong.
+  const canSend = draft.trim().length > 0 && !isSending;
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -191,7 +241,10 @@ export function ChatPane({ feature, projectPath }: ChatPaneProps) {
             data-testid="chat-send"
           >
             {!isSending && <SendHorizontal className="size-3.5" />}
-            Start follow-up
+            {/* The label names the likely outcome rather than the endpoint, so
+                it stays honest either way: what the server actually did is
+                confirmed by the toast, not promised by this button. */}
+            {isRunning ? 'Send to agent' : 'Start follow-up'}
           </Button>
         </div>
       </div>

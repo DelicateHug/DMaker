@@ -1522,6 +1522,23 @@ export class HttpApiClient implements ElectronAPI {
         prompt,
         imagePaths,
       }),
+    /**
+     * `interrupt` is flattened into the body deliberately: the route reads a
+     * top-level `interrupt`, not an `options` object. The bag survives on this
+     * side so a second knob does not have to change every call site.
+     */
+    injectMessage: (
+      projectPath: string,
+      featureId: string,
+      message: string,
+      options?: { interrupt?: boolean }
+    ) =>
+      this.post('/api/auto-mode/inject-message', {
+        projectPath,
+        featureId,
+        message,
+        interrupt: options?.interrupt,
+      }),
     commitFeature: (projectPath: string, featureId: string, worktreePath?: string) =>
       this.post('/api/auto-mode/commit-feature', {
         projectPath,

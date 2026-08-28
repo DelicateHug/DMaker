@@ -577,6 +577,25 @@ export interface AutoModeAPI {
     error?: string;
   }>;
 
+  /**
+   * Message a running agent, falling back to a follow-up run when nothing is
+   * running. `mode` says which of the two happened; see the copy of this
+   * contract in `lib/electron.ts` for why the distinction matters.
+   */
+  injectMessage: (
+    projectPath: string,
+    featureId: string,
+    message: string,
+    options?: { interrupt?: boolean }
+  ) => Promise<{
+    success: boolean;
+    mode?: 'injected' | 'follow-up' | 'none';
+    status?: 'delivered' | 'not_running' | 'unsupported_provider' | 'run_finished';
+    interrupted?: boolean;
+    message?: string;
+    error?: string;
+  }>;
+
   commitFeature: (
     projectPath: string,
     featureId: string

@@ -843,6 +843,40 @@ export interface AutoModeAPI {
     prompt: string,
     imagePaths?: string[]
   ) => Promise<{ success: boolean; passes?: boolean; error?: string }>;
+  /**
+   * Message the agent that is running this feature — or, when none is, start a
+   * follow-up run. `/api/auto-mode/inject-message` does both, and the response
+   * says which, because they are genuinely different things:
+   *
+   *  - `mode: 'injected'` — the text went into the LIVE session. The SDK reads
+   *    a queued user message only at a turn boundary, so it lands as the next
+   *    turn; it is not mid-sentence steering and nothing in the SDK offers that.
+   *  - `mode: 'follow-up'` — nothing was running, so this started a fresh run
+   *    carrying the previous transcript. New process, new session.
+   *  - `success: false` with `status` `unsupported_provider` or `run_finished`
+   *    — running, but unreachable. Only the main Claude stream loop has an
+   *    input channel; a pipeline step, a nested run and every other provider
+   *    do not. Say so rather than retrying into a void.
+   *
+   * `interrupt` ends the current turn so the message is picked up now instead
+   * of whenever that turn happens to finish. It is sent as a TOP-LEVEL
+   * `interrupt` field — that is what the route reads — not as a nested object.
+   */
+  injectMessage: (
+    projectPath: string,
+    featureId: string,
+    message: string,
+    options?: { interrupt?: boolean }
+  ) => Promise<{
+    success: boolean;
+    mode?: 'injected' | 'follow-up' | 'none';
+    status?: 'delivered' | 'not_running' | 'unsupported_provider' | 'run_finished';
+    /** True only when the current turn was actually cut short for this message. */
+    interrupted?: boolean;
+    /** The server's own plain-English account of what happened, on success. */
+    message?: string;
+    error?: string;
+  }>;
   commitFeature: (
     projectPath: string,
     featureId: string,
@@ -2726,6 +2760,52 @@ function createMockAutoModeAPI(): AutoModeAPI {
 
       // Return immediately so the modal can close (matches real implementation)
       return { success: true };
+    },
+
+    /**
+     * Mirrors what the real server does under `DMAKER_MOCK_AGENT`, which is the
+     * only mode Playwright ever sees: the mock loop opens no provider, so a
+     * running feature has no input channel to push into and the honest answer
+     * is `unsupported_provider` rather than a pretend injection. With nothing
+     * running the fallback is real, and it is the same follow-up run the route
+     * starts.
+     */
+    injectMessage: async (
+      projectPath: string,
+      featureId: string,
+      message: string,
+      options?: { interrupt?: boolean }
+    ) => {
+      console.log('[Mock] Inject message:', {
+        featureId,
+        message,
+        interrupt: options?.interrupt,
+      });
+
+      if (mockRunningFeatures.has(featureId)) {
+        return {
+          success: false,
+          mode: 'none',
+          status: 'unsupported_provider',
+          interrupted: false,
+          error:
+            'This run cannot take messages: only the main Claude agent can. Wait for it to finish, then send a follow-up.',
+        };
+      }
+
+      mockRunningFeatures.add(featureId);
+
+      // Not awaited, exactly as followUpFeature above: the route answers the
+      // moment it accepts the request and reports the rest through events.
+      simulateAutoModeLoop(projectPath, featureId);
+
+      return {
+        success: true,
+        mode: 'follow-up',
+        status: 'not_running',
+        interrupted: false,
+        message: 'Nothing was running, so this started a follow-up run instead.',
+      };
     },
 
     commitFeature: async (projectPath: string, featureId: string, worktreePath?: string) => {

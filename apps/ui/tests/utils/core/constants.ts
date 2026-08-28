@@ -144,6 +144,56 @@ export const TEST_IDS = {
 
   // Xterm Log Viewer
   xtermLogViewer: 'xterm-log-viewer',
+
+  // ---------------------------------------------------------------------------
+  // Workbench (the per-task shell and its six panes)
+  //
+  // Only the fixed ids live here. The parameterised ones — `workbench-tab-{id}`,
+  // `workbench-pane-{id}`, `agent-chain-row-{depth}`, `agent-chain-item-{agentId}`,
+  // `agent-question-*-{questionId}`, `phase-group-{key}`, `phase-task-{id}` — are
+  // built by the helpers in `tests/utils/views/workbench.ts`, so there is one
+  // place that knows how each id is spelled.
+  // ---------------------------------------------------------------------------
+  workbench: 'workbench',
+  workbenchStatusIcon: 'workbench-status-icon',
+  workbenchStatusSpinner: 'workbench-status-spinner',
+
+  // Agents pane
+  agentsPane: 'agents-pane',
+  agentChain: 'agent-chain',
+  agentSpawnNotice: 'agent-spawn-notice',
+  agentsIncludeDescendants: 'agents-include-descendants',
+  agentsRefresh: 'agents-refresh',
+  agentsEmpty: 'agents-empty',
+  agentResult: 'agent-result',
+
+  // Changes pane
+  changesPane: 'changes-pane',
+  changesFileCount: 'changes-file-count',
+  changesFileList: 'changes-file-list',
+  changesFileRow: 'changes-file-row',
+  changesDiff: 'changes-diff',
+  changesEmpty: 'changes-empty',
+  changesError: 'changes-error',
+  changesRefresh: 'changes-refresh',
+  changesOpenEditor: 'changes-open-editor',
+  changesMainCheckoutBanner: 'changes-main-checkout-banner',
+
+  // Phases pane
+  phasesTodosPanel: 'phases-todos-panel',
+  phasesSection: 'phases-section',
+  phasesEmpty: 'phases-empty',
+  pipelineSection: 'pipeline-section',
+  liveTodosSection: 'live-todos-section',
+  liveTodosRefresh: 'live-todos-refresh',
+
+  // Questions pane
+  agentQuestionsPanel: 'agent-questions-panel',
+
+  // Chat pane
+  chatComposer: 'chat-composer',
+  chatSend: 'chat-send',
+  chatStatus: 'chat-status',
 } as const;
 
 // ============================================================================

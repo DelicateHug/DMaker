@@ -46,17 +46,22 @@ export async function countLogEntriesByType(page: Page, type: string): Promise<n
 }
 
 /**
- * Get the log type count badge by type
+ * Get the per-type filter chip, which doubles as the count badge.
+ *
+ * It reads `<type>: <count>` and its testid is `log-type-filter-${type}` —
+ * `log-viewer.tsx` has never emitted `log-type-count-${type}`, so both of these
+ * helpers matched nothing at all and every caller would have seen "not visible"
+ * rather than a failure.
  */
 export async function getLogTypeCountBadge(page: Page, type: string): Promise<Locator> {
-  return page.locator(`[data-testid="log-type-count-${type}"]`);
+  return page.locator(`[data-testid="log-type-filter-${type}"]`);
 }
 
 /**
  * Check if a log type count badge is visible
  */
 export async function isLogTypeCountBadgeVisible(page: Page, type: string): Promise<boolean> {
-  const badge = page.locator(`[data-testid="log-type-count-${type}"]`);
+  const badge = page.locator(`[data-testid="log-type-filter-${type}"]`);
   return await badge.isVisible().catch(() => false);
 }
 
@@ -90,24 +95,43 @@ export async function isLogEntryBadgeVisible(page: Page): Promise<boolean> {
 }
 
 /**
- * Get the view mode toggle button (parsed/raw)
+ * The task modal's view modes.
+ *
+ * Was `'parsed' | 'raw'`, which named two of the seven the modal actually
+ * renders (`agent-output-modal.tsx:674-786`).
  */
-export async function getViewModeButton(page: Page, mode: 'parsed' | 'raw'): Promise<Locator> {
+export type LogViewMode =
+  | 'summary'
+  | 'plan'
+  | 'parsed'
+  | 'changes'
+  | 'raw'
+  | 'questions'
+  | 'metrics';
+
+/**
+ * Get the view mode toggle button
+ */
+export async function getViewModeButton(page: Page, mode: LogViewMode): Promise<Locator> {
   return page.locator(`[data-testid="view-mode-${mode}"]`);
 }
 
 /**
  * Click a view mode toggle button
  */
-export async function clickViewModeButton(page: Page, mode: 'parsed' | 'raw'): Promise<void> {
+export async function clickViewModeButton(page: Page, mode: LogViewMode): Promise<void> {
   await clickElement(page, `view-mode-${mode}`);
 }
 
 /**
  * Check if a view mode button is active (selected)
+ *
+ * The active button is the one carrying `bg-primary`. It used to be tested for
+ * `text-purple-300`, a class the modal stopped applying, so this returned false
+ * for every mode including the selected one.
  */
-export async function isViewModeActive(page: Page, mode: 'parsed' | 'raw'): Promise<boolean> {
+export async function isViewModeActive(page: Page, mode: LogViewMode): Promise<boolean> {
   const button = page.locator(`[data-testid="view-mode-${mode}"]`);
   const classes = await button.getAttribute('class');
-  return classes?.includes('text-purple-300') ?? false;
+  return classes?.includes('bg-primary') ?? false;
 }
