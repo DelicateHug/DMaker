@@ -1,11 +1,24 @@
 /**
- * Agent Questions panel — where an agent asks the user something and gets an answer.
+ * Agent Questions panel — where an agent asks the user something and gets an
+ * answer, and where the record of what was asked and what was picked lives.
  *
- * Lives in the task view. Today its only producer is the background GitHub
- * issue drafter, which parks a question here rather than inventing
- * requirements when a task note is too thin. The panel is deliberately
- * source-agnostic: anything that writes an `agentQuestions` entry shows up
- * here, and the reply is routed back by the question's `source`.
+ * Lives in the task view and in the workbench's Questions pane. Its first
+ * producer was the background GitHub issue drafter, which parks a question
+ * here rather than inventing requirements when a task note is too thin; the
+ * panel is deliberately source-agnostic, so anything that writes an
+ * `agentQuestions` entry shows up here and the reply is routed back by the
+ * question's `source`.
+ *
+ * Two rules the server owns and this panel must not second-guess:
+ *
+ * - **The choices are the record.** An answer submitted as `selectedOptionIds`
+ *   is recorded as `answerSource: 'option'` with the ids; submitting the
+ *   option's *label* as free text records `'custom'` and loses which choice was
+ *   taken. So picking a row sends ids and the server synthesises the text.
+ * - **"Other" is always on offer.** The asking agent is told never to invent an
+ *   "Other" option because the UI supplies one, which is why the free-text box
+ *   is a deliberate choice here rather than an always-open box beside the
+ *   options.
  *
  * The task keeps running while a question is outstanding — planning and branch
  * creation are unaffected. Only the commit waits on the issue.
@@ -15,14 +28,16 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle,
   CheckCircle2,
+  CircleSlash,
   Github,
   HelpCircle,
   Loader2,
   MessageCircleQuestion,
+  PenLine,
   RefreshCw,
   SkipForward,
 } from 'lucide-react';
-import type { AgentQuestion, Feature, GitHubIssueDraft } from '@dmaker/types';
+import type { AgentQuestion, AgentQuestionOption, Feature, GitHubIssueDraft } from '@dmaker/types';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/forms';
 import { Badge } from '@/components/ui/layout';
@@ -34,19 +49,68 @@ import { toast } from 'sonner';
 const logger = createLogger('AgentQuestions');
 
 /**
- * How often the panel re-reads the feature.
+ * Safety net, not the delivery mechanism.
  *
- * The server has no per-feature push channel the UI can subscribe to, so this
- * polls — but only while the panel is mounted and the tab is visible.
+ * Questions arrive on `features.onQuestionEvent`. This poll exists for the two
+ * cases that channel cannot cover: a socket that dropped without the client
+ * noticing, and the mock API (the whole Playwright suite), whose
+ * `onQuestionEvent` never fires. Anything faster is a re-read of a file nothing
+ * has changed.
  */
-const POLL_INTERVAL_MS = 4_000;
+const POLL_INTERVAL_MS = 30_000;
 
 export interface AgentQuestionsPanelProps {
   projectPath: string;
   featureId: string;
-  /** Feature to render before the first poll lands */
+  /** Feature to render before the first fetch lands */
   initialFeature?: Feature | null;
+  /**
+   * Whether this surface is on screen. The workbench keeps every visited pane
+   * mounted, so the poll is gated on it. Defaults to true for callers that are
+   * only rendered when visible.
+   */
+  isActive?: boolean;
   className?: string;
+}
+
+/**
+ * The choices a question actually offered.
+ *
+ * Mirrors `questionChoices()` in the server's AgentQuestionService, including
+ * the positional `opt-N` ids it hands a legacy question that carries only
+ * `options: string[]`. Those ids are what makes the entire existing corpus
+ * answerable by choice rather than forced into free text — the two copies of
+ * this one-line rule must never disagree.
+ */
+function questionChoices(question: AgentQuestion): AgentQuestionOption[] {
+  if (question.choices?.length) return question.choices;
+  return (question.options ?? []).map((label, index) => ({ id: `opt-${index + 1}`, label }));
+}
+
+/** A question nobody can act on any more: answered, skipped, or expired. */
+function isResolved(question: AgentQuestion): boolean {
+  return !!(question.answeredAt || question.skipped || question.expiredAt);
+}
+
+/**
+ * Display number for a question.
+ *
+ * The server assigns a real `number` at ask time. Every question written before
+ * it did carries none, so those fall back to their position in askedAt order.
+ */
+function buildQuestionNumbers(questions: AgentQuestion[]): Map<string, number> {
+  const numbers = new Map<string, number>();
+  const byAskedAt = [...questions].sort((a, b) => (a.askedAt ?? '').localeCompare(b.askedAt ?? ''));
+  byAskedAt.forEach((question, index) => {
+    numbers.set(question.id, question.number ?? index + 1);
+  });
+  return numbers;
+}
+
+interface SubmitPayload {
+  answer: string;
+  skipped?: boolean;
+  selectedOptionIds?: string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -120,82 +184,211 @@ function describeDraft(
 }
 
 // ---------------------------------------------------------------------------
-// Single question
+// Question header (shared by the outstanding and resolved cards)
+// ---------------------------------------------------------------------------
+
+function QuestionHeading({
+  question,
+  number,
+  tone,
+}: {
+  question: AgentQuestion;
+  number: number;
+  tone: 'open' | 'resolved';
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <p
+        className={cn(
+          'text-xs font-medium',
+          tone === 'open' ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'
+        )}
+        data-testid={`agent-question-title-${question.id}`}
+      >
+        Question {number}
+      </p>
+      {question.header && (
+        <Badge variant="outline" className="h-4 px-1 text-[10px] font-normal">
+          {question.header}
+        </Badge>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Outstanding question
 // ---------------------------------------------------------------------------
 
 const QuestionCard = memo(function QuestionCard({
   question,
+  number,
   isSubmitting,
   onAnswer,
   onSkip,
 }: {
   question: AgentQuestion;
+  number: number;
   isSubmitting: boolean;
-  onAnswer: (answer: string) => void;
+  onAnswer: (payload: SubmitPayload) => void;
   onSkip: () => void;
 }) {
+  const choices = useMemo(() => questionChoices(question), [question]);
   const [draft, setDraft] = useState('');
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [wantsCustom, setWantsCustom] = useState(false);
+
+  // With nothing on offer the free-text box is the only way to answer, so it is
+  // shown outright rather than behind an "Other" nobody could have skipped.
+  const freeTextOnly = choices.length === 0;
+  const offersCustom = freeTextOnly || question.allowCustomAnswer !== false;
+  const showTextarea = freeTextOnly || wantsCustom;
+
+  const toggleChoice = useCallback(
+    (choiceId: string) => {
+      setWantsCustom(false);
+      setSelectedIds((previous) => {
+        if (!question.multiSelect) return [choiceId];
+        return previous.includes(choiceId)
+          ? previous.filter((id) => id !== choiceId)
+          : [...previous, choiceId];
+      });
+    },
+    [question.multiSelect]
+  );
+
+  const chooseCustom = useCallback(() => {
+    setSelectedIds([]);
+    setWantsCustom(true);
+  }, []);
+
+  const canSubmit = showTextarea ? draft.trim().length > 0 : selectedIds.length > 0;
 
   const submit = useCallback(() => {
-    const trimmed = draft.trim();
-    if (!trimmed) return;
-    onAnswer(trimmed);
-  }, [draft, onAnswer]);
+    if (showTextarea) {
+      const trimmed = draft.trim();
+      if (!trimmed) return;
+      onAnswer({ answer: trimmed });
+      return;
+    }
+    if (selectedIds.length === 0) return;
+    // The ids are the answer. The server derives the text from the labels it
+    // recorded, so sending our own would only be a second copy that can drift.
+    onAnswer({ answer: '', selectedOptionIds: selectedIds });
+  }, [showTextarea, draft, selectedIds, onAnswer]);
 
   return (
     <div
-      className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 space-y-3"
+      className="space-y-3 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3"
       data-testid={`agent-question-${question.id}`}
     >
       <div className="flex items-start gap-2">
-        <HelpCircle className="w-4 h-4 mt-0.5 shrink-0 text-amber-600 dark:text-amber-400" />
-        <p className="text-sm leading-relaxed">{question.question}</p>
+        <HelpCircle className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+        <div className="min-w-0 flex-1 space-y-1">
+          <QuestionHeading question={question} number={number} tone="open" />
+          <p className="text-sm leading-relaxed">{question.question}</p>
+        </div>
       </div>
 
-      {question.options && question.options.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 pl-6">
-          {question.options.map((option) => (
-            <Button
-              key={option}
+      {choices.length > 0 && (
+        <div
+          className="space-y-1 pl-6"
+          role={question.multiSelect ? 'group' : 'radiogroup'}
+          aria-label={`Answers for question ${number}`}
+        >
+          {choices.map((choice) => {
+            const isSelected = selectedIds.includes(choice.id);
+            return (
+              <button
+                key={choice.id}
+                type="button"
+                role={question.multiSelect ? 'checkbox' : 'radio'}
+                aria-checked={isSelected}
+                disabled={isSubmitting}
+                onClick={() => toggleChoice(choice.id)}
+                data-testid={`agent-question-choice-${question.id}-${choice.id}`}
+                data-selected={isSelected ? 'true' : 'false'}
+                className={cn(
+                  'flex w-full cursor-pointer items-start gap-2 rounded-md border px-2 py-1.5 text-left transition-colors',
+                  isSelected
+                    ? 'border-amber-500/60 bg-amber-500/10'
+                    : 'border-border/50 hover:bg-accent/40',
+                  isSubmitting && 'cursor-not-allowed opacity-60'
+                )}
+              >
+                <span
+                  className={cn(
+                    'mt-0.5 size-3.5 shrink-0 border',
+                    question.multiSelect ? 'rounded-[3px]' : 'rounded-full',
+                    isSelected ? 'border-amber-500 bg-amber-500' : 'border-muted-foreground/40'
+                  )}
+                  aria-hidden="true"
+                />
+                <span className="min-w-0 flex-1">
+                  <span className="block text-xs font-medium leading-relaxed">{choice.label}</span>
+                  {choice.description && (
+                    <span className="mt-0.5 block text-[11px] leading-relaxed text-muted-foreground">
+                      {choice.description}
+                    </span>
+                  )}
+                </span>
+              </button>
+            );
+          })}
+
+          {offersCustom && !freeTextOnly && (
+            <button
               type="button"
-              variant="outline"
-              size="sm"
-              className="h-7 text-xs"
+              role={question.multiSelect ? 'checkbox' : 'radio'}
+              aria-checked={wantsCustom}
               disabled={isSubmitting}
-              onClick={() => onAnswer(option)}
+              onClick={chooseCustom}
+              data-testid={`agent-question-other-${question.id}`}
+              data-selected={wantsCustom ? 'true' : 'false'}
+              className={cn(
+                'flex w-full cursor-pointer items-center gap-2 rounded-md border px-2 py-1.5 text-left text-xs transition-colors',
+                wantsCustom
+                  ? 'border-amber-500/60 bg-amber-500/10'
+                  : 'border-dashed border-border/50 hover:bg-accent/40',
+                isSubmitting && 'cursor-not-allowed opacity-60'
+              )}
             >
-              {option}
-            </Button>
-          ))}
+              <PenLine className="size-3.5 shrink-0 text-muted-foreground" />
+              Other…
+            </button>
+          )}
         </div>
       )}
 
-      <div className="pl-6 space-y-2">
-        <Textarea
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            // Enter sends; Shift+Enter is a newline, as everywhere else in the app.
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault();
-              submit();
-            }
-          }}
-          placeholder="Type your answer…"
-          className="min-h-[60px] text-sm"
-          disabled={isSubmitting}
-          data-testid={`agent-question-input-${question.id}`}
-        />
+      <div className="space-y-2 pl-6">
+        {showTextarea && (
+          <Textarea
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              // Enter sends; Shift+Enter is a newline, as everywhere else in the app.
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                submit();
+              }
+            }}
+            placeholder="Type your answer…"
+            className="min-h-[60px] text-sm"
+            disabled={isSubmitting}
+            autoFocus={wantsCustom}
+            data-testid={`agent-question-input-${question.id}`}
+          />
+        )}
         <div className="flex items-center gap-2">
           <Button
             type="button"
             size="sm"
             className="h-7 text-xs"
-            disabled={isSubmitting || !draft.trim()}
+            disabled={isSubmitting || !canSubmit}
             onClick={submit}
             data-testid={`agent-question-submit-${question.id}`}
           >
-            {isSubmitting ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : null}
+            {isSubmitting ? <Loader2 className="mr-1 size-3 animate-spin" /> : null}
             Answer
           </Button>
           <Button
@@ -205,14 +398,128 @@ const QuestionCard = memo(function QuestionCard({
             className="h-7 text-xs text-muted-foreground"
             disabled={isSubmitting}
             onClick={onSkip}
-            title="Write the issue without this detail"
+            title="Let the agent decide without this detail"
             data-testid={`agent-question-skip-${question.id}`}
           >
-            <SkipForward className="w-3 h-3 mr-1" />
+            <SkipForward className="mr-1 size-3" />
             Skip
           </Button>
         </div>
       </div>
+    </div>
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Resolved question — what was offered, and what was picked
+// ---------------------------------------------------------------------------
+
+const ResolvedQuestionCard = memo(function ResolvedQuestionCard({
+  question,
+  number,
+}: {
+  question: AgentQuestion;
+  number: number;
+}) {
+  const choices = useMemo(() => questionChoices(question), [question]);
+  const expired = !!question.expiredAt && !question.answeredAt && !question.skipped;
+
+  const chosenIds = useMemo(() => {
+    const ids = new Set(question.selectedOptionIds ?? []);
+    if (ids.size > 0 || question.answerSource) return ids;
+    // Legacy: a question answered by clicking an option chip recorded the
+    // label as free text and no ids at all. An exact label match is the only
+    // safe way to mark it — anything looser would put a tick beside a choice
+    // the user may never have picked.
+    const answer = question.answer?.trim();
+    if (!answer) return ids;
+    const exact = choices.filter((choice) => choice.label.trim() === answer);
+    if (exact.length === 1) ids.add(exact[0].id);
+    return ids;
+  }, [question.selectedOptionIds, question.answerSource, question.answer, choices]);
+
+  return (
+    <div
+      className="space-y-2 rounded-lg border border-border/50 bg-muted/20 p-3"
+      data-testid={`agent-question-resolved-${question.id}`}
+      data-answer-source={question.answerSource ?? (expired ? 'expired' : 'unknown')}
+    >
+      <div className="flex items-start gap-2">
+        {expired ? (
+          <CircleSlash className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
+        ) : (
+          <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
+        )}
+        <div className="min-w-0 flex-1 space-y-1">
+          <QuestionHeading question={question} number={number} tone="resolved" />
+          <p className="text-xs leading-relaxed text-muted-foreground">{question.question}</p>
+        </div>
+      </div>
+
+      {choices.length > 0 && (
+        <ul className="space-y-1 pl-5">
+          {choices.map((choice) => {
+            const chosen = chosenIds.has(choice.id);
+            return (
+              <li
+                key={choice.id}
+                className={cn(
+                  'flex items-start gap-2 rounded-md px-1.5 py-1 text-xs',
+                  chosen ? 'bg-emerald-500/10' : 'opacity-60'
+                )}
+                data-testid={`agent-question-resolved-choice-${question.id}-${choice.id}`}
+                data-chosen={chosen ? 'true' : 'false'}
+              >
+                {chosen ? (
+                  <CheckCircle2 className="mt-0.5 size-3 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                ) : (
+                  <span
+                    className="mt-0.5 size-3 shrink-0 rounded-full border border-muted-foreground/30"
+                    aria-hidden="true"
+                  />
+                )}
+                <span className="min-w-0 flex-1">
+                  <span className={cn('block leading-relaxed', chosen && 'font-medium')}>
+                    {choice.label}
+                  </span>
+                  {choice.description && (
+                    <span className="mt-0.5 block text-[11px] leading-relaxed text-muted-foreground">
+                      {choice.description}
+                    </span>
+                  )}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      <div className="flex flex-wrap items-center gap-2 pl-5">
+        {expired ? (
+          <Badge variant="outline" className="text-[10px]">
+            Expired
+          </Badge>
+        ) : question.skipped ? (
+          <Badge variant="outline" className="text-[10px]">
+            Skipped
+          </Badge>
+        ) : (
+          <>
+            {question.answerSource === 'custom' && (
+              <Badge variant="outline" className="text-[10px]">
+                Other
+              </Badge>
+            )}
+            <p className="min-w-0 flex-1 text-sm leading-relaxed">{question.answer}</p>
+          </>
+        )}
+      </div>
+
+      {expired && (
+        <p className="pl-5 text-[11px] leading-relaxed text-muted-foreground">
+          The run ended before this was answered, so it can no longer be acted on.
+        </p>
+      )}
     </div>
   );
 });
@@ -225,6 +532,7 @@ export function AgentQuestionsPanel({
   projectPath,
   featureId,
   initialFeature,
+  isActive = true,
   className,
 }: AgentQuestionsPanelProps) {
   const [feature, setFeature] = useState<Feature | null>(initialFeature ?? null);
@@ -249,28 +557,47 @@ export function AgentQuestionsPanel({
   }, [projectPath, featureId]);
 
   useEffect(() => {
+    // Nothing is read while hidden: a workbench pane stays mounted for the
+    // life of the task, so an ungated poll would re-read feature.json for
+    // every open task's Questions pane whether or not anyone is looking at it.
+    // Becoming visible refreshes immediately, which is what covers the gap.
+    if (!isActive) return;
     void refresh();
     const interval = setInterval(() => {
       if (document.visibilityState === 'visible') void refresh();
     }, POLL_INTERVAL_MS);
     return () => clearInterval(interval);
-  }, [refresh]);
+  }, [refresh, isActive]);
+
+  // The push channel. Asked, answered and expired all change what is on screen,
+  // and an answer can arrive from the other half of the dev/prod pair, so every
+  // one of them re-reads the feature rather than patching state locally.
+  useEffect(() => {
+    const api = getElectronAPI();
+    if (!api.features?.onQuestionEvent) return;
+
+    return api.features.onQuestionEvent((event) => {
+      if (event.payload.featureId !== featureId) return;
+      void refresh();
+    });
+  }, [featureId, refresh]);
 
   const questions = useMemo<AgentQuestion[]>(
     () => (feature?.agentQuestions as AgentQuestion[] | undefined) || [],
     [feature]
   );
 
-  const outstanding = useMemo(
-    () => questions.filter((q) => !q.answeredAt && !q.skipped),
-    [questions]
-  );
-  const resolved = useMemo(() => questions.filter((q) => q.answeredAt || q.skipped), [questions]);
+  const questionNumbers = useMemo(() => buildQuestionNumbers(questions), [questions]);
+
+  // An expired question is not outstanding: nobody can answer it, and counting
+  // it would leave the badge stuck on a run that has already ended.
+  const outstanding = useMemo(() => questions.filter((q) => !isResolved(q)), [questions]);
+  const resolved = useMemo(() => questions.filter(isResolved), [questions]);
 
   const draftStatus = describeDraft(feature?.githubIssueDraft, feature?.githubIssue?.number);
 
   const submitAnswer = useCallback(
-    async (question: AgentQuestion, answer: string, skipped: boolean) => {
+    async (question: AgentQuestion, payload: SubmitPayload) => {
       setSubmittingId(question.id);
       try {
         const api = getElectronAPI();
@@ -282,8 +609,9 @@ export function AgentQuestionsPanel({
           projectPath,
           featureId,
           question.id,
-          answer,
-          skipped
+          payload.answer,
+          payload.skipped,
+          payload.selectedOptionIds
         );
         if (result.success && result.feature) {
           setFeature(result.feature);
@@ -325,15 +653,15 @@ export function AgentQuestionsPanel({
         <div className="flex items-start gap-2 rounded-lg border border-border/50 bg-card p-3">
           <draftStatus.icon
             className={cn(
-              'w-4 h-4 mt-0.5 shrink-0',
+              'mt-0.5 size-4 shrink-0',
               draftStatus.tone,
               draftStatus.spin && 'animate-spin'
             )}
           />
-          <div className="flex-1 min-w-0 space-y-0.5">
+          <div className="min-w-0 flex-1 space-y-0.5">
             <p className={cn('text-sm font-medium', draftStatus.tone)}>{draftStatus.label}</p>
             {draftStatus.detail && (
-              <p className="text-xs text-muted-foreground leading-relaxed">{draftStatus.detail}</p>
+              <p className="text-xs leading-relaxed text-muted-foreground">{draftStatus.detail}</p>
             )}
           </div>
           {showRetry && (
@@ -341,12 +669,12 @@ export function AgentQuestionsPanel({
               type="button"
               variant="outline"
               size="sm"
-              className="h-7 text-xs shrink-0"
+              className="h-7 shrink-0 text-xs"
               disabled={isRetrying}
               onClick={retryDraft}
               data-testid="retry-issue-draft"
             >
-              <RefreshCw className={cn('w-3 h-3 mr-1', isRetrying && 'animate-spin')} />
+              <RefreshCw className={cn('mr-1 size-3', isRetrying && 'animate-spin')} />
               Retry
             </Button>
           )}
@@ -355,16 +683,17 @@ export function AgentQuestionsPanel({
 
       {outstanding.length > 0 && (
         <div className="space-y-2">
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
             Needs your answer ({outstanding.length})
           </p>
           {outstanding.map((question) => (
             <QuestionCard
               key={question.id}
               question={question}
+              number={questionNumbers.get(question.id) ?? 0}
               isSubmitting={submittingId === question.id}
-              onAnswer={(answer) => submitAnswer(question, answer, false)}
-              onSkip={() => submitAnswer(question, '', true)}
+              onAnswer={(payload) => submitAnswer(question, payload)}
+              onSkip={() => submitAnswer(question, { answer: '', skipped: true })}
             />
           ))}
         </div>
@@ -372,38 +701,24 @@ export function AgentQuestionsPanel({
 
       {resolved.length > 0 && (
         <div className="space-y-2">
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
             Answered ({resolved.length})
           </p>
           {resolved.map((question) => (
-            <div
+            <ResolvedQuestionCard
               key={question.id}
-              className="rounded-lg border border-border/50 bg-muted/20 p-3 space-y-1.5"
-              data-testid={`agent-question-resolved-${question.id}`}
-            >
-              <div className="flex items-start gap-2">
-                <CheckCircle2 className="w-3.5 h-3.5 mt-0.5 shrink-0 text-muted-foreground" />
-                <p className="text-xs text-muted-foreground leading-relaxed">{question.question}</p>
-              </div>
-              <p className="pl-5 text-sm">
-                {question.skipped ? (
-                  <Badge variant="outline" className="text-[10px]">
-                    Skipped
-                  </Badge>
-                ) : (
-                  question.answer
-                )}
-              </p>
-            </div>
+              question={question}
+              number={questionNumbers.get(question.id) ?? 0}
+            />
           ))}
         </div>
       )}
 
       {!draftStatus && questions.length === 0 && (
         <div className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground">
-          <MessageCircleQuestion className="w-10 h-10 mb-3 opacity-40" />
+          <MessageCircleQuestion className="mb-3 size-10 opacity-40" />
           <p className="text-sm">Nothing to answer.</p>
-          <p className="text-xs mt-1 opacity-80">
+          <p className="mt-1 text-xs opacity-80">
             Agents post questions here when they need a decision from you.
           </p>
         </div>

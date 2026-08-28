@@ -273,7 +273,10 @@ export function AgentOutputModal({
    */
   const outstandingQuestionCount = useMemo(() => {
     const questions = featureProp?.agentQuestions || [];
-    return questions.filter((q) => !q.answeredAt && !q.skipped).length;
+    // `expiredAt` counts as resolved. The run that asked has ended, so nobody
+    // can answer it any more; counting it left the badge permanently lit and
+    // forced the modal open on the Questions tab for a finished task.
+    return questions.filter((q) => !q.answeredAt && !q.skipped && !q.expiredAt).length;
   }, [featureProp]);
 
   // Determine the effective view mode. An unanswered question outranks the
