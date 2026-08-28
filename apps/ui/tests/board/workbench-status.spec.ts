@@ -202,7 +202,7 @@ test.describe('Workbench and sidebar status', () => {
     ).toHaveCount(0);
   });
 
-  test('opening a task gives working Agent, Diff, Files, Terminal and Browser panes', async ({
+  test('opening a task gives working Agents, Changes, Phases, Questions, Chat and Browser panes', async ({
     page,
   }) => {
     await expect(row(page, 'feat-backlog')).toBeVisible({ timeout: 10000 });
@@ -216,7 +216,7 @@ test.describe('Workbench and sidebar status', () => {
       'backlog'
     );
 
-    for (const pane of ['agent', 'diff', 'files', 'terminal', 'browser'] as const) {
+    for (const pane of ['agents', 'changes', 'phases', 'questions', 'chat', 'browser'] as const) {
       const tab = page.locator(`[data-testid="workbench-tab-${pane}"]`);
       await expect(tab, `${pane} tab should exist`).toBeVisible();
 
@@ -232,13 +232,15 @@ test.describe('Workbench and sidebar status', () => {
     }
 
     // Panes stay mounted once visited, so switching back is instant and keeps
-    // terminal sessions and scroll positions alive.
-    await page.locator('[data-testid="workbench-tab-agent"]').click();
-    await expect(page.locator('[data-testid="workbench-pane-terminal"]')).toHaveAttribute(
+    // scroll positions, selections and unsent chat drafts alive. Browser is
+    // the pane the loop left on, so it is the one that must go inactive
+    // without unmounting.
+    await page.locator('[data-testid="workbench-tab-agents"]').click();
+    await expect(page.locator('[data-testid="workbench-pane-browser"]')).toHaveAttribute(
       'data-active',
       'false'
     );
-    await expect(page.locator('[data-testid="workbench-pane-agent"]')).toHaveAttribute(
+    await expect(page.locator('[data-testid="workbench-pane-agents"]')).toHaveAttribute(
       'data-active',
       'true'
     );

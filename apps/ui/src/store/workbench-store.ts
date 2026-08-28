@@ -22,27 +22,71 @@ import { openFeatureTab } from './center-store';
 // Tabs
 // ============================================================================
 
-export type WorkbenchTabId = 'agent' | 'diff' | 'files' | 'terminal' | 'browser';
-
 export interface WorkbenchTabConfig {
-  id: WorkbenchTabId;
+  /**
+   * Widened to `string` on purpose: `WorkbenchTabId` is derived *from* this
+   * array below, so naming it here would be circular. The `as const satisfies`
+   * on `WORKBENCH_TABS` still pins each id to its literal.
+   */
+  id: string;
   label: string;
   /** Digit used with Ctrl/Cmd to jump straight to this pane */
   shortcutDigit: string;
 }
 
-export const WORKBENCH_TABS: WorkbenchTabConfig[] = [
-  { id: 'agent', label: 'Agent', shortcutDigit: '1' },
-  { id: 'diff', label: 'Diff', shortcutDigit: '2' },
-  { id: 'files', label: 'Files', shortcutDigit: '3' },
-  { id: 'terminal', label: 'Terminal', shortcutDigit: '4' },
-  { id: 'browser', label: 'Browser', shortcutDigit: '5' },
-];
+/**
+ * The panes, in tab-strip order.
+ *
+ * This array is the single source of truth — the id union is derived from it,
+ * so a pane cannot exist in the type but be missing from the strip (which
+ * would leave it persistable yet unreachable). `project-view-store.ts` does
+ * the same thing for the project view's tabs.
+ */
+export const WORKBENCH_TABS = [
+  { id: 'agents', label: 'Agents', shortcutDigit: '1' },
+  { id: 'changes', label: 'Changes', shortcutDigit: '2' },
+  { id: 'phases', label: 'Phases', shortcutDigit: '3' },
+  { id: 'questions', label: 'Questions', shortcutDigit: '4' },
+  { id: 'chat', label: 'Chat', shortcutDigit: '5' },
+  { id: 'browser', label: 'Browser', shortcutDigit: '6' },
+] as const satisfies readonly WorkbenchTabConfig[];
 
-export const DEFAULT_WORKBENCH_TAB: WorkbenchTabId = 'agent';
+export type WorkbenchTabId = (typeof WORKBENCH_TABS)[number]['id'];
+
+export const DEFAULT_WORKBENCH_TAB: WorkbenchTabId = 'agents';
+
+/**
+ * Tab ids from before the panes were reworked, mapped to what replaced them.
+ *
+ * `activeTab` is persisted, so every user who last sat on Agent, Diff, Files
+ * or Terminal has one of these in localStorage. Without the map they all fail
+ * `isWorkbenchTabId` and land on the default — no crash, but their intent is
+ * silently lost. Diff and Files both became the one Changes pane.
+ *
+ * Keep these entries forever; they cost nothing and a dropped one is a silent
+ * regression for anyone who has not opened the app since.
+ */
+const LEGACY_TAB_ALIASES: Record<string, WorkbenchTabId> = {
+  agent: 'agents',
+  diff: 'changes',
+  files: 'changes',
+  terminal: 'chat',
+};
 
 function isWorkbenchTabId(value: string): value is WorkbenchTabId {
   return WORKBENCH_TABS.some((tab) => tab.id === value);
+}
+
+/** Read a persisted tab id, translating a retired one to its successor. */
+function resolvePersistedTab(value: string | undefined): WorkbenchTabId {
+  if (!value) return DEFAULT_WORKBENCH_TAB;
+  if (isWorkbenchTabId(value)) return value;
+  // Own keys only: a localStorage value of 'toString' would otherwise index
+  // through to Object.prototype and hand back a function as the active tab.
+  const successor = Object.hasOwn(LEGACY_TAB_ALIASES, value)
+    ? LEGACY_TAB_ALIASES[value]
+    : undefined;
+  return successor ?? DEFAULT_WORKBENCH_TAB;
 }
 
 // ============================================================================
@@ -364,10 +408,7 @@ const initialState: WorkbenchState = {
   sidebarWidth: clampWidth(persisted.sidebarWidth ?? SIDEBAR_DEFAULT_WIDTH),
   collapsedSections: new Set(persisted.collapsedSections ?? []),
   researchMode: persisted.researchMode === true,
-  activeTab:
-    persisted.activeTab && isWorkbenchTabId(persisted.activeTab)
-      ? persisted.activeTab
-      : DEFAULT_WORKBENCH_TAB,
+  activeTab: resolvePersistedTab(persisted.activeTab),
   commandPaletteOpen: false,
   selectedFeatureIds: [],
   selectionAnchorId: null,

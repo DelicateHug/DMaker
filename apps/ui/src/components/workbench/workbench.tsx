@@ -6,8 +6,9 @@ import {
   GitPullRequest,
   Bot,
   FileDiff,
-  Files,
-  TerminalSquare,
+  ListChecks,
+  MessageCircleQuestion,
+  MessageSquare,
   Globe,
   ExternalLink,
   Loader2,
@@ -24,10 +25,11 @@ import {
   getLinkedIssue,
   getBranchName,
 } from '@/components/layout/sidebar/status-meta';
-import { AgentPane } from './panes/agent-pane';
-import { DiffPane } from './panes/diff-pane';
-import { FilesPane } from './panes/files-pane';
-import { TerminalPane } from './panes/terminal-pane';
+import { AgentsPane } from './panes/agents-pane';
+import { ChangesPane } from './panes/changes-pane';
+import { PhasesPane } from './panes/phases-pane';
+import { QuestionsPane } from './panes/questions-pane';
+import { ChatPane } from './panes/chat-pane';
 import { BrowserPane } from './panes/browser-pane';
 import { AssigneeChip } from './assignee-chip';
 
@@ -39,20 +41,23 @@ interface WorkbenchProps {
 }
 
 const TAB_ICONS: Record<WorkbenchTabId, typeof Bot> = {
-  agent: Bot,
-  diff: FileDiff,
-  files: Files,
-  terminal: TerminalSquare,
+  agents: Bot,
+  changes: FileDiff,
+  phases: ListChecks,
+  questions: MessageCircleQuestion,
+  chat: MessageSquare,
   browser: Globe,
 };
 
 /**
- * Per-feature workbench: the agent transcript, its diff, its files, a terminal
- * and a preview of its dev server, behind one tab strip.
+ * Per-feature workbench: the agents that ran, the changes they made, the plan
+ * they are working through, the questions they are blocked on, a reply
+ * composer and a preview of its dev server, behind one tab strip.
  *
  * One of these is mounted per open task tab, so several tasks can be open at
- * once. Panes stay mounted once opened (hidden with CSS) so terminal sessions
- * and scroll positions survive tab switches.
+ * once. Panes stay mounted once opened (hidden with CSS) so scroll positions,
+ * selections and unsent drafts survive tab switches — which is also why every
+ * pane that polls is handed `isActive` rather than left to poll while hidden.
  */
 export function Workbench({ featureId, isActive }: WorkbenchProps) {
   const { features, currentProject, worktreesByProject } = useAppStore(
@@ -97,7 +102,7 @@ export function Workbench({ featureId, isActive }: WorkbenchProps) {
 
   const { statusByBranch } = useWorktreeSyncStatus(worktrees, { enabled: !!currentProject });
 
-  // Ctrl/Cmd+1..5 jump between panes. Several task tabs can be mounted at once
+  // Ctrl/Cmd+1..6 jump between panes. Several task tabs can be mounted at once
   // and only the one on screen may claim the shortcuts. Closing the tab is the
   // strip's business (Escape), not ours.
   useEffect(() => {
@@ -246,28 +251,46 @@ export function Workbench({ featureId, isActive }: WorkbenchProps) {
 
       {/* Panes — mounted once visited, hidden when inactive */}
       <div className="relative min-h-0 flex-1 overflow-hidden">
-        {mountedTabs.has('agent') && (
-          <PaneHost paneId="agent" isActive={activeTab === 'agent'}>
-            <AgentPane feature={feature} projectPath={currentProject.path} />
+        {mountedTabs.has('agents') && (
+          <PaneHost paneId="agents" isActive={activeTab === 'agents'}>
+            <AgentsPane feature={feature} projectPath={currentProject.path} />
           </PaneHost>
         )}
-        {mountedTabs.has('diff') && (
-          <PaneHost paneId="diff" isActive={activeTab === 'diff'}>
-            <DiffPane
+        {mountedTabs.has('changes') && (
+          <PaneHost paneId="changes" isActive={activeTab === 'changes'}>
+            {/* Takes the worktree and the project root separately rather than
+                the resolved `rootPath`: only then can it tell "this feature has
+                no branch" from "its branch's worktree is missing", and warn
+                about the second. */}
+            <ChangesPane
               projectPath={currentProject.path}
-              featureId={feature.id}
-              useWorktrees={!!branchName}
+              worktreePath={worktree?.path ?? null}
+              branchName={branchName}
+              isActive={activeTab === 'changes'}
             />
           </PaneHost>
         )}
-        {mountedTabs.has('files') && (
-          <PaneHost paneId="files" isActive={activeTab === 'files'}>
-            <FilesPane rootPath={rootPath} />
+        {mountedTabs.has('phases') && (
+          <PaneHost paneId="phases" isActive={activeTab === 'phases'}>
+            <PhasesPane
+              feature={feature}
+              projectPath={currentProject.path}
+              isActive={activeTab === 'phases'}
+            />
           </PaneHost>
         )}
-        {mountedTabs.has('terminal') && (
-          <PaneHost paneId="terminal" isActive={activeTab === 'terminal'}>
-            <TerminalPane />
+        {mountedTabs.has('questions') && (
+          <PaneHost paneId="questions" isActive={activeTab === 'questions'}>
+            <QuestionsPane
+              feature={feature}
+              projectPath={currentProject.path}
+              isActive={activeTab === 'questions'}
+            />
+          </PaneHost>
+        )}
+        {mountedTabs.has('chat') && (
+          <PaneHost paneId="chat" isActive={activeTab === 'chat'}>
+            <ChatPane feature={feature} projectPath={currentProject.path} />
           </PaneHost>
         )}
         {mountedTabs.has('browser') && (
