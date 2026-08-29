@@ -107,6 +107,41 @@ function buildQuestionNumbers(questions: AgentQuestion[]): Map<string, number> {
   return numbers;
 }
 
+/**
+ * Group questions into batches by proximity in time.
+ * Questions asked within 120s of each other are in the same group.
+ */
+function groupQuestionsByBatch(
+  questions: AgentQuestion[]
+): { group: AgentQuestion[]; setNumber: number }[] {
+  if (questions.length === 0) return [];
+  const sorted = [...questions].sort((a, b) => (a.askedAt ?? '').localeCompare(b.askedAt ?? ''));
+  const groups: { group: AgentQuestion[]; setNumber: number }[] = [];
+  const BATCH_WINDOW_MS = 120_000; // 2 minutes
+
+  let currentGroup: AgentQuestion[] = [];
+  let lastTime: number | null = null;
+
+  sorted.forEach((q) => {
+    const time = q.askedAt ? new Date(q.askedAt).getTime() : Date.now();
+    if (lastTime === null || time - lastTime <= BATCH_WINDOW_MS) {
+      currentGroup.push(q);
+    } else {
+      if (currentGroup.length > 0) {
+        groups.push({ group: currentGroup, setNumber: groups.length + 1 });
+      }
+      currentGroup = [q];
+    }
+    lastTime = time;
+  });
+
+  if (currentGroup.length > 0) {
+    groups.push({ group: currentGroup, setNumber: groups.length + 1 });
+  }
+
+  return groups;
+}
+
 interface SubmitPayload {
   answer: string;
   skipped?: boolean;
@@ -421,26 +456,11 @@ const ResolvedQuestionCard = memo(function ResolvedQuestionCard({
   question: AgentQuestion;
   number: number;
 }) {
-  const choices = useMemo(() => questionChoices(question), [question]);
   const expired = !!question.expiredAt && !question.answeredAt && !question.skipped;
-
-  const chosenIds = useMemo(() => {
-    const ids = new Set(question.selectedOptionIds ?? []);
-    if (ids.size > 0 || question.answerSource) return ids;
-    // Legacy: a question answered by clicking an option chip recorded the
-    // label as free text and no ids at all. An exact label match is the only
-    // safe way to mark it — anything looser would put a tick beside a choice
-    // the user may never have picked.
-    const answer = question.answer?.trim();
-    if (!answer) return ids;
-    const exact = choices.filter((choice) => choice.label.trim() === answer);
-    if (exact.length === 1) ids.add(exact[0].id);
-    return ids;
-  }, [question.selectedOptionIds, question.answerSource, question.answer, choices]);
 
   return (
     <div
-      className="space-y-2 rounded-lg border border-border/50 bg-muted/20 p-3"
+      className="space-y-1 rounded-lg border border-border/50 bg-muted/20 p-3"
       data-testid={`agent-question-resolved-${question.id}`}
       data-answer-source={question.answerSource ?? (expired ? 'expired' : 'unknown')}
     >
@@ -448,78 +468,18 @@ const ResolvedQuestionCard = memo(function ResolvedQuestionCard({
         {expired ? (
           <CircleSlash className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
         ) : (
-          <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
+          <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
         )}
-        <div className="min-w-0 flex-1 space-y-1">
+        <div className="min-w-0 flex-1 space-y-0.5">
           <QuestionHeading question={question} number={number} tone="resolved" />
           <p className="text-xs leading-relaxed text-muted-foreground">{question.question}</p>
+          {expired && (
+            <p className="text-[11px] leading-relaxed text-muted-foreground">
+              Expired — run ended before answer
+            </p>
+          )}
         </div>
       </div>
-
-      {choices.length > 0 && (
-        <ul className="space-y-1 pl-5">
-          {choices.map((choice) => {
-            const chosen = chosenIds.has(choice.id);
-            return (
-              <li
-                key={choice.id}
-                className={cn(
-                  'flex items-start gap-2 rounded-md px-1.5 py-1 text-xs',
-                  chosen ? 'bg-emerald-500/10' : 'opacity-60'
-                )}
-                data-testid={`agent-question-resolved-choice-${question.id}-${choice.id}`}
-                data-chosen={chosen ? 'true' : 'false'}
-              >
-                {chosen ? (
-                  <CheckCircle2 className="mt-0.5 size-3 shrink-0 text-emerald-600 dark:text-emerald-400" />
-                ) : (
-                  <span
-                    className="mt-0.5 size-3 shrink-0 rounded-full border border-muted-foreground/30"
-                    aria-hidden="true"
-                  />
-                )}
-                <span className="min-w-0 flex-1">
-                  <span className={cn('block leading-relaxed', chosen && 'font-medium')}>
-                    {choice.label}
-                  </span>
-                  {choice.description && (
-                    <span className="mt-0.5 block text-[11px] leading-relaxed text-muted-foreground">
-                      {choice.description}
-                    </span>
-                  )}
-                </span>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-
-      <div className="flex flex-wrap items-center gap-2 pl-5">
-        {expired ? (
-          <Badge variant="outline" className="text-[10px]">
-            Expired
-          </Badge>
-        ) : question.skipped ? (
-          <Badge variant="outline" className="text-[10px]">
-            Skipped
-          </Badge>
-        ) : (
-          <>
-            {question.answerSource === 'custom' && (
-              <Badge variant="outline" className="text-[10px]">
-                Other
-              </Badge>
-            )}
-            <p className="min-w-0 flex-1 text-sm leading-relaxed">{question.answer}</p>
-          </>
-        )}
-      </div>
-
-      {expired && (
-        <p className="pl-5 text-[11px] leading-relaxed text-muted-foreground">
-          The run ended before this was answered, so it can no longer be acted on.
-        </p>
-      )}
     </div>
   );
 });
@@ -593,6 +553,9 @@ export function AgentQuestionsPanel({
   // it would leave the badge stuck on a run that has already ended.
   const outstanding = useMemo(() => questions.filter((q) => !isResolved(q)), [questions]);
   const resolved = useMemo(() => questions.filter(isResolved), [questions]);
+
+  const outstandingGroups = useMemo(() => groupQuestionsByBatch(outstanding), [outstanding]);
+  const resolvedGroups = useMemo(() => groupQuestionsByBatch(resolved), [resolved]);
 
   const draftStatus = describeDraft(feature?.githubIssueDraft, feature?.githubIssue?.number);
 
@@ -682,34 +645,52 @@ export function AgentQuestionsPanel({
       )}
 
       {outstanding.length > 0 && (
-        <div className="space-y-2">
+        <div className="space-y-4">
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
             Needs your answer ({outstanding.length})
           </p>
-          {outstanding.map((question) => (
-            <QuestionCard
-              key={question.id}
-              question={question}
-              number={questionNumbers.get(question.id) ?? 0}
-              isSubmitting={submittingId === question.id}
-              onAnswer={(payload) => submitAnswer(question, payload)}
-              onSkip={() => submitAnswer(question, { answer: '', skipped: true })}
-            />
+          {outstandingGroups.map(({ group, setNumber }) => (
+            <div key={`set-${setNumber}`} className="space-y-2">
+              {outstandingGroups.length > 1 && (
+                <p className="text-xs font-medium text-amber-600 dark:text-amber-400">
+                  Question Set {setNumber}
+                </p>
+              )}
+              {group.map((question) => (
+                <QuestionCard
+                  key={question.id}
+                  question={question}
+                  number={questionNumbers.get(question.id) ?? 0}
+                  isSubmitting={submittingId === question.id}
+                  onAnswer={(payload) => submitAnswer(question, payload)}
+                  onSkip={() => submitAnswer(question, { answer: '', skipped: true })}
+                />
+              ))}
+            </div>
           ))}
         </div>
       )}
 
       {resolved.length > 0 && (
-        <div className="space-y-2">
+        <div className="space-y-4">
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
             Answered ({resolved.length})
           </p>
-          {resolved.map((question) => (
-            <ResolvedQuestionCard
-              key={question.id}
-              question={question}
-              number={questionNumbers.get(question.id) ?? 0}
-            />
+          {resolvedGroups.map(({ group, setNumber }) => (
+            <div key={`set-${setNumber}`} className="space-y-2">
+              {resolvedGroups.length > 1 && (
+                <p className="text-xs font-medium text-muted-foreground">
+                  Question Set {setNumber}
+                </p>
+              )}
+              {group.map((question) => (
+                <ResolvedQuestionCard
+                  key={question.id}
+                  question={question}
+                  number={questionNumbers.get(question.id) ?? 0}
+                />
+              ))}
+            </div>
           ))}
         </div>
       )}
