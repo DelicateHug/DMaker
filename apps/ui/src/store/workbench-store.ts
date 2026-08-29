@@ -49,6 +49,7 @@ export const WORKBENCH_TABS = [
   { id: 'questions', label: 'Questions', shortcutDigit: '4' },
   { id: 'chat', label: 'Chat', shortcutDigit: '5' },
   { id: 'browser', label: 'Browser', shortcutDigit: '6' },
+  { id: 'summary', label: 'Summary', shortcutDigit: '7' },
 ] as const satisfies readonly WorkbenchTabConfig[];
 
 export type WorkbenchTabId = (typeof WORKBENCH_TABS)[number]['id'];

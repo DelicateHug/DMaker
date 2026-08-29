@@ -10,6 +10,7 @@ import {
   MessageCircleQuestion,
   MessageSquare,
   Globe,
+  FileText,
   ExternalLink,
   Loader2,
 } from 'lucide-react';
@@ -31,6 +32,7 @@ import { PhasesPane } from './panes/phases-pane';
 import { QuestionsPane } from './panes/questions-pane';
 import { ChatPane } from './panes/chat-pane';
 import { BrowserPane } from './panes/browser-pane';
+import { SummaryPane } from './panes/summary-pane';
 import { AssigneeChip } from './assignee-chip';
 
 interface WorkbenchProps {
@@ -47,6 +49,7 @@ const TAB_ICONS: Record<WorkbenchTabId, typeof Bot> = {
   questions: MessageCircleQuestion,
   chat: MessageSquare,
   browser: Globe,
+  summary: FileText,
 };
 
 /**
@@ -102,7 +105,7 @@ export function Workbench({ featureId, isActive }: WorkbenchProps) {
 
   const { statusByBranch } = useWorktreeSyncStatus(worktrees, { enabled: !!currentProject });
 
-  // Ctrl/Cmd+1..6 jump between panes. Several task tabs can be mounted at once
+  // Ctrl/Cmd+1..7 jump between panes. Several task tabs can be mounted at once
   // and only the one on screen may claim the shortcuts. Closing the tab is the
   // strip's business (Escape), not ours.
   useEffect(() => {
@@ -296,6 +299,15 @@ export function Workbench({ featureId, isActive }: WorkbenchProps) {
         {mountedTabs.has('browser') && (
           <PaneHost paneId="browser" isActive={activeTab === 'browser'}>
             <BrowserPane projectPath={currentProject.path} worktreePath={rootPath} />
+          </PaneHost>
+        )}
+        {mountedTabs.has('summary') && (
+          <PaneHost paneId="summary" isActive={activeTab === 'summary'}>
+            <SummaryPane
+              feature={feature}
+              projectPath={currentProject.path}
+              isActive={activeTab === 'summary'}
+            />
           </PaneHost>
         )}
       </div>
