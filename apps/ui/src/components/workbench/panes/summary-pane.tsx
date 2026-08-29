@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
-import { AlertCircle, RefreshCw } from 'lucide-react';
+import { useEffect, useRef, useState, useMemo } from 'react';
+import { AlertCircle, RefreshCw, ChevronDown } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { LoadingState } from '@/components/ui/loading-state';
 import { Button } from '@/components/ui/button';
@@ -12,16 +12,101 @@ interface SummaryPaneProps {
   isActive?: boolean;
 }
 
+interface ParsedSummary {
+  index: number;
+  timestamp: string;
+  content: string;
+}
+
+function extractSummaries(output: string): ParsedSummary[] {
+  if (!output) return [];
+
+  const summaries: ParsedSummary[] = [];
+
+  // Look for summary markers and sections
+  const lines = output.split('\n');
+  let currentSummary = '';
+  let currentTimestamp = '';
+  let inSummarySection = false;
+  let summaryIndex = 0;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    // Extract timestamp if present
+    if (line.includes('[timestamp:')) {
+      const match = line.match(/\[timestamp:([^\]]+)\]/);
+      if (match) {
+        currentTimestamp = match[1];
+      }
+    }
+
+    // Detect summary section headers
+    if (
+      line.includes('Implementation Complete') ||
+      (line.includes('✓') && (line.includes('Complete') || line.includes('completed'))) ||
+      line.match(/^#+\s+(Summary|SUMMARY|Summary Report)/)
+    ) {
+      if (currentSummary && currentTimestamp) {
+        summaries.push({
+          index: summaryIndex++,
+          timestamp: currentTimestamp,
+          content: currentSummary.trim(),
+        });
+      }
+      inSummarySection = true;
+      currentSummary = line + '\n';
+      continue;
+    }
+
+    // End summary section on empty line or new major section
+    if (inSummarySection && line.match(/^\s*$/) && currentSummary.split('\n').length > 3) {
+      inSummarySection = false;
+    }
+
+    if (inSummarySection) {
+      currentSummary += line + '\n';
+    }
+  }
+
+  // Add final summary if exists
+  if (currentSummary && currentTimestamp) {
+    summaries.push({
+      index: summaryIndex,
+      timestamp: currentTimestamp,
+      content: currentSummary.trim(),
+    });
+  }
+
+  // If no summaries found, treat entire output as one summary
+  if (summaries.length === 0 && output.trim()) {
+    const match = output.match(/\[timestamp:([^\]]+)\]/);
+    summaries.push({
+      index: 0,
+      timestamp: match ? match[1] : new Date().toISOString(),
+      content: output.trim(),
+    });
+  }
+
+  return summaries.reverse();
+}
+
 /**
  * Run summary with markdown support.
  *
  * Shows a formatted summary of the feature including the agent output
- * rendered as markdown for better readability.
+ * rendered as markdown for better readability. Displays summaries as
+ * distinct items with a dropdown selector (newest first).
  */
 export function SummaryPane({ feature, projectPath, isActive }: SummaryPaneProps) {
   const { output, isLoading, error, refresh } = useAgentOutputStream(projectPath, feature.id);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [shouldFollow, setShouldFollow] = useState(true);
+
+  const summaries = useMemo(() => extractSummaries(output), [output]);
+  const [selectedSummaryIndex, setSelectedSummaryIndex] = useState(0);
+
+  const selectedSummary = summaries[selectedSummaryIndex];
 
   useEffect(() => {
     const element = scrollRef.current;
@@ -40,13 +125,35 @@ export function SummaryPane({ feature, projectPath, isActive }: SummaryPaneProps
     const element = scrollRef.current;
     if (!element || !shouldFollow) return;
     element.scrollTop = element.scrollHeight;
-  }, [output, shouldFollow]);
+  }, [selectedSummary, shouldFollow]);
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      {/* Header with refresh */}
+      {/* Header with selector and refresh */}
       <div className="flex shrink-0 items-center justify-between border-b border-border/60 px-3 py-2">
-        <h3 className="text-sm font-semibold">Summary</h3>
+        <div className="flex items-center gap-2">
+          <h3 className="text-sm font-semibold">Summary</h3>
+          {summaries.length > 0 && (
+            <div className="relative">
+              <select
+                value={selectedSummaryIndex}
+                onChange={(e) => setSelectedSummaryIndex(Number(e.currentTarget.value))}
+                className="appearance-none rounded border border-border/60 bg-muted px-2.5 py-1 text-xs pr-7 cursor-pointer hover:border-border"
+              >
+                {summaries.map((summary, idx) => {
+                  const date = new Date(summary.timestamp);
+                  const label = `${summary.index + 1} - ${date.toLocaleTimeString()}`;
+                  return (
+                    <option key={idx} value={idx}>
+                      {label}
+                    </option>
+                  );
+                })}
+              </select>
+              <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 size-3 pointer-events-none text-muted-foreground" />
+            </div>
+          )}
+        </div>
         <Button
           variant="ghost"
           size="sm"
@@ -76,7 +183,11 @@ export function SummaryPane({ feature, projectPath, isActive }: SummaryPaneProps
 
         {isLoading && !output && <LoadingState message="Loading summary..." />}
 
-        {output && (
+        {!selectedSummary && !isLoading && (
+          <p className="text-xs text-muted-foreground">No summaries available yet.</p>
+        )}
+
+        {selectedSummary && (
           <div className="prose prose-sm max-w-none dark:prose-invert">
             {/* Feature header */}
             <div className="mb-6 not-prose">
@@ -98,7 +209,7 @@ export function SummaryPane({ feature, projectPath, isActive }: SummaryPaneProps
               </div>
             </div>
 
-            {/* Agent output as markdown */}
+            {/* Summary as markdown */}
             <div className="markdown-content">
               <ReactMarkdown
                 components={{
@@ -141,7 +252,7 @@ export function SummaryPane({ feature, projectPath, isActive }: SummaryPaneProps
                   ),
                 }}
               >
-                {output}
+                {selectedSummary.content}
               </ReactMarkdown>
             </div>
           </div>

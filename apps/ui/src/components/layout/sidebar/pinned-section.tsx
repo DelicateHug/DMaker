@@ -213,6 +213,7 @@ export function PinnedSection({
         }}
         onDragLeave={() => setDropTarget(null)}
         onDrop={(event) => handleDropOnFeature(feature.id, event)}
+        showMetadata={true}
       />
     ),
     [

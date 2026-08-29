@@ -9,6 +9,8 @@ import {
   getPullRequestNumber,
   getBranchName,
   isPinned,
+  getProjectName,
+  getProjectPath,
 } from './status-meta';
 
 interface SidebarFeatureRowProps {
@@ -36,6 +38,8 @@ interface SidebarFeatureRowProps {
   isDropTarget?: boolean;
   /** This row is the one being dragged */
   isDragging?: boolean;
+  /** Show project and branch info (for pinned rows) */
+  showMetadata?: boolean;
 }
 
 /**
@@ -61,12 +65,15 @@ export const SidebarFeatureRow = memo(function SidebarFeatureRow({
   onDrop,
   isDropTarget,
   isDragging,
+  showMetadata,
 }: SidebarFeatureRowProps) {
   const statusMeta = getStatusMeta(feature.status);
   const StatusIcon = statusMeta.Icon;
   const attention = needsAttention(feature);
   const prNumber = getPullRequestNumber(feature);
   const branchName = getBranchName(feature);
+  const projectName = getProjectName(feature);
+  const projectPath = getProjectPath(feature);
   const title = feature.title || feature.description || 'Untitled feature';
 
   const ahead = syncStatus?.ahead ?? 0;
@@ -89,7 +96,7 @@ export const SidebarFeatureRow = memo(function SidebarFeatureRow({
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
       onDrop={onDrop}
-      title={`${title} — ${statusMeta.label}${branchName ? ` (${branchName})` : ''}`}
+      title={`${title} — ${statusMeta.label}${branchName ? ` (${branchName})` : ''}${projectName ? ` in ${projectName}` : ''}`}
       data-testid="sidebar-feature-row"
       data-feature-id={feature.id}
       className={cn(
@@ -130,9 +137,22 @@ export const SidebarFeatureRow = memo(function SidebarFeatureRow({
         />
       )}
 
-      {/* Title */}
-      <span className="min-w-0 flex-1 truncate text-[13px] leading-5">
-        <span className={cn('truncate', isActive ? 'font-medium' : 'font-normal')}>{title}</span>
+      {/* Title and optional metadata */}
+      <span className="min-w-0 flex-1 truncate">
+        <span
+          className={cn(
+            'block truncate text-[13px] leading-5',
+            isActive ? 'font-medium' : 'font-normal'
+          )}
+        >
+          {title}
+        </span>
+        {showMetadata && (projectName || branchName) && (
+          <span className="block truncate text-[10px] leading-3 text-muted-foreground/70">
+            {projectName}
+            {branchName ? ` • ${branchName}` : ''}
+          </span>
+        )}
       </span>
 
       {/* Right cluster: dirty / ahead / behind / PR / attention */}

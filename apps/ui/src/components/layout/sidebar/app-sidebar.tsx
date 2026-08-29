@@ -791,8 +791,6 @@ export function AppSidebar({ onCreateFeature, onCreateWorktree }: AppSidebarProp
     const projectBuckets = new Map<string, ProjectBucket>();
 
     for (const feature of visibleFeatures) {
-      if (isPinned(feature)) continue;
-
       const status = feature.status || 'unknown';
       if (statusFilter && !statusFilter.has(status)) continue;
       if (!matchesAssigneeFilter(feature, assigneeFilter, currentGithubUser)) continue;
@@ -1513,7 +1511,7 @@ export function AppSidebar({ onCreateFeature, onCreateWorktree }: AppSidebarProp
             // of counting down to a check that cannot succeed.
             branch.missing ? (
               <span
-                className="shrink-0 select-none font-mono text-[9px] leading-none text-destructive/60"
+                className="shrink-0 select-none font-mono text-[10px] font-semibold leading-none text-destructive"
                 title={`${branch.label} no longer exists in this repository.\nThe ${branch.count} task(s) below still point at it — reuse them on another branch, or let a new one be created.`}
                 data-testid="branch-missing"
                 data-branch={branch.branchName}
